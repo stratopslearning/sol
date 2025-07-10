@@ -1,0 +1,7 @@
+question,type,options,correct_answer
+What is the capital of France?,MULTIPLE_CHOICE,Paris|London|Berlin|Madrid,Paris
+Is the Earth round?,TRUE_FALSE,,true
+Explain the concept of photosynthesis in one sentence.,SHORT_ANSWER,,Photosynthesis is the process by which plants convert sunlight into energy to produce glucose and oxygen.
+What is 2 + 2?,MULTIPLE_CHOICE,3|4|5|6,4
+Is JavaScript a programming language?,TRUE_FALSE,,true
+Describe the main features of object-oriented programming.,SHORT_ANSWER,,Object-oriented programming uses classes and objects to organize code, with features like inheritance, encapsulation, and polymorphism. 
