@@ -53,7 +53,6 @@ export async function POST(
       timeLimit: originalQuiz.timeLimit,
       startDate: null, // Reset dates for the copy
       endDate: null,
-      passingScore: originalQuiz.passingScore,
       isActive: false, // Start as inactive
     }).returning();
 
