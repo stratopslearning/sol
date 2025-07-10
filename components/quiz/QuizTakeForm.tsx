@@ -20,7 +20,6 @@ interface QuizTakeFormProps {
     title: string;
     description?: string;
     timeLimit?: number;
-    passingScore?: number;
     dueDate?: string | null;
     totalQuestions: number;
   };
@@ -229,9 +228,6 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId }: QuizTake
             )}
             {quiz.timeLimit && (
               <Badge variant="outline" className="text-black dark:text-white border-gray-400 dark:border-gray-600">Time limit: {quiz.timeLimit} min</Badge>
-            )}
-            {quiz.passingScore && (
-              <Badge variant="outline" className="text-black dark:text-white border-gray-400 dark:border-gray-600">Passing: {quiz.passingScore}%</Badge>
             )}
           </div>
           <div className="mb-2">

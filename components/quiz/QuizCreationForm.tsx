@@ -56,7 +56,6 @@ const quizBasicSchema = z.object({
   timeLimit: z.number().min(1, 'Time limit must be at least 1 minute').max(180, 'Time limit cannot exceed 3 hours'),
   startDate: z.date().optional(),
   endDate: z.date().optional(),
-  passingScore: z.number().min(0, 'Passing score must be at least 0').max(100, 'Passing score cannot exceed 100'),
 }).refine((data) => {
   if (data.startDate && data.endDate) {
     return data.endDate > data.startDate;
@@ -83,7 +82,6 @@ const quizSchema = z.object({
   timeLimit: z.number().min(1, 'Time limit must be at least 1 minute').max(180, 'Time limit cannot exceed 3 hours'),
   startDate: z.date().optional(),
   endDate: z.date().optional(),
-  passingScore: z.number().min(0, 'Passing score must be at least 0').max(100, 'Passing score cannot exceed 100'),
   questions: z.array(questionSchema).min(1, 'At least one question is required'),
 }).refine((data) => {
   if (data.startDate && data.endDate) {
@@ -122,7 +120,6 @@ export function QuizCreationForm({ courses }: QuizCreationFormProps) {
       courseId: '',
       maxAttempts: 1,
       timeLimit: 30,
-      passingScore: 70,
       startDate: undefined,
       endDate: undefined,
       questions: [
@@ -190,6 +187,8 @@ export function QuizCreationForm({ courses }: QuizCreationFormProps) {
         
         // Validate headers
         const requiredHeaders = ['question', 'type', 'options', 'correct_answer'];
+        const optionalHeaders = ['points'];
+        const allHeaders = [...requiredHeaders, ...optionalHeaders];
         const missingHeaders = requiredHeaders.filter(h => !headers.includes(h));
         
         if (missingHeaders.length > 0) {
@@ -204,11 +203,17 @@ export function QuizCreationForm({ courses }: QuizCreationFormProps) {
           const typeIndex = headers.indexOf('type');
           const optionsIndex = headers.indexOf('options');
           const correctAnswerIndex = headers.indexOf('correct_answer');
+          const pointsIndex = headers.indexOf('points');
 
           const question = values[questionIndex];
           const type = values[typeIndex]?.toUpperCase();
           const optionsStr = values[optionsIndex];
           const correctAnswer = values[correctAnswerIndex];
+          const pointsRaw = pointsIndex !== -1 ? values[pointsIndex] : undefined;
+          let points = 1;
+          if (pointsRaw && !isNaN(Number(pointsRaw)) && Number(pointsRaw) > 0) {
+            points = Number(pointsRaw);
+          }
 
           if (!question || !type) {
             setCsvError(`Row ${i + 1}: Missing question or type`);
@@ -232,7 +237,7 @@ export function QuizCreationForm({ courses }: QuizCreationFormProps) {
           questions.push({
             question,
             type,
-            points: 1,
+            points,
             options: type === 'MULTIPLE_CHOICE' ? options : undefined,
             correctAnswer: correctAnswer || '',
           });
@@ -545,26 +550,6 @@ export function QuizCreationForm({ courses }: QuizCreationFormProps) {
                     )}
                   />
                 </div>
-
-                <FormField
-                  control={form.control}
-                  name="passingScore"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-white">Passing Score (%) *</FormLabel>
-                      <FormControl>
-                        <Input 
-                          type="number" 
-                          placeholder="70" 
-                          className="bg-white/5 border-white/20 text-white placeholder:text-white/40"
-                          {...field}
-                          onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
               </CardContent>
             </Card>
           )}
@@ -575,13 +560,13 @@ export function QuizCreationForm({ courses }: QuizCreationFormProps) {
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-xl text-white">Quiz Questions</CardTitle>
-                  <div className="flex gap-2">
+                  <div className="flex gap-3">
                     <Button 
                       type="button" 
                       onClick={() => fileInputRef.current?.click()}
-                      variant="outline"
+                      variant="secondary"
                       size="sm"
-                      className="border-white/20 text-white hover:bg-white/10"
+                      className="shadow rounded-lg font-semibold focus:ring-2 focus:ring-blue-400 focus:outline-none transition-all"
                     >
                       <Upload className="w-4 h-4 mr-2" />
                       Upload CSV
@@ -589,9 +574,9 @@ export function QuizCreationForm({ courses }: QuizCreationFormProps) {
                     <Button 
                       type="button" 
                       onClick={addQuestion}
-                      variant="outline"
+                      variant="secondary"
                       size="sm"
-                      className="border-white/20 text-white hover:bg-white/10"
+                      className="shadow rounded-lg font-semibold focus:ring-2 focus:ring-blue-400 focus:outline-none transition-all"
                     >
                       <Plus className="w-4 h-4 mr-2" />
                       Add Question
@@ -612,9 +597,10 @@ export function QuizCreationForm({ courses }: QuizCreationFormProps) {
                   </div>
                 )}
                 <div className="text-sm text-white/60">
-                  CSV Format: question,type,options,correct_answer<br />
+                  CSV Format: question,type,options,correct_answer,points (points is optional, default 1)<br />
                   Types: MULTIPLE_CHOICE, TRUE_FALSE, SHORT_ANSWER<br />
-                  Options: Use | to separate multiple choice options (e.g., "Option A|Option B|Option C")
+                  Options: Use | to separate multiple choice options (e.g., "Option A|Option B|Option C")<br />
+                  Points: (Optional) Number of points for the question (e.g., 2, 5, etc.)
                 </div>
               </CardHeader>
               <CardContent className="space-y-6">
@@ -806,7 +792,6 @@ export function QuizCreationForm({ courses }: QuizCreationFormProps) {
                       }</p>
                       <p><strong>Max Attempts:</strong> {form.getValues('maxAttempts')}</p>
                       <p><strong>Time Limit:</strong> {form.getValues('timeLimit')} minutes</p>
-                      <p><strong>Passing Score:</strong> {form.getValues('passingScore')}%</p>
                       <p><strong>Start Date:</strong> {form.getValues('startDate') ? format(form.getValues('startDate')!, 'PPP') : 'None'}</p>
                       <p><strong>End Date:</strong> {form.getValues('endDate') ? format(form.getValues('endDate')!, 'PPP') : 'None'}</p>
                     </div>
@@ -828,13 +813,16 @@ export function QuizCreationForm({ courses }: QuizCreationFormProps) {
           )}
 
           {/* Navigation Buttons */}
-          <div className="flex justify-between">
+          <div className="flex justify-between mt-8">
             <Button
               type="button"
               onClick={prevStep}
               disabled={currentStep === 1}
-              variant="outline"
-              className="border-white/20 text-white hover:bg-white/10"
+              variant="secondary"
+              className={cn(
+                "font-semibold rounded-lg shadow min-w-[120px] h-12 transition-all border border-white/20",
+                currentStep === 1 ? "bg-gray-700 text-white/40 cursor-not-allowed opacity-60" : "bg-white/10 text-white hover:bg-white/20"
+              )}
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
               Previous
@@ -844,7 +832,7 @@ export function QuizCreationForm({ courses }: QuizCreationFormProps) {
               <Button
                 type="button"
                 onClick={nextStep}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
+                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow min-w-[120px] h-12 transition-all"
               >
                 Next
                 <ArrowRight className="w-4 h-4 ml-2" />
@@ -853,7 +841,7 @@ export function QuizCreationForm({ courses }: QuizCreationFormProps) {
               <Button
                 type="submit"
                 disabled={isSubmitting}
-                className="bg-green-600 hover:bg-green-700 text-white"
+                className="bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow min-w-[120px] h-12 transition-all"
               >
                 {isSubmitting ? (
                   <>

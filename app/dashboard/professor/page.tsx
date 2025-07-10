@@ -19,6 +19,7 @@ import {
   Clock
 } from 'lucide-react';
 import { SignOutButton } from '@clerk/nextjs';
+import ExportResultsWrapper from '@/components/ExportResultsWrapper';
 
 export default async function ProfessorDashboard() {
   const user = await getOrCreateUser();
@@ -96,6 +97,9 @@ export default async function ProfessorDashboard() {
             <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">Welcome back, Professor {user.firstName || user.email}!</h1>
             <p className="text-white/60 text-lg">Here's your teaching overview</p>
           </section>
+
+          {/* Export Results Section */}
+          <ExportResultsWrapper quizzes={professorQuizzes} />
 
           {/* Stats Cards */}
           <section className="w-full max-w-4xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
@@ -233,8 +237,16 @@ export default async function ProfessorDashboard() {
                     <div className="text-center py-6 text-white/40">
                       <BookOpen className="w-8 h-8 mx-auto mb-2 opacity-50" />
                       <p>No quizzes created yet</p>
-                      <Button asChild variant="outline" size="sm" className="mt-2">
-                        <a href="/dashboard/professor/quiz/new">Create Your First Quiz</a>
+                      <Button
+                        asChild
+                        variant="secondary"
+                        size="lg"
+                        className="mt-4 shadow rounded-lg font-semibold min-w-[180px] h-12 text-base flex items-center justify-center gap-2"
+                      >
+                        <a href="/dashboard/professor/quiz/new">
+                          <Plus className="w-5 h-5 mr-2" />
+                          Create Your First Quiz
+                        </a>
                       </Button>
                     </div>
                   )}

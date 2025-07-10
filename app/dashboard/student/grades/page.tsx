@@ -68,9 +68,6 @@ export default async function GradesPage() {
                           <div className="text-xs text-gray-400">{new Date(a.submittedAt!).toLocaleString()}</div>
                         </div>
                         <div className="flex gap-2 items-center">
-                          <Badge variant={a.passed ? 'default' : 'destructive'}>
-                            {a.passed ? 'Passed' : 'Failed'}
-                          </Badge>
                           <Badge variant="outline">{a.percentage}%</Badge>
                           <Badge variant="outline">{a.score} / {a.maxScore}</Badge>
                           {a.passed ? <Trophy className="w-5 h-5 text-yellow-500" /> : <XCircle className="w-5 h-5 text-red-500" />}

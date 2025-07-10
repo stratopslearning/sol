@@ -131,12 +131,6 @@ export default async function ResultsPage({ params, searchParams }: ResultsPageP
                   <span>Submitted:</span>
                   <span>{new Date(attempt.submittedAt!).toLocaleString()}</span>
                 </div>
-                {quiz.passingScore && (
-                  <div className="flex justify-between">
-                    <span>Passing Score:</span>
-                    <span>{quiz.passingScore}%</span>
-                  </div>
-                )}
               </div>
 
               {/* Action Buttons */}

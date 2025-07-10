@@ -54,7 +54,6 @@ export default async function QuizPage(props: QuizPageProps) {
         title: quiz.title,
         description: quiz.description || undefined,
         timeLimit: quiz.timeLimit || undefined,
-        passingScore: quiz.passingScore || undefined,
         dueDate: assignment.dueDate ? assignment.dueDate.toISOString() : null,
         totalQuestions: quizQuestions.length,
       }}

@@ -14,7 +14,6 @@ const updateQuizSchema = z.object({
   timeLimit: z.number().min(1).max(180),
   startDate: z.string().optional().transform((val) => val ? new Date(val) : undefined),
   endDate: z.string().optional().transform((val) => val ? new Date(val) : undefined),
-  passingScore: z.number().min(0).max(100),
   isActive: z.boolean(),
   questions: z.array(z.object({
     id: z.string(),
@@ -96,7 +95,6 @@ export async function PUT(
         timeLimit: validatedData.timeLimit,
         startDate: validatedData.startDate || null,
         endDate: validatedData.endDate || null,
-        passingScore: validatedData.passingScore,
         isActive: validatedData.isActive,
         updatedAt: new Date(),
       })

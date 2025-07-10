@@ -163,18 +163,6 @@ export default async function AttemptDetailPage({
                     <div className="text-3xl font-bold text-white mb-2">{attempt.score}/{attempt.maxScore}</div>
                     <div className="text-sm text-white/60">Points Earned</div>
                   </div>
-                  <div className="text-center">
-                    <div className="text-3xl font-bold text-white mb-2">
-                      {attempt.passed ? (
-                        <CheckCircle className="w-8 h-8 mx-auto text-green-400" />
-                      ) : (
-                        <XCircle className="w-8 h-8 mx-auto text-red-400" />
-                      )}
-                    </div>
-                    <div className="text-sm text-white/60">
-                      {attempt.passed ? 'Passed' : 'Failed'}
-                    </div>
-                  </div>
                 </div>
               </CardContent>
             </Card>

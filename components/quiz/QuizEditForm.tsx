@@ -40,7 +40,6 @@ interface Quiz {
   timeLimit?: number | null;
   startDate?: Date | null;
   endDate?: Date | null;
-  passingScore?: number | null;
   isActive: boolean;
   questions: Question[];
   course?: {
@@ -73,7 +72,6 @@ export function QuizEditForm({ quiz, courses }: QuizEditFormProps) {
     timeLimit: quiz.timeLimit || 30,
     startDate: quiz.startDate ? new Date(quiz.startDate).toISOString().split('T')[0] : '',
     endDate: quiz.endDate ? new Date(quiz.endDate).toISOString().split('T')[0] : '',
-    passingScore: quiz.passingScore || 70,
     isActive: quiz.isActive,
   });
 
@@ -289,22 +287,6 @@ export function QuizEditForm({ quiz, courses }: QuizEditFormProps) {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="passingScore" className="text-white flex items-center gap-2">
-                  <Target className="w-4 h-4" />
-                  Passing Score (%)
-                </Label>
-                <Input
-                  id="passingScore"
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={formData.passingScore}
-                  onChange={(e) => setFormData({ ...formData, passingScore: parseInt(e.target.value) })}
-                  className="bg-white/10 border-white/20 text-white"
-                />
-              </div>
-
-              <div className="space-y-2">
                 <Label className="text-white">Quiz Status</Label>
                 <div className="flex items-center space-x-2">
                   <Switch
@@ -511,10 +493,6 @@ export function QuizEditForm({ quiz, courses }: QuizEditFormProps) {
                   <div className="flex justify-between">
                     <span className="text-white/60">Time Limit:</span>
                     <span className="text-white font-medium">{formData.timeLimit} minutes</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-white/60">Passing Score:</span>
-                    <span className="text-white font-medium">{formData.passingScore}%</span>
                   </div>
                 </div>
               </div>

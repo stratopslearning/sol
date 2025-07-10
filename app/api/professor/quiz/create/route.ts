@@ -14,7 +14,6 @@ const createQuizSchema = z.object({
   timeLimit: z.number().min(1).max(180),
   startDate: z.string().optional().transform((val) => val ? new Date(val) : undefined),
   endDate: z.string().optional().transform((val) => val ? new Date(val) : undefined),
-  passingScore: z.number().min(0).max(100),
   questions: z.array(z.object({
     question: z.string().min(1),
     type: z.enum(['MULTIPLE_CHOICE', 'TRUE_FALSE', 'SHORT_ANSWER']),
@@ -76,7 +75,6 @@ export async function POST(req: NextRequest) {
       timeLimit: validatedData.timeLimit,
       startDate: validatedData.startDate || null,
       endDate: validatedData.endDate || null,
-      passingScore: validatedData.passingScore,
       isActive: true,
     }).returning();
 

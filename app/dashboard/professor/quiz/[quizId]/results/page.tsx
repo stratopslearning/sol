@@ -31,6 +31,7 @@ import {
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { SignOutButton } from '@clerk/nextjs';
 import { notFound } from 'next/navigation';
+import ExportResultsWrapper from '@/components/ExportResultsWrapper';
 
 export default async function QuizResultsPage({ 
   params 
@@ -75,8 +76,7 @@ export default async function QuizResultsPage({
   const averageScore = totalAttempts > 0 
     ? Math.round(quizAttempts.reduce((sum, a) => sum + (a.percentage || 0), 0) / totalAttempts)
     : 0;
-  const passedAttempts = quizAttempts.filter(a => a.passed).length;
-  const passRate = totalAttempts > 0 ? Math.round((passedAttempts / totalAttempts) * 100) : 0;
+  const passRate = totalAttempts > 0 ? Math.round((quizAttempts.filter(a => a.passed).length / totalAttempts) * 100) : 0;
 
   // Question analysis
   const questionStats = quiz.questions.map(question => {
@@ -152,10 +152,7 @@ export default async function QuizResultsPage({
                 )}
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm">
-                  <Download className="w-4 h-4 mr-2" />
-                  Export Results
-                </Button>
+                <ExportResultsWrapper quizzes={[{ id: quiz.id, title: quiz.title }]} />
               </div>
             </div>
           </section>

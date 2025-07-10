@@ -105,7 +105,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
     }
 
     const percentage = Math.round((totalScore / maxScore) * 100);
-    const passed = quiz.passingScore ? percentage >= quiz.passingScore : true;
+    const passed = true; // Always set passed to true
 
     // Prevent duplicate attempts
     const existingAttempt = await db.query.attempts.findFirst({

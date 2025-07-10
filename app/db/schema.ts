@@ -36,7 +36,6 @@ export const quizzes = pgTable('quizzes', {
   timeLimit: integer('time_limit'), // in minutes
   startDate: timestamp('start_date'), // Quiz start date
   endDate: timestamp('end_date'), // Quiz end date
-  passingScore: integer('passing_score'), // percentage
   isActive: boolean('is_active').default(true).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
