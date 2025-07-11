@@ -5,7 +5,8 @@ import { eq, and, inArray } from 'drizzle-orm';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Sidebar, SidebarProvider } from '@/components/ui/sidebar';
+import { SidebarProvider } from '@/components/ui/sidebar';
+import ProfessorSidebar from '@/components/ProfessorSidebar';
 import { 
   CalendarDays, 
   CheckCircle, 
@@ -16,10 +17,12 @@ import {
   Users, 
   BookOpen,
   TrendingUp,
-  Clock
+  Clock,
+  Download
 } from 'lucide-react';
 import { SignOutButton } from '@clerk/nextjs';
 import ExportResultsWrapper from '@/components/ExportResultsWrapper';
+import CourseCreationWrapper from '@/components/CourseCreationWrapper';
 
 export default async function ProfessorDashboard() {
   const user = await getOrCreateUser();
@@ -53,6 +56,7 @@ export default async function ProfessorDashboard() {
   });
 
   // Calculate stats
+  const totalCourses = professorCourses.length;
   const activeQuizzes = professorQuizzes.filter(q => q.isActive).length;
   const draftQuizzes = professorQuizzes.filter(q => !q.isActive).length;
   const totalStudents = new Set(professorQuizzes.flatMap(q => q.attempts.map(a => a.studentId))).size;
@@ -66,122 +70,124 @@ export default async function ProfessorDashboard() {
     <SidebarProvider>
       <div className="min-h-screen w-screen bg-[#030303] flex">
         {/* Sidebar */}
-        <aside className="hidden md:flex sticky top-0 h-screen w-64 bg-white/5 border-r border-white/10 flex-col p-6">
-          <div className="mb-8">
-            <a href="/" className="text-lg font-bold text-white flex items-center gap-2 hover:underline">S-O-L</a>
-            <div className="text-xs text-white/40">Professor Dashboard</div>
-          </div>
-          <nav className="flex flex-col gap-2">
-            <a href="/dashboard/professor" className="flex items-center gap-2 text-white/90 hover:bg-white/10 rounded px-3 py-2 font-medium"><BarChart2 className="w-4 h-4" /> Dashboard</a>
-            <a href="/dashboard/professor/quizzes" className="flex items-center gap-2 text-white/80 hover:bg-white/10 rounded px-3 py-2"><FileText className="w-4 h-4" /> My Quizzes</a>
-            <SignOutButton redirectUrl="/">
-              <button className="flex items-center gap-2 text-red-400 hover:bg-red-400/10 rounded px-3 py-2 mt-8 w-full text-left">
-                <LogOut className="w-4 h-4" /> Logout
-              </button>
-            </SignOutButton>
-          </nav>
-          <div className="mt-auto pt-8 flex flex-col gap-2">
-            <div>
-              <Badge className="bg-blue-600/20 text-blue-400 border-blue-600">
-                Professor
-              </Badge>
-            </div>
-            <div className="text-xs text-white/30">&copy; {new Date().getFullYear()} S-O-L</div>
-          </div>
-        </aside>
-
+        <ProfessorSidebar active="dashboard" />
         {/* Main Content */}
-        <main className="flex-1 flex flex-col items-center py-10 px-2 md:px-8">
+        <main className="flex-1 flex flex-col py-10 px-4 md:px-8 overflow-x-hidden">
           {/* Hero/Header */}
-          <section className="w-full max-w-4xl mb-8">
+          <section className="w-full max-w-7xl mx-auto mb-8">
             <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">Welcome back, Professor {user.firstName || user.email}!</h1>
             <p className="text-white/60 text-lg">Here's your teaching overview</p>
           </section>
 
-          {/* Export Results Section */}
-          <ExportResultsWrapper quizzes={professorQuizzes} />
+          {/* Analytics Section - Top */}
+          <section className="w-full max-w-7xl mx-auto mb-8">
+            <h2 className="text-xl font-semibold text-white mb-4">Analytics Overview</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+              <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium text-white/60">Total Courses</CardTitle>
+                  <BookOpen className="h-4 w-4 text-blue-400" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-blue-400">{totalCourses}</div>
+                  <p className="text-xs text-white/40">Your courses</p>
+                </CardContent>
+              </Card>
 
-          {/* Stats Cards */}
-          <section className="w-full max-w-4xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
-            <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-white/60">Active Quizzes</CardTitle>
-                <FileText className="h-4 w-4 text-green-400" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-green-400">{activeQuizzes}</div>
-                <p className="text-xs text-white/40">Live quizzes</p>
-              </CardContent>
-            </Card>
+              <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium text-white/60">Active Quizzes</CardTitle>
+                  <FileText className="h-4 w-4 text-green-400" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-green-400">{activeQuizzes}</div>
+                  <p className="text-xs text-white/40">Live quizzes</p>
+                </CardContent>
+              </Card>
 
-            <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-white/60">Draft Quizzes</CardTitle>
-                <FileText className="h-4 w-4 text-yellow-400" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-yellow-400">{draftQuizzes}</div>
-                <p className="text-xs text-white/40">Inactive quizzes</p>
-              </CardContent>
-            </Card>
+              <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium text-white/60">Draft Quizzes</CardTitle>
+                  <FileText className="h-4 w-4 text-yellow-400" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-yellow-400">{draftQuizzes}</div>
+                  <p className="text-xs text-white/40">Inactive quizzes</p>
+                </CardContent>
+              </Card>
 
-            <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-white/60">Total Students</CardTitle>
-                <Users className="h-4 w-4 text-white/40" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-white">{totalStudents}</div>
-                <p className="text-xs text-white/40">Enrolled students</p>
-              </CardContent>
-            </Card>
+              <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium text-white/60">Total Students</CardTitle>
+                  <Users className="h-4 w-4 text-purple-400" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-purple-400">{totalStudents}</div>
+                  <p className="text-xs text-white/40">Enrolled students</p>
+                </CardContent>
+              </Card>
 
-            <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-white/60">Total Attempts</CardTitle>
-                <CheckCircle className="h-4 w-4 text-white/40" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-white">{totalAttempts}</div>
-                <p className="text-xs text-white/40">Quiz submissions</p>
-              </CardContent>
-            </Card>
+              <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium text-white/60">Total Attempts</CardTitle>
+                  <CheckCircle className="h-4 w-4 text-orange-400" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-orange-400">{totalAttempts}</div>
+                  <p className="text-xs text-white/40">Quiz submissions</p>
+                </CardContent>
+              </Card>
 
-            <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-white/60">Avg Score</CardTitle>
-                <TrendingUp className="h-4 w-4 text-white/40" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-white">{averageScore}%</div>
-                <p className="text-xs text-white/40">Class average</p>
-              </CardContent>
-            </Card>
-          </section>
-
-          {/* Quick Actions */}
-          <section className="w-full max-w-4xl mb-8">
-            <div className="flex flex-col sm:flex-row gap-4">
-              <Button asChild className="flex-1">
-                <a href="/dashboard/professor/quiz/new" className="flex items-center gap-2">
-                  <Plus className="w-4 h-4" />
-                  Create New Quiz
-                </a>
-              </Button>
-              <Button asChild variant="secondary" className="flex-1">
-                <a href="/dashboard/professor/quizzes" className="flex items-center gap-2">
-                  <FileText className="w-4 h-4" />
-                  Manage Quizzes
-                </a>
-              </Button>
+              <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium text-white/60">Avg Score</CardTitle>
+                  <TrendingUp className="h-4 w-4 text-emerald-400" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-emerald-400">{averageScore}%</div>
+                  <p className="text-xs text-white/40">Class average</p>
+                </CardContent>
+              </Card>
             </div>
           </section>
 
-          {/* Recent Activity */}
-          <section className="w-full max-w-4xl">
-            <h2 className="text-xl font-semibold text-white mb-4">Recent Activity</h2>
+          {/* Course & Quiz Creation Section - Side by Side */}
+          <section className="w-full max-w-7xl mx-auto mb-8">
+            <h2 className="text-xl font-semibold text-white mb-4">Quick Actions</h2>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Recent Quiz Submissions */}
+              {/* Course Creation */}
+              <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
+                <CardHeader>
+                  <CardTitle className="text-lg text-white flex items-center gap-2">
+                    <BookOpen className="w-5 h-5" />
+                    Course Management
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <CourseCreationWrapper />
+                </CardContent>
+              </Card>
+
+              {/* Quiz Creation */}
+              <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
+                <CardHeader>
+                  <CardTitle className="text-lg text-white flex items-center gap-2">
+                    <FileText className="w-5 h-5" />
+                    Quiz Management
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ExportResultsWrapper quizzes={professorQuizzes} />
+                </CardContent>
+              </Card>
+            </div>
+          </section>
+
+          {/* Recent Activity & Export Section - Bottom */}
+          <section className="w-full max-w-7xl mx-auto">
+            <h2 className="text-xl font-semibold text-white mb-4">Recent Activity & Data Export</h2>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Recent Activity */}
               <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
                 <CardHeader>
                   <CardTitle className="text-lg text-white">Recent Submissions</CardTitle>
@@ -212,12 +218,28 @@ export default async function ProfessorDashboard() {
                 </CardContent>
               </Card>
 
-              {/* Recent Quizzes */}
+              {/* Export Results */}
               <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
                 <CardHeader>
-                  <CardTitle className="text-lg text-white">Your Quizzes</CardTitle>
+                  <CardTitle className="text-lg text-white flex items-center gap-2">
+                    <Download className="w-5 h-5" />
+                    Export Quiz Results
+                  </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-3">
+                <CardContent>
+                  <p className="text-white/60 text-sm mb-4">Export student results as CSV files</p>
+                  <ExportResultsWrapper quizzes={professorQuizzes} />
+                </CardContent>
+              </Card>
+            </div>
+          </section>
+
+          {/* Your Quizzes Section */}
+          <section className="w-full max-w-7xl mx-auto mt-8">
+            <h2 className="text-xl font-semibold text-white mb-4">Your Quizzes</h2>
+            <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
+              <CardContent className="p-6">
+                <div className="space-y-3">
                   {professorQuizzes.slice(0, 5).map(quiz => (
                     <div key={quiz.id} className="flex items-center justify-between p-3 rounded-lg bg-white/5">
                       <div className="flex-1">
@@ -250,9 +272,9 @@ export default async function ProfessorDashboard() {
                       </Button>
                     </div>
                   )}
-                </CardContent>
-              </Card>
-            </div>
+                </div>
+              </CardContent>
+            </Card>
           </section>
         </main>
       </div>

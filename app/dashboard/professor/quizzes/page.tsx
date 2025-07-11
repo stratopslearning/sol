@@ -20,7 +20,8 @@ import {
   Users, 
   Plus, 
   TrendingUp,
-  Clock
+  Clock,
+  BookOpen
 } from 'lucide-react';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { SignOutButton } from '@clerk/nextjs';
@@ -79,6 +80,7 @@ export default async function ProfessorQuizzesPage() {
           </div>
           <nav className="flex flex-col gap-2">
             <a href="/dashboard/professor" className="flex items-center gap-2 text-white/80 hover:bg-white/10 rounded px-3 py-2"><BarChart2 className="w-4 h-4" /> Dashboard</a>
+            <a href="/dashboard/professor/courses" className="flex items-center gap-2 text-white/80 hover:bg-white/10 rounded px-3 py-2"><BookOpen className="w-4 h-4" /> My Courses</a>
             <a href="/dashboard/professor/quizzes" className="flex items-center gap-2 text-white/90 hover:bg-white/10 rounded px-3 py-2 font-medium"><FileText className="w-4 h-4" /> My Quizzes</a>
             <SignOutButton redirectUrl="/">
               <button className="flex items-center gap-2 text-red-400 hover:bg-red-400/10 rounded px-3 py-2 mt-8 w-full text-left">

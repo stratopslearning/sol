@@ -131,6 +131,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
       assignmentId,
       studentId: assignment.studentId,
       quizId: quizId,
+      courseId: quiz.courseId, // Get courseId from the quiz
       answers,
       score: totalScore,
       maxScore,

@@ -20,9 +20,20 @@ export const courses = pgTable('courses', {
   title: text('title').notNull(),
   description: text('description'),
   professorId: uuid('professor_id').references(() => users.id).notNull(),
+  enrollmentCode: text('enrollment_code').unique().notNull(), // 6-character enrollment code
+  status: text('status', { enum: ['ACTIVE', 'INACTIVE'] }).default('ACTIVE').notNull(),
   isActive: boolean('is_active').default(true).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+// Course enrollments - students enrolled in courses
+export const courseEnrollments = pgTable('course_enrollments', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  courseId: uuid('course_id').references(() => courses.id).notNull(),
+  studentId: uuid('student_id').references(() => users.id).notNull(),
+  enrolledAt: timestamp('enrolled_at').defaultNow().notNull(),
+  status: text('status', { enum: ['ACTIVE', 'DROPPED'] }).default('ACTIVE').notNull(),
 });
 
 // Quizzes table
@@ -30,7 +41,7 @@ export const quizzes = pgTable('quizzes', {
   id: uuid('id').primaryKey().defaultRandom(),
   title: text('title').notNull(),
   description: text('description'),
-  courseId: uuid('course_id').references(() => courses.id), // Optional - can be null for global quizzes
+  courseId: uuid('course_id').references(() => courses.id).notNull(), // Required - no more global quizzes
   professorId: uuid('professor_id').references(() => users.id).notNull(), // Direct link to professor
   maxAttempts: integer('max_attempts').default(1).notNull(), // Maximum attempts allowed
   timeLimit: integer('time_limit'), // in minutes
@@ -39,6 +50,15 @@ export const quizzes = pgTable('quizzes', {
   isActive: boolean('is_active').default(true).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+// Quiz-course assignments - many-to-many relationship (for admin assigning to multiple courses)
+export const quizCourses = pgTable('quiz_courses', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  quizId: uuid('quiz_id').references(() => quizzes.id).notNull(),
+  courseId: uuid('course_id').references(() => courses.id).notNull(),
+  assignedBy: uuid('assigned_by').references(() => users.id).notNull(), // who assigned (professor or admin)
+  assignedAt: timestamp('assigned_at').defaultNow().notNull(),
 });
 
 // Questions table
@@ -71,6 +91,7 @@ export const attempts = pgTable('attempts', {
   assignmentId: uuid('assignment_id').references(() => assignments.id).notNull(),
   studentId: uuid('student_id').references(() => users.id).notNull(),
   quizId: uuid('quiz_id').references(() => quizzes.id).notNull(),
+  courseId: uuid('course_id').references(() => courses.id).notNull(), // NEW: track which course context
   answers: jsonb('answers').notNull(), // { questionId: answer }
   score: integer('score'), // total points earned
   maxScore: integer('max_score').notNull(), // total possible points
@@ -84,8 +105,10 @@ export const attempts = pgTable('attempts', {
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   courses: many(courses),
+  courseEnrollments: many(courseEnrollments),
   assignments: many(assignments),
   attempts: many(attempts),
+  quizAssignments: many(quizCourses), // quizzes assigned by this user
 }));
 
 export const coursesRelations = relations(courses, ({ one, many }) => ({
@@ -93,7 +116,21 @@ export const coursesRelations = relations(courses, ({ one, many }) => ({
     fields: [courses.professorId],
     references: [users.id],
   }),
+  enrollments: many(courseEnrollments),
   quizzes: many(quizzes),
+  quizAssignments: many(quizCourses),
+  attempts: many(attempts),
+}));
+
+export const courseEnrollmentsRelations = relations(courseEnrollments, ({ one }) => ({
+  course: one(courses, {
+    fields: [courseEnrollments.courseId],
+    references: [courses.id],
+  }),
+  student: one(users, {
+    fields: [courseEnrollments.studentId],
+    references: [users.id],
+  }),
 }));
 
 export const quizzesRelations = relations(quizzes, ({ one, many }) => ({
@@ -108,6 +145,22 @@ export const quizzesRelations = relations(quizzes, ({ one, many }) => ({
   questions: many(questions),
   assignments: many(assignments),
   attempts: many(attempts),
+  courseAssignments: many(quizCourses), // courses this quiz is assigned to
+}));
+
+export const quizCoursesRelations = relations(quizCourses, ({ one }) => ({
+  quiz: one(quizzes, {
+    fields: [quizCourses.quizId],
+    references: [quizzes.id],
+  }),
+  course: one(courses, {
+    fields: [quizCourses.courseId],
+    references: [courses.id],
+  }),
+  assignedBy: one(users, {
+    fields: [quizCourses.assignedBy],
+    references: [users.id],
+  }),
 }));
 
 export const questionsRelations = relations(questions, ({ one }) => ({
@@ -141,5 +194,9 @@ export const attemptsRelations = relations(attempts, ({ one }) => ({
   quiz: one(quizzes, {
     fields: [attempts.quizId],
     references: [quizzes.id],
+  }),
+  course: one(courses, {
+    fields: [attempts.courseId],
+    references: [courses.id],
   }),
 })); 

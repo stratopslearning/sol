@@ -8,6 +8,13 @@
       "when": 1752044011558,
       "tag": "0000_free_captain_universe",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1752221913681,
+      "tag": "0001_smiling_scarlet_witch",
+      "breakpoints": true
     }
   ]
 }

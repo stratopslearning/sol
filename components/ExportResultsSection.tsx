@@ -4,6 +4,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
 export default function ExportResultsSection({ quizzes }: { quizzes: { id: string; title: string }[] }) {
   const [quizId, setQuizId] = useState('');
@@ -40,7 +41,7 @@ export default function ExportResultsSection({ quizzes }: { quizzes: { id: strin
         <CardTitle className="text-lg text-white">Export Quiz Results</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="flex flex-col md:flex-row gap-4 items-end">
+        <div className="flex flex-col gap-4">
           <div className="flex-1">
             <label className="block text-white/80 mb-1">Quiz</label>
             <Select value={quizId} onValueChange={setQuizId}>
@@ -55,17 +56,28 @@ export default function ExportResultsSection({ quizzes }: { quizzes: { id: strin
               </SelectContent>
             </Select>
           </div>
-          <div>
-            <label className="block text-white/80 mb-1">From</label>
-            <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="bg-white/5 border-white/20 text-white" />
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div>
+              <label className="block text-white/80 mb-1">From</label>
+              <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="bg-white/5 border-white/20 text-white" />
+            </div>
+            <div>
+              <label className="block text-white/80 mb-1">To</label>
+              <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="bg-white/5 border-white/20 text-white" />
+            </div>
           </div>
           <div>
-            <label className="block text-white/80 mb-1">To</label>
-            <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="bg-white/5 border-white/20 text-white" />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button onClick={handleExport} disabled={downloading} className="h-12 w-full">
+                  {downloading ? 'Exporting...' : 'Export Results as CSV'}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                Export Results as CSV
+              </TooltipContent>
+            </Tooltip>
           </div>
-          <Button onClick={handleExport} disabled={downloading} className="h-12 mt-4 md:mt-0">
-            {downloading ? 'Exporting...' : 'Export Results as CSV'}
-          </Button>
         </div>
       </CardContent>
     </Card>

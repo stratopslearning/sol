@@ -46,12 +46,13 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import CourseMultiSelect from '@/components/CourseMultiSelect';
 
 // Form validation schemas
 const quizBasicSchema = z.object({
   title: z.string().min(1, 'Quiz title is required').max(100, 'Title must be less than 100 characters'),
   description: z.string().optional(),
-  courseId: z.string().optional(), // Can be "global" or course ID
+  courseIds: z.array(z.string()).min(1, 'Select at least one course'),
   maxAttempts: z.number().min(1, 'Max attempts must be at least 1').max(10, 'Max attempts cannot exceed 10'),
   timeLimit: z.number().min(1, 'Time limit must be at least 1 minute').max(180, 'Time limit cannot exceed 3 hours'),
   startDate: z.date().optional(),
@@ -77,7 +78,7 @@ const questionSchema = z.object({
 const quizSchema = z.object({
   title: z.string().min(1, 'Quiz title is required').max(100, 'Title must be less than 100 characters'),
   description: z.string().optional(),
-  courseId: z.string().optional(), // Can be "global" or course ID
+  courseIds: z.array(z.string()).min(1, 'Select at least one course'),
   maxAttempts: z.number().min(1, 'Max attempts must be at least 1').max(10, 'Max attempts cannot exceed 10'),
   timeLimit: z.number().min(1, 'Time limit must be at least 1 minute').max(180, 'Time limit cannot exceed 3 hours'),
   startDate: z.date().optional(),
@@ -117,7 +118,7 @@ export function QuizCreationForm({ courses }: QuizCreationFormProps) {
     defaultValues: {
       title: '',
       description: '',
-      courseId: '',
+      courseIds: [],
       maxAttempts: 1,
       timeLimit: 30,
       startDate: undefined,
@@ -396,27 +397,16 @@ export function QuizCreationForm({ courses }: QuizCreationFormProps) {
 
                 <FormField
                   control={form.control}
-                  name="courseId"
+                  name="courseIds"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-white">Course (Optional)</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger className="bg-white/5 border-white/20 text-white">
-                            <SelectValue placeholder="Select a course (optional)" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent className="bg-white/10 border-white/20">
-                          <SelectItem value="global" className="text-white">
-                            Global Quiz (No Course)
-                          </SelectItem>
-                          {courses.map((course) => (
-                            <SelectItem key={course.id} value={course.id} className="text-white">
-                              {course.title}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <FormLabel className="text-white">Assign to Courses *</FormLabel>
+                      <CourseMultiSelect
+                        value={field.value || []}
+                        onChange={field.onChange}
+                        options={courses}
+                        placeholder="Select courses..."
+                      />
                       <FormMessage />
                     </FormItem>
                   )}
@@ -785,11 +775,7 @@ export function QuizCreationForm({ courses }: QuizCreationFormProps) {
                     <div className="space-y-2 text-white/80">
                       <p><strong>Title:</strong> {form.getValues('title')}</p>
                       <p><strong>Description:</strong> {form.getValues('description') || 'None'}</p>
-                      <p><strong>Course:</strong> {
-                        form.getValues('courseId') === 'global' 
-                          ? 'Global Quiz' 
-                          : courses.find(c => c.id === form.getValues('courseId'))?.title || 'None'
-                      }</p>
+                      <p><strong>Courses:</strong> {form.getValues('courseIds').length === 0 ? 'None' : form.getValues('courseIds').map(id => courses.find(c => c.id === id)?.title || id).join(', ')}</p>
                       <p><strong>Max Attempts:</strong> {form.getValues('maxAttempts')}</p>
                       <p><strong>Time Limit:</strong> {form.getValues('timeLimit')} minutes</p>
                       <p><strong>Start Date:</strong> {form.getValues('startDate') ? format(form.getValues('startDate')!, 'PPP') : 'None'}</p>

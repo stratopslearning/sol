@@ -1,24 +1,30 @@
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import { db } from '@/app/db';
-import { attempts, quizzes } from '@/app/db/schema';
+import { attempts, quizzes, courses } from '@/app/db/schema';
 import { eq } from 'drizzle-orm';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { CheckCircle, XCircle, Trophy, FileText, LogOut, BarChart2 } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
+import { Trophy, XCircle, FileText, BookOpen } from 'lucide-react';
 import { SidebarProvider } from '@/components/ui/sidebar';
+import StudentSidebar from '@/components/StudentSidebar';
 import { SignOutButton } from '@clerk/nextjs';
 
 export default async function GradesPage() {
   const user = await getOrCreateUser();
   if (!user) return null;
 
-  // Fetch all attempts for this student
+  // Fetch all attempts for this student, including quiz and course info
   const allAttempts = await db.query.attempts.findMany({
     where: eq(attempts.studentId, user.id),
     orderBy: (attempts, { desc }) => desc(attempts.submittedAt),
     with: {
-      quiz: true,
+      quiz: {
+        with: {
+          course: true,
+        },
+      },
     },
   });
 
@@ -26,60 +32,57 @@ export default async function GradesPage() {
     <SidebarProvider>
       <div className="min-h-screen w-screen bg-[#030303] flex">
         {/* Sidebar */}
-        <aside className="hidden md:flex sticky top-0 h-screen w-64 bg-white/5 border-r border-white/10 flex-col p-6">
-          <div className="mb-8">
-          <a href="/" className="text-lg font-bold text-white flex items-center gap-2 hover:underline">S-O-L</a>
-            <div className="text-xs text-white/40">Student Dashboard</div>
-          </div>
-          <nav className="flex flex-col gap-2">
-            <a href="/dashboard/student" className="flex items-center gap-2 text-white/90 hover:bg-white/10 rounded px-3 py-2 font-medium"><BarChart2 className="w-4 h-4" /> Dashboard</a>
-            <a href="/dashboard/student/grades" className="flex items-center gap-2 text-white/80 hover:bg-white/10 rounded px-3 py-2"><CheckCircle className="w-4 h-4" /> My Grades</a>
-            <SignOutButton redirectUrl="/">
-              <button className="flex items-center gap-2 text-red-400 hover:bg-red-400/10 rounded px-3 py-2 mt-8 w-full text-left">
-                <LogOut className="w-4 h-4" /> Logout
-              </button>
-            </SignOutButton>
-          </nav>
-          <div className="mt-auto pt-8 flex flex-col gap-2">
-            <div>
-              <Badge className={user.paid ? 'bg-green-600/20 text-green-400 border-green-600' : 'bg-red-600/20 text-red-400 border-red-600'}>
-                {user.paid ? 'Paid' : 'Unpaid'}
-              </Badge>
-            </div>
-            <div className="text-xs text-white/30">&copy; {new Date().getFullYear()} S-O-L</div>
-          </div>
-        </aside>
+        <StudentSidebar user={user} />
         {/* Main Content */}
         <main className="flex-1 flex flex-col items-center py-10 px-2 md:px-8">
-          <Card className="max-w-3xl w-full mb-8">
+          <Card className="max-w-4xl w-full mb-8 bg-white/5 border border-white/10 shadow-xl">
             <CardHeader>
               <CardTitle className="text-2xl text-white">My Grades & Attempt History</CardTitle>
             </CardHeader>
             <CardContent>
               {allAttempts.length === 0 ? (
-                <div className="text-white/80 text-center py-12">No quiz attempts yet.</div>
+                <div className="flex flex-col items-center justify-center py-16 text-white/80">
+                  <BookOpen className="w-12 h-12 mb-4 opacity-70" />
+                  <div className="text-lg font-medium">No quiz attempts yet.</div>
+                  <div className="text-sm text-gray-400 mt-1">Your grades will appear here after you complete a quiz.</div>
+                </div>
               ) : (
-                <div className="space-y-4">
-                  {allAttempts.map((a) => (
-                    <Card key={a.id} className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-white/10">
-                      <CardHeader className="flex flex-row items-center justify-between">
-                        <div>
-                          <CardTitle className="text-lg text-black dark:text-white">{a.quiz?.title || 'Quiz'}</CardTitle>
-                          <div className="text-xs text-gray-400">{new Date(a.submittedAt!).toLocaleString()}</div>
-                        </div>
-                        <div className="flex gap-2 items-center">
-                          <Badge variant="outline">{a.percentage}%</Badge>
-                          <Badge variant="outline">{a.score} / {a.maxScore}</Badge>
-                          {a.passed ? <Trophy className="w-5 h-5 text-yellow-500" /> : <XCircle className="w-5 h-5 text-red-500" />}
-                        </div>
-                      </CardHeader>
-                      <CardContent className="flex gap-4 items-center">
-                        <Button asChild variant="secondary">
-                          <a href={`/quiz/${a.quizId}/review?attemptId=${a.id}`}>Review</a>
-                        </Button>
-                      </CardContent>
-                    </Card>
-                  ))}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  {allAttempts.map((a) => {
+                    const percentage = a.percentage ?? 0;
+                    let badgeColor = 'bg-green-600';
+                    if (percentage < 60) badgeColor = 'bg-red-600';
+                    else if (percentage < 80) badgeColor = 'bg-yellow-500';
+                    return (
+                      <Card
+                        key={a.id}
+                        className="transition-shadow hover:shadow-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-white/10 rounded-xl flex flex-col justify-between min-h-[220px]"
+                      >
+                        <CardHeader className="flex flex-row items-start justify-between gap-2 pb-2">
+                          <div>
+                            <CardTitle className="text-lg text-black dark:text-white mb-1">{a.quiz?.title || 'Quiz'}</CardTitle>
+                            <div className="text-xs text-gray-400 mb-1">
+                              {a.quiz?.course?.title && (
+                                <span className="font-semibold text-gray-300 mr-2">{a.quiz.course.title}</span>
+                              )}
+                              {a.submittedAt && new Date(a.submittedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+                            </div>
+                          </div>
+                          <div className="flex flex-col items-end gap-2">
+                            <span className={`text-xs px-2 py-1 rounded-full text-white font-semibold ${badgeColor}`}>{percentage}%</span>
+                            <Badge variant="outline" className="text-xs">{a.score} / {a.maxScore}</Badge>
+                            {a.passed ? <Trophy className="w-5 h-5 text-yellow-500" /> : <XCircle className="w-5 h-5 text-red-500" />}
+                          </div>
+                        </CardHeader>
+                        <CardContent className="flex flex-col gap-3 pt-0">
+                          <Progress value={percentage} className="h-2 bg-gray-200 dark:bg-gray-800" />
+                          <Button asChild variant="secondary" className="w-full mt-2">
+                            <a href={`/quiz/${a.quizId}/review?attemptId=${a.id}`}>Review</a>
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
                 </div>
               )}
             </CardContent>

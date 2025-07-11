@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { db } from '@/app/db';
-import { quizzes, questions, courses, users } from '@/app/db/schema';
+import { quizzes, questions, courses, users, quizCourses } from '@/app/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
 
@@ -9,7 +9,7 @@ import { z } from 'zod';
 const updateQuizSchema = z.object({
   title: z.string().min(1).max(100),
   description: z.string().optional(),
-  courseId: z.string().optional(), // Can be "global" or course ID
+  courseIds: z.array(z.string()).min(1),
   maxAttempts: z.number().min(1).max(10),
   timeLimit: z.number().min(1).max(180),
   startDate: z.string().optional().transform((val) => val ? new Date(val) : undefined),
@@ -72,25 +72,22 @@ export async function PUT(
     const body = await req.json();
     const validatedData = updateQuizSchema.parse(body);
 
-    // Verify the course belongs to the professor (if course is specified)
-    if (validatedData.courseId && validatedData.courseId !== 'global') {
+    // Verify all courses belong to the professor (or admin)
+    for (const courseId of validatedData.courseIds) {
       const course = await db.query.courses.findFirst({
-        where: eq(courses.id, validatedData.courseId),
+        where: eq(courses.id, courseId),
       });
-
-      if (!course || course.professorId !== user.id) {
+      if (!course || ((user.role as any) !== 'ADMIN' && course.professorId !== user.id)) {
         return NextResponse.json({ error: 'Course not found or access denied' }, { status: 403 });
       }
     }
 
-    const courseId = validatedData.courseId === 'global' ? null : validatedData.courseId;
-
-    // Update the quiz
+    // Update the quiz (assign to first course for legacy field, but use quizCourses for assignment)
     const [updatedQuiz] = await db.update(quizzes)
       .set({
         title: validatedData.title,
         description: validatedData.description || null,
-        courseId: courseId,
+        courseId: validatedData.courseIds[0],
         maxAttempts: validatedData.maxAttempts,
         timeLimit: validatedData.timeLimit,
         startDate: validatedData.startDate || null,
@@ -100,6 +97,18 @@ export async function PUT(
       })
       .where(eq(quizzes.id, quizId))
       .returning();
+
+    // Remove old assignments
+    await db.delete(quizCourses).where(eq(quizCourses.quizId, quizId));
+    // Assign quiz to courses in quizCourses
+    await db.insert(quizCourses).values(
+      validatedData.courseIds.map((courseId: string) => ({
+        quizId: quizId,
+        courseId,
+        assignedBy: user.id,
+        assignedAt: new Date(),
+      }))
+    );
 
     // Delete existing questions
     await db.delete(questions).where(eq(questions.quizId, quizId));
