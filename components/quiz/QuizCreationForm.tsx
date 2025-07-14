@@ -47,12 +47,14 @@ import * as z from 'zod';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import CourseMultiSelect from '@/components/CourseMultiSelect';
+import { toast } from 'sonner';
+import { Label } from '@/components/ui/label';
+import { SectionMultiSelect } from '@/components/ui/SectionMultiSelect';
 
 // Form validation schemas
 const quizBasicSchema = z.object({
   title: z.string().min(1, 'Quiz title is required').max(100, 'Title must be less than 100 characters'),
   description: z.string().optional(),
-  courseIds: z.array(z.string()).min(1, 'Select at least one course'),
   maxAttempts: z.number().min(1, 'Max attempts must be at least 1').max(10, 'Max attempts cannot exceed 10'),
   timeLimit: z.number().min(1, 'Time limit must be at least 1 minute').max(180, 'Time limit cannot exceed 3 hours'),
   startDate: z.date().optional(),
@@ -78,7 +80,6 @@ const questionSchema = z.object({
 const quizSchema = z.object({
   title: z.string().min(1, 'Quiz title is required').max(100, 'Title must be less than 100 characters'),
   description: z.string().optional(),
-  courseIds: z.array(z.string()).min(1, 'Select at least one course'),
   maxAttempts: z.number().min(1, 'Max attempts must be at least 1').max(10, 'Max attempts cannot exceed 10'),
   timeLimit: z.number().min(1, 'Time limit must be at least 1 minute').max(180, 'Time limit cannot exceed 3 hours'),
   startDate: z.date().optional(),
@@ -96,29 +97,31 @@ const quizSchema = z.object({
 
 type QuizFormData = z.infer<typeof quizSchema>;
 
-interface Course {
+interface Section {
   id: string;
   title: string;
   description?: string | null;
 }
 
 interface QuizCreationFormProps {
-  courses: Course[];
+  courses: Section[]; // Keep the prop name for backward compatibility but it's actually sections
+  apiEndpoint?: string;
 }
 
-export function QuizCreationForm({ courses }: QuizCreationFormProps) {
+export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps) {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [csvError, setCsvError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [sectionIds, setSectionIds] = useState<string[]>([]);
+  const [sectionError, setSectionError] = useState<string | null>(null);
 
   const form = useForm<QuizFormData>({
     resolver: zodResolver(quizSchema),
     defaultValues: {
       title: '',
       description: '',
-      courseIds: [],
       maxAttempts: 1,
       timeLimit: 30,
       startDate: undefined,
@@ -259,25 +262,51 @@ export function QuizCreationForm({ courses }: QuizCreationFormProps) {
   };
 
   const onSubmit = async (data: QuizFormData) => {
+    console.log('Quiz form submitted!', data);
     setIsSubmitting(true);
+    
+    // Check if professor has any sections available
+    if (courses.length === 0) {
+      toast.error('You need to be enrolled in at least one section to create quizzes.');
+      setIsSubmitting(false);
+      return;
+    }
+    
+    if (sectionIds.length === 0) {
+      setSectionError('Please assign the quiz to at least one section.');
+      setIsSubmitting(false);
+      return;
+    }
+    setSectionError(null);
     try {
-      const response = await fetch('/api/professor/quiz/create', {
+      // Add 'order' to each question
+      const questionsWithOrder = data.questions.map((q, idx) => ({ ...q, order: idx }));
+      const response = await fetch(apiEndpoint || '/api/professor/quiz/create', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          ...data,
+          sectionIds: sectionIds, // for admin endpoint compatibility
+          questions: questionsWithOrder,
+        }),
       });
 
       if (response.ok) {
-        const result = await response.json();
-        router.push(`/dashboard/professor/quizzes?success=true&quizId=${result.quizId}`);
+        toast.success('Quiz created successfully!');
+        if (apiEndpoint && apiEndpoint.includes('/admin/quiz/create')) {
+          window.location.href = '/dashboard/admin/quizzes';
+        } else {
+          // fallback for professor
+          router.push('/dashboard/professor/quizzes');
+        }
       } else {
         throw new Error('Failed to create quiz');
       }
     } catch (error) {
       console.error('Error creating quiz:', error);
-      // Handle error (show toast, etc.)
+      toast.error('Failed to create quiz');
     } finally {
       setIsSubmitting(false);
     }
@@ -351,7 +380,16 @@ export function QuizCreationForm({ courses }: QuizCreationFormProps) {
       </Card>
 
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        <form 
+          onSubmit={e => { 
+            console.log('Native form submit!'); 
+            form.handleSubmit(onSubmit, (errors) => {
+              console.log('React Hook Form validation errors:', errors);
+            })(e); 
+          }} 
+          className="space-y-6"
+        >
+          <button type="submit" style={{ display: 'none' }}>Test Submit</button>
           {/* Step 1: Basic Info */}
           {currentStep === 1 && (
             <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10">
@@ -395,22 +433,36 @@ export function QuizCreationForm({ courses }: QuizCreationFormProps) {
                   )}
                 />
 
-                <FormField
-                  control={form.control}
-                  name="courseIds"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-white">Assign to Courses *</FormLabel>
-                      <CourseMultiSelect
-                        value={field.value || []}
-                        onChange={field.onChange}
+                <div className="space-y-2">
+                  <Label htmlFor="sectionIds" className="text-white">Assign to Sections <span className="text-red-400">*</span></Label>
+                  {courses.length === 0 ? (
+                    <div className="p-4 border border-yellow-500/20 bg-yellow-500/10 rounded-lg">
+                      <div className="flex items-center gap-2 text-yellow-400">
+                        <AlertCircle className="w-4 h-4" />
+                        <span className="text-sm font-medium">No sections available</span>
+                      </div>
+                      <p className="text-xs text-yellow-300 mt-1">
+                        You need to be enrolled in at least one section to create quizzes. 
+                        <a href="/dashboard/professor/sections" className="text-blue-400 hover:underline ml-1">
+                          Join a section
+                        </a>
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <SectionMultiSelect
                         options={courses}
-                        placeholder="Select courses..."
+                        value={sectionIds}
+                        onChange={selected => {
+                          setSectionIds(selected);
+                          setSectionError(null);
+                        }}
+                        placeholder="Select sections..."
                       />
-                      <FormMessage />
-                    </FormItem>
+                      {sectionError && <div className="text-xs text-red-400 mt-1">{sectionError}</div>}
+                    </>
                   )}
-                />
+                </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <FormField
@@ -775,7 +827,7 @@ export function QuizCreationForm({ courses }: QuizCreationFormProps) {
                     <div className="space-y-2 text-white/80">
                       <p><strong>Title:</strong> {form.getValues('title')}</p>
                       <p><strong>Description:</strong> {form.getValues('description') || 'None'}</p>
-                      <p><strong>Courses:</strong> {form.getValues('courseIds').length === 0 ? 'None' : form.getValues('courseIds').map(id => courses.find(c => c.id === id)?.title || id).join(', ')}</p>
+                      <p><strong>Sections:</strong> {sectionIds.length === 0 ? 'None' : sectionIds.map(id => courses.find(c => c.id === id)?.title || id).join(', ')}</p>
                       <p><strong>Max Attempts:</strong> {form.getValues('maxAttempts')}</p>
                       <p><strong>Time Limit:</strong> {form.getValues('timeLimit')} minutes</p>
                       <p><strong>Start Date:</strong> {form.getValues('startDate') ? format(form.getValues('startDate')!, 'PPP') : 'None'}</p>
@@ -818,7 +870,13 @@ export function QuizCreationForm({ courses }: QuizCreationFormProps) {
               <Button
                 type="button"
                 onClick={nextStep}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow min-w-[120px] h-12 transition-all"
+                disabled={courses.length === 0}
+                className={cn(
+                  "font-semibold rounded-lg shadow min-w-[120px] h-12 transition-all",
+                  courses.length === 0 
+                    ? "bg-gray-700 text-white/40 cursor-not-allowed opacity-60" 
+                    : "bg-blue-600 hover:bg-blue-700 text-white"
+                )}
               >
                 Next
                 <ArrowRight className="w-4 h-4 ml-2" />
@@ -826,8 +884,13 @@ export function QuizCreationForm({ courses }: QuizCreationFormProps) {
             ) : (
               <Button
                 type="submit"
-                disabled={isSubmitting}
-                className="bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow min-w-[120px] h-12 transition-all"
+                disabled={isSubmitting || sectionIds.length === 0 || courses.length === 0}
+                className={cn(
+                  "font-semibold rounded-lg shadow min-w-[120px] h-12 transition-all",
+                  (isSubmitting || sectionIds.length === 0 || courses.length === 0)
+                    ? "bg-gray-700 text-white/40 cursor-not-allowed opacity-60"
+                    : "bg-green-600 hover:bg-green-700 text-white"
+                )}
               >
                 {isSubmitting ? (
                   <>

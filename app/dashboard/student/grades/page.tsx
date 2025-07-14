@@ -1,6 +1,6 @@
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import { db } from '@/app/db';
-import { attempts, quizzes, courses } from '@/app/db/schema';
+import { attempts, quizzes, sections } from '@/app/db/schema';
 import { eq } from 'drizzle-orm';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -15,12 +15,13 @@ export default async function GradesPage() {
   const user = await getOrCreateUser();
   if (!user) return null;
 
-  // Fetch all attempts for this student, including quiz and course info
+  // Fetch all attempts for this student, including quiz and section info
   const allAttempts = await db.query.attempts.findMany({
     where: eq(attempts.studentId, user.id),
     orderBy: (attempts, { desc }) => desc(attempts.submittedAt),
     with: {
-      quiz: {
+      quiz: true,
+      section: {
         with: {
           course: true,
         },
@@ -62,8 +63,8 @@ export default async function GradesPage() {
                           <div>
                             <CardTitle className="text-lg text-black dark:text-white mb-1">{a.quiz?.title || 'Quiz'}</CardTitle>
                             <div className="text-xs text-gray-400 mb-1">
-                              {a.quiz?.course?.title && (
-                                <span className="font-semibold text-gray-300 mr-2">{a.quiz.course.title}</span>
+                              {a.section?.course?.title && (
+                                <span className="font-semibold text-gray-300 mr-2">{a.section.course.title}</span>
                               )}
                               {a.submittedAt && new Date(a.submittedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
                             </div>

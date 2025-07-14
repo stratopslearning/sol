@@ -38,6 +38,12 @@ export default clerkMiddleware(async (auth, req) => {
       return Response.redirect(new URL('/dashboard/student', req.url));
     }
   }
+
+  if (url.startsWith('/dashboard/admin') || url.startsWith('/api/admin')) {
+    if (user.role !== 'ADMIN') {
+      return Response.redirect(new URL('/dashboard/' + user.role.toLowerCase(), req.url));
+    }
+  }
 });
 
 export const config = {

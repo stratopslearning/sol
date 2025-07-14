@@ -14,3 +14,11 @@ export function generateEnrollmentCode(): string {
   }
   return result;
 }
+
+// Generate unique enrollment codes for sections
+export function generateSectionEnrollmentCodes(): { professorCode: string; studentCode: string } {
+  const professorCode = generateEnrollmentCode();
+  // Generate student code with 'S' suffix to ensure uniqueness
+  const studentCode = generateEnrollmentCode() + 'S';
+  return { professorCode, studentCode };
+}

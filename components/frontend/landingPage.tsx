@@ -165,6 +165,10 @@ function HeroGeometric({
                                     <a href="/dashboard/professor" className="bg-white text-black font-semibold px-6 py-3 rounded-lg hover:bg-white/90 transition-all">
                                         Professor Dashboard
                                     </a>
+                                ) : dbUser && dbUser.role === 'ADMIN' ? (
+                                    <a href="/dashboard/admin" className="bg-white text-black font-semibold px-6 py-3 rounded-lg hover:bg-white/90 transition-all">
+                                        Admin Dashboard
+                                    </a>
                                 ) : null
                             ) : (
                                 <>

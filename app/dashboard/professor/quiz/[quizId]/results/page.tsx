@@ -1,7 +1,7 @@
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import { db } from '@/app/db';
-import { quizzes, attempts, questions, users } from '@/app/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { quizzes, attempts, questions, professorSections, quizSections } from '@/app/db/schema';
+import { eq, and, inArray } from 'drizzle-orm';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -43,29 +43,72 @@ export default async function QuizResultsPage({
   
   if (!user || user.role !== 'PROFESSOR') return null;
 
-  // Fetch quiz with questions
-  const quiz = await db.query.quizzes.findFirst({
+  // Get professor's enrolled sections
+  const professorSectionsList = await db.query.professorSections.findMany({
+    where: eq(professorSections.professorId, user.id),
+    with: {
+      section: {
+        with: {
+          course: true
+        }
+      }
+    }
+  });
+
+  const enrolledSectionIds = professorSectionsList.map(ps => ps.section.id);
+
+  if (enrolledSectionIds.length === 0) {
+    notFound();
+  }
+
+  // Fetch quiz with questions and section assignments
+  // Check if quiz is assigned to any of professor's enrolled sections
+  const quizAssignment = await db.query.quizSections.findFirst({
     where: and(
-      eq(quizzes.id, quizId),
-      eq(quizzes.professorId, user.id)
+      eq(quizSections.quizId, quizId),
+      inArray(quizSections.sectionId, enrolledSectionIds)
     ),
     with: {
-      questions: {
-        orderBy: questions.order,
-      },
-      course: true,
-    },
+      quiz: {
+        with: {
+          professor: true,
+          questions: {
+            orderBy: questions.order,
+          },
+          sectionAssignments: {
+            with: {
+              section: {
+                with: {
+                  course: true
+                }
+              }
+            }
+          },
+        }
+      }
+    }
   });
+
+  if (!quizAssignment) {
+    notFound();
+  }
+
+  const quiz = quizAssignment.quiz;
 
   if (!quiz) {
     notFound();
   }
 
-  // Fetch all attempts for this quiz
+  // Fetch all attempts for this quiz, with student and section
   const quizAttempts = await db.query.attempts.findMany({
     where: eq(attempts.quizId, quizId),
     with: {
       student: true,
+      section: {
+        with: {
+          course: true
+        }
+      }
     },
     orderBy: (attempts, { desc }) => desc(attempts.submittedAt),
   });
@@ -112,10 +155,11 @@ export default async function QuizResultsPage({
             <a href="/" className="text-lg font-bold text-white flex items-center gap-2 hover:underline">S-O-L</a>
             <div className="text-xs text-white/40">Professor Dashboard</div>
           </div>
-          <nav className="flex flex-col gap-2">
-            <a href="/dashboard/professor" className="flex items-center gap-2 text-white/80 hover:bg-white/10 rounded px-3 py-2"><BarChart2 className="w-4 h-4" /> Dashboard</a>
-            <a href="/dashboard/professor/quizzes" className="flex items-center gap-2 text-white/80 hover:bg-white/10 rounded px-3 py-2"><FileText className="w-4 h-4" /> My Quizzes</a>
-            <SignOutButton redirectUrl="/">
+                      <nav className="flex flex-col gap-2">
+              <a href="/dashboard/professor" className="flex items-center gap-2 text-white/80 hover:bg-white/10 rounded px-3 py-2"><BarChart2 className="w-4 h-4" /> Dashboard</a>
+              <a href="/dashboard/professor/quizzes" className="flex items-center gap-2 text-white/80 hover:bg-white/10 rounded px-3 py-2"><FileText className="w-4 h-4" /> My Quizzes</a>
+              <a href="/dashboard/professor/quiz-results" className="flex items-center gap-2 text-white/80 hover:bg-white/10 rounded px-3 py-2"><BarChart2 className="w-4 h-4" /> All Results</a>
+              <SignOutButton redirectUrl="/">
               <button className="flex items-center gap-2 text-red-400 hover:bg-red-400/10 rounded px-3 py-2 mt-8 w-full text-left">
                 <LogOut className="w-4 h-4" /> Logout
               </button>
@@ -147,9 +191,18 @@ export default async function QuizResultsPage({
                 </div>
                 <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">{quiz.title}</h1>
                 <p className="text-white/60 text-lg">Quiz Results & Analytics</p>
-                {quiz.course && (
-                  <p className="text-white/40 text-sm mt-1">Course: {quiz.course.title}</p>
-                )}
+                <div className="flex flex-col gap-1 mt-2">
+                  {quiz.professor.id !== user.id && (
+                    <p className="text-white/40 text-sm">
+                      Created by: {quiz.professor.firstName} {quiz.professor.lastName} ({quiz.professor.email})
+                    </p>
+                  )}
+                  {quiz.sectionAssignments.length > 0 && (
+                    <p className="text-white/40 text-sm">
+                      Section(s): {quiz.sectionAssignments.map(sa => sa.section.name).join(', ')}
+                    </p>
+                  )}
+                </div>
               </div>
               <div className="flex gap-2">
                 <ExportResultsWrapper quizzes={[{ id: quiz.id, title: quiz.title }]} />
@@ -225,6 +278,7 @@ export default async function QuizResultsPage({
                       <TableHeader>
                         <TableRow className="border-white/10">
                           <TableHead className="text-white/60 font-medium">Student</TableHead>
+                          <TableHead className="text-white/60 font-medium">Section</TableHead>
                           <TableHead className="text-white/60 font-medium">Score</TableHead>
                           <TableHead className="text-white/60 font-medium">Status</TableHead>
                           <TableHead className="text-white/60 font-medium">Submitted</TableHead>
@@ -243,6 +297,9 @@ export default async function QuizResultsPage({
                                   {attempt.student.email}
                                 </div>
                               </div>
+                            </TableCell>
+                            <TableCell className="text-white/80">
+                              {attempt.section?.name || 'N/A'} ({attempt.section?.course?.title || 'N/A'})
                             </TableCell>
                             <TableCell className="text-white/80">
                               <div className="flex items-center gap-2">

@@ -1,5 +1,5 @@
 "use client";
-import { BarChart2, BookOpen, FileText, LogOut } from 'lucide-react';
+import { BarChart2, BookOpen, FileText, LogOut, TrendingUp } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { SignOutButton } from '@clerk/nextjs';
 import * as React from 'react';
@@ -16,8 +16,9 @@ const ProfessorSidebar: React.FC<ProfessorSidebarProps> = ({ active }) => (
     </div>
     <nav className="flex flex-col gap-2">
       <a href="/dashboard/professor" className={`flex items-center gap-2 ${active === 'dashboard' ? 'bg-white/10 text-white font-bold' : 'text-white/90'} hover:bg-white/10 rounded px-3 py-2 font-medium`}><BarChart2 className="w-4 h-4" /> Dashboard</a>
-      <a href="/dashboard/professor/courses" className={`flex items-center gap-2 ${active === 'courses' ? 'bg-white/10 text-white font-bold' : 'text-white/80'} hover:bg-white/10 rounded px-3 py-2`}><BookOpen className="w-4 h-4" /> My Courses</a>
+      <a href="/dashboard/professor/sections" className={`flex items-center gap-2 ${active === 'sections' ? 'bg-white/10 text-white font-bold' : 'text-white/80'} hover:bg-white/10 rounded px-3 py-2`}><BookOpen className="w-4 h-4" /> My Sections</a>
       <a href="/dashboard/professor/quizzes" className={`flex items-center gap-2 ${active === 'quizzes' ? 'bg-white/10 text-white font-bold' : 'text-white/80'} hover:bg-white/10 rounded px-3 py-2`}><FileText className="w-4 h-4" /> My Quizzes</a>
+      <a href="/dashboard/professor/quiz-results" className={`flex items-center gap-2 ${active === 'quiz-results' ? 'bg-white/10 text-white font-bold' : 'text-white/80'} hover:bg-white/10 rounded px-3 py-2`}><TrendingUp className="w-4 h-4" /> All Results</a>
       <SignOutButton redirectUrl="/">
         <button className="flex items-center gap-2 text-red-400 hover:bg-red-400/10 rounded px-3 py-2 mt-8 w-full text-left">
           <LogOut className="w-4 h-4" /> Logout

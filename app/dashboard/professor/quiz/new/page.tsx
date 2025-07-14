@@ -1,6 +1,6 @@
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import { db } from '@/app/db';
-import { courses } from '@/app/db/schema';
+import { sections, professorSections } from '@/app/db/schema';
 import { eq } from 'drizzle-orm';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -24,11 +24,24 @@ export default async function CreateQuizPage() {
   const user = await getOrCreateUser();
   if (!user || user.role !== 'PROFESSOR') return null;
 
-  // Fetch professor's courses for the form (optional)
-  const professorCourses = await db.query.courses.findMany({
-    where: eq(courses.professorId, user.id),
-    orderBy: (courses, { asc }) => asc(courses.title),
+  // Fetch professor's sections for the form
+  const professorSectionsList = await db.query.professorSections.findMany({
+    where: eq(professorSections.professorId, user.id),
+    with: {
+      section: {
+        with: {
+          course: true
+        }
+      }
+    }
   });
+
+  // Transform the data to match the expected format for SectionMultiSelect
+  const enrolledSections = professorSectionsList.map(ps => ({
+    id: ps.section.id,
+    title: `${ps.section.course.title} - ${ps.section.name}`,
+    description: ps.section.course.description
+  }));
 
   return (
     <SidebarProvider>
@@ -78,7 +91,7 @@ export default async function CreateQuizPage() {
 
           {/* Quiz Creation Form */}
           <section className="w-full max-w-4xl">
-            <QuizCreationForm courses={professorCourses} />
+            <QuizCreationForm courses={enrolledSections} />
           </section>
         </main>
       </div>

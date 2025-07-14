@@ -20,7 +20,6 @@ export default async function QuizPage(props: QuizPageProps) {
   // Fetch quiz details
   const quiz = await db.query.quizzes.findFirst({
     where: eq(quizzes.id, quizId),
-    with: { course: true },
   });
   if (!quiz) redirect('/dashboard/student');
 

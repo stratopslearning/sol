@@ -1,7 +1,7 @@
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import { db } from '@/app/db';
-import { attempts, quizzes, questions, users } from '@/app/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { attempts, quizzes, questions } from '@/app/db/schema';
+import { eq } from 'drizzle-orm';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -20,6 +20,7 @@ import { SidebarProvider } from '@/components/ui/sidebar';
 import { SignOutButton } from '@clerk/nextjs';
 import { notFound } from 'next/navigation';
 import { GPTFeedbackDisplay } from '@/components/quiz/GPTFeedbackDisplay';
+import { professorSections } from '@/app/db/schema';
 
 export default async function AttemptDetailPage({ 
   params 
@@ -31,7 +32,7 @@ export default async function AttemptDetailPage({
   
   if (!user || user.role !== 'PROFESSOR') return null;
 
-  // Fetch attempt with student and quiz data
+  // Fetch attempt with student, quiz, and section (with course)
   const attempt = await db.query.attempts.findFirst({
     where: eq(attempts.id, attemptId),
     with: {
@@ -41,6 +42,10 @@ export default async function AttemptDetailPage({
           questions: {
             orderBy: questions.order,
           },
+        },
+      },
+      section: {
+        with: {
           course: true,
         },
       },
@@ -51,15 +56,21 @@ export default async function AttemptDetailPage({
     notFound();
   }
 
-  // Verify the quiz belongs to the professor
-  if (attempt.quiz.professorId !== user.id) {
+  // Get professor's enrolled section IDs
+  const professorSectionsList = await db.query.professorSections.findMany({
+    where: eq(professorSections.professorId, user.id),
+  });
+  const enrolledSectionIds = professorSectionsList.map(ps => ps.sectionId);
+
+  // Access control: allow if professor is assigned to the section
+  if (!enrolledSectionIds.includes(attempt.sectionId)) {
     notFound();
   }
 
   // Parse student answers and GPT feedback
-  const studentAnswers = attempt.answers && typeof attempt.answers === 'string' 
-    ? JSON.parse(attempt.answers) 
-    : [];
+  const studentAnswers = attempt.answers && typeof attempt.answers === 'string'
+    ? JSON.parse(attempt.answers)
+    : attempt.answers || {};
   const gptFeedback: Record<string, any> = attempt.gptFeedback || {};
 
   return (
@@ -137,6 +148,10 @@ export default async function AttemptDetailPage({
                     <div className="text-white font-medium">{attempt.quiz.title}</div>
                   </div>
                   <div>
+                    <div className="text-sm font-medium text-white/60 mb-1">Section</div>
+                    <div className="text-white font-medium">{attempt.section.name} ({attempt.section.course.title})</div>
+                  </div>
+                  <div>
                     <div className="text-sm font-medium text-white/60 mb-1">Submitted</div>
                     <div className="text-white">
                       {attempt.submittedAt ? new Date(attempt.submittedAt).toLocaleDateString() : 'N/A'}
@@ -176,9 +191,15 @@ export default async function AttemptDetailPage({
               </CardHeader>
               <CardContent className="space-y-6">
                 {attempt.quiz.questions.map((question, index) => {
-                  const studentAnswer = studentAnswers.find((ans: any) => ans.questionId === question.id);
-                  const isCorrect = studentAnswer?.isCorrect || false;
-                  
+                  // For MCQ/TF, answer is a string; for short answer, could be string or object
+                  const answerValue = studentAnswers[question.id];
+                  let isCorrect = false;
+                  if (question.type === 'SHORT_ANSWER') {
+                    // Use GPT feedback if available
+                    isCorrect = gptFeedback[question.id]?.score === question.points;
+                  } else {
+                    isCorrect = answerValue === question.correctAnswer;
+                  }
                   return (
                     <Card key={question.id} className="bg-white/5 border border-white/10">
                       <CardContent className="p-6">
@@ -188,71 +209,49 @@ export default async function AttemptDetailPage({
                               Question {index + 1}
                             </h3>
                             <p className="text-white/80 mb-4">{question.question}</p>
-                            
                             <div className="space-y-2">
-                              <div className="text-sm text-white/60">Student's Answer:</div>
-                              <div className="p-3 bg-white/10 rounded-lg">
-                                <span className="text-white">
-                                  {studentAnswer?.answer || 'No answer provided'}
-                                </span>
+                              <div className="text-sm font-medium text-white/60">Student's Answer:</div>
+                              <div className="mb-2">
+                                {answerValue === undefined || answerValue === null || answerValue === '' ? (
+                                  <span className="italic text-gray-400">No answer provided</span>
+                                ) : (
+                                  <span className="text-white">{String(answerValue)}</span>
+                                )}
                               </div>
-                            </div>
-
-                            {question.type === 'MULTIPLE_CHOICE' && Array.isArray(question.options) && (
-                              <div className="mt-4">
-                                <div className="text-sm text-white/60 mb-2">Available Options:</div>
-                                <div className="space-y-1">
-                                  {question.options.map((option, optionIndex) => (
-                                    <div 
-                                      key={optionIndex} 
-                                      className={`p-2 rounded text-sm ${
-                                        option === question.correctAnswer 
-                                          ? 'bg-green-600/20 text-green-400 border border-green-600'
-                                          : option === studentAnswer?.answer
-                                          ? 'bg-red-600/20 text-red-400 border border-red-600'
-                                          : 'bg-white/5 text-white/60'
-                                      }`}
-                                    >
-                                      {option}
-                                      {option === question.correctAnswer && ' (Correct)'}
-                                      {option === studentAnswer?.answer && option !== question.correctAnswer && ' (Selected)'}
-                                    </div>
+                              <div className="text-sm font-medium text-white/60">Available Options:</div>
+                              {question.type === 'MULTIPLE_CHOICE' && Array.isArray(question.options) && (
+                                <ul className="list-none pl-0">
+                                  {question.options.map((opt: string) => (
+                                    <li key={opt} className={
+                                      opt === question.correctAnswer
+                                        ? 'text-green-400'
+                                        : ''
+                                    }>
+                                      {opt}
+                                      {opt === question.correctAnswer ? ' (Correct)' : ''}
+                                    </li>
                                   ))}
-                                </div>
-                              </div>
-                            )}
-
-                            {question.type !== 'MULTIPLE_CHOICE' && (
-                              <div className="mt-4">
-                                <div className="text-sm text-white/60 mb-2">Correct Answer:</div>
-                                <div className="p-2 bg-green-600/20 text-green-400 border border-green-600 rounded">
-                                  {question.correctAnswer}
-                                </div>
-                              </div>
-                            )}
-
-                            {/* GPT Feedback for Short Answer Questions */}
-                            {question.type === 'SHORT_ANSWER' && gptFeedback[question.id] && (
-                              <div className="mt-4">
-                                <GPTFeedbackDisplay
-                                  feedback={gptFeedback[question.id]}
-                                  questionText={question.question}
-                                  studentAnswer={studentAnswer?.answer || ''}
-                                  className="mt-2"
-                                />
-                              </div>
-                            )}
+                                </ul>
+                              )}
+                              {/* Add similar display for TRUE_FALSE or SHORT_ANSWER if needed */}
+                            </div>
                           </div>
-                          
-                          <div className="ml-4 flex flex-col items-end gap-2">
-                            <Badge className={isCorrect ? "bg-green-600/20 text-green-400 border-green-600" : "bg-red-600/20 text-red-400 border-red-600"}>
+                          <div className="flex flex-col items-end gap-2">
+                            <Badge variant={isCorrect ? 'default' : 'destructive'}>
                               {isCorrect ? 'Correct' : 'Incorrect'}
                             </Badge>
-                            <div className="text-sm text-white/60">
-                              {question.points} point{question.points !== 1 ? 's' : ''}
-                            </div>
+                            <div className="text-white/60 text-xs">{question.points} points</div>
                           </div>
                         </div>
+                        {/* GPT Feedback for short answer */}
+                        {question.type === 'SHORT_ANSWER' && gptFeedback[question.id] && (
+                          <GPTFeedbackDisplay
+                            feedback={gptFeedback[question.id]}
+                            questionText={question.question}
+                            studentAnswer={answerValue || ''}
+                            className="mt-2"
+                          />
+                        )}
                       </CardContent>
                     </Card>
                   );

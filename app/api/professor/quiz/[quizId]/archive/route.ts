@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { db } from '@/app/db';
-import { quizzes, users } from '@/app/db/schema';
+import { quizzes, users, quizSections, professorSections } from '@/app/db/schema';
 import { eq, and } from 'drizzle-orm';
 
 export async function POST(
@@ -26,16 +26,13 @@ export async function POST(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Verify the quiz belongs to the professor
-    const existingQuiz = await db.query.quizzes.findFirst({
-      where: and(
-        eq(quizzes.id, quizId),
-        eq(quizzes.professorId, user.id)
-      ),
-    });
-
-    if (!existingQuiz) {
-      return NextResponse.json({ error: 'Quiz not found or access denied' }, { status: 404 });
+    // Verify the quiz belongs to the professor by section assignment
+    const quizSectionAssignments = await db.query.quizSections.findMany({ where: eq(quizSections.quizId, quizId) });
+    const professorSectionEnrollments = await db.query.professorSections.findMany({ where: eq(professorSections.professorId, user.id) });
+    const allowedSectionIds = professorSectionEnrollments.map(e => e.sectionId);
+    const isAllowed = quizSectionAssignments.some(qs => allowedSectionIds.includes(qs.sectionId));
+    if (!isAllowed) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
     // Archive the quiz (set to inactive)

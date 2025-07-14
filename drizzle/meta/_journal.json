@@ -15,6 +15,13 @@
       "when": 1752221913681,
       "tag": "0001_smiling_scarlet_witch",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1752475178784,
+      "tag": "0002_cheerful_red_wolf",
+      "breakpoints": true
     }
   ]
 }

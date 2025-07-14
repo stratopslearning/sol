@@ -1,7 +1,7 @@
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import { db } from '@/app/db';
-import { quizzes, courses, attempts, users } from '@/app/db/schema';
-import { eq, and, inArray } from 'drizzle-orm';
+import { sections, professorSections, quizzes, attempts, users } from '@/app/db/schema';
+import { eq, inArray } from 'drizzle-orm';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -22,22 +22,40 @@ import {
 } from 'lucide-react';
 import { SignOutButton } from '@clerk/nextjs';
 import ExportResultsWrapper from '@/components/ExportResultsWrapper';
-import CourseCreationWrapper from '@/components/CourseCreationWrapper';
+import ProfessorEnrollForm from '@/components/ProfessorEnrollForm';
 
 export default async function ProfessorDashboard() {
   const user = await getOrCreateUser();
   if (!user || user.role !== 'PROFESSOR') return null;
 
-  // Fetch professor's courses
-  const professorCourses = await db.query.courses.findMany({
-    where: eq(courses.professorId, user.id),
+  // Fetch professor's section enrollments
+  const professorEnrollments = await db.query.professorSections.findMany({
+    where: eq(professorSections.professorId, user.id),
+    with: {
+      section: {
+        with: {
+          course: true
+        }
+      }
+    }
   });
 
-  // Fetch professor's quizzes (directly by professorId)
+  // Get section IDs for filtering
+  const sectionIds = professorEnrollments.map(e => e.sectionId);
+
+  // Fetch professor's quizzes (created by professor)
   const professorQuizzes = await db.query.quizzes.findMany({
     where: eq(quizzes.professorId, user.id),
     with: {
-      course: true,
+      sectionAssignments: {
+        with: {
+          section: {
+            with: {
+              course: true
+            }
+          }
+        }
+      },
       attempts: true,
     }
   });
@@ -48,7 +66,22 @@ export default async function ProfessorDashboard() {
     with: {
       student: true,
       quiz: {
-        with: { course: true }
+        with: { 
+          sectionAssignments: {
+            with: {
+              section: {
+                with: {
+                  course: true
+                }
+              }
+            }
+          }
+        }
+      },
+      section: {
+        with: {
+          course: true
+        }
       }
     },
     orderBy: (attempts, { desc }) => desc(attempts.submittedAt),
@@ -56,7 +89,7 @@ export default async function ProfessorDashboard() {
   });
 
   // Calculate stats
-  const totalCourses = professorCourses.length;
+  const totalSections = professorEnrollments.length;
   const activeQuizzes = professorQuizzes.filter(q => q.isActive).length;
   const draftQuizzes = professorQuizzes.filter(q => !q.isActive).length;
   const totalStudents = new Set(professorQuizzes.flatMap(q => q.attempts.map(a => a.studentId))).size;
@@ -73,6 +106,7 @@ export default async function ProfessorDashboard() {
         <ProfessorSidebar active="dashboard" />
         {/* Main Content */}
         <main className="flex-1 flex flex-col py-10 px-4 md:px-8 overflow-x-hidden">
+          <ProfessorEnrollForm />
           {/* Hero/Header */}
           <section className="w-full max-w-7xl mx-auto mb-8">
             <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">Welcome back, Professor {user.firstName || user.email}!</h1>
@@ -85,12 +119,12 @@ export default async function ProfessorDashboard() {
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
               <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-white/60">Total Courses</CardTitle>
+                  <CardTitle className="text-sm font-medium text-white/60">Enrolled Sections</CardTitle>
                   <BookOpen className="h-4 w-4 text-blue-400" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-blue-400">{totalCourses}</div>
-                  <p className="text-xs text-white/40">Your courses</p>
+                  <div className="text-2xl font-bold text-blue-400">{totalSections}</div>
+                  <p className="text-xs text-white/40">Your sections</p>
                 </CardContent>
               </Card>
 
@@ -155,19 +189,6 @@ export default async function ProfessorDashboard() {
           <section className="w-full max-w-7xl mx-auto mb-8">
             <h2 className="text-xl font-semibold text-white mb-4">Quick Actions</h2>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Course Creation */}
-              <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
-                <CardHeader>
-                  <CardTitle className="text-lg text-white flex items-center gap-2">
-                    <BookOpen className="w-5 h-5" />
-                    Course Management
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <CourseCreationWrapper />
-                </CardContent>
-              </Card>
-
               {/* Quiz Creation */}
               <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
                 <CardHeader>
@@ -176,8 +197,19 @@ export default async function ProfessorDashboard() {
                     Quiz Management
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <ExportResultsWrapper quizzes={professorQuizzes} />
+                <CardContent className="space-y-3">
+                  <Button asChild className="flex items-center gap-2 w-full">
+                    <a href="/dashboard/professor/quiz/new">
+                      <Plus className="w-4 h-4" />
+                      Create New Quiz
+                    </a>
+                  </Button>
+                  <Button asChild variant="outline" className="flex items-center gap-2 w-full">
+                    <a href="/dashboard/professor/quiz-results">
+                      <TrendingUp className="w-4 h-4" />
+                      View All Results
+                    </a>
+                  </Button>
                 </CardContent>
               </Card>
             </div>
@@ -201,7 +233,7 @@ export default async function ProfessorDashboard() {
                             {attempt.student.firstName} {attempt.student.lastName}
                           </div>
                           <div className="text-xs text-white/60">
-                            {attempt.quiz.title} • {attempt.percentage}%
+                            {attempt.quiz.title} • {attempt.section.course.title} • {attempt.percentage}%
                           </div>
                         </div>
                         <Badge className={attempt.passed ? 'bg-green-600/20 text-green-400 border-green-600' : 'bg-red-600/20 text-red-400 border-red-600'}>
@@ -245,7 +277,7 @@ export default async function ProfessorDashboard() {
                       <div className="flex-1">
                         <div className="text-sm font-medium text-white">{quiz.title}</div>
                         <div className="text-xs text-white/60">
-                          {quiz.course ? quiz.course.title : 'Global Quiz'} • {quiz.attempts.length} attempts
+                          {quiz.sectionAssignments[0]?.section.course.title || 'No Course'} • {quiz.attempts.length} attempts
                         </div>
                       </div>
                       <Button asChild variant="ghost" size="sm">

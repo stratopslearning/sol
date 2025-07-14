@@ -1,6 +1,6 @@
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import { db } from '@/app/db';
-import { quizzes, courses, attempts } from '@/app/db/schema';
+import { quizzes } from '@/app/db/schema';
 import { eq } from 'drizzle-orm';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -37,16 +37,15 @@ export default async function ProfessorQuizzesPage() {
   const user = await getOrCreateUser();
   if (!user || user.role !== 'PROFESSOR') return null;
 
-  // Fetch professor's courses
-  const professorCourses = await db.query.courses.findMany({
-    where: eq(courses.professorId, user.id),
-  });
-
-  // Fetch professor's quizzes with course and attempt data
+  // Fetch professor's quizzes with sectionAssignments, attempts, and questions
   const professorQuizzes = await db.query.quizzes.findMany({
     where: eq(quizzes.professorId, user.id),
     with: {
-      course: true,
+      sectionAssignments: {
+        with: {
+          section: true,
+        },
+      },
       attempts: true,
       questions: true,
     },
@@ -78,11 +77,12 @@ export default async function ProfessorQuizzesPage() {
             <a href="/" className="text-lg font-bold text-white flex items-center gap-2 hover:underline">S-O-L</a>
             <div className="text-xs text-white/40">Professor Dashboard</div>
           </div>
-          <nav className="flex flex-col gap-2">
-            <a href="/dashboard/professor" className="flex items-center gap-2 text-white/80 hover:bg-white/10 rounded px-3 py-2"><BarChart2 className="w-4 h-4" /> Dashboard</a>
-            <a href="/dashboard/professor/courses" className="flex items-center gap-2 text-white/80 hover:bg-white/10 rounded px-3 py-2"><BookOpen className="w-4 h-4" /> My Courses</a>
-            <a href="/dashboard/professor/quizzes" className="flex items-center gap-2 text-white/90 hover:bg-white/10 rounded px-3 py-2 font-medium"><FileText className="w-4 h-4" /> My Quizzes</a>
-            <SignOutButton redirectUrl="/">
+                      <nav className="flex flex-col gap-2">
+              <a href="/dashboard/professor" className="flex items-center gap-2 text-white/80 hover:bg-white/10 rounded px-3 py-2"><BarChart2 className="w-4 h-4" /> Dashboard</a>
+              <a href="/dashboard/professor/sections" className="flex items-center gap-2 text-white/80 hover:bg-white/10 rounded px-3 py-2"><BookOpen className="w-4 h-4" /> My Sections</a>
+              <a href="/dashboard/professor/quizzes" className="flex items-center gap-2 text-white/90 hover:bg-white/10 rounded px-3 py-2 font-medium"><FileText className="w-4 h-4" /> My Quizzes</a>
+              <a href="/dashboard/professor/quiz-results" className="flex items-center gap-2 text-white/80 hover:bg-white/10 rounded px-3 py-2"><TrendingUp className="w-4 h-4" /> All Results</a>
+              <SignOutButton redirectUrl="/">
               <button className="flex items-center gap-2 text-red-400 hover:bg-red-400/10 rounded px-3 py-2 mt-8 w-full text-left">
                 <LogOut className="w-4 h-4" /> Logout
               </button>
@@ -107,12 +107,20 @@ export default async function ProfessorQuizzesPage() {
                 <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">My Quizzes</h1>
                 <p className="text-white/60 text-lg">Manage and monitor your quiz performance</p>
               </div>
-              <Button asChild className="flex items-center gap-2">
-                <a href="/dashboard/professor/quiz/new">
-                  <Plus className="w-4 h-4" />
-                  Create New Quiz
-                </a>
-              </Button>
+              <div className="flex gap-2">
+                <Button asChild variant="outline" className="flex items-center gap-2">
+                  <a href="/dashboard/professor/quiz-results">
+                    <TrendingUp className="w-4 h-4" />
+                    View All Results
+                  </a>
+                </Button>
+                <Button asChild className="flex items-center gap-2">
+                  <a href="/dashboard/professor/quiz/new">
+                    <Plus className="w-4 h-4" />
+                    Create New Quiz
+                  </a>
+                </Button>
+              </div>
             </div>
           </section>
 
@@ -198,7 +206,7 @@ export default async function ProfessorQuizzesPage() {
                       <TableHeader>
                         <TableRow className="border-white/10">
                           <TableHead className="text-white/60 font-medium">Quiz Title</TableHead>
-                          <TableHead className="text-white/60 font-medium">Course</TableHead>
+                          <TableHead className="text-white/60 font-medium">Section(s)</TableHead>
                           <TableHead className="text-white/60 font-medium">Status</TableHead>
                           <TableHead className="text-white/60 font-medium">Students</TableHead>
                           <TableHead className="text-white/60 font-medium">Attempts</TableHead>
@@ -219,7 +227,9 @@ export default async function ProfessorQuizzesPage() {
                               </div>
                             </TableCell>
                             <TableCell className="text-white/80">
-                              {quiz.course ? quiz.course.title : 'Global Quiz'}
+                              {quiz.sectionAssignments.length > 0
+                                ? quiz.sectionAssignments.map(sa => sa.section.name).join(', ')
+                                : 'No Section'}
                             </TableCell>
                             <TableCell>
                               {getStatusBadge(quiz.isActive ? 'Active' : 'Draft')}

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/app/db';
-import { quizzes, attempts, users } from '@/app/db/schema';
+import { quizzes, attempts, users, professorSections, quizSections } from '@/app/db/schema';
 import { eq, and, inArray, gte, lte } from 'drizzle-orm';
 import { auth } from '@clerk/nextjs/server';
 import { parse } from 'json2csv';
@@ -20,6 +20,24 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
+    // Get all section IDs the professor is enrolled in
+    const professorSectionEnrollments = await db.query.professorSections.findMany({
+      where: eq(professorSections.professorId, professor.id),
+    });
+    const sectionIds = professorSectionEnrollments.map(e => e.sectionId);
+    if (sectionIds.length === 0) {
+      return NextResponse.json({ error: 'No section access' }, { status: 403 });
+    }
+
+    // Get all quiz IDs assigned to these sections
+    const quizSectionAssignments = await db.query.quizSections.findMany({
+      where: inArray(quizSections.sectionId, sectionIds),
+    });
+    const allowedQuizIds = quizSectionAssignments.map(qs => qs.quizId);
+    if (allowedQuizIds.length === 0) {
+      return NextResponse.json({ error: 'No quiz access' }, { status: 403 });
+    }
+
     // Get query parameters
     const { searchParams } = new URL(req.url);
     const quizId = searchParams.get('quizId');
@@ -27,16 +45,16 @@ export async function GET(req: NextRequest) {
     const dateTo = searchParams.get('dateTo');
 
     // Build where conditions
-    const whereConditions = [eq(attempts.quizId, quizzes.id), eq(quizzes.professorId, professor.id)];
-    
+    let whereConditions = [inArray(attempts.quizId, allowedQuizIds)];
     if (quizId) {
-      whereConditions.push(eq(quizzes.id, quizId));
+      if (!allowedQuizIds.includes(quizId)) {
+        return NextResponse.json({ error: 'Access denied for this quiz' }, { status: 403 });
+      }
+      whereConditions.push(eq(attempts.quizId, quizId));
     }
-    
     if (dateFrom) {
       whereConditions.push(gte(attempts.submittedAt, new Date(dateFrom)));
     }
-    
     if (dateTo) {
       whereConditions.push(lte(attempts.submittedAt, new Date(dateTo + 'T23:59:59')));
     }

@@ -14,35 +14,53 @@ export const users = pgTable('users', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
-// Courses table
+// Courses table - Admin creates courses (no professor assignment at course level)
 export const courses = pgTable('courses', {
   id: uuid('id').primaryKey().defaultRandom(),
   title: text('title').notNull(),
   description: text('description'),
-  professorId: uuid('professor_id').references(() => users.id).notNull(),
-  enrollmentCode: text('enrollment_code').unique().notNull(), // 6-character enrollment code
   status: text('status', { enum: ['ACTIVE', 'INACTIVE'] }).default('ACTIVE').notNull(),
   isActive: boolean('is_active').default(true).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
-// Course enrollments - students enrolled in courses
-export const courseEnrollments = pgTable('course_enrollments', {
+// Sections table - Admin creates sections within courses
+export const sections = pgTable('sections', {
   id: uuid('id').primaryKey().defaultRandom(),
   courseId: uuid('course_id').references(() => courses.id).notNull(),
+  name: text('name').notNull(), // e.g., "Section A", "Morning Section"
+  professorEnrollmentCode: text('professor_enrollment_code').unique().notNull(), // 6-character code for professors
+  studentEnrollmentCode: text('student_enrollment_code').unique().notNull(), // 6-character code for students
+  isActive: boolean('is_active').default(true).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+// Professor-Section enrollments - professors enroll in sections using codes
+export const professorSections = pgTable('professor_sections', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  professorId: uuid('professor_id').references(() => users.id).notNull(),
+  sectionId: uuid('section_id').references(() => sections.id).notNull(),
+  enrolledAt: timestamp('enrolled_at').defaultNow().notNull(),
+  status: text('status', { enum: ['ACTIVE', 'INACTIVE'] }).default('ACTIVE').notNull(),
+});
+
+// Student-Section enrollments - students enroll in sections using codes
+export const studentSections = pgTable('student_sections', {
+  id: uuid('id').primaryKey().defaultRandom(),
   studentId: uuid('student_id').references(() => users.id).notNull(),
+  sectionId: uuid('section_id').references(() => sections.id).notNull(),
   enrolledAt: timestamp('enrolled_at').defaultNow().notNull(),
   status: text('status', { enum: ['ACTIVE', 'DROPPED'] }).default('ACTIVE').notNull(),
 });
 
-// Quizzes table
+// Quizzes table - professors create and own quizzes
 export const quizzes = pgTable('quizzes', {
   id: uuid('id').primaryKey().defaultRandom(),
   title: text('title').notNull(),
   description: text('description'),
-  courseId: uuid('course_id').references(() => courses.id).notNull(), // Required - no more global quizzes
-  professorId: uuid('professor_id').references(() => users.id).notNull(), // Direct link to professor
+  professorId: uuid('professor_id').references(() => users.id).notNull(), // Professor who created the quiz
   maxAttempts: integer('max_attempts').default(1).notNull(), // Maximum attempts allowed
   timeLimit: integer('time_limit'), // in minutes
   startDate: timestamp('start_date'), // Quiz start date
@@ -52,11 +70,11 @@ export const quizzes = pgTable('quizzes', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
-// Quiz-course assignments - many-to-many relationship (for admin assigning to multiple courses)
-export const quizCourses = pgTable('quiz_courses', {
+// Quiz-Section assignments - quizzes assigned to sections
+export const quizSections = pgTable('quiz_sections', {
   id: uuid('id').primaryKey().defaultRandom(),
   quizId: uuid('quiz_id').references(() => quizzes.id).notNull(),
-  courseId: uuid('course_id').references(() => courses.id).notNull(),
+  sectionId: uuid('section_id').references(() => sections.id).notNull(),
   assignedBy: uuid('assigned_by').references(() => users.id).notNull(), // who assigned (professor or admin)
   assignedAt: timestamp('assigned_at').defaultNow().notNull(),
 });
@@ -91,7 +109,7 @@ export const attempts = pgTable('attempts', {
   assignmentId: uuid('assignment_id').references(() => assignments.id).notNull(),
   studentId: uuid('student_id').references(() => users.id).notNull(),
   quizId: uuid('quiz_id').references(() => quizzes.id).notNull(),
-  courseId: uuid('course_id').references(() => courses.id).notNull(), // NEW: track which course context
+  sectionId: uuid('section_id').references(() => sections.id).notNull(), // Track which section context
   answers: jsonb('answers').notNull(), // { questionId: answer }
   score: integer('score'), // total points earned
   maxScore: integer('max_score').notNull(), // total possible points
@@ -104,40 +122,52 @@ export const attempts = pgTable('attempts', {
 
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
-  courses: many(courses),
-  courseEnrollments: many(courseEnrollments),
+  professorSections: many(professorSections),
+  studentSections: many(studentSections),
   assignments: many(assignments),
   attempts: many(attempts),
-  quizAssignments: many(quizCourses), // quizzes assigned by this user
+  quizAssignments: many(quizSections), // quizzes assigned by this user
+  quizzes: many(quizzes), // quizzes created by this user
 }));
 
-export const coursesRelations = relations(courses, ({ one, many }) => ({
-  professor: one(users, {
-    fields: [courses.professorId],
-    references: [users.id],
+export const coursesRelations = relations(courses, ({ many }) => ({
+  sections: many(sections),
+}));
+
+export const sectionsRelations = relations(sections, ({ one, many }) => ({
+  course: one(courses, {
+    fields: [sections.courseId],
+    references: [courses.id],
   }),
-  enrollments: many(courseEnrollments),
-  quizzes: many(quizzes),
-  quizAssignments: many(quizCourses),
+  professorSections: many(professorSections),
+  studentSections: many(studentSections),
+  quizSections: many(quizSections),
   attempts: many(attempts),
 }));
 
-export const courseEnrollmentsRelations = relations(courseEnrollments, ({ one }) => ({
-  course: one(courses, {
-    fields: [courseEnrollments.courseId],
-    references: [courses.id],
-  }),
-  student: one(users, {
-    fields: [courseEnrollments.studentId],
+export const professorSectionsRelations = relations(professorSections, ({ one }) => ({
+  professor: one(users, {
+    fields: [professorSections.professorId],
     references: [users.id],
+  }),
+  section: one(sections, {
+    fields: [professorSections.sectionId],
+    references: [sections.id],
+  }),
+}));
+
+export const studentSectionsRelations = relations(studentSections, ({ one }) => ({
+  student: one(users, {
+    fields: [studentSections.studentId],
+    references: [users.id],
+  }),
+  section: one(sections, {
+    fields: [studentSections.sectionId],
+    references: [sections.id],
   }),
 }));
 
 export const quizzesRelations = relations(quizzes, ({ one, many }) => ({
-  course: one(courses, {
-    fields: [quizzes.courseId],
-    references: [courses.id],
-  }),
   professor: one(users, {
     fields: [quizzes.professorId],
     references: [users.id],
@@ -145,20 +175,20 @@ export const quizzesRelations = relations(quizzes, ({ one, many }) => ({
   questions: many(questions),
   assignments: many(assignments),
   attempts: many(attempts),
-  courseAssignments: many(quizCourses), // courses this quiz is assigned to
+  sectionAssignments: many(quizSections), // sections this quiz is assigned to
 }));
 
-export const quizCoursesRelations = relations(quizCourses, ({ one }) => ({
+export const quizSectionsRelations = relations(quizSections, ({ one }) => ({
   quiz: one(quizzes, {
-    fields: [quizCourses.quizId],
+    fields: [quizSections.quizId],
     references: [quizzes.id],
   }),
-  course: one(courses, {
-    fields: [quizCourses.courseId],
-    references: [courses.id],
+  section: one(sections, {
+    fields: [quizSections.sectionId],
+    references: [sections.id],
   }),
   assignedBy: one(users, {
-    fields: [quizCourses.assignedBy],
+    fields: [quizSections.assignedBy],
     references: [users.id],
   }),
 }));
@@ -195,8 +225,8 @@ export const attemptsRelations = relations(attempts, ({ one }) => ({
     fields: [attempts.quizId],
     references: [quizzes.id],
   }),
-  course: one(courses, {
-    fields: [attempts.courseId],
-    references: [courses.id],
+  section: one(sections, {
+    fields: [attempts.sectionId],
+    references: [sections.id],
   }),
 })); 

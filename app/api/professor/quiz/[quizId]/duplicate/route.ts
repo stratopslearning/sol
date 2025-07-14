@@ -1,84 +1,90 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
+import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import { db } from '@/app/db';
-import { quizzes, questions, users } from '@/app/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { quizzes, questions, quizSections, professorSections } from '@/app/db/schema';
+import { eq } from 'drizzle-orm';
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ quizId: string }> }
-) {
+export async function POST(req: NextRequest) {
   try {
-    const { quizId } = await params;
-    
-    // Authenticate user
-    const { userId } = await auth();
-    if (!userId) {
+    const user = await getOrCreateUser();
+    if (!user || user.role !== 'PROFESSOR') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get user data
-    const user = await db.query.users.findFirst({
-      where: eq(users.clerkId, userId),
-    });
+    // Extract quizId from the URL
+    const urlParts = req.nextUrl.pathname.split('/');
+    const quizId = urlParts[urlParts.length - 2];
 
-    if (!user || user.role !== 'PROFESSOR') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    // Verify the quiz belongs to the professor by section assignment
+    const quizSectionAssignments = await db.query.quizSections.findMany({ where: eq(quizSections.quizId, quizId) });
+    const professorSectionEnrollments = await db.query.professorSections.findMany({ where: eq(professorSections.professorId, user.id) });
+    const allowedSectionIds = professorSectionEnrollments.map(e => e.sectionId);
+    const isAllowed = quizSectionAssignments.some(qs => allowedSectionIds.includes(qs.sectionId));
+    if (!isAllowed) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    // Fetch the original quiz with questions
+    // Get the original quiz with questions and section assignments
     const originalQuiz = await db.query.quizzes.findFirst({
-      where: and(
-        eq(quizzes.id, quizId),
-        eq(quizzes.professorId, user.id)
-      ),
+      where: eq(quizzes.id, quizId),
       with: {
-        questions: {
-          orderBy: questions.order,
-        },
-      },
+        questions: true,
+        sectionAssignments: true,
+      }
     });
 
     if (!originalQuiz) {
-      return NextResponse.json({ error: 'Quiz not found or access denied' }, { status: 404 });
+      return NextResponse.json({ error: 'Quiz not found' }, { status: 404 });
     }
 
-    // Create a copy of the quiz
-    const [duplicatedQuiz] = await db.insert(quizzes).values({
+    // Create a new quiz with the same data
+    const [newQuiz] = await db.insert(quizzes).values({
       title: `${originalQuiz.title} (Copy)`,
       description: originalQuiz.description,
-      courseId: originalQuiz.courseId,
       professorId: user.id,
       maxAttempts: originalQuiz.maxAttempts,
       timeLimit: originalQuiz.timeLimit,
-      startDate: null, // Reset dates for the copy
-      endDate: null,
+      startDate: originalQuiz.startDate,
+      endDate: originalQuiz.endDate,
       isActive: false, // Start as inactive
     }).returning();
 
-    // Copy all questions
-    const questionsToInsert = originalQuiz.questions.map((question, index) => ({
-      quizId: duplicatedQuiz.id,
-      type: question.type,
-      question: question.question,
-      options: question.options,
-      correctAnswer: question.correctAnswer,
-      points: question.points,
-      order: index + 1,
-    }));
+    // Copy questions
+    if (originalQuiz.questions.length > 0) {
+      await db.insert(questions).values(
+        originalQuiz.questions.map(q => ({
+          quizId: newQuiz.id,
+          type: q.type,
+          question: q.question,
+          options: q.options,
+          correctAnswer: q.correctAnswer,
+          points: q.points,
+          order: q.order,
+        }))
+      );
+    }
 
-    await db.insert(questions).values(questionsToInsert);
+    // Copy section assignments
+    if (originalQuiz.sectionAssignments.length > 0) {
+      await db.insert(quizSections).values(
+        originalQuiz.sectionAssignments.map(sa => ({
+          quizId: newQuiz.id,
+          sectionId: sa.sectionId,
+          assignedBy: user.id,
+        }))
+      );
+    }
 
     return NextResponse.json({
       success: true,
-      quizId: duplicatedQuiz.id,
-      message: 'Quiz duplicated successfully',
+      quiz: {
+        id: newQuiz.id,
+        title: newQuiz.title,
+      }
     });
 
   } catch (error) {
-    console.error('Error duplicating quiz:', error);
-    return NextResponse.json({
-      error: 'Failed to duplicate quiz',
-    }, { status: 500 });
+    console.error('Quiz duplication error:', error);
+    return NextResponse.json({ error: 'Failed to duplicate quiz' }, { status: 500 });
   }
 } 

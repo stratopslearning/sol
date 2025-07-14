@@ -1,37 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
+import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import { db } from '@/app/db';
-import { quizzes, questions, courses, users, quizCourses } from '@/app/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { quizzes, questions, sections, professorSections, users, quizSections } from '@/app/db/schema';
+import { eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 
-// Validation schema for updating quiz
 const updateQuizSchema = z.object({
-  title: z.string().min(1).max(100),
+  title: z.string().min(1),
   description: z.string().optional(),
-  courseIds: z.array(z.string()).min(1),
-  maxAttempts: z.number().min(1).max(10),
-  timeLimit: z.number().min(1).max(180),
-  startDate: z.string().optional().transform((val) => val ? new Date(val) : undefined),
-  endDate: z.string().optional().transform((val) => val ? new Date(val) : undefined),
-  isActive: z.boolean(),
+  sectionIds: z.array(z.string()).min(1, 'Select at least one section'),
+  maxAttempts: z.number().min(1).max(10).default(1),
+  timeLimit: z.number().min(1).optional(),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+  isActive: z.boolean().default(true),
   questions: z.array(z.object({
-    id: z.string(),
     type: z.enum(['MULTIPLE_CHOICE', 'TRUE_FALSE', 'SHORT_ANSWER']),
     question: z.string().min(1),
-    points: z.number().min(1),
-    options: z.array(z.string()).nullable().optional(),
-    correctAnswer: z.string().nullable().optional(),
-    order: z.number(),
-  })).min(1),
-}).refine((data) => {
-  if (data.startDate && data.endDate) {
-    return data.endDate > data.startDate;
-  }
-  return true;
-}, {
-  message: "End date must be after start date",
-  path: ["endDate"],
+    options: z.array(z.string()).optional(),
+    correctAnswer: z.string().optional(),
+    points: z.number().min(1).default(1),
+    order: z.number().min(0),
+  })),
 });
 
 export async function PUT(
@@ -40,110 +30,98 @@ export async function PUT(
 ) {
   try {
     const { quizId } = await params;
-    
-    // Authenticate user
-    const { userId } = await auth();
-    if (!userId) {
+    const user = await getOrCreateUser();
+    if (!user || user.role !== 'PROFESSOR') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    // Get user data
-    const user = await db.query.users.findFirst({
-      where: eq(users.clerkId, userId),
-    });
-
-    if (!user || user.role !== 'PROFESSOR') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
-    // Verify the quiz belongs to the professor
-    const existingQuiz = await db.query.quizzes.findFirst({
-      where: and(
-        eq(quizzes.id, quizId),
-        eq(quizzes.professorId, user.id)
-      ),
-    });
-
-    if (!existingQuiz) {
-      return NextResponse.json({ error: 'Quiz not found or access denied' }, { status: 404 });
-    }
-
-    // Parse and validate request body
     const body = await req.json();
     const validatedData = updateQuizSchema.parse(body);
 
-    // Verify all courses belong to the professor (or admin)
-    for (const courseId of validatedData.courseIds) {
-      const course = await db.query.courses.findFirst({
-        where: eq(courses.id, courseId),
-      });
-      if (!course || ((user.role as any) !== 'ADMIN' && course.professorId !== user.id)) {
-        return NextResponse.json({ error: 'Course not found or access denied' }, { status: 403 });
-      }
+    // Check if quiz exists and belongs to professor
+    const existingQuiz = await db.query.quizzes.findFirst({
+      where: eq(quizzes.id, quizId),
+    });
+
+    if (!existingQuiz) {
+      return NextResponse.json({ error: 'Quiz not found' }, { status: 404 });
     }
 
-    // Update the quiz (assign to first course for legacy field, but use quizCourses for assignment)
-    const [updatedQuiz] = await db.update(quizzes)
+    // Verify the quiz belongs to the professor by section assignment
+    const quizSectionAssignments = await db.query.quizSections.findMany({ where: eq(quizSections.quizId, quizId) });
+    const professorSectionEnrollments = await db.query.professorSections.findMany({ where: eq(professorSections.professorId, user.id) });
+    const allowedSectionIds = professorSectionEnrollments.map(e => e.sectionId);
+    const isAllowed = quizSectionAssignments.some(qs => allowedSectionIds.includes(qs.sectionId));
+    if (!isAllowed) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    }
+
+    // Verify professor is enrolled in all specified sections
+    const enrolledSectionIds = professorSectionEnrollments.map(e => e.sectionId);
+    const invalidSections = validatedData.sectionIds.filter(id => !enrolledSectionIds.includes(id));
+    
+    if (invalidSections.length > 0) {
+      return NextResponse.json({ 
+        error: 'You can only assign quizzes to sections you are enrolled in' 
+      }, { status: 403 });
+    }
+
+    // Update the quiz
+    await db.update(quizzes)
       .set({
         title: validatedData.title,
-        description: validatedData.description || null,
-        courseId: validatedData.courseIds[0],
+        description: validatedData.description,
         maxAttempts: validatedData.maxAttempts,
         timeLimit: validatedData.timeLimit,
-        startDate: validatedData.startDate || null,
-        endDate: validatedData.endDate || null,
+        startDate: validatedData.startDate ? new Date(validatedData.startDate) : null,
+        endDate: validatedData.endDate ? new Date(validatedData.endDate) : null,
         isActive: validatedData.isActive,
         updatedAt: new Date(),
       })
-      .where(eq(quizzes.id, quizId))
-      .returning();
+      .where(eq(quizzes.id, quizId));
 
-    // Remove old assignments
-    await db.delete(quizCourses).where(eq(quizCourses.quizId, quizId));
-    // Assign quiz to courses in quizCourses
-    await db.insert(quizCourses).values(
-      validatedData.courseIds.map((courseId: string) => ({
-        quizId: quizId,
-        courseId,
-        assignedBy: user.id,
-        assignedAt: new Date(),
-      }))
-    );
-
-    // Delete existing questions
+    // Delete existing questions and recreate them
     await db.delete(questions).where(eq(questions.quizId, quizId));
 
     // Create new questions
-    const questionsToInsert = validatedData.questions.map((question) => ({
-      quizId: quizId,
-      type: question.type,
-      question: question.question,
-      options: question.type === 'MULTIPLE_CHOICE' ? question.options : null,
-      correctAnswer: question.correctAnswer || null,
-      points: question.points,
-      order: question.order,
-    }));
+    if (validatedData.questions.length > 0) {
+      await db.insert(questions).values(
+        validatedData.questions.map(q => ({
+          quizId,
+          type: q.type,
+          question: q.question,
+          options: q.options,
+          correctAnswer: q.correctAnswer,
+          points: q.points,
+          order: q.order,
+        }))
+      );
+    }
 
-    await db.insert(questions).values(questionsToInsert);
+    // Update section assignments
+    await db.delete(quizSections).where(eq(quizSections.quizId, quizId));
+    await db.insert(quizSections).values(
+      validatedData.sectionIds.map((sectionId: string) => ({
+        quizId,
+        sectionId,
+        assignedBy: user.id,
+      }))
+    );
 
-    return NextResponse.json({
-      success: true,
-      quizId: updatedQuiz.id,
+    return NextResponse.json({ 
+      success: true, 
       message: 'Quiz updated successfully',
+      quiz: {
+        id: quizId,
+        title: validatedData.title,
+        sectionIds: validatedData.sectionIds,
+      }
     });
 
   } catch (error) {
-    console.error('Error updating quiz:', error);
-    
+    console.error('Quiz update error:', error);
     if (error instanceof z.ZodError) {
-      return NextResponse.json({
-        error: 'Validation failed',
-        details: error.errors,
-      }, { status: 400 });
+      return NextResponse.json({ error: 'Invalid data', details: error.errors }, { status: 400 });
     }
-
-    return NextResponse.json({
-      error: 'Failed to update quiz',
-    }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to update quiz' }, { status: 500 });
   }
 } 

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { db } from '@/app/db';
-import { quizzes, questions, assignments, attempts } from '@/app/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { quizzes, questions, assignments, attempts, quizSections, studentSections } from '@/app/db/schema';
+import { eq, and, inArray } from 'drizzle-orm';
 import { gradeShortAnswer, GradingRequest } from '@/lib/grading';
 
 export async function POST(req: NextRequest, context: { params: Promise<{ quizId: string }> }) {
@@ -34,6 +34,25 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
     });
     if (!quiz) {
       return NextResponse.json({ error: 'Quiz not found' }, { status: 404 });
+    }
+
+    // Find all sections this quiz is assigned to
+    const quizSectionLinks = await db.query.quizSections.findMany({
+      where: eq(quizSections.quizId, quizId)
+    });
+    const quizSectionIds = quizSectionLinks.map(qs => qs.sectionId);
+
+    // Find the student's active section enrollment that matches one of these sections
+    const studentSection = await db.query.studentSections.findFirst({
+      where: and(
+        eq(studentSections.studentId, assignment.studentId),
+        eq(studentSections.status, 'ACTIVE'),
+        inArray(studentSections.sectionId, quizSectionIds)
+      )
+    });
+    const sectionId = studentSection ? studentSection.sectionId : null;
+    if (!sectionId) {
+      return NextResponse.json({ error: 'No valid section found for this quiz/assignment' }, { status: 400 });
     }
 
     const quizQuestions = await db.query.questions.findMany({
@@ -131,7 +150,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
       assignmentId,
       studentId: assignment.studentId,
       quizId: quizId,
-      courseId: quiz.courseId, // Get courseId from the quiz
+      sectionId,
       answers,
       score: totalScore,
       maxScore,

@@ -1,153 +1,215 @@
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import { db } from '@/app/db';
-import { quizzes, assignments, attempts, courses, courseEnrollments, users } from '@/app/db/schema';
+import { quizzes, assignments, attempts, sections, studentSections, users } from '@/app/db/schema';
 import { eq, inArray } from 'drizzle-orm';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import StudentSidebar from '@/components/StudentSidebar';
-import { CheckCircle, LogOut, BarChart2, BookOpen, User2, FileText } from 'lucide-react';
+import { 
+  CalendarDays, 
+  CheckCircle, 
+  FileText, 
+  LogOut, 
+  BarChart2, 
+  BookOpen,
+  TrendingUp,
+  Clock,
+  Users
+} from 'lucide-react';
 import { SignOutButton } from '@clerk/nextjs';
 import StudentEnrollFormWrapper from '@/components/StudentEnrollFormWrapper';
-
-function getStatusBadge(status: 'Open' | 'Completed' | 'Locked') {
-  if (status === 'Open') return <Badge className="bg-green-600/20 text-green-400 border-green-600">Open</Badge>;
-  if (status === 'Completed') return <Badge className="bg-gray-600/20 text-gray-300 border-gray-600">Completed</Badge>;
-  return <Badge className="bg-red-600/20 text-red-400 border-red-600">Locked</Badge>;
-}
+import LeaveSectionButton from '@/components/LeaveSectionButton';
 
 export default async function StudentDashboard() {
   const user = await getOrCreateUser();
-  if (!user) return null;
+  if (!user || user.role !== 'STUDENT') return null;
 
-  // Fetch enrolled courses
-  const enrollments = await db.query.courseEnrollments.findMany({
-    where: eq(courseEnrollments.studentId, user.id),
-    with: { course: { with: { professor: true } } },
+  // Fetch student's section enrollments
+  const enrollments = await db.query.studentSections.findMany({
+    where: eq(studentSections.studentId, user.id),
+    with: {
+      section: true
+    }
   });
-  const enrolledCourses = enrollments.map(e => e.course);
-  const enrolledCourseIds = enrolledCourses.map(c => c.id);
 
-  // Fetch quizzes for enrolled courses
-  const courseQuizzes = enrolledCourseIds.length > 0
-    ? await db.query.quizzes.findMany({
-        where: inArray(quizzes.courseId, enrolledCourseIds),
-        with: { course: true },
-        orderBy: (quizzes, { desc }) => desc(quizzes.createdAt),
-      })
-    : [];
+  // Get section IDs for filtering
+  const sectionIds = enrollments.map(e => e.sectionId);
 
-  // Fetch all attempts for this student
-  const allAttempts = await db.query.attempts.findMany({
+  // Fetch quizzes assigned to student's sections
+  const assignedQuizzes = sectionIds.length > 0 ? await db.query.quizzes.findMany({
+    where: inArray(quizzes.id, 
+      db.select({ quizId: quizzes.id })
+        .from(quizzes)
+        .innerJoin(assignments, eq(assignments.quizId, quizzes.id))
+        .where(eq(assignments.studentId, user.id))
+    ),
+    with: {
+      sectionAssignments: {
+        with: {
+          section: true
+        }
+      }
+    }
+  }) : [];
+
+  // Fetch recent attempts
+  const recentAttempts = await db.query.attempts.findMany({
     where: eq(attempts.studentId, user.id),
+    with: {
+      quiz: true,
+      section: true
+    },
+    orderBy: (attempts, { desc }) => desc(attempts.submittedAt),
+    limit: 5,
   });
-  // Map attempts by quizId
-  const attemptsByQuiz: Record<string, typeof allAttempts[0][]> = {};
-  allAttempts.forEach(a => {
-    if (!attemptsByQuiz[a.quizId]) attemptsByQuiz[a.quizId] = [];
-    attemptsByQuiz[a.quizId].push(a);
-  });
+
+  // Calculate stats
+  const totalSections = enrollments.length;
+  const totalQuizzes = assignedQuizzes.length;
+  const totalAttempts = recentAttempts.length;
+  const averageScore = totalAttempts > 0 
+    ? Math.round(recentAttempts.reduce((sum, a) => sum + (a.percentage || 0), 0) / totalAttempts)
+    : 0;
 
   return (
     <SidebarProvider>
       <div className="min-h-screen w-screen bg-[#030303] flex">
         {/* Sidebar */}
         <StudentSidebar user={user} />
-
         {/* Main Content */}
-        <main className="flex-1 flex flex-col items-center py-10 px-2 md:px-8">
-          {/* Welcome Header */}
-          <section className="w-full max-w-4xl mb-8">
+        <main className="flex-1 flex flex-col py-10 px-4 md:px-8 overflow-x-hidden">
+          <StudentEnrollFormWrapper />
+          {/* Hero/Header */}
+          <section className="w-full max-w-7xl mx-auto mb-8">
             <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">Welcome back, {user.firstName || user.email}!</h1>
-            <p className="text-white/60 text-lg">Here’s your learning overview</p>
-          </section>
-          {/* Enrollment Form */}
-          <section className="w-full max-w-4xl mb-8">
-            <StudentEnrollFormWrapper />
+            <p className="text-white/60 text-lg">Here's your learning overview</p>
           </section>
 
-          {/* My Courses Section */}
-          <section className="w-full max-w-4xl mb-8">
-            <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2"><BookOpen className="w-6 h-6" /> My Courses</h2>
-            {enrolledCourses.length === 0 ? (
-              <Card className="bg-white/10 border border-white/10 text-center py-8">
+          {/* Analytics Section */}
+          <section className="w-full max-w-7xl mx-auto mb-8">
+            <h2 className="text-xl font-semibold text-white mb-4">Your Progress</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium text-white/60">Enrolled Sections</CardTitle>
+                  <BookOpen className="h-4 w-4 text-blue-400" />
+                </CardHeader>
                 <CardContent>
-                  <FileText className="w-10 h-10 mx-auto mb-2 text-white/40" />
-                  <div className="text-white/60 text-lg mb-2">You are not enrolled in any courses yet.</div>
-                  <div className="text-white/40 text-sm">Join a course using the enrollment code above.</div>
+                  <div className="text-2xl font-bold text-blue-400">{totalSections}</div>
+                  <p className="text-xs text-white/40">Active sections</p>
                 </CardContent>
               </Card>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                {enrolledCourses.map(course => (
-                  <Card key={course.id} className="bg-white/10 border border-white/10">
-                    <CardHeader>
-                      <CardTitle className="text-lg text-white flex items-center gap-2">
-                        <BookOpen className="w-5 h-5" />
-                        {course.title}
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-white/70 text-sm flex items-center gap-2">
-                        <User2 className="w-4 h-4" />
-                        Professor: {course.professor?.firstName || course.professor?.email || 'Unknown'}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
+
+              <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium text-white/60">Available Quizzes</CardTitle>
+                  <FileText className="h-4 w-4 text-green-400" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-green-400">{totalQuizzes}</div>
+                  <p className="text-xs text-white/40">Assigned quizzes</p>
+                </CardContent>
+              </Card>
+
+              <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium text-white/60">Quiz Attempts</CardTitle>
+                  <CheckCircle className="h-4 w-4 text-orange-400" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-orange-400">{totalAttempts}</div>
+                  <p className="text-xs text-white/40">Completed quizzes</p>
+                </CardContent>
+              </Card>
+
+              <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium text-white/60">Avg Score</CardTitle>
+                  <TrendingUp className="h-4 w-4 text-emerald-400" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-emerald-400">{averageScore}%</div>
+                  <p className="text-xs text-white/40">Your average</p>
+                </CardContent>
+              </Card>
+            </div>
           </section>
 
-          {/* Available Quizzes Section */}
-          <section className="w-full max-w-4xl mb-8">
-            <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2"><FileText className="w-6 h-6" /> Available Quizzes</h2>
-            {courseQuizzes.length === 0 ? (
-              <Card className="bg-white/10 border border-white/10 text-center py-8">
-                <CardContent>
-                  <FileText className="w-10 h-10 mx-auto mb-2 text-white/40" />
-                  <div className="text-white/60 text-lg mb-2">No quizzes available yet.</div>
-                  <div className="text-white/40 text-sm">Check back later for new quizzes in your courses.</div>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {courseQuizzes.map(quiz => {
-                  const attempts = attemptsByQuiz[quiz.id] || [];
-                  const hasAttempted = attempts.length > 0;
-                  return (
-                    <Card key={quiz.id} className="flex flex-col justify-between rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
-                      <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-lg text-white flex-1 truncate">{quiz.title}</CardTitle>
-                        <Badge className="bg-blue-600/20 text-blue-400 border-blue-600 ml-2">{quiz.course?.title}</Badge>
-                      </CardHeader>
-                      <CardContent className="flex flex-col gap-2">
-                        <div className="flex items-center gap-2 text-white/70 text-sm">
-                          <CheckCircle className="w-4 h-4" />
-                          {hasAttempted ? 'Attempted' : 'Not Attempted'}
+          {/* Enrolled Sections & Recent Activity */}
+          <section className="w-full max-w-7xl mx-auto">
+            <h2 className="text-xl font-semibold text-white mb-4">Your Sections & Recent Activity</h2>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Enrolled Sections */}
+              <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
+                <CardHeader>
+                  <CardTitle className="text-lg text-white">Enrolled Sections</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {enrollments.length > 0 ? (
+                    enrollments.map(enrollment => (
+                      <div key={enrollment.id} className="flex items-center justify-between p-3 rounded-lg bg-white/5">
+                        <div className="flex-1">
+                          <div className="text-sm font-medium text-white">
+                            {enrollment.section.name}
+                          </div>
+                          <div className="text-xs text-white/60">
+                            Section
+                          </div>
                         </div>
-                      </CardContent>
-                      <div className="flex-1" />
-                      <div className="p-4 pt-0 flex gap-2">
-                        {!hasAttempted && (
-                          <Button asChild className="w-full">
-                            <a href={`/quiz/${quiz.id}`}>Start Quiz</a>
-                          </Button>
-                        )}
-                        {hasAttempted && attempts.length > 0 && (
-                          <Button asChild variant="secondary" className="w-full">
-                            <a href={`/quiz/${quiz.id}/results?attemptId=${attempts[attempts.length - 1]?.id}`}>
-                              Review
-                            </a>
-                          </Button>
-                        )}
+                        <div className="flex items-center gap-2">
+                          <Badge className="bg-green-600/20 text-green-400 border-green-600">
+                            Enrolled
+                          </Badge>
+                          <LeaveSectionButton 
+                            sectionId={enrollment.section.id} 
+                            sectionName={enrollment.section.name}
+                          />
+                        </div>
                       </div>
-                    </Card>
-                  );
-                })}
-              </div>
-            )}
+                    ))
+                  ) : (
+                    <div className="text-center py-6 text-white/40">
+                      <BookOpen className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                      <p>No sections enrolled yet</p>
+                      <div className="text-white/40 text-sm">Join a section using the enrollment code from your dashboard.</div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Recent Activity */}
+              <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
+                <CardHeader>
+                  <CardTitle className="text-lg text-white">Recent Quiz Attempts</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {recentAttempts.length > 0 ? (
+                    recentAttempts.map(attempt => (
+                      <div key={attempt.id} className="flex items-center justify-between p-3 rounded-lg bg-white/5">
+                        <div className="flex-1">
+                          <div className="text-sm font-medium text-white">
+                            {attempt.quiz.title}
+                          </div>
+                          <div className="text-xs text-white/60">
+                            {attempt.section.name} • {attempt.percentage}%
+                          </div>
+                        </div>
+                        <Badge className={attempt.passed ? 'bg-green-600/20 text-green-400 border-green-600' : 'bg-red-600/20 text-red-400 border-red-600'}>
+                          {attempt.passed ? 'Passed' : 'Failed'}
+                        </Badge>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-6 text-white/40">
+                      <FileText className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                      <p>No recent attempts</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           </section>
         </main>
       </div>

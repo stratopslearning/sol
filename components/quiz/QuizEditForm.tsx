@@ -18,8 +18,10 @@ import {
   FileText,
   Clock,
   Users,
-  Target
+  Target,
+  AlertCircle
 } from 'lucide-react';
+import { SectionMultiSelect } from '@/components/ui/SectionMultiSelect';
 
 interface Question {
   id: string;
@@ -48,17 +50,20 @@ interface Quiz {
   } | null;
 }
 
-interface Course {
+interface Section {
   id: string;
   title: string;
 }
 
 interface QuizEditFormProps {
   quiz: Quiz;
-  courses: Course[];
+  courses: Section[]; // Keep the prop name for backward compatibility but it's actually sections
+  apiEndpoint?: string;
+  onSuccess?: () => void;
+  assignedSectionIds?: string[];
 }
 
-export function QuizEditForm({ quiz, courses }: QuizEditFormProps) {
+export function QuizEditForm({ quiz, courses, apiEndpoint = `/api/professor/quiz/${quiz.id}/update`, onSuccess, assignedSectionIds = [] }: QuizEditFormProps) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
@@ -75,7 +80,9 @@ export function QuizEditForm({ quiz, courses }: QuizEditFormProps) {
     isActive: quiz.isActive,
   });
 
-  const [questions, setQuestions] = useState<Question[]>(quiz.questions);
+  const [questions, setQuestions] = useState<Question[]>(quiz.questions || []);
+  const [sectionIds, setSectionIds] = useState<string[]>(assignedSectionIds);
+  const [sectionError, setSectionError] = useState<string | null>(null);
 
   const addQuestion = () => {
     const newQuestion: Question = {
@@ -109,9 +116,20 @@ export function QuizEditForm({ quiz, courses }: QuizEditFormProps) {
   };
 
   const onSubmit = async () => {
+    // Check if professor has any sections available
+    if (courses.length === 0) {
+      // Show error message
+      return;
+    }
+    
+    if (sectionIds.length === 0) {
+      setSectionError('Please assign the quiz to at least one section.');
+      return;
+    }
+    setSectionError(null);
     setIsSubmitting(true);
     try {
-      const response = await fetch(`/api/professor/quiz/${quiz.id}/update`, {
+      const response = await fetch(apiEndpoint, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -122,11 +140,16 @@ export function QuizEditForm({ quiz, courses }: QuizEditFormProps) {
             ...q,
             order: index + 1,
           })),
+          sectionIds,
         }),
       });
 
       if (response.ok) {
-        router.push(`/dashboard/professor/quizzes?success=true&quizId=${quiz.id}`);
+        if (onSuccess) {
+          onSuccess();
+        } else {
+          router.push(`/dashboard/professor/quizzes?success=true&quizId=${quiz.id}`);
+        }
       } else {
         throw new Error('Failed to update quiz');
       }
@@ -139,6 +162,11 @@ export function QuizEditForm({ quiz, courses }: QuizEditFormProps) {
   };
 
   const nextStep = () => {
+    if (currentStep === 1 && sectionIds.length === 0) {
+      setSectionError('Please assign the quiz to at least one section.');
+      return;
+    }
+    setSectionError(null);
     if (currentStep < 3) {
       setCurrentStep(currentStep + 1);
     }
@@ -222,23 +250,6 @@ export function QuizEditForm({ quiz, courses }: QuizEditFormProps) {
                   className="bg-white/10 border-white/20 text-white placeholder:text-white/40"
                 />
               </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="courseId" className="text-white">Course</Label>
-                <Select value={formData.courseId} onValueChange={(value) => setFormData({ ...formData, courseId: value })}>
-                  <SelectTrigger className="bg-white/10 border-white/20 text-white">
-                    <SelectValue placeholder="Select course" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="global">Global Quiz (No Course)</SelectItem>
-                    {courses.map((course) => (
-                      <SelectItem key={course.id} value={course.id}>
-                        {course.title}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
             </div>
 
             <div className="space-y-2">
@@ -253,6 +264,37 @@ export function QuizEditForm({ quiz, courses }: QuizEditFormProps) {
               />
             </div>
 
+            <div className="space-y-2">
+              <Label htmlFor="sectionIds" className="text-white">Assign to Sections <span className="text-red-400">*</span></Label>
+              {courses.length === 0 ? (
+                <div className="p-4 border border-yellow-500/20 bg-yellow-500/10 rounded-lg">
+                  <div className="flex items-center gap-2 text-yellow-400">
+                    <AlertCircle className="w-4 h-4" />
+                    <span className="text-sm font-medium">No sections available</span>
+                  </div>
+                  <p className="text-xs text-yellow-300 mt-1">
+                    You need to be enrolled in at least one section to edit quizzes. 
+                    <a href="/dashboard/professor/sections" className="text-blue-400 hover:underline ml-1">
+                      Join a section
+                    </a>
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <SectionMultiSelect
+                    options={courses}
+                    value={sectionIds}
+                    onChange={selected => {
+                      setSectionIds(selected);
+                      setSectionError(null);
+                    }}
+                    placeholder="Select sections..."
+                  />
+                  {sectionError && <div className="text-xs text-red-400 mt-1">{sectionError}</div>}
+                </>
+              )}
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <div className="space-y-2">
                 <Label htmlFor="maxAttempts" className="text-white flex items-center gap-2">
@@ -264,8 +306,8 @@ export function QuizEditForm({ quiz, courses }: QuizEditFormProps) {
                   type="number"
                   min="1"
                   max="10"
-                  value={formData.maxAttempts}
-                  onChange={(e) => setFormData({ ...formData, maxAttempts: parseInt(e.target.value) })}
+                  value={typeof formData.maxAttempts === 'number' && !isNaN(formData.maxAttempts) ? formData.maxAttempts : 1}
+                  onChange={(e) => setFormData({ ...formData, maxAttempts: parseInt(e.target.value) || 1 })}
                   className="bg-white/10 border-white/20 text-white"
                 />
               </div>
@@ -280,8 +322,8 @@ export function QuizEditForm({ quiz, courses }: QuizEditFormProps) {
                   type="number"
                   min="1"
                   max="180"
-                  value={formData.timeLimit}
-                  onChange={(e) => setFormData({ ...formData, timeLimit: parseInt(e.target.value) })}
+                  value={typeof formData.timeLimit === 'number' && !isNaN(formData.timeLimit) ? formData.timeLimit : 30}
+                  onChange={(e) => setFormData({ ...formData, timeLimit: parseInt(e.target.value) || 30 })}
                   className="bg-white/10 border-white/20 text-white"
                 />
               </div>
@@ -430,8 +472,8 @@ export function QuizEditForm({ quiz, courses }: QuizEditFormProps) {
                       <Input
                         type="number"
                         min="1"
-                        value={question.points}
-                        onChange={(e) => updateQuestion(index, 'points', parseInt(e.target.value))}
+                        value={typeof question.points === 'number' && !isNaN(question.points) ? question.points : 1}
+                        onChange={(e) => updateQuestion(index, 'points', parseInt(e.target.value) || 1)}
                         className="bg-white/10 border-white/20 text-white w-24"
                       />
                     </div>
@@ -444,7 +486,7 @@ export function QuizEditForm({ quiz, courses }: QuizEditFormProps) {
               <div className="text-center py-12">
                 <FileText className="w-12 h-12 mx-auto mb-4 text-white/40" />
                 <h3 className="text-lg font-medium text-white mb-2">No questions yet</h3>
-                <p className="text-white/60 mb-6">Add your first question to get started</p>
+                <p className="text-white/60 mb-6">Add your first question to get started. You need at least one question to proceed.</p>
                 <Button onClick={addQuestion}>
                   <Plus className="w-4 h-4 mr-2" />
                   Add First Question
@@ -472,13 +514,6 @@ export function QuizEditForm({ quiz, courses }: QuizEditFormProps) {
                   <div className="flex justify-between">
                     <span className="text-white/60">Title:</span>
                     <span className="text-white font-medium">{formData.title}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-white/60">Course:</span>
-                    <span className="text-white font-medium">
-                      {formData.courseId === 'global' ? 'Global Quiz' : 
-                       courses.find(c => c.id === formData.courseId)?.title}
-                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-white/60">Status:</span>
@@ -554,13 +589,19 @@ export function QuizEditForm({ quiz, courses }: QuizEditFormProps) {
 
         <div className="flex gap-2">
           {currentStep < 3 ? (
-            <Button onClick={nextStep} disabled={questions.length === 0}>
-              Next
+            <Button 
+              onClick={nextStep} 
+              disabled={questions.length === 0 || sectionIds.length === 0 || courses.length === 0}
+            >
+              {questions.length === 0 ? 'Add Questions First' : courses.length === 0 ? 'No Sections Available' : 'Next'}
             </Button>
           ) : (
-            <Button onClick={onSubmit} disabled={isSubmitting}>
+            <Button 
+              onClick={onSubmit} 
+              disabled={isSubmitting || sectionIds.length === 0 || courses.length === 0}
+            >
               <Save className="w-4 h-4 mr-2" />
-              {isSubmitting ? 'Saving...' : 'Save Changes'}
+              {isSubmitting ? 'Saving...' : courses.length === 0 ? 'No Sections Available' : 'Save Changes'}
             </Button>
           )}
         </div>

@@ -30,11 +30,7 @@ export default async function ResultsPage({ params, searchParams }: ResultsPageP
   const attempt = await db.query.attempts.findFirst({
     where: eq(attempts.id, attemptId),
     with: {
-      quiz: {
-        with: {
-          course: true,
-        },
-      },
+      quiz: true,
     },
   });
 
@@ -86,7 +82,6 @@ export default async function ResultsPage({ params, searchParams }: ResultsPageP
                 {attempt.passed ? 'Quiz Completed!' : 'Quiz Attempted'}
               </CardTitle>
               <p className="text-gray-300 mt-2 text-lg font-medium">{quiz.title}</p>
-              <p className="text-gray-400">{quiz.course?.title}</p>
             </CardHeader>
             <CardContent className="space-y-8">
               {/* Score Summary */}

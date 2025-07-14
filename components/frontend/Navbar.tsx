@@ -72,6 +72,11 @@ export function Navbar() {
                         <a href="/dashboard/professor">Professor Dashboard</a>
                       </Button>
                     )}
+                    {dbUser && dbUser.role === 'ADMIN' && (
+                      <Button asChild variant="secondary">
+                        <a href="/dashboard/admin">Admin Dashboard</a>
+                      </Button>
+                    )}
                     {dbUser && (
                       <div className="flex items-center space-x-2">
                         <span className="text-xs text-white/60">{dbUser.role}</span>
@@ -139,6 +144,9 @@ export function Navbar() {
                 )}
                 {isSignedIn && dbUser && dbUser.role === 'PROFESSOR' && (
                   <MobileNavLink href="/dashboard/professor">Professor Dashboard</MobileNavLink>
+                )}
+                {isSignedIn && dbUser && dbUser.role === 'ADMIN' && (
+                  <MobileNavLink href="/dashboard/admin">Admin Dashboard</MobileNavLink>
                 )}
                 
                 {/* Mobile Auth Buttons */}

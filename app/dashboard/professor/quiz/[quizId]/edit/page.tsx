@@ -1,6 +1,6 @@
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import { db } from '@/app/db';
-import { quizzes, questions, courses } from '@/app/db/schema';
+import { quizzes, questions, professorSections } from '@/app/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -31,7 +31,7 @@ export default async function EditQuizPage({
   
   if (!user || user.role !== 'PROFESSOR') return null;
 
-  // Fetch quiz with questions
+  // Fetch quiz with questions and section assignments
   const quiz = await db.query.quizzes.findFirst({
     where: and(
       eq(quizzes.id, quizId),
@@ -41,7 +41,15 @@ export default async function EditQuizPage({
       questions: {
         orderBy: questions.order,
       },
-      course: true,
+      sectionAssignments: {
+        with: {
+          section: {
+            with: {
+              course: true
+            }
+          }
+        }
+      },
     },
   });
 
@@ -60,11 +68,27 @@ export default async function EditQuizPage({
           : null,
   }));
 
-  // Fetch professor's courses for the form
-  const professorCourses = await db.query.courses.findMany({
-    where: eq(courses.professorId, user.id),
-    orderBy: (courses, { asc }) => asc(courses.title),
+  // Fetch professor's sections for the form
+  const professorSectionsList = await db.query.professorSections.findMany({
+    where: eq(professorSections.professorId, user.id),
+    with: {
+      section: {
+        with: {
+          course: true
+        }
+      }
+    }
   });
+
+  // Transform the data to match the expected format for SectionMultiSelect
+  const enrolledSections = professorSectionsList.map(ps => ({
+    id: ps.section.id,
+    title: `${ps.section.course.title} - ${ps.section.name}`,
+    description: ps.section.course.description
+  }));
+
+  // Get currently assigned section IDs
+  const assignedSectionIds = quiz.sectionAssignments.map(sa => sa.section.id);
 
   return (
     <SidebarProvider>
@@ -113,10 +137,12 @@ export default async function EditQuizPage({
                 <div className="flex items-center gap-2 mt-2">
                   <span className="text-white/40 text-sm">Quiz:</span>
                   <span className="text-white font-medium">{quiz.title}</span>
-                  {quiz.course && (
+                  {quiz.sectionAssignments.length > 0 && (
                     <>
-                      <span className="text-white/40 text-sm">• Course:</span>
-                      <span className="text-white/60 text-sm">{quiz.course.title}</span>
+                      <span className="text-white/40 text-sm">• Section(s):</span>
+                      <span className="text-white/60 text-sm">
+                        {quiz.sectionAssignments.map(sa => sa.section.name).join(', ')}
+                      </span>
                     </>
                   )}
                 </div>
@@ -173,7 +199,8 @@ export default async function EditQuizPage({
           <section className="w-full max-w-6xl">
             <QuizEditForm 
               quiz={{ ...quiz, questions: safeQuestions }}
-              courses={professorCourses}
+              courses={enrolledSections}
+              assignedSectionIds={assignedSectionIds}
             />
           </section>
         </main>
