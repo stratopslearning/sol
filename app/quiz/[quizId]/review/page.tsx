@@ -93,10 +93,6 @@ export default async function ReviewPage({ params, searchParams }: ReviewPagePro
                       <span className="text-gray-300 font-medium">Your Answer: </span>
                       <span className="text-white">{answers[q.id] ?? <span className="italic text-gray-400">No answer</span>}</span>
                     </div>
-                    <div className="mb-2">
-                      <span className="text-gray-300 font-medium">Correct Answer: </span>
-                      <span className="text-green-400">{q.correctAnswer ?? <span className="italic text-gray-400">N/A</span>}</span>
-                    </div>
                   </div>
                   {/* Enhanced GPT Feedback Display */}
                   {q.type === 'SHORT_ANSWER' && gptFeedback[q.id] && (
@@ -112,15 +108,9 @@ export default async function ReviewPage({ params, searchParams }: ReviewPagePro
                     <div className="bg-blue-900/30 border border-blue-500/30 rounded-xl p-6 shadow-md">
                       <div className="flex items-center gap-2 mb-2">
                         <span className="text-sm font-semibold text-blue-300">Question Result</span>
-                        <Badge variant="outline" className="text-xs">
-                          {gptFeedback[q.id].score}/{gptFeedback[q.id].maxPoints} pts
-                        </Badge>
                       </div>
                       <p className="text-base text-blue-100 font-medium">
-                        {answers[q.id] === q.correctAnswer ? 
-                          'Correct! Well done.' : 
-                          'Incorrect. Review the correct answer above.'
-                        }
+                        {gptFeedback[q.id].feedback}
                       </p>
                     </div>
                   )}

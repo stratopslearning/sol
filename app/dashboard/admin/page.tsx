@@ -100,16 +100,14 @@ export default async function AdminDashboardPage() {
                   <Card key={course.id} className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
                     <CardHeader className="flex flex-row items-center justify-between">
                       <CardTitle className="text-lg text-white">{course.title}</CardTitle>
-                      <Link href={`/dashboard/admin/courses/${course.id}`}
-                        className="ml-2 text-blue-400 hover:underline flex items-center">
-                        <BookOpen className="w-4 h-4" />
-                      </Link>
+                      {/* Removed link to /dashboard/admin/courses/[course.id] */}
+                      <BookOpen className="w-4 h-4 text-blue-400 ml-2" />
                     </CardHeader>
                     <CardContent>
                       <div className="flex flex-col gap-2">
                         <span className="text-white/60 text-sm">{course.description}</span>
                         <div className="flex gap-2 mt-4">
-                          <CourseFormModal mode="edit" course={safeCourse} />
+                          {/* Removed edit button */}
                           <CourseFormModal mode="delete" course={safeCourse} />
                         </div>
                       </div>

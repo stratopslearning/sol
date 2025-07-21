@@ -84,8 +84,6 @@ export default async function AttemptDetailPage({
           </div>
           <nav className="flex flex-col gap-2">
             <a href="/dashboard/professor" className="flex items-center gap-2 text-white/80 hover:bg-white/10 rounded px-3 py-2"><BarChart2 className="w-4 h-4" /> Dashboard</a>
-            <a href="/dashboard/professor/quizzes" className="flex items-center gap-2 text-white/80 hover:bg-white/10 rounded px-3 py-2"><FileText className="w-4 h-4" /> My Quizzes</a>
-            <a href="/dashboard/professor/classes" className="flex items-center gap-2 text-white/80 hover:bg-white/10 rounded px-3 py-2"><Users className="w-4 h-4" /> Classes</a>
             <SignOutButton redirectUrl="/">
               <button className="flex items-center gap-2 text-red-400 hover:bg-red-400/10 rounded px-3 py-2 mt-8 w-full text-left">
                 <LogOut className="w-4 h-4" /> Logout
@@ -170,10 +168,7 @@ export default async function AttemptDetailPage({
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                  <div className="text-center">
-                    <div className="text-3xl font-bold text-white mb-2">{attempt.percentage}%</div>
-                    <div className="text-sm text-white/60">Final Score</div>
-                  </div>
+                  {/* Removed percentage display */}
                   <div className="text-center">
                     <div className="text-3xl font-bold text-white mb-2">{attempt.score}/{attempt.maxScore}</div>
                     <div className="text-sm text-white/60">Points Earned</div>
@@ -191,11 +186,9 @@ export default async function AttemptDetailPage({
               </CardHeader>
               <CardContent className="space-y-6">
                 {attempt.quiz.questions.map((question, index) => {
-                  // For MCQ/TF, answer is a string; for short answer, could be string or object
                   const answerValue = studentAnswers[question.id];
                   let isCorrect = false;
                   if (question.type === 'SHORT_ANSWER') {
-                    // Use GPT feedback if available
                     isCorrect = gptFeedback[question.id]?.score === question.points;
                   } else {
                     isCorrect = answerValue === question.correctAnswer;
@@ -218,17 +211,11 @@ export default async function AttemptDetailPage({
                                   <span className="text-white">{String(answerValue)}</span>
                                 )}
                               </div>
-                              <div className="text-sm font-medium text-white/60">Available Options:</div>
                               {question.type === 'MULTIPLE_CHOICE' && Array.isArray(question.options) && (
                                 <ul className="list-none pl-0">
                                   {question.options.map((opt: string) => (
-                                    <li key={opt} className={
-                                      opt === question.correctAnswer
-                                        ? 'text-green-400'
-                                        : ''
-                                    }>
+                                    <li key={opt}>
                                       {opt}
-                                      {opt === question.correctAnswer ? ' (Correct)' : ''}
                                     </li>
                                   ))}
                                 </ul>
@@ -237,9 +224,6 @@ export default async function AttemptDetailPage({
                             </div>
                           </div>
                           <div className="flex flex-col items-end gap-2">
-                            <Badge variant={isCorrect ? 'default' : 'destructive'}>
-                              {isCorrect ? 'Correct' : 'Incorrect'}
-                            </Badge>
                             <div className="text-white/60 text-xs">{question.points} points</div>
                           </div>
                         </div>

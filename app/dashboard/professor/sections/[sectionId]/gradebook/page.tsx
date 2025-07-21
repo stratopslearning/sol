@@ -45,13 +45,14 @@ export default async function SectionGradebookPage({ params }: any) {
   }
 
   // Calculate per-student, per-quiz scores
-  const studentQuizScores: Record<string, Record<string, { score: number; percentage: number; attemptId: string }>> = {};
+  const studentQuizScores: Record<string, Record<string, { score: number; percentage: number; attemptId: string; maxScore: number }>> = {};
   allAttempts.forEach(attempt => {
     if (!studentQuizScores[attempt.studentId]) studentQuizScores[attempt.studentId] = {};
     studentQuizScores[attempt.studentId][attempt.quizId] = {
       score: attempt.score,
       percentage: attempt.percentage,
       attemptId: attempt.id,
+      maxScore: attempt.maxScore,
     };
   });
 
@@ -94,19 +95,19 @@ export default async function SectionGradebookPage({ params }: any) {
                   </thead>
                   <tbody>
                     {students.map(student => {
-                      const scores = sectionQuizzes.map(quiz => studentQuizScores[student.id]?.[quiz.id]?.percentage ?? '-');
-                      const avg = typeof scores[0] === 'number' ? Math.round(scores.filter(s => typeof s === 'number').reduce((a, b) => a + b, 0) / scores.filter(s => typeof s === 'number').length) : '-';
+                      const scores = sectionQuizzes.map(quiz => studentQuizScores[student.id]?.[quiz.id]?.score ?? '-');
+                      // Remove avg percentage calculation
                       return (
                         <tr key={student.id} className="border-t border-white/10">
                           <td className="px-4 py-2">{student.firstName} {student.lastName}</td>
                           {sectionQuizzes.map(quiz => (
                             <td key={quiz.id} className="px-4 py-2">
-                              {studentQuizScores[student.id]?.[quiz.id]?.percentage !== undefined
-                                ? `${studentQuizScores[student.id][quiz.id].percentage}%`
+                              {studentQuizScores[student.id]?.[quiz.id]?.score !== undefined
+                                ? `${studentQuizScores[student.id][quiz.id].score} / ${studentQuizScores[student.id][quiz.id].maxScore}`
                                 : '-'}
                             </td>
                           ))}
-                          <td className="px-4 py-2 font-bold">{avg !== '-' ? `${avg}%` : '-'}</td>
+                          {/* Remove avg column */}
                         </tr>
                       );
                     })}

@@ -3,6 +3,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Layers, Copy } from 'lucide-react';
 import React, { useState } from 'react';
 import { SectionFormModal } from '@/components/admin/SectionFormModal';
+import CopyEnrollmentButton from '@/components/CopyEnrollmentButton';
 
 export default function SectionsPageContentClient({ allSections, allCourses }: { allSections: any[]; allCourses: any[] }) {
   const [filter, setFilter] = useState('');
@@ -52,16 +53,12 @@ export default function SectionsPageContentClient({ allSections, allCourses }: {
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-muted-foreground">Professor Code:</span>
                       <span className="font-mono text-sm bg-muted px-2 py-1 rounded">{section.professorEnrollmentCode}</span>
-                      <button type="button" onClick={() => navigator.clipboard.writeText(section.professorEnrollmentCode)} className="ml-1 text-blue-400 hover:underline">
-                        <Copy className="w-4 h-4" />
-                      </button>
+                      <CopyEnrollmentButton code={section.professorEnrollmentCode} />
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-muted-foreground">Student Code:</span>
                       <span className="font-mono text-sm bg-muted px-2 py-1 rounded">{section.studentEnrollmentCode}</span>
-                      <button type="button" onClick={() => navigator.clipboard.writeText(section.studentEnrollmentCode)} className="ml-1 text-blue-400 hover:underline">
-                        <Copy className="w-4 h-4" />
-                      </button>
+                      <CopyEnrollmentButton code={section.studentEnrollmentCode} />
                     </div>
                   </div>
                 </CardContent>

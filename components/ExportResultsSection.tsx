@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
 export default function ExportResultsSection({ quizzes }: { quizzes: { id: string; title: string }[] }) {
-  const [quizId, setQuizId] = useState('');
+  const [quizId, setQuizId] = useState('all');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [downloading, setDownloading] = useState(false);
@@ -44,11 +44,11 @@ export default function ExportResultsSection({ quizzes }: { quizzes: { id: strin
         <div className="flex flex-col gap-4">
           <div className="flex-1">
             <label className="block text-white/80 mb-1">Quiz</label>
-            <Select value={quizId} onValueChange={setQuizId}>
-              <SelectTrigger className="bg-white/5 border-white/20 text-white">
+            <Select value={quizId || 'all'} onValueChange={setQuizId}>
+              <SelectTrigger className="border border-white/20 bg-white dark:bg-[#18181b] text-black dark:text-white rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                 <SelectValue placeholder="All Quizzes" />
               </SelectTrigger>
-              <SelectContent className="bg-white/10 border-white/20">
+              <SelectContent className="border border-white/20 bg-white dark:bg-[#18181b] text-black dark:text-white rounded-md">
                 <SelectItem value="all">All Quizzes</SelectItem>
                 {quizzes.map((q: { id: string; title: string }) => (
                   <SelectItem key={q.id} value={q.id}>{q.title}</SelectItem>

@@ -69,13 +69,24 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
       maxScore += question.points;
       const userAnswer = answers[question.id];
 
+      if (!userAnswer || userAnswer.trim?.() === "") {
+        // Blank answer: always zero score
+        if (question.type === 'SHORT_ANSWER') {
+          gptFeedback[question.id] = {
+            score: 0,
+            feedback: "Please read the textbook and try again."
+          };
+        }
+        // No points for blank answer
+        continue;
+      }
+
       if (question.type === 'MULTIPLE_CHOICE' || question.type === 'TRUE_FALSE') {
         // Auto-grade MCQ and T/F questions
         if (userAnswer === question.correctAnswer) {
           totalScore += question.points;
         }
-      } else if (question.type === 'SHORT_ANSWER' && userAnswer) {
-        // Use GPT to grade short answer questions
+      } else if (question.type === 'SHORT_ANSWER') {
         try {
           const gradingRequest: GradingRequest = {
             question: question.question,
@@ -86,38 +97,16 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
           };
 
           const gradingResult = await gradeShortAnswer(gradingRequest);
-          
-          // Add the AI-graded score to total
           totalScore += gradingResult.score;
-          
-          // Store detailed feedback
           gptFeedback[question.id] = {
             score: gradingResult.score,
-            maxPoints: gradingResult.maxPoints,
-            feedback: gradingResult.feedback,
-            confidence: gradingResult.confidence,
-            reasoning: gradingResult.reasoning,
-            keywords: gradingResult.keywords,
-            suggestions: gradingResult.suggestions,
-            gradedAt: new Date().toISOString()
+            feedback: gradingResult.feedback
           };
         } catch (error) {
           console.error(`Error grading question ${question.id}:`, error);
-          
-          // Fallback to partial credit if GPT grading fails
-          const fallbackScore = Math.floor(question.points * 0.5);
-          totalScore += fallbackScore;
-          
           gptFeedback[question.id] = {
-            score: fallbackScore,
-            maxPoints: question.points,
-            feedback: "Grading temporarily unavailable. Partial credit awarded for providing an answer.",
-            confidence: 40,
-            reasoning: "Fallback grading used due to technical issues",
-            keywords: [],
-            suggestions: ["Please try again later for detailed feedback"],
-            gradedAt: new Date().toISOString(),
-            error: true
+            score: 0,
+            feedback: "Grading temporarily unavailable. Please read the textbook and try again."
           };
         }
       }

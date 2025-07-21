@@ -153,7 +153,6 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId }: QuizTake
           <CardContent>
             <div className="flex flex-col gap-2 mb-4">
               <div className="text-lg text-white font-semibold">Score: {score} / {questions.reduce((a, q) => a + q.points, 0)}</div>
-              <div className="text-md text-white/80">Percentage: {percentage}%</div>
             </div>
             <div className="mb-4">
               <Button asChild variant="secondary">

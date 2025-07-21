@@ -70,7 +70,6 @@ export default async function GradesPage() {
                             </div>
                           </div>
                           <div className="flex flex-col items-end gap-2">
-                            <span className={`text-xs px-2 py-1 rounded-full text-white font-semibold ${badgeColor}`}>{percentage}%</span>
                             <Badge variant="outline" className="text-xs">{a.score} / {a.maxScore}</Badge>
                             {a.passed ? <Trophy className="w-5 h-5 text-yellow-500" /> : <XCircle className="w-5 h-5 text-red-500" />}
                           </div>

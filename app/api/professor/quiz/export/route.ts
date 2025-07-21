@@ -62,7 +62,8 @@ export async function GET(req: NextRequest) {
     // Fetch attempts with student and quiz data
     const results = await db
       .select({
-        studentName: users.firstName,
+        studentFirstName: users.firstName,
+        studentLastName: users.lastName,
         studentEmail: users.email,
         quizTitle: quizzes.title,
         attemptDate: attempts.submittedAt,
@@ -87,21 +88,21 @@ export async function GET(req: NextRequest) {
     // Format data for CSV
     const csvData = results.map(result => {
       const key = `${result.studentEmail}-${result.quizTitle}`;
+      const fullName = [result.studentFirstName, result.studentLastName].filter(Boolean).join(' ') || 'Unknown';
       return {
-        'Student Name': `${result.studentName || 'Unknown'}`,
+        'Student Name': fullName,
         'Student Email': result.studentEmail,
         'Quiz Name': result.quizTitle,
         'Attempt Date': result.attemptDate ? new Date(result.attemptDate).toLocaleString() : 'N/A',
         'Score': result.score,
         'Max Score': result.maxScore,
-        'Percentage': `${result.percentage}%`,
         'Attempt Number': attemptCounts.get(key) || 1,
       };
     });
 
     // Generate CSV
     const csv = parse(csvData, {
-      fields: ['Student Name', 'Student Email', 'Quiz Name', 'Attempt Date', 'Score', 'Max Score', 'Percentage', 'Attempt Number'],
+      fields: ['Student Name', 'Student Email', 'Quiz Name', 'Attempt Date', 'Score', 'Max Score', 'Attempt Number'],
     });
 
     // Return CSV file

@@ -247,7 +247,9 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
           });
         }
 
-        setValue('questions', questions);
+        setValue('questions', questions, { shouldDirty: true, shouldValidate: true });
+        // Also reset the form's questions field to only the imported questions
+        form.reset({ ...getValues(), questions });
         setCsvError(null);
         
         // Clear the file input
@@ -537,9 +539,11 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
                               mode="single"
                               selected={field.value}
                               onSelect={field.onChange}
-                              disabled={(date) =>
-                                date < new Date()
-                              }
+                              disabled={(date) => {
+                                const today = new Date();
+                                today.setHours(0, 0, 0, 0);
+                                return date < today;
+                              }}
                               initialFocus
                             />
                           </PopoverContent>
@@ -580,8 +584,16 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
                               selected={field.value}
                               onSelect={field.onChange}
                               disabled={(date) => {
+                                const today = new Date();
+                                today.setHours(0, 0, 0, 0);
                                 const startDate = form.getValues('startDate');
-                                return startDate ? date <= startDate : date < new Date();
+                                if (startDate) {
+                                  // Only allow end dates after or equal to today and after startDate
+                                  const start = new Date(startDate);
+                                  start.setHours(0, 0, 0, 0);
+                                  return date < today || date <= start;
+                                }
+                                return date < today;
                               }}
                               initialFocus
                             />

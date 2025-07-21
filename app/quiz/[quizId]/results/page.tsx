@@ -94,10 +94,6 @@ export default async function ResultsPage({ params, searchParams }: ResultsPageP
                   <div className="text-3xl font-extrabold text-blue-400 drop-shadow">{attempt.maxScore}</div>
                   <div className="text-base text-gray-200 font-medium">Total Points</div>
                 </div>
-                <div className="p-6 bg-white/10 border border-white/10 rounded-xl shadow-md">
-                  <div className="text-3xl font-extrabold text-yellow-400 drop-shadow">{attempt.percentage}%</div>
-                  <div className="text-base text-gray-200 font-medium">Percentage</div>
-                </div>
               </div>
 
               {/* Pass/Fail Status */}
