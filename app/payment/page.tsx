@@ -46,7 +46,7 @@ export default async function PaymentPage() {
   const productData = await getProductDetails();
   const productName = productData?.product?.name || 'S-O-L Quiz Platform Access';
   const productDescription = productData?.product?.description || 'One-time payment for unlimited quiz access';
-  const formattedPrice = productData?.price?.formatted_amount || '$9.99';
+  const formattedPrice = productData?.price?.formatted_amount || '$0.00';
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#030303]">
