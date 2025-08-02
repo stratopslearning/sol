@@ -4,16 +4,16 @@ import { db } from '@/app/db';
 import { quizzes, questions, quizSections, professorSections } from '@/app/db/schema';
 import { eq } from 'drizzle-orm';
 
-export async function POST(req: NextRequest) {
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ quizId: string }> }
+) {
   try {
+    const { quizId } = await params;
     const user = await getOrCreateUser();
     if (!user || user.role !== 'PROFESSOR') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    // Extract quizId from the URL
-    const urlParts = req.nextUrl.pathname.split('/');
-    const quizId = urlParts[urlParts.length - 2];
 
     // Verify the quiz belongs to the professor by section assignment
     const quizSectionAssignments = await db.query.quizSections.findMany({ where: eq(quizSections.quizId, quizId) });

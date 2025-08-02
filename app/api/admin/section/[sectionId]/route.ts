@@ -9,8 +9,12 @@ const updateSectionSchema = z.object({
   name: z.string().min(1, 'Section name is required').max(100, 'Section name too long'),
 });
 
-export async function PUT(req: NextRequest) {
+export async function PUT(
+  req: NextRequest,
+  { params }: { params: Promise<{ sectionId: string }> }
+) {
   try {
+    const { sectionId } = await params;
     const { userId } = await auth();
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -19,9 +23,6 @@ export async function PUT(req: NextRequest) {
     if (!user || user.role !== 'ADMIN') {
       return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
     }
-    // Extract sectionId from the URL
-    const urlParts = req.nextUrl.pathname.split('/');
-    const sectionId = urlParts[urlParts.length - 2];
     const body = await req.json();
     const validatedData = updateSectionSchema.parse(body);
     const [updatedSection] = await db.update(sections)

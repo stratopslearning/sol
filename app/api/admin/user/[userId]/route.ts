@@ -10,8 +10,12 @@ const updateUserSchema = z.object({
   paid: z.boolean().optional(),
 });
 
-export async function PATCH(req: NextRequest) {
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ userId: string }> }
+) {
   try {
+    const { userId: targetUserId } = await params;
     const { userId: adminId } = await auth();
     if (!adminId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -20,17 +24,15 @@ export async function PATCH(req: NextRequest) {
     if (!admin || admin.role !== 'ADMIN') {
       return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
     }
-    // Extract userId from the URL
-    const urlParts = req.nextUrl.pathname.split('/');
-    const userId = urlParts[urlParts.length - 2];
     const body = await req.json();
     const validatedData = updateUserSchema.parse(body);
     const [updatedUser] = await db.update(users)
       .set(validatedData)
-      .where(eq(users.id, userId))
+      .where(eq(users.id, targetUserId))
       .returning();
     return NextResponse.json({ success: true, user: updatedUser });
   } catch (error) {
+    console.error('Error updating user:', error);
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: 'Validation error', details: error.errors }, { status: 400 });
     }
