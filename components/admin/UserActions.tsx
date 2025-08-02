@@ -1,7 +1,7 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "../ui/button";
-import { UserCheck, UserX } from "lucide-react";
+import { UserCheck, UserX, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 
 const ROLES = ["STUDENT", "PROFESSOR", "ADMIN"];
@@ -10,6 +10,7 @@ export function UserActions({ user }: { user: any }) {
   const [loading, setLoading] = useState(false);
   const [showRoleDropdown, setShowRoleDropdown] = useState(false);
   const [selectedRole, setSelectedRole] = useState(user.role);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const handleChangeRole = async () => {
     setShowRoleDropdown(true);
@@ -64,14 +65,31 @@ export function UserActions({ user }: { user: any }) {
     setLoading(false);
   };
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowRoleDropdown(false);
+      }
+    };
+
+    if (showRoleDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showRoleDropdown]);
+
   return (
     <div className="flex gap-2 relative">
       {showRoleDropdown ? (
-        <div className="absolute z-10 bg-white text-black rounded shadow border w-32 top-10 left-0">
+        <div ref={dropdownRef} className="absolute z-50 bg-white text-black rounded-lg shadow-lg border border-gray-200 w-32 bottom-full left-0 mb-1 min-w-max">
           {ROLES.map(role => (
             <button
               key={role}
-              className={`w-full text-left px-4 py-2 hover:bg-gray-100 ${role === user.role ? 'font-bold' : ''}`}
+              className={`w-full text-left px-4 py-2 hover:bg-gray-100 transition-colors ${role === user.role ? 'font-bold bg-blue-50 text-blue-700' : 'text-gray-700'}`}
               onClick={() => handleRoleSelect(role)}
               disabled={loading}
             >
@@ -80,8 +98,9 @@ export function UserActions({ user }: { user: any }) {
           ))}
         </div>
       ) : (
-        <Button size="sm" variant="outline" className="text-xs" onClick={handleChangeRole} disabled={loading}>
+        <Button size="sm" variant="outline" className="text-xs flex items-center gap-1" onClick={handleChangeRole} disabled={loading}>
           Change Role
+          <ChevronDown className="w-3 h-3" />
         </Button>
       )}
       <Button size="sm" variant={user.paid ? "destructive" : "secondary"} className="text-xs" onClick={handleToggleActive} disabled={loading}>
