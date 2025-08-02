@@ -61,7 +61,6 @@ export default function UserTableWithFilters({ users }: { users: any[] }) {
                 <th className="px-4 py-2 text-left text-xs font-medium text-white/60 uppercase">Name</th>
                 <th className="px-4 py-2 text-left text-xs font-medium text-white/60 uppercase">Email</th>
                 <th className="px-4 py-2 text-left text-xs font-medium text-white/60 uppercase">Role</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-white/60 uppercase">Status</th>
                 <th className="px-4 py-2 text-left text-xs font-medium text-white/60 uppercase">Actions</th>
               </tr>
             </thead>
@@ -83,13 +82,6 @@ export default function UserTableWithFilters({ users }: { users: any[] }) {
                       {user.role}
                     </Badge>
                   </td>
-                  <td className="px-4 py-2">
-                    {user.paid !== undefined && (
-                      <Badge className={user.paid ? 'bg-green-600/20 text-green-400 border-green-600' : 'bg-red-600/20 text-red-400 border-red-600'}>
-                        {user.paid ? 'Active' : 'Inactive'}
-                      </Badge>
-                    )}
-                  </td>
                   <td className="px-4 py-2 flex gap-2">
                     <UserActions user={user} />
                   </td>
@@ -97,7 +89,7 @@ export default function UserTableWithFilters({ users }: { users: any[] }) {
               ))}
               {filteredUsers.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="text-center text-white/60 py-6">No users found.</td>
+                  <td colSpan={4} className="text-center text-white/60 py-6">No users found.</td>
                 </tr>
               )}
             </tbody>

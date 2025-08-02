@@ -7,7 +7,6 @@ import { eq } from 'drizzle-orm';
 
 const updateUserSchema = z.object({
   role: z.enum(['STUDENT', 'PROFESSOR', 'ADMIN']).optional(),
-  paid: z.boolean().optional(),
 });
 
 export async function PATCH(

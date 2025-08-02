@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import { Button } from "../ui/button";
-import { UserCheck, UserX, ChevronDown } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 
 const ROLES = ["STUDENT", "PROFESSOR", "ADMIN"];
@@ -63,27 +63,7 @@ export function UserActions({ user }: { user: any }) {
     setShowRoleDropdown(false);
   };
 
-  const handleToggleActive = async () => {
-    const newPaid = !user.paid;
-    if (!confirm(`${newPaid ? "Activate" : "Deactivate"} this user?`)) return;
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/admin/user/${user.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ paid: newPaid }),
-      });
-      if (res.ok) {
-        toast.success(newPaid ? "User activated" : "User deactivated");
-        setTimeout(() => window.location.reload(), 1000);
-      } else {
-        toast.error("Failed to update user status");
-      }
-    } catch {
-      toast.error("Failed to update user status");
-    }
-    setLoading(false);
-  };
+
 
   // Close dropdown when clicking outside and ensure visibility
   useEffect(() => {
@@ -155,10 +135,6 @@ export function UserActions({ user }: { user: any }) {
           <ChevronDown className="w-3 h-3" />
         </Button>
       )}
-      <Button size="sm" variant={user.paid ? "destructive" : "secondary"} className="text-xs" onClick={handleToggleActive} disabled={loading}>
-        {user.paid ? <UserX className="w-4 h-4 mr-1" /> : <UserCheck className="w-4 h-4 mr-1" />}
-        {user.paid ? "Deactivate" : "Activate"}
-      </Button>
     </div>
   );
 } 
