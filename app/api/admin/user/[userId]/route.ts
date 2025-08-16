@@ -1,0 +1,40 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { db } from '@/app/db';
+import { users } from '@/app/db/schema';
+import { z } from 'zod';
+import { auth } from '@clerk/nextjs/server';
+import { eq } from 'drizzle-orm';
+
+const updateUserSchema = z.object({
+  role: z.enum(['STUDENT', 'PROFESSOR', 'ADMIN']).optional(),
+});
+
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ userId: string }> }
+) {
+  try {
+    const { userId: targetUserId } = await params;
+    const { userId: adminId } = await auth();
+    if (!adminId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const admin = await db.query.users.findFirst({ where: eq(users.clerkId, adminId) });
+    if (!admin || admin.role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
+    }
+    const body = await req.json();
+    const validatedData = updateUserSchema.parse(body);
+    const [updatedUser] = await db.update(users)
+      .set(validatedData)
+      .where(eq(users.id, targetUserId))
+      .returning();
+    return NextResponse.json({ success: true, user: updatedUser });
+  } catch (error) {
+    console.error('Error updating user:', error);
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: 'Validation error', details: error.errors }, { status: 400 });
+    }
+    return NextResponse.json({ error: 'Failed to update user' }, { status: 500 });
+  }
+} 

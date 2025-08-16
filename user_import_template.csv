@@ -1,0 +1,6 @@
+email,firstName,lastName,role,paid
+john.doe@university.edu,John,Doe,STUDENT,false
+jane.smith@university.edu,Jane,Smith,PROFESSOR,false
+admin.user@university.edu,Admin,User,ADMIN,true
+student1@university.edu,Student,One,STUDENT,false
+professor1@university.edu,Professor,One,PROFESSOR,false
