@@ -6,7 +6,7 @@ import { eq } from 'drizzle-orm';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Trophy, FileText, LogOut, BarChart2 } from 'lucide-react';
+import { CheckCircle, Trophy, FileText, LogOut, BarChart2 } from 'lucide-react';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { SignOutButton } from '@clerk/nextjs';
 
