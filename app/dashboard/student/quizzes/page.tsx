@@ -175,7 +175,7 @@ export default async function StudentQuizzesPage() {
                         )}
                       </CardContent>
                       <div className="flex-1" />
-                      <div className="p-4 pt-0 flex gap-2">
+                      <div className="p-4 pt-0 flex flex-col gap-2">
                         {!hasAttempted && (
                           <Button asChild className="w-full">
                             <a href={`/quiz/${quiz.id}`}>Start Quiz</a>

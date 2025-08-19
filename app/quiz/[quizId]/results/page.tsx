@@ -6,7 +6,7 @@ import { eq } from 'drizzle-orm';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle, XCircle, Trophy, FileText, LogOut, BarChart2 } from 'lucide-react';
+import { Trophy, FileText, LogOut, BarChart2 } from 'lucide-react';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { SignOutButton } from '@clerk/nextjs';
 
@@ -72,20 +72,16 @@ export default async function ResultsPage({ params, searchParams }: ResultsPageP
           <Card className="max-w-xl mx-auto w-full shadow-2xl border-2 border-white/10 bg-[#18181b]/90">
             <CardHeader className="text-center">
               <div className="flex justify-center mb-4">
-                {attempt.passed ? (
-                  <Trophy className="w-20 h-20 text-yellow-400 drop-shadow-lg" />
-                ) : (
-                  <XCircle className="w-20 h-20 text-red-500 drop-shadow-lg" />
-                )}
+                <Trophy className="w-20 h-20 text-yellow-400 drop-shadow-lg" />
               </div>
               <CardTitle className="text-3xl text-white font-bold">
-                {attempt.passed ? 'Quiz Completed!' : 'Quiz Attempted'}
+                Quiz Completed!
               </CardTitle>
               <p className="text-gray-300 mt-2 text-lg font-medium">{quiz.title}</p>
             </CardHeader>
             <CardContent className="space-y-8">
               {/* Score Summary */}
-              <div className="grid grid-cols-3 gap-6 text-center">
+              <div className="grid grid-cols-2 gap-6 text-center">
                 <div className="p-6 bg-white/10 border border-white/10 rounded-xl shadow-md">
                   <div className="text-3xl font-extrabold text-green-400 drop-shadow">{attempt.score}</div>
                   <div className="text-base text-gray-200 font-medium">Points Earned</div>
@@ -94,26 +90,6 @@ export default async function ResultsPage({ params, searchParams }: ResultsPageP
                   <div className="text-3xl font-extrabold text-blue-400 drop-shadow">{attempt.maxScore}</div>
                   <div className="text-base text-gray-200 font-medium">Total Points</div>
                 </div>
-              </div>
-
-              {/* Pass/Fail Status */}
-              <div className="text-center mt-2">
-                <Badge 
-                  variant={attempt.passed ? 'default' : 'destructive'}
-                  className={`text-2xl px-8 py-3 font-bold tracking-wide shadow-lg ${attempt.passed ? 'bg-green-600/80 text-white border-green-400' : 'bg-red-600/80 text-white border-red-400'}`}
-                >
-                  {attempt.passed ? (
-                    <div className="flex items-center space-x-3">
-                      <CheckCircle className="w-7 h-7" />
-                      <span>PASSED</span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center space-x-3">
-                      <XCircle className="w-7 h-7" />
-                      <span>FAILED</span>
-                    </div>
-                  )}
-                </Badge>
               </div>
 
               {/* Quiz Details */}
