@@ -115,26 +115,26 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
     const percentage = Math.round((totalScore / maxScore) * 100);
     const passed = true; // Always set passed to true
 
-    // Prevent duplicate attempts
-    const existingAttempt = await db.query.attempts.findFirst({
+    // Check attempt count against maxAttempts
+    const existingAttempts = await db.query.attempts.findMany({
       where: and(
         eq(attempts.assignmentId, assignmentId),
         eq(attempts.studentId, assignment.studentId)
       ),
     });
-    if (existingAttempt) {
+    const attemptCount = existingAttempts.length;
+
+    if (attemptCount >= quiz.maxAttempts) {
       return NextResponse.json({
-        success: true,
-        attemptId: existingAttempt.id,
-        score: existingAttempt.score,
-        maxScore: existingAttempt.maxScore,
-        percentage: existingAttempt.percentage,
-        passed: existingAttempt.passed,
-        duplicate: true,
-      });
+        error: `Maximum attempts (${quiz.maxAttempts}) reached for this quiz. You cannot retake this quiz.`,
+        maxAttemptsReached: true
+      }, { status: 400 });
     }
 
-    // Create the attempt record
+    // Get current attempt number
+    const currentAttemptNumber = attemptCount + 1;
+
+    // Create the attempt record with attempt metadata
     const [attempt] = await db.insert(attempts).values({
       assignmentId,
       studentId: assignment.studentId,
@@ -145,9 +145,22 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
       maxScore,
       percentage,
       passed,
-      gptFeedback,
+      gptFeedback: {
+        ...gptFeedback,
+        attemptNumber: currentAttemptNumber,
+        totalAttempts: attemptCount + 1,
+        maxAttempts: quiz.maxAttempts
+      },
       submittedAt: new Date(),
     }).returning();
+
+    // Calculate best score across all attempts for this assignment
+    const allAttempts = await db.query.attempts.findMany({
+      where: eq(attempts.assignmentId, assignmentId),
+    });
+    
+    const bestScore = Math.max(...allAttempts.map(a => a.score || 0));
+    const bestPercentage = Math.round((bestScore / maxScore) * 100);
 
     // Update assignment as completed
     await db.update(assignments)
@@ -164,6 +177,12 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
       maxScore,
       percentage,
       passed,
+      attemptNumber: currentAttemptNumber,
+      totalAttempts: attemptCount + 1,
+      maxAttempts: quiz.maxAttempts,
+      bestScore,
+      bestPercentage,
+      attemptsRemaining: quiz.maxAttempts - (attemptCount + 1),
     });
 
   } catch (error) {

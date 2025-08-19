@@ -104,7 +104,7 @@ export function Navbar() {
                 ) : (
                   <>
                     <a href="/login" className="text-white/80 hover:text-white transition-colors">
-                      Sign In
+                      Log In
                     </a>
                     <a href="/signup" className="bg-white text-black px-4 py-2 rounded-lg hover:bg-white/90 transition-all font-medium">
                       Get Started
@@ -169,7 +169,7 @@ export function Navbar() {
                   ) : (
                     <>
                       <a href="/login" className="w-full text-left text-white/80 hover:text-white transition-colors py-2">
-                        Sign In
+                        Log In
                       </a>
                       <a href="/signup" className="w-full bg-white text-black px-4 py-2 rounded-lg hover:bg-white/90 transition-all font-medium">
                         Get Started

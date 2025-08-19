@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { QuizTimer } from "@/components/quiz/QuizTimer";
 import { useRouter } from "next/navigation";
 import { useRef, useEffect } from "react";
+import { formatDateTime } from "@/lib/utils";
 
 interface QuizTakeFormProps {
   quiz: {
@@ -223,7 +224,9 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId }: QuizTake
           <div className="flex flex-wrap gap-4 items-center mb-2">
             <Badge variant="secondary" className="text-black dark:text-white bg-gray-200 dark:bg-gray-800">{questions.length} questions</Badge>
             {quiz.dueDate && (
-              <Badge variant="outline" className="text-black dark:text-white border-gray-400 dark:border-gray-600">Due: {new Date(quiz.dueDate).toLocaleDateString()}</Badge>
+              <Badge variant="outline" className="text-black dark:text-white border-gray-400 dark:border-gray-600">
+                Due: {formatDateTime(quiz.dueDate)}
+              </Badge>
             )}
             {quiz.timeLimit && (
               <Badge variant="outline" className="text-black dark:text-white border-gray-400 dark:border-gray-600">Time limit: {quiz.timeLimit} min</Badge>

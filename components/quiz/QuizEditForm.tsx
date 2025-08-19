@@ -344,25 +344,55 @@ export function QuizEditForm({ quiz, courses, apiEndpoint = `/api/professor/quiz
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <Label htmlFor="startDate" className="text-white">Start Date</Label>
-                <Input
-                  id="startDate"
-                  type="date"
-                  value={formData.startDate}
-                  onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                  className="bg-white/10 border-white/20 text-white"
-                />
+                <Label htmlFor="startDate" className="text-white">Start Date & Time</Label>
+                <div className="space-y-2">
+                  <Input
+                    id="startDate"
+                    type="date"
+                    value={formData.startDate}
+                    onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                    className="bg-white/10 border-white/20 text-white"
+                  />
+                  <Input
+                    id="startTime"
+                    type="time"
+                    placeholder="00:00"
+                    className="bg-white/10 border-white/20 text-white"
+                    onChange={(e) => {
+                      if (formData.startDate && e.target.value) {
+                        const [hours, minutes] = e.target.value.split(':');
+                        const newDateTime = `${formData.startDate}T${e.target.value}:00`;
+                        setFormData({ ...formData, startDate: newDateTime });
+                      }
+                    }}
+                  />
+                </div>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="endDate" className="text-white">End Date</Label>
-                <Input
-                  id="endDate"
-                  type="date"
-                  value={formData.endDate}
-                  onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                  className="bg-white/10 border-white/20 text-white"
-                />
+                <Label htmlFor="endDate" className="text-white">End Date & Time (Due Date)</Label>
+                <div className="space-y-2">
+                  <Input
+                    id="endDate"
+                    type="date"
+                    value={formData.endDate}
+                    onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                    className="bg-white/10 border-white/20 text-white"
+                  />
+                  <Input
+                    id="endTime"
+                    type="time"
+                    placeholder="23:59"
+                    className="bg-white/10 border-white/20 text-white"
+                    onChange={(e) => {
+                      if (formData.endDate && e.target.value) {
+                        const [hours, minutes] = e.target.value.split(':');
+                        const newDateTime = `${formData.endDate}T${e.target.value}:00`;
+                        setFormData({ ...formData, endDate: newDateTime });
+                      }
+                    }}
+                  />
+                </div>
               </div>
             </div>
           </CardContent>

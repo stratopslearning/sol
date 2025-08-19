@@ -9,7 +9,7 @@ export default function LoginPage() {
       <main className="flex flex-1 items-center justify-center z-10 px-4">
         <div className="w-full max-w-md bg-black/30 border border-white/10 rounded-xl p-8 backdrop-blur-md shadow-xl">
           <h2 className="text-2xl font-bold text-white mb-6 text-center">
-            Sign In to Continue
+            Log In to Continue
           </h2>
           <SignIn path="/login" routing="path" signUpUrl="/signup" />
         </div>

@@ -514,40 +514,58 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
                     name="startDate"
                     render={({ field }) => (
                       <FormItem className="flex flex-col">
-                        <FormLabel className="text-white">Start Date</FormLabel>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <FormControl>
-                              <Button
-                                variant="outline"
-                                className={cn(
-                                  "w-full pl-3 text-left font-normal bg-white/5 border-white/20 text-white hover:bg-white/10",
-                                  !field.value && "text-white/40"
-                                )}
-                              >
-                                {field.value ? (
-                                  format(field.value, "PPP")
-                                ) : (
-                                  <span>Pick a start date</span>
-                                )}
-                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                              </Button>
-                            </FormControl>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar
-                              mode="single"
-                              selected={field.value}
-                              onSelect={field.onChange}
-                              disabled={(date) => {
-                                const today = new Date();
-                                today.setHours(0, 0, 0, 0);
-                                return date < today;
-                              }}
-                              initialFocus
-                            />
-                          </PopoverContent>
-                        </Popover>
+                        <FormLabel className="text-white">Start Date & Time</FormLabel>
+                        <p className="text-xs text-white/60 mb-2">Set when students can start taking this quiz</p>
+                        <div className="space-y-2">
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <FormControl>
+                                <Button
+                                  variant="outline"
+                                  className={cn(
+                                    "w-full pl-3 text-left font-normal bg-white/5 border-white/20 text-white hover:bg-white/10",
+                                    !field.value && "text-white/40"
+                                  )}
+                                >
+                                  {field.value ? (
+                                    format(field.value, "PPP")
+                                  ) : (
+                                    <span>Pick a start date</span>
+                                  )}
+                                  <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                </Button>
+                              </FormControl>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                              <Calendar
+                                mode="single"
+                                selected={field.value}
+                                onSelect={field.onChange}
+                                disabled={(date) => {
+                                  const today = new Date();
+                                  today.setHours(0, 0, 0, 0);
+                                  return date < today;
+                                }}
+                                initialFocus
+                              />
+                            </PopoverContent>
+                          </Popover>
+                          <Input
+                            type="time"
+                            placeholder="00:00"
+                            className="bg-white/5 border-white/20 text-white"
+                            onChange={(e) => {
+                              if (field.value && e.target.value) {
+                                const [hours, minutes] = e.target.value.split(':');
+                                const newDate = new Date(field.value);
+                                newDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+                                field.onChange(newDate);
+                              }
+                            }}
+                            defaultValue={field.value ? format(field.value, 'HH:mm') : ''}
+                            required={!!field.value}
+                          />
+                        </div>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -558,47 +576,65 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
                     name="endDate"
                     render={({ field }) => (
                       <FormItem className="flex flex-col">
-                        <FormLabel className="text-white">End Date</FormLabel>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <FormControl>
-                              <Button
-                                variant="outline"
-                                className={cn(
-                                  "w-full pl-3 text-left font-normal bg-white/5 border-white/20 text-white hover:bg-white/10",
-                                  !field.value && "text-white/40"
-                                )}
-                              >
-                                {field.value ? (
-                                  format(field.value, "PPP")
-                                ) : (
-                                  <span>Pick an end date</span>
-                                )}
-                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                              </Button>
-                            </FormControl>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar
-                              mode="single"
-                              selected={field.value}
-                              onSelect={field.onChange}
-                              disabled={(date) => {
-                                const today = new Date();
-                                today.setHours(0, 0, 0, 0);
-                                const startDate = form.getValues('startDate');
-                                if (startDate) {
-                                  // Only allow end dates after or equal to today and after startDate
-                                  const start = new Date(startDate);
-                                  start.setHours(0, 0, 0, 0);
-                                  return date < today || date <= start;
-                                }
-                                return date < today;
-                              }}
-                              initialFocus
-                            />
-                          </PopoverContent>
-                        </Popover>
+                        <FormLabel className="text-white">End Date & Time (Due Date)</FormLabel>
+                        <p className="text-xs text-white/60 mb-2">Set the deadline for quiz submission</p>
+                        <div className="space-y-2">
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <FormControl>
+                                <Button
+                                  variant="outline"
+                                  className={cn(
+                                    "w-full pl-3 text-left font-normal bg-white/5 border-white/20 text-white hover:bg-white/10",
+                                    !field.value && "text-white/40"
+                                  )}
+                                >
+                                  {field.value ? (
+                                    format(field.value, "PPP")
+                                  ) : (
+                                    <span>Pick an end date</span>
+                                  )}
+                                  <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                </Button>
+                              </FormControl>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                              <Calendar
+                                mode="single"
+                                selected={field.value}
+                                onSelect={field.onChange}
+                                disabled={(date) => {
+                                  const today = new Date();
+                                  today.setHours(0, 0, 0, 0);
+                                  const startDate = form.getValues('startDate');
+                                  if (startDate) {
+                                    // Only allow end dates after or equal to today and after startDate
+                                    const start = new Date(startDate);
+                                    start.setHours(0, 0, 0, 0);
+                                    return date < today || date <= start;
+                                  }
+                                  return date < today;
+                                }}
+                                initialFocus
+                              />
+                            </PopoverContent>
+                          </Popover>
+                          <Input
+                            type="time"
+                            placeholder="23:59"
+                            className="bg-white/5 border-white/20 text-white"
+                            onChange={(e) => {
+                              if (field.value && e.target.value) {
+                                const [hours, minutes] = e.target.value.split(':');
+                                const newDate = new Date(field.value);
+                                newDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+                                field.onChange(newDate);
+                              }
+                            }}
+                            defaultValue={field.value ? format(field.value, 'HH:mm') : ''}
+                            required={!!field.value}
+                          />
+                        </div>
                         <FormMessage />
                       </FormItem>
                     )}
