@@ -74,7 +74,9 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
         if (question.type === 'SHORT_ANSWER') {
           gptFeedback[question.id] = {
             score: 0,
-            feedback: "Please read the textbook and try again."
+            feedback: "Please read the textbook and try again.",
+            confidence: 100,
+            maxPoints: question.points
           };
         }
         // No points for blank answer
@@ -100,13 +102,17 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
           totalScore += gradingResult.score;
           gptFeedback[question.id] = {
             score: gradingResult.score,
-            feedback: gradingResult.feedback
+            feedback: gradingResult.feedback,
+            confidence: gradingResult.confidence || 80,
+            maxPoints: question.points
           };
         } catch (error) {
           console.error(`Error grading question ${question.id}:`, error);
           gptFeedback[question.id] = {
             score: 0,
-            feedback: "Grading temporarily unavailable. Please read the textbook and try again."
+            feedback: "Grading temporarily unavailable. Please read the textbook and try again.",
+            confidence: 50,
+            maxPoints: question.points
           };
         }
       }
