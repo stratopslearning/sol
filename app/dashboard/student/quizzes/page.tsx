@@ -6,7 +6,7 @@ import { eq, inArray } from 'drizzle-orm';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { SidebarProvider } from '@/components/ui/sidebar';
+import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import StudentSidebar from '@/components/StudentSidebar';
 import { FileText, CheckCircle, Clock, BookOpen, Calendar, RefreshCw } from 'lucide-react';
 
@@ -69,6 +69,12 @@ export default async function StudentQuizzesPage() {
         <main className="flex-1 flex flex-col py-10 px-4 md:px-8 overflow-x-hidden">
           {/* Header */}
           <section className="w-full max-w-7xl mx-auto mb-8">
+            <div className="flex items-center justify-between mb-4">
+              <div className="md:hidden">
+                <SidebarTrigger />
+              </div>
+              <div className="flex-1" />
+            </div>
             <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">My Quizzes</h1>
             <p className="text-white/60 text-lg">Take quizzes for your enrolled sections</p>
           </section>

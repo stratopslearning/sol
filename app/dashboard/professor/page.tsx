@@ -5,7 +5,7 @@ import { eq, inArray } from 'drizzle-orm';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { SidebarProvider } from '@/components/ui/sidebar';
+import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import ProfessorSidebar from '@/components/ProfessorSidebar';
 import { 
   CalendarDays, 
@@ -109,7 +109,13 @@ export default async function ProfessorDashboard() {
           <ProfessorEnrollForm />
           {/* Hero/Header */}
           <section className="w-full max-w-7xl mx-auto mb-8">
-            <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">Welcome back, Professor {user.firstName || user.email}!</h1>
+            <div className="flex items-center justify-between mb-4">
+              <div className="md:hidden">
+                <SidebarTrigger />
+              </div>
+              <div className="flex-1" />
+            </div>
+            <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">Welcome back, {user.firstName || user.email}!</h1>
             <p className="text-white/60 text-lg">Here's your teaching overview</p>
           </section>
 

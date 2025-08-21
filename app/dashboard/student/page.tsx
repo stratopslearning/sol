@@ -1,11 +1,11 @@
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import { db } from '@/app/db';
-import { quizzes, assignments, attempts, sections, studentSections, users } from '@/app/db/schema';
+import { quizzes, assignments, attempts, sections, studentSections, users, quizSections } from '@/app/db/schema';
 import { eq, inArray } from 'drizzle-orm';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { SidebarProvider } from '@/components/ui/sidebar';
+import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import StudentSidebar from '@/components/StudentSidebar';
 import { 
   CalendarDays, 
@@ -16,7 +16,8 @@ import {
   BookOpen,
   TrendingUp,
   Clock,
-  Users
+  Users,
+  Menu
 } from 'lucide-react';
 import { SignOutButton } from '@clerk/nextjs';
 import StudentEnrollFormWrapper from '@/components/StudentEnrollFormWrapper';
@@ -37,13 +38,12 @@ export default async function StudentDashboard() {
   // Get section IDs for filtering
   const sectionIds = enrollments.map(e => e.sectionId);
 
-  // Fetch quizzes assigned to student's sections
-  const assignedQuizzes = sectionIds.length > 0 ? await db.query.quizzes.findMany({
+  // Fetch quizzes assigned to student's sections (not individual student assignments)
+  const availableQuizzes = sectionIds.length > 0 ? await db.query.quizzes.findMany({
     where: inArray(quizzes.id, 
-      db.select({ quizId: quizzes.id })
-        .from(quizzes)
-        .innerJoin(assignments, eq(assignments.quizId, quizzes.id))
-        .where(eq(assignments.studentId, user.id))
+      db.select({ quizId: quizSections.quizId })
+        .from(quizSections)
+        .where(inArray(quizSections.sectionId, sectionIds))
     ),
     with: {
       sectionAssignments: {
@@ -53,6 +53,14 @@ export default async function StudentDashboard() {
       }
     }
   }) : [];
+
+  // Filter to only show active quizzes
+  const activeQuizzes = availableQuizzes.filter(quiz => quiz.isActive);
+
+  // Deduplicate quizzes by ID to avoid counting the same quiz multiple times
+  const uniqueActiveQuizzes = activeQuizzes.filter((quiz, index, self) => 
+    index === self.findIndex(q => q.id === quiz.id)
+  );
 
   // Fetch recent attempts
   const recentAttempts = await db.query.attempts.findMany({
@@ -67,7 +75,7 @@ export default async function StudentDashboard() {
 
   // Calculate stats
   const totalSections = enrollments.length;
-  const totalQuizzes = assignedQuizzes.length;
+  const totalQuizzes = uniqueActiveQuizzes.length;
   const totalAttempts = recentAttempts.length;
   const averageScore = totalAttempts > 0 
     ? Math.round(recentAttempts.reduce((sum, a) => sum + (a.percentage || 0), 0) / totalAttempts)
@@ -83,6 +91,12 @@ export default async function StudentDashboard() {
           <StudentEnrollFormWrapper />
           {/* Hero/Header */}
           <section className="w-full max-w-7xl mx-auto mb-8">
+            <div className="flex items-center justify-between mb-4">
+              <div className="md:hidden">
+                <SidebarTrigger />
+              </div>
+              <div className="flex-1" />
+            </div>
             <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">Welcome back, {user.firstName || user.email}!</h1>
             <p className="text-white/60 text-lg">Here's your learning overview</p>
           </section>

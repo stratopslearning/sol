@@ -4,7 +4,7 @@ import { sections, studentSections, courses } from '@/app/db/schema';
 import { eq } from 'drizzle-orm';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { SidebarProvider } from '@/components/ui/sidebar';
+import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import StudentSidebar from '@/components/StudentSidebar';
 import { BookOpen, Users, Calendar } from 'lucide-react';
 import LeaveSectionButton from '@/components/LeaveSectionButton';
@@ -39,6 +39,12 @@ export default async function StudentSectionsPage() {
           
           {/* Header */}
           <section className="w-full max-w-7xl mx-auto mb-8">
+            <div className="flex items-center justify-between mb-4">
+              <div className="md:hidden">
+                <SidebarTrigger />
+              </div>
+              <div className="flex-1" />
+            </div>
             <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">My Sections</h1>
             <p className="text-white/60 text-lg">View and manage your enrolled sections</p>
           </section>
