@@ -7,7 +7,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Trophy, XCircle, FileText, BookOpen } from 'lucide-react';
-import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import StudentSidebar from '@/components/StudentSidebar';
 import { SignOutButton } from '@clerk/nextjs';
 
@@ -30,23 +29,16 @@ export default async function GradesPage() {
   });
 
   return (
-    <SidebarProvider>
-      <div className="min-h-screen w-screen bg-[#030303] flex">
-        {/* Sidebar */}
-        <StudentSidebar user={user} />
-        {/* Main Content */}
-        <main className="flex-1 flex flex-col items-center py-10 px-2 md:px-8">
-          {/* Header */}
-          <section className="w-full max-w-7xl mx-auto mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <div className="md:hidden">
-                <SidebarTrigger />
-              </div>
-              <div className="flex-1" />
-            </div>
-            <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">My Grades</h1>
-            <p className="text-white/60 text-lg">Track your academic performance</p>
-          </section>
+    <div className="min-h-screen w-screen bg-[#030303] flex">
+      {/* Sidebar */}
+      <StudentSidebar user={user} />
+      {/* Main Content */}
+      <main className="flex-1 flex flex-col items-center py-10 px-2 md:px-8">
+        {/* Header */}
+        <section className="w-full max-w-7xl mx-auto mb-8">
+          <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">My Grades</h1>
+          <p className="text-white/60 text-lg">Track your academic performance</p>
+        </section>
           <Card className="max-w-4xl w-full mb-8 bg-white/5 border border-white/10 shadow-xl">
             <CardHeader>
               <CardTitle className="text-2xl text-white">My Grades & Attempt History</CardTitle>
@@ -100,6 +92,5 @@ export default async function GradesPage() {
           </Card>
         </main>
       </div>
-    </SidebarProvider>
-  );
+    );
 } 
