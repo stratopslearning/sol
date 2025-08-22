@@ -14,8 +14,8 @@ import {
 
 export default function StudentSidebar({ user }: { user: any }) {
   return (
-    <Sidebar>
-      <SidebarContent>
+    <Sidebar className="bg-white/5 border-r border-white/10">
+      <SidebarContent className="bg-white/5">
         <SidebarHeader>
           <div className="mb-8">
             <a href="/" className="text-lg font-bold text-white flex items-center gap-2 hover:underline">S-O-L</a>
@@ -25,7 +25,7 @@ export default function StudentSidebar({ user }: { user: any }) {
         
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild>
+            <SidebarMenuButton asChild className="text-white/90 hover:bg-white/10 hover:text-white">
               <a href="/dashboard/student">
                 <BarChart2 className="w-4 h-4" />
                 <span>Dashboard</span>
@@ -34,7 +34,7 @@ export default function StudentSidebar({ user }: { user: any }) {
           </SidebarMenuItem>
           
           <SidebarMenuItem>
-            <SidebarMenuButton asChild>
+            <SidebarMenuButton asChild className="text-white/80 hover:bg-white/10 hover:text-white">
               <a href="/dashboard/student/sections">
                 <BookOpen className="w-4 h-4" />
                 <span>My Sections</span>
@@ -43,7 +43,7 @@ export default function StudentSidebar({ user }: { user: any }) {
           </SidebarMenuItem>
 
           <SidebarMenuItem>
-            <SidebarMenuButton asChild>
+            <SidebarMenuButton asChild className="text-white/80 hover:bg-white/10 hover:text-white">
               <a href="/dashboard/student/quizzes">
                 <FileText className="w-4 h-4" />
                 <span>My Quizzes</span>
@@ -52,7 +52,7 @@ export default function StudentSidebar({ user }: { user: any }) {
           </SidebarMenuItem>
           
           <SidebarMenuItem>
-            <SidebarMenuButton asChild>
+            <SidebarMenuButton asChild className="text-white/80 hover:bg-white/10 hover:text-white">
               <a href="/dashboard/student/grades">
                 <CheckCircle className="w-4 h-4" />
                 <span>My Grades</span>

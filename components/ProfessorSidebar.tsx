@@ -18,8 +18,8 @@ interface ProfessorSidebarProps {
 }
 
 const ProfessorSidebar: React.FC<ProfessorSidebarProps> = ({ active }) => (
-  <Sidebar>
-    <SidebarContent>
+  <Sidebar className="bg-white/5 border-r border-white/10">
+    <SidebarContent className="bg-white/5">
       <SidebarHeader>
         <div className="mb-8">
           <a href="/" className="text-lg font-bold text-white flex items-center gap-2 hover:underline">S-O-L</a>
@@ -29,7 +29,7 @@ const ProfessorSidebar: React.FC<ProfessorSidebarProps> = ({ active }) => (
       
       <SidebarMenu>
         <SidebarMenuItem>
-          <SidebarMenuButton asChild isActive={active === 'dashboard'}>
+          <SidebarMenuButton asChild isActive={active === 'dashboard'} className="text-white/90 hover:bg-white/10 hover:text-white">
             <a href="/dashboard/professor">
               <BarChart2 className="w-4 h-4" />
               <span>Dashboard</span>
@@ -38,7 +38,7 @@ const ProfessorSidebar: React.FC<ProfessorSidebarProps> = ({ active }) => (
         </SidebarMenuItem>
         
         <SidebarMenuItem>
-          <SidebarMenuButton asChild isActive={active === 'sections'}>
+          <SidebarMenuButton asChild isActive={active === 'sections'} className="text-white/80 hover:bg-white/10 hover:text-white">
             <a href="/dashboard/professor/sections">
               <BookOpen className="w-4 h-4" />
               <span>My Sections</span>
@@ -47,7 +47,7 @@ const ProfessorSidebar: React.FC<ProfessorSidebarProps> = ({ active }) => (
         </SidebarMenuItem>
         
         <SidebarMenuItem>
-          <SidebarMenuButton asChild isActive={active === 'quizzes'}>
+          <SidebarMenuButton asChild isActive={active === 'quizzes'} className="text-white/80 hover:bg-white/10 hover:text-white">
             <a href="/dashboard/professor/quizzes">
               <FileText className="w-4 h-4" />
               <span>My Quizzes</span>
@@ -56,7 +56,7 @@ const ProfessorSidebar: React.FC<ProfessorSidebarProps> = ({ active }) => (
         </SidebarMenuItem>
         
         <SidebarMenuItem>
-          <SidebarMenuButton asChild isActive={active === 'quiz-results'}>
+          <SidebarMenuButton asChild isActive={active === 'quiz-results'} className="text-white/80 hover:bg-white/10 hover:text-white">
             <a href="/dashboard/professor/quiz-results">
               <TrendingUp className="w-4 h-4" />
               <span>All Results</span>
