@@ -38,24 +38,17 @@ function createGradingSchema(maxPoints: number) {
   });
 }
 
-// Enhanced prompt with sample answer comparison and dynamic scoring
+// Enhanced prompt with correct answer comparison and dynamic scoring
 function createGradingPrompt(request: GradingRequest): string {
   const { question, studentAnswer, correctAnswer, maxPoints } = request;
   
-  const hasSampleAnswer = correctAnswer && correctAnswer.trim().length > 0;
-  
-  if (hasSampleAnswer) {
-    return `You are an expert business professor grading a short answer question worth ${maxPoints} points.
+  return `You are an expert business professor grading a short answer question worth ${maxPoints} points.
 
 REFERENCE ANSWER: ${correctAnswer}
 STUDENT ANSWER: ${studentAnswer}
 
 GRADING INSTRUCTIONS:
-Compare the student's answer against the reference answer. Focus on:
-- Key concepts and terminology covered
-- Understanding demonstrated
-- Completeness of response
-- Business knowledge accuracy
+Grade only against the "Correct Answer" provided by the instructor in the conversation. Treat it as the sole authoritative key. Do not use outside knowledge or popular alternatives.
 
 SCORING RUBRIC (${maxPoints} points total):
 - ${maxPoints} points: Excellent - captures all key concepts from reference answer
@@ -75,38 +68,6 @@ Score: [0 to ${maxPoints}]
 Confidence: [0-100, how confident are you in this grade]
 
 QUESTION: ${question}`;
-  } else {
-    // Fallback prompt when no sample answer is provided
-    return `You are an expert business professor grading a short answer question worth ${maxPoints} points.
-
-STUDENT ANSWER: ${studentAnswer}
-
-GRADING INSTRUCTIONS:
-Assess the student's understanding based on:
-- Business knowledge demonstrated
-- Relevance to the question
-- Clarity and completeness
-- Use of appropriate terminology
-
-SCORING RUBRIC (${maxPoints} points total):
-- ${maxPoints} points: Excellent - comprehensive understanding shown
-- ${Math.round(maxPoints * 0.8)}-${maxPoints - 1} points: Very Good - solid understanding
-- ${Math.round(maxPoints * 0.6)}-${Math.round(maxPoints * 0.79)} points: Good - adequate understanding
-- ${Math.round(maxPoints * 0.4)}-${Math.round(maxPoints * 0.59)} points: Satisfactory - basic understanding
-- 1-${Math.round(maxPoints * 0.39)} points: Needs Improvement - limited understanding
-- 0 points: Incorrect or shows no understanding
-
-FEEDBACK REQUIREMENTS:
-- 1 sentence: What the student did well
-- 1 sentence: One specific area for improvement
-
-RESPONSE FORMAT:
-Feedback: [your feedback here - exactly 2 sentences]
-Score: [0 to ${maxPoints}]
-Confidence: [0-100, how confident are you in this grade]
-
-QUESTION: ${question}`;
-  }
 }
 
 // Enhanced fallback grading with dynamic scoring
@@ -194,7 +155,7 @@ export async function gradeShortAnswer(request: GradingRequest): Promise<Grading
           content: prompt
         }
       ],
-      temperature: 0.2, // Lower temperature for more consistent grading
+      temperature: 0.05, // Very low temperature for highly consistent grading
       max_tokens: 800,
       response_format: { type: 'text' }
     });

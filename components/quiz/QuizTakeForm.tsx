@@ -124,6 +124,26 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId }: QuizTake
     setAnswers((prev) => ({ ...prev, [qid]: value }));
   };
 
+  // Prevent copy/paste/cut operations
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Prevent Ctrl+C, Ctrl+V, Ctrl+X, Ctrl+A
+    if (e.ctrlKey && (e.key === 'c' || e.key === 'v' || e.key === 'x' || e.key === 'a')) {
+      e.preventDefault();
+    }
+    // Prevent right-click context menu shortcuts
+    if (e.key === 'F10' || (e.shiftKey && e.key === 'F10')) {
+      e.preventDefault();
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+  };
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
@@ -258,6 +278,8 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId }: QuizTake
                     onValueChange={(val) => handleChange(q.id, val)}
                     disabled={submitting}
                     className="space-y-2"
+                    onKeyDown={handleKeyDown}
+                    onContextMenu={handleContextMenu}
                   >
                     {q.options.map((opt, i) => (
                       <div key={i} className="flex items-center space-x-2">
@@ -276,6 +298,8 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId }: QuizTake
                   onValueChange={(val) => handleChange(q.id, val)}
                   disabled={submitting}
                   className="space-y-2"
+                  onKeyDown={handleKeyDown}
+                  onContextMenu={handleContextMenu}
                 >
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="true" id={`${q.id}-true`} />
@@ -291,6 +315,9 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId }: QuizTake
                 <Textarea
                   value={answers[q.id] || ""}
                   onChange={(e) => handleChange(q.id, e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  onPaste={handlePaste}
+                  onContextMenu={handleContextMenu}
                   placeholder="Type your answer here..."
                   disabled={submitting}
                   className="min-h-[100px] resize-none text-black dark:text-white bg-gray-100 dark:bg-gray-800"

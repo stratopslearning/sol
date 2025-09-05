@@ -15,6 +15,26 @@ interface QuestionCardProps {
 }
 
 export function QuestionCard({ question, questionNumber, answer, onAnswerChange }: QuestionCardProps) {
+  // Prevent copy/paste/cut operations
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Prevent Ctrl+C, Ctrl+V, Ctrl+X, Ctrl+A
+    if (e.ctrlKey && (e.key === 'c' || e.key === 'v' || e.key === 'x' || e.key === 'a')) {
+      e.preventDefault();
+    }
+    // Prevent right-click context menu shortcuts
+    if (e.key === 'F10' || (e.shiftKey && e.key === 'F10')) {
+      e.preventDefault();
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+  };
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+  };
+
   const getQuestionTypeLabel = (type: string) => {
     switch (type) {
       case 'MULTIPLE_CHOICE':
@@ -36,6 +56,8 @@ export function QuestionCard({ question, questionNumber, answer, onAnswerChange 
             value={answer || ''}
             onValueChange={onAnswerChange}
             className="space-y-3"
+            onKeyDown={handleKeyDown}
+            onContextMenu={handleContextMenu}
           >
             {question.options?.map((option: string, index: number) => (
               <div key={index} className="flex items-center space-x-2">
@@ -54,6 +76,8 @@ export function QuestionCard({ question, questionNumber, answer, onAnswerChange 
             value={answer || ''}
             onValueChange={onAnswerChange}
             className="space-y-3"
+            onKeyDown={handleKeyDown}
+            onContextMenu={handleContextMenu}
           >
             <div className="flex items-center space-x-2">
               <RadioGroupItem value="true" id="true" />
@@ -77,6 +101,9 @@ export function QuestionCard({ question, questionNumber, answer, onAnswerChange 
               placeholder="Enter your answer here..."
               value={answer || ''}
               onChange={(e) => onAnswerChange(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
+              onContextMenu={handleContextMenu}
               className="min-h-[120px] resize-none"
               rows={4}
             />
