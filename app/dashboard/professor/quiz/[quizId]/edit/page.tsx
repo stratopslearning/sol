@@ -2,6 +2,7 @@ import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import { db } from '@/app/db';
 import { quizzes, questions, professorSections } from '@/app/db/schema';
 import { eq, and } from 'drizzle-orm';
+import { cleanQuizDescription } from '@/lib/utils';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -188,7 +189,7 @@ export default async function EditQuizPage({
                 {quiz.description && (
                   <div className="mt-6">
                     <div className="text-sm font-medium text-white/60 mb-2">Description</div>
-                    <p className="text-white/80">{quiz.description}</p>
+                    <p className="text-white/80">{cleanQuizDescription(quiz.description)}</p>
                   </div>
                 )}
               </CardContent>

@@ -191,3 +191,15 @@ export function shouldHideFeedbackForStudent(quiz: { endDate: Date | null; descr
   
   return now <= dueDate;
 }
+
+/**
+ * Clean quiz description by removing metadata for display purposes
+ * @param description - Quiz description that may contain metadata
+ * @returns Clean description without metadata
+ */
+export function cleanQuizDescription(description: string | null | undefined): string {
+  if (!description) return '';
+  
+  // Remove metadata from description for display
+  return description.replace(/\n\n<!-- QUIZ_METADATA: {.*?} -->/g, '').trim();
+}

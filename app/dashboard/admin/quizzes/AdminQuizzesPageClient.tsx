@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { QuizEditForm } from '@/components/quiz/QuizEditForm';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
+import { cleanQuizDescription } from '@/lib/utils';
 
 export default function AdminQuizzesPageClient({ allSections, allQuizzes, allQuizSections }: { allSections: any[]; allQuizzes: any[]; allQuizSections: any[] }) {
   const [quizzesWithQuestions, setQuizzesWithQuestions] = useState<any[]>([]);
@@ -140,7 +141,7 @@ export default function AdminQuizzesPageClient({ allSections, allQuizzes, allQui
                       </div>
                     </CardHeader>
                     <CardContent className="px-6 pb-6 pt-2 flex flex-col gap-2 break-words max-w-full">
-                      <div className="text-white/70 text-base block min-h-[24px] break-words">{quiz.description}</div>
+                      <div className="text-white/70 text-base block min-h-[24px] break-words">{cleanQuizDescription(quiz.description)}</div>
                       <div className="text-white/60 text-sm mt-2">Attempts: {quiz.maxAttempts} | Time Limit: {quiz.timeLimit || 'N/A'} min</div>
                       <div className="text-white/60 text-sm">Questions: {quiz.questions?.length ?? 0}</div>
                     </CardContent>

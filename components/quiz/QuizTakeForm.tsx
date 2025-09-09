@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import { QuizTimer } from "@/components/quiz/QuizTimer";
 import { useRouter } from "next/navigation";
 import { useRef, useEffect } from "react";
-import { formatDateTime, shouldHideFeedbackForStudent } from "@/lib/utils";
+import { formatDateTime, shouldHideFeedbackForStudent, cleanQuizDescription } from "@/lib/utils";
 
 interface QuizTakeFormProps {
   quiz: {
@@ -162,8 +162,11 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
       });
       if (!res.ok) throw new Error("Failed to submit quiz");
       const data = await res.json();
-      window.location.href = `/quiz/${quiz.id}/results?attemptId=${data.attemptId}`;
+      console.log('Quiz submitted successfully:', data);
+      // Use router.push for better navigation
+      router.push(`/quiz/${quiz.id}/results?attemptId=${data.attemptId}`);
     } catch (err) {
+      console.error('Quiz submission error:', err);
       toast.error("Submission failed", { description: (err as Error).message });
     } finally {
       setSubmitting(false);
@@ -254,7 +257,7 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
           </div>
         </CardHeader>
         <CardContent>
-          {quiz.description && <div className="mb-2 text-black dark:text-white/80">{quiz.description}</div>}
+          {quiz.description && <div className="mb-2 text-black dark:text-white/80">{cleanQuizDescription(quiz.description)}</div>}
           <div className="flex flex-wrap gap-4 items-center mb-2">
             <Badge variant="secondary" className="text-black dark:text-white bg-gray-200 dark:bg-gray-800">{questions.length} questions</Badge>
             {quiz.dueDate && (

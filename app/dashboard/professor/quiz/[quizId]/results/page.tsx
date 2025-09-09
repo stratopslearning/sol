@@ -246,16 +246,6 @@ export default async function QuizResultsPage({
                 </CardContent>
               </Card>
 
-              <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-white/60">Pass Rate</CardTitle>
-                  <Target className="h-4 w-4 text-white/40" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-white">{passRate}%</div>
-                  <p className="text-xs text-white/40">Students who passed</p>
-                </CardContent>
-              </Card>
             </div>
           </section>
 
