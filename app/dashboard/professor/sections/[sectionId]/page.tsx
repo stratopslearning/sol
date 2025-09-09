@@ -9,6 +9,7 @@ import ProfessorSidebar from '@/components/ProfessorSidebar';
 import CopyEnrollmentButton from '@/components/CopyEnrollmentButton';
 import LeaveSectionButton from './LeaveSectionButton';
 import UnassignQuizButton from './UnassignQuizButton';
+import { cleanQuizDescription } from '@/lib/utils';
 
 export default async function SectionDetailsPage({ params, searchParams }: any) {
   const resolvedParams = await params;
@@ -118,7 +119,9 @@ export default async function SectionDetailsPage({ params, searchParams }: any) 
                     <li key={quiz.id} className="py-4 flex items-center justify-between gap-4">
                       <div>
                         <span className="font-medium text-white">{quiz.title}</span>
-                        <span className="ml-2 text-xs text-white/40">{quiz.description}</span>
+                        {cleanQuizDescription(quiz.description) && (
+                          <span className="ml-2 text-xs text-white/40">{cleanQuizDescription(quiz.description)}</span>
+                        )}
                       </div>
                       <UnassignQuizButton quizId={quiz.id} sectionId={sectionId} />
                     </li>

@@ -236,9 +236,11 @@ export default async function QuizResultsPage() {
                             <TableCell className="font-medium text-white">
                               <div>
                                 <div className="font-semibold">{stat.quiz.title}</div>
-                                <div className="text-xs text-white/60">
-                                  {cleanQuizDescription(stat.quiz.description) || 'No description'}
-                                </div>
+                                {cleanQuizDescription(stat.quiz.description) && (
+                                  <div className="text-xs text-white/60">
+                                    {cleanQuizDescription(stat.quiz.description)}
+                                  </div>
+                                )}
                               </div>
                             </TableCell>
                             <TableCell className="text-white/80">

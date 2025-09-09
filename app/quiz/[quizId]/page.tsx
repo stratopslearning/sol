@@ -4,6 +4,7 @@ import { db } from '@/app/db';
 import { quizzes, questions, assignments } from '@/app/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { QuizTakeForm } from '@/components/quiz/QuizTakeForm';
+import { cleanQuizDescription } from '@/lib/utils';
 
 interface QuizPageProps {
   params: Promise<{ quizId: string }>;
@@ -51,7 +52,7 @@ export default async function QuizPage(props: QuizPageProps) {
       quiz={{
         id: quiz.id,
         title: quiz.title,
-        description: quiz.description || undefined,
+        description: quiz.description ? cleanQuizDescription(quiz.description) : undefined,
         timeLimit: quiz.timeLimit || undefined,
         dueDate: assignment.dueDate ? assignment.dueDate.toISOString() : null,
         totalQuestions: quizQuestions.length,
