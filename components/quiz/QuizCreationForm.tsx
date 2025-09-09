@@ -296,7 +296,7 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
           ...data,
           startDate: data.startDate ? data.startDate.toISOString() : undefined,
           endDate: data.endDate ? data.endDate.toISOString() : undefined,
-          description: data.description ? `${data.description}\n\n<!-- QUIZ_METADATA: ${JSON.stringify({ hideFeedbackAfterDue: data.hideFeedbackAfterDue })} -->` : `<!-- QUIZ_METADATA: ${JSON.stringify({ hideFeedbackAfterDue: data.hideFeedbackAfterDue })} -->`,
+          description: data.description ? `${data.description}\n\n<!-- QUIZ_METADATA: ${JSON.stringify({ hideFeedbackAfterDue: data.hideFeedbackAfterDue })} -->` : (data.hideFeedbackAfterDue ? `<!-- QUIZ_METADATA: ${JSON.stringify({ hideFeedbackAfterDue: data.hideFeedbackAfterDue })} -->` : ''),
           sectionIds: sectionIds, // for admin endpoint compatibility
           questions: questionsWithOrder,
         }),

@@ -143,7 +143,7 @@ export function QuizEditForm({ quiz, courses, apiEndpoint = `/api/professor/quiz
           ...formData,
           startDate: formData.startDate ? new Date(formData.startDate).toISOString() : undefined,
           endDate: formData.endDate ? new Date(formData.endDate).toISOString() : undefined,
-          description: formData.description ? `${formData.description}\n\n<!-- QUIZ_METADATA: ${JSON.stringify({ hideFeedbackAfterDue: formData.hideFeedbackAfterDue })} -->` : `<!-- QUIZ_METADATA: ${JSON.stringify({ hideFeedbackAfterDue: formData.hideFeedbackAfterDue })} -->`,
+          description: formData.description ? `${formData.description}\n\n<!-- QUIZ_METADATA: ${JSON.stringify({ hideFeedbackAfterDue: formData.hideFeedbackAfterDue })} -->` : (formData.hideFeedbackAfterDue ? `<!-- QUIZ_METADATA: ${JSON.stringify({ hideFeedbackAfterDue: formData.hideFeedbackAfterDue })} -->` : ''),
           questions: questions.map((q, index) => ({
             ...q,
             order: index + 1,

@@ -226,7 +226,6 @@ export default async function QuizResultsPage() {
                           <TableHead className="text-white/60 font-medium">Created By</TableHead>
                           <TableHead className="text-white/60 font-medium">Attempts</TableHead>
                           <TableHead className="text-white/60 font-medium">Avg Score</TableHead>
-                          <TableHead className="text-white/60 font-medium">Pass Rate</TableHead>
                           <TableHead className="text-white/60 font-medium">Last Attempt</TableHead>
                           <TableHead className="text-white/60 font-medium">Actions</TableHead>
                         </TableRow>
@@ -270,14 +269,6 @@ export default async function QuizResultsPage() {
                             </TableCell>
                             <TableCell className="text-white/80">
                               <div className="text-lg font-bold">{stat.averageScore}%</div>
-                            </TableCell>
-                            <TableCell className="text-white/80">
-                              <div className="flex items-center gap-2">
-                                <div className="text-lg font-bold">{stat.passRate}%</div>
-                                <Badge className={stat.passRate >= 70 ? "bg-green-600/20 text-green-400 border-green-600" : stat.passRate >= 50 ? "bg-yellow-600/20 text-yellow-400 border-yellow-600" : "bg-red-600/20 text-red-400 border-red-600"}>
-                                  {stat.passRate >= 70 ? 'Good' : stat.passRate >= 50 ? 'Fair' : 'Poor'}
-                                </Badge>
-                              </div>
                             </TableCell>
                             <TableCell className="text-white/60 text-sm">
                               {stat.lastAttempt ? stat.lastAttempt.toLocaleDateString() : 'No attempts'}
