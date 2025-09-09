@@ -1,6 +1,6 @@
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import { db } from '@/app/db';
-import { formatDateTime } from '@/lib/utils';
+import { formatDateTimeUTC } from '@/lib/utils';
 import { sections, studentSections, quizzes, attempts, users, quizSections } from '@/app/db/schema';
 import { eq, inArray } from 'drizzle-orm';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -123,7 +123,7 @@ export default async function StudentQuizzesPage() {
                           <div className="flex items-center gap-2 text-white/70 text-sm">
                             <Calendar className="w-4 h-4" />
                             <span className={new Date(quiz.endDate) < new Date() ? 'text-red-400' : 'text-white/70'}>
-                              Due: {formatDateTime(quiz.endDate)}
+                              Due: {formatDateTimeUTC(quiz.endDate)}
                             </span>
                           </div>
                         )}

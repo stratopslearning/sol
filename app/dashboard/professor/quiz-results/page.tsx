@@ -2,6 +2,7 @@ import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import { db } from '@/app/db';
 import { quizzes, quizSections, professorSections, sections, courses } from '@/app/db/schema';
 import { eq, and, inArray } from 'drizzle-orm';
+import { cleanQuizDescription } from '@/lib/utils';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -237,7 +238,7 @@ export default async function QuizResultsPage() {
                               <div>
                                 <div className="font-semibold">{stat.quiz.title}</div>
                                 <div className="text-xs text-white/60">
-                                  {stat.quiz.description || 'No description'}
+                                  {cleanQuizDescription(stat.quiz.description) || 'No description'}
                                 </div>
                               </div>
                             </TableCell>
