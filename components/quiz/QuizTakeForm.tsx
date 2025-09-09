@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import { QuizTimer } from "@/components/quiz/QuizTimer";
 import { useRouter } from "next/navigation";
 import { useRef, useEffect } from "react";
-import { formatDateTime } from "@/lib/utils";
+import { formatDateTime, shouldHideFeedbackForStudent } from "@/lib/utils";
 
 interface QuizTakeFormProps {
   quiz: {
@@ -34,6 +34,7 @@ interface QuizTakeFormProps {
   }>;
   assignmentId: string;
   userId: string;
+  userRole?: string;
 }
 
 type AnswerMap = Record<string, string>;
@@ -43,7 +44,7 @@ type ResultMap = {
   feedback?: string;
 };
 
-export function QuizTakeForm({ quiz, questions, assignmentId, userId }: QuizTakeFormProps) {
+export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole = 'STUDENT' }: QuizTakeFormProps) {
   const [answers, setAnswers] = useState<AnswerMap>({});
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -55,6 +56,12 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId }: QuizTake
 
   const router = useRouter();
   const submittingRef = useRef(false);
+
+  // Check if feedback should be hidden for this user
+  const shouldHideFeedback = shouldHideFeedbackForStudent(
+    { endDate: quiz.dueDate ? new Date(quiz.dueDate) : null, description: quiz.description || null },
+    userRole
+  );
 
   // 1. Optionally: Create attempt on mount (pseudo-code, adjust to your backend)
   useEffect(() => {
@@ -205,11 +212,18 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId }: QuizTake
                         ) : (
                           <Badge className="bg-red-600/20 text-red-400 border-red-600">Incorrect</Badge>
                         )}
-                        {results[q.id]?.feedback && (
+                        {results[q.id]?.feedback && !shouldHideFeedback && (
                           <span className="text-sm text-blue-300">{results[q.id].feedback}</span>
                         )}
-                        {gptFeedback[q.id] && (
+                        {gptFeedback[q.id] && !shouldHideFeedback && (
                           <span className="text-sm text-purple-300">AI: {gptFeedback[q.id]}</span>
+                        )}
+                        {shouldHideFeedback && (
+                          <span className="text-sm text-yellow-300 italic">
+                            {quiz.dueDate && new Date() <= new Date(quiz.dueDate) 
+                              ? "Feedback will be available after the due date" 
+                              : "Feedback is now available"}
+                          </span>
                         )}
                       </div>
                     )}

@@ -11,6 +11,7 @@ import { SidebarProvider } from '@/components/ui/sidebar';
 import { SignOutButton } from '@clerk/nextjs';
 import { questions } from '@/app/db/schema';
 import { GPTFeedbackDisplay } from '@/components/quiz/GPTFeedbackDisplay';
+import { shouldHideFeedbackForStudent } from '@/lib/utils';
 
 interface ReviewPageProps {
   params: Promise<{ quizId: string }>;
@@ -49,6 +50,12 @@ export default async function ReviewPage({ params, searchParams }: ReviewPagePro
   });
   const answers: Record<string, any> = attempt.answers || {};
   const gptFeedback: Record<string, any> = attempt.gptFeedback || {};
+
+  // Check if feedback should be hidden for this user
+  const shouldHideFeedback = shouldHideFeedbackForStudent(
+    { endDate: quiz.endDate, description: quiz.description },
+    user.role
+  );
 
   return (
     <SidebarProvider>
@@ -95,7 +102,7 @@ export default async function ReviewPage({ params, searchParams }: ReviewPagePro
                     </div>
                   </div>
                   {/* Enhanced GPT Feedback Display */}
-                  {q.type === 'SHORT_ANSWER' && gptFeedback[q.id] && (
+                  {q.type === 'SHORT_ANSWER' && gptFeedback[q.id] && !shouldHideFeedback && (
                     <GPTFeedbackDisplay
                       feedback={gptFeedback[q.id]}
                       questionText={q.question}
@@ -104,13 +111,26 @@ export default async function ReviewPage({ params, searchParams }: ReviewPagePro
                     />
                   )}
                   {/* Simple feedback for MCQ/TF questions */}
-                  {q.type !== 'SHORT_ANSWER' && gptFeedback[q.id]?.feedback && (
+                  {q.type !== 'SHORT_ANSWER' && gptFeedback[q.id]?.feedback && !shouldHideFeedback && (
                     <div className="bg-blue-900/30 border border-blue-500/30 rounded-xl p-6 shadow-md">
                       <div className="flex items-center gap-2 mb-2">
                         <span className="text-sm font-semibold text-blue-300">Question Result</span>
                       </div>
                       <p className="text-base text-blue-100 font-medium">
                         {gptFeedback[q.id].feedback}
+                      </p>
+                    </div>
+                  )}
+                  {/* Feedback hidden message */}
+                  {shouldHideFeedback && (
+                    <div className="bg-yellow-900/30 border border-yellow-500/30 rounded-xl p-6 shadow-md">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-sm font-semibold text-yellow-300">Feedback Status</span>
+                      </div>
+                      <p className="text-base text-yellow-100 font-medium italic">
+                        {quiz.endDate && new Date() <= new Date(quiz.endDate) 
+                          ? "Feedback will be available after the due date" 
+                          : "Feedback is now available"}
                       </p>
                     </div>
                   )}

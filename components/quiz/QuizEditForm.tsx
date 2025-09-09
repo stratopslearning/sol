@@ -22,6 +22,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { SectionMultiSelect } from '@/components/ui/SectionMultiSelect';
+import { formatDateTimeUTC, fromUTC, extractQuizMetadata } from '@/lib/utils';
 
 interface Question {
   id: string;
@@ -68,6 +69,9 @@ export function QuizEditForm({ quiz, courses, apiEndpoint = `/api/professor/quiz
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   
+  // Extract metadata from description
+  const quizMetadata = extractQuizMetadata(quiz.description);
+  
   // Form state
   const [formData, setFormData] = useState({
     title: quiz.title,
@@ -78,6 +82,7 @@ export function QuizEditForm({ quiz, courses, apiEndpoint = `/api/professor/quiz
     startDate: quiz.startDate ? new Date(quiz.startDate).toISOString().split('T')[0] : '',
     endDate: quiz.endDate ? new Date(quiz.endDate).toISOString().split('T')[0] : '',
     isActive: quiz.isActive,
+    hideFeedbackAfterDue: quizMetadata.hideFeedbackAfterDue,
   });
 
   const [questions, setQuestions] = useState<Question[]>(quiz.questions || []);
@@ -136,6 +141,9 @@ export function QuizEditForm({ quiz, courses, apiEndpoint = `/api/professor/quiz
         },
         body: JSON.stringify({
           ...formData,
+          startDate: formData.startDate ? new Date(formData.startDate).toISOString() : undefined,
+          endDate: formData.endDate ? new Date(formData.endDate).toISOString() : undefined,
+          description: formData.description ? `${formData.description}\n\n<!-- QUIZ_METADATA: ${JSON.stringify({ hideFeedbackAfterDue: formData.hideFeedbackAfterDue })} -->` : `<!-- QUIZ_METADATA: ${JSON.stringify({ hideFeedbackAfterDue: formData.hideFeedbackAfterDue })} -->`,
           questions: questions.map((q, index) => ({
             ...q,
             order: index + 1,
@@ -326,6 +334,24 @@ export function QuizEditForm({ quiz, courses, apiEndpoint = `/api/professor/quiz
                   onChange={(e) => setFormData({ ...formData, timeLimit: parseInt(e.target.value) || 30 })}
                   className="bg-white/10 border-white/20 text-white"
                 />
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between rounded-lg border border-white/20 p-4 bg-white/5">
+                  <div className="space-y-0.5">
+                    <Label className="text-white text-base">
+                      Hide Feedback Until After Due Date
+                    </Label>
+                    <div className="text-sm text-white/60">
+                      Students will only see their score before the due date, but can see detailed feedback after
+                    </div>
+                  </div>
+                  <Switch
+                    checked={formData.hideFeedbackAfterDue}
+                    onCheckedChange={(checked) => setFormData({ ...formData, hideFeedbackAfterDue: checked })}
+                    className="data-[state=checked]:bg-blue-600"
+                  />
+                </div>
               </div>
 
               <div className="space-y-2">

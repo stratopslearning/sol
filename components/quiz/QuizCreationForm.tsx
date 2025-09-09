@@ -45,10 +45,11 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { format } from 'date-fns';
-import { cn } from '@/lib/utils';
+import { cn, formatDateTimeUTC, fromUTC } from '@/lib/utils';
 import CourseMultiSelect from '@/components/CourseMultiSelect';
 import { toast } from 'sonner';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { SectionMultiSelect } from '@/components/ui/SectionMultiSelect';
 
 // Form validation schemas
@@ -59,6 +60,7 @@ const quizBasicSchema = z.object({
   timeLimit: z.number().min(1, 'Time limit must be at least 1 minute').max(180, 'Time limit cannot exceed 3 hours'),
   startDate: z.date().optional(),
   endDate: z.date().optional(),
+  hideFeedbackAfterDue: z.boolean(),
 }).refine((data) => {
   if (data.startDate && data.endDate) {
     return data.endDate > data.startDate;
@@ -84,6 +86,7 @@ const quizSchema = z.object({
   timeLimit: z.number().min(1, 'Time limit must be at least 1 minute').max(180, 'Time limit cannot exceed 3 hours'),
   startDate: z.date().optional(),
   endDate: z.date().optional(),
+  hideFeedbackAfterDue: z.boolean(),
   questions: z.array(questionSchema).min(1, 'At least one question is required'),
 }).refine((data) => {
   if (data.startDate && data.endDate) {
@@ -126,6 +129,7 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
       timeLimit: 30,
       startDate: undefined,
       endDate: undefined,
+      hideFeedbackAfterDue: false,
       questions: [
         {
           question: '',
@@ -290,6 +294,9 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
         },
         body: JSON.stringify({
           ...data,
+          startDate: data.startDate ? data.startDate.toISOString() : undefined,
+          endDate: data.endDate ? data.endDate.toISOString() : undefined,
+          description: data.description ? `${data.description}\n\n<!-- QUIZ_METADATA: ${JSON.stringify({ hideFeedbackAfterDue: data.hideFeedbackAfterDue })} -->` : `<!-- QUIZ_METADATA: ${JSON.stringify({ hideFeedbackAfterDue: data.hideFeedbackAfterDue })} -->`,
           sectionIds: sectionIds, // for admin endpoint compatibility
           questions: questionsWithOrder,
         }),
@@ -503,6 +510,30 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
                           />
                         </FormControl>
                         <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="hideFeedbackAfterDue"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-lg border border-white/20 p-4 bg-white/5">
+                        <div className="space-y-0.5">
+                          <FormLabel className="text-white text-base">
+                            Hide Feedback Until After Due Date
+                          </FormLabel>
+                          <div className="text-sm text-white/60">
+                            Students will only see their score before the due date, but can see detailed feedback after
+                          </div>
+                        </div>
+                        <FormControl>
+                          <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                            className="data-[state=checked]:bg-blue-600"
+                          />
+                        </FormControl>
                       </FormItem>
                     )}
                   />
@@ -880,6 +911,7 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
                       <p><strong>Time Limit:</strong> {form.getValues('timeLimit')} minutes</p>
                       <p><strong>Start Date:</strong> {form.getValues('startDate') ? format(form.getValues('startDate')!, 'PPP') : 'None'}</p>
                       <p><strong>End Date:</strong> {form.getValues('endDate') ? format(form.getValues('endDate')!, 'PPP') : 'None'}</p>
+                      <p><strong>Hide Feedback Until After Due Date:</strong> {form.getValues('hideFeedbackAfterDue') ? 'Yes' : 'No'}</p>
                     </div>
                   </div>
                   <div>

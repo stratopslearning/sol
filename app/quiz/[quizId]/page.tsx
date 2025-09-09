@@ -71,6 +71,7 @@ export default async function QuizPage(props: QuizPageProps) {
       }))}
       assignmentId={assignment.id}
       userId={user.id}
+      userRole={user.role}
     />
   );
 } 

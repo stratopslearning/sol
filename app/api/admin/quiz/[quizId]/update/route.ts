@@ -3,6 +3,7 @@ import { db } from '@/app/db';
 import { quizzes, questions, quizSections, users } from '@/app/db/schema';
 import { eq } from 'drizzle-orm';
 import { auth } from '@clerk/nextjs/server';
+import { toUTC } from '@/lib/utils';
 
 export async function PUT(
   request: NextRequest,
@@ -45,8 +46,8 @@ export async function PUT(
         description,
         maxAttempts,
         timeLimit,
-        startDate: startDate ? new Date(startDate) : null,
-        endDate: endDate ? new Date(endDate) : null,
+        startDate: startDate ? toUTC(new Date(startDate)) : null,
+        endDate: endDate ? toUTC(new Date(endDate)) : null,
         isActive,
         updatedAt: new Date(),
       })

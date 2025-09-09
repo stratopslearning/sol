@@ -4,6 +4,7 @@ import { db } from '@/app/db';
 import { quizzes, questions, sections, professorSections, users, quizSections } from '@/app/db/schema';
 import { eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
+import { toUTC } from '@/lib/utils';
 
 const updateQuizSchema = z.object({
   title: z.string().min(1),
@@ -72,8 +73,8 @@ export async function PUT(
         description: validatedData.description,
         maxAttempts: validatedData.maxAttempts,
         timeLimit: validatedData.timeLimit,
-        startDate: validatedData.startDate ? new Date(validatedData.startDate) : null,
-        endDate: validatedData.endDate ? new Date(validatedData.endDate) : null,
+        startDate: validatedData.startDate ? toUTC(new Date(validatedData.startDate)) : null,
+        endDate: validatedData.endDate ? toUTC(new Date(validatedData.endDate)) : null,
         isActive: validatedData.isActive,
         updatedAt: new Date(),
       })

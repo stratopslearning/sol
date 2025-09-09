@@ -4,6 +4,7 @@ import { quizzes, questions, quizSections, users } from '@/app/db/schema';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { auth } from '@clerk/nextjs/server';
+import { toUTC } from '@/lib/utils';
 
 const createQuizSchema = z.object({
   title: z.string().min(1),
@@ -47,8 +48,8 @@ export async function POST(req: NextRequest) {
       professorId: user.id, // Track admin as creator
       maxAttempts: validatedData.maxAttempts,
       timeLimit: validatedData.timeLimit,
-      startDate: validatedData.startDate ? new Date(validatedData.startDate) : null,
-      endDate: validatedData.endDate ? new Date(validatedData.endDate) : null,
+      startDate: validatedData.startDate ? toUTC(new Date(validatedData.startDate)) : null,
+      endDate: validatedData.endDate ? toUTC(new Date(validatedData.endDate)) : null,
       isActive: true,
     }).returning();
 
