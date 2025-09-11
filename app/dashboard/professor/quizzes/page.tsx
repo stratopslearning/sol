@@ -1,7 +1,7 @@
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import { db } from '@/app/db';
-import { quizzes } from '@/app/db/schema';
-import { eq } from 'drizzle-orm';
+import { quizzes, professorSections, quizSections } from '@/app/db/schema';
+import { eq, inArray } from 'drizzle-orm';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -37,23 +37,45 @@ export default async function ProfessorQuizzesPage() {
   const user = await getOrCreateUser();
   if (!user || user.role !== 'PROFESSOR') return null;
 
-  // Fetch professor's quizzes with sectionAssignments, attempts, and questions
-  const professorQuizzes = await db.query.quizzes.findMany({
-    where: eq(quizzes.professorId, user.id),
+  // First, get all sections the professor is enrolled in
+  const professorEnrollments = await db.query.professorSections.findMany({
+    where: eq(professorSections.professorId, user.id),
     with: {
-      sectionAssignments: {
-        with: {
-          section: true,
-        },
-      },
-      attempts: true,
-      questions: true,
+      section: true,
     },
-    orderBy: (quizzes, { desc }) => desc(quizzes.createdAt),
   });
 
+  const enrolledSectionIds = professorEnrollments.map(e => e.sectionId);
+
+  // Fetch all quizzes assigned to the professor's enrolled sections
+  const sectionQuizzes = await db.query.quizSections.findMany({
+    where: inArray(quizSections.sectionId, enrolledSectionIds),
+    with: {
+      quiz: {
+        with: {
+          sectionAssignments: {
+            with: {
+              section: true,
+            },
+          },
+          attempts: true,
+          questions: true,
+          professor: true, // Include professor info to distinguish created vs assigned
+        },
+      },
+    },
+    orderBy: (quizSections, { desc }) => desc(quizSections.assignedAt),
+  });
+
+  // Extract quizzes and add metadata about whether they were created by this professor
+  const allQuizzes = sectionQuizzes.map(qs => ({
+    ...qs.quiz,
+    isCreatedByProfessor: qs.quiz.professorId === user.id,
+    assignedSectionId: qs.sectionId,
+  }));
+
   // Calculate stats for each quiz
-  const quizzesWithStats = professorQuizzes.map(quiz => {
+  const quizzesWithStats = allQuizzes.map(quiz => {
     const totalAttempts = quiz.attempts.length;
     const uniqueStudents = new Set(quiz.attempts.map(a => a.studentId)).size;
     const averageScore = totalAttempts > 0 
@@ -105,7 +127,7 @@ export default async function ProfessorQuizzesPage() {
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div>
                 <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">My Quizzes</h1>
-                <p className="text-white/60 text-lg">Manage and monitor your quiz performance</p>
+                <p className="text-white/60 text-lg">View and manage all quizzes from your enrolled sections</p>
               </div>
               <div className="flex gap-2">
                 <Button asChild variant="outline" className="flex items-center gap-2">
@@ -191,8 +213,8 @@ export default async function ProfessorQuizzesPage() {
                 {quizzesWithStats.length === 0 ? (
                   <div className="text-center py-12">
                     <FileText className="w-12 h-12 mx-auto mb-4 text-white/40" />
-                    <h3 className="text-lg font-medium text-white mb-2">No quizzes created yet</h3>
-                    <p className="text-white/60 mb-6">Create your first quiz to get started</p>
+                    <h3 className="text-lg font-medium text-white mb-2">No quizzes available</h3>
+                    <p className="text-white/60 mb-6">No quizzes have been assigned to your enrolled sections yet</p>
                     <Button asChild>
                       <a href="/dashboard/professor/quiz/new">
                         <Plus className="w-4 h-4 mr-2" />
@@ -206,6 +228,7 @@ export default async function ProfessorQuizzesPage() {
                       <TableHeader>
                         <TableRow className="border-white/10">
                           <TableHead className="text-white/60 font-medium">Quiz Title</TableHead>
+                          <TableHead className="text-white/60 font-medium">Type</TableHead>
                           <TableHead className="text-white/60 font-medium">Section(s)</TableHead>
                           <TableHead className="text-white/60 font-medium">Status</TableHead>
                           <TableHead className="text-white/60 font-medium">Students</TableHead>
@@ -225,6 +248,17 @@ export default async function ProfessorQuizzesPage() {
                                   {quiz.questions.length} questions
                                 </div>
                               </div>
+                            </TableCell>
+                            <TableCell className="text-white/80">
+                              <Badge 
+                                variant={quiz.isCreatedByProfessor ? "default" : "secondary"}
+                                className={quiz.isCreatedByProfessor 
+                                  ? "bg-blue-600/20 text-blue-400 border-blue-600" 
+                                  : "bg-purple-600/20 text-purple-400 border-purple-600"
+                                }
+                              >
+                                {quiz.isCreatedByProfessor ? 'Created' : 'Assigned'}
+                              </Badge>
                             </TableCell>
                             <TableCell className="text-white/80">
                               {quiz.sectionAssignments.length > 0
