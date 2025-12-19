@@ -147,7 +147,7 @@ OPENAI_API_KEY=your_openai_api_key_here
 ### API Settings
 
 The system uses:
-- **Model**: `gpt-4-turbo-preview`
+- **Model**: `gpt-5-mini`
 - **Temperature**: `0.3` (for consistency)
 - **Max Tokens**: `500`
 - **Response Format**: JSON
