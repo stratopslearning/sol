@@ -1,26 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
 import { db } from '@/app/db';
 import { quizzes, questions, assignments, attempts, quizSections, studentSections } from '@/app/db/schema';
 import { eq, and, inArray } from 'drizzle-orm';
 import { gradeShortAnswer, GradingRequest } from '@/lib/grading';
+import { getOrCreateUser } from '@/lib/getOrCreateUser';
 
 export async function POST(req: NextRequest, context: { params: Promise<{ quizId: string }> }) {
   const params = await context.params;
   const quizId = params.quizId;
   try {
-    const { userId } = await auth();
-    if (!userId) {
+    const user = await getOrCreateUser();
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { assignmentId, answers } = await req.json();
+    const { assignmentId, answers, startedAt } = await req.json();
 
     // Verify the assignment belongs to the user
     const assignment = await db.query.assignments.findFirst({
       where: and(
         eq(assignments.id, assignmentId),
-        eq(assignments.quizId, quizId)
+        eq(assignments.quizId, quizId),
+        eq(assignments.studentId, user.id)
       ),
     });
 
@@ -34,6 +35,29 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
     });
     if (!quiz) {
       return NextResponse.json({ error: 'Quiz not found' }, { status: 404 });
+    }
+
+    // Validate quiz availability dates
+    const now = new Date();
+    if (quiz.startDate && now < quiz.startDate) {
+      return NextResponse.json({ 
+        error: 'This quiz has not started yet.',
+        quizNotStarted: true 
+      }, { status: 400 });
+    }
+    if (quiz.endDate && now > quiz.endDate) {
+      return NextResponse.json({ 
+        error: 'This quiz has ended. Submissions are no longer accepted.',
+        quizEnded: true 
+      }, { status: 400 });
+    }
+
+    // Validate assignment due date
+    if (assignment.dueDate && now > assignment.dueDate) {
+      return NextResponse.json({ 
+        error: 'The due date for this assignment has passed. Submissions are no longer accepted.',
+        dueDatePassed: true 
+      }, { status: 400 });
     }
 
     // Find all sections this quiz is assigned to
@@ -128,7 +152,13 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
         eq(attempts.studentId, assignment.studentId)
       ),
     });
-    const attemptCount = existingAttempts.length;
+    
+    // Find in-progress attempt (started but not submitted)
+    const inProgressAttempt = existingAttempts.find(a => !a.submittedAt);
+    
+    // Count only submitted attempts
+    const submittedAttempts = existingAttempts.filter(a => a.submittedAt);
+    const attemptCount = submittedAttempts.length;
 
     if (attemptCount >= quiz.maxAttempts) {
       return NextResponse.json({
@@ -140,25 +170,72 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
     // Get current attempt number
     const currentAttemptNumber = attemptCount + 1;
 
-    // Create the attempt record with attempt metadata
-    const [attempt] = await db.insert(attempts).values({
-      assignmentId,
-      studentId: assignment.studentId,
-      quizId: quizId,
-      sectionId,
-      answers,
-      score: totalScore,
-      maxScore,
-      percentage,
-      passed,
-      gptFeedback: {
-        ...gptFeedback,
-        attemptNumber: currentAttemptNumber,
-        totalAttempts: attemptCount + 1,
-        maxAttempts: quiz.maxAttempts
-      },
-      submittedAt: new Date(),
-    }).returning();
+    // Determine start time: use in-progress attempt's start time, or provided startedAt, or now
+    let attemptStartTime: Date;
+    if (inProgressAttempt) {
+      attemptStartTime = inProgressAttempt.startedAt;
+    } else if (startedAt) {
+      attemptStartTime = new Date(startedAt);
+    } else {
+      attemptStartTime = new Date();
+    }
+    
+    const submitTime = new Date();
+    const timeElapsedMinutes = (submitTime.getTime() - attemptStartTime.getTime()) / (1000 * 60);
+    
+    // Validate time limit if set
+    if (quiz.timeLimit && timeElapsedMinutes > quiz.timeLimit) {
+      return NextResponse.json({ 
+        error: `Time limit exceeded. The quiz has a ${quiz.timeLimit} minute time limit, but ${Math.ceil(timeElapsedMinutes)} minutes have elapsed.`,
+        timeLimitExceeded: true,
+        timeElapsed: Math.ceil(timeElapsedMinutes),
+        timeLimit: quiz.timeLimit
+      }, { status: 400 });
+    }
+
+    // Update existing attempt or create new one
+    let attempt;
+    if (inProgressAttempt) {
+      // Update the existing in-progress attempt
+      [attempt] = await db.update(attempts)
+        .set({
+          answers,
+          score: totalScore,
+          maxScore,
+          percentage,
+          passed,
+          gptFeedback: {
+            ...gptFeedback,
+            attemptNumber: currentAttemptNumber,
+            totalAttempts: attemptCount + 1,
+            maxAttempts: quiz.maxAttempts
+          },
+          submittedAt: submitTime,
+        })
+        .where(eq(attempts.id, inProgressAttempt.id))
+        .returning();
+    } else {
+      // Create a new attempt record
+      [attempt] = await db.insert(attempts).values({
+        assignmentId,
+        studentId: assignment.studentId,
+        quizId: quizId,
+        sectionId,
+        answers,
+        score: totalScore,
+        maxScore,
+        percentage,
+        passed,
+        gptFeedback: {
+          ...gptFeedback,
+          attemptNumber: currentAttemptNumber,
+          totalAttempts: attemptCount + 1,
+          maxAttempts: quiz.maxAttempts
+        },
+        startedAt: attemptStartTime,
+        submittedAt: submitTime,
+      }).returning();
+    }
 
     // Calculate best score across all attempts for this assignment
     const allAttempts = await db.query.attempts.findMany({

@@ -53,6 +53,8 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
   const [percentage, setPercentage] = useState<number | null>(null);
   const [gptFeedback, setGptFeedback] = useState<Record<string, string>>({});
   const [timeUp, setTimeUp] = useState(false);
+  const [startedAt, setStartedAt] = useState<string | null>(null);
+  const [quizStarted, setQuizStarted] = useState(false);
 
   const router = useRouter();
   const submittingRef = useRef(false);
@@ -63,22 +65,46 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
     userRole
   );
 
-  // 1. Optionally: Create attempt on mount (pseudo-code, adjust to your backend)
+  // Start quiz when component mounts
   useEffect(() => {
-    // If you want to POST to /api/quiz/[quizId]/start to create attempt, do it here
-    // await fetch(`/api/quiz/${quiz.id}/start`, { method: "POST", body: JSON.stringify({ assignmentId, userId }) });
-  }, [quiz.id, assignmentId, userId]);
+    const startQuiz = async () => {
+      if (quizStarted) return;
+      try {
+        const res = await fetch(`/api/quiz/${quiz.id}/start`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ assignmentId }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setStartedAt(data.startedAt);
+          setQuizStarted(true);
+        } else {
+          const error = await res.json();
+          toast.error("Failed to start quiz", { description: error.error });
+          // Redirect back if quiz can't be started
+          if (error.quizNotStarted || error.quizEnded || error.dueDatePassed) {
+            router.push('/dashboard/student');
+          }
+        }
+      } catch (err) {
+        console.error('Error starting quiz:', err);
+        toast.error("Failed to start quiz", { description: (err as Error).message });
+      }
+    };
+    startQuiz();
+  }, [quiz.id, assignmentId, quizStarted, router]);
 
   // 2. Auto-submit on exit if not all answered
   useEffect(() => {
     const handleAutoSubmit = async () => {
-      if (submittingRef.current) return;
+      if (submittingRef.current || !startedAt) return;
       submittingRef.current = true;
       try {
         await fetch(`/api/quiz/${quiz.id}/submit`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ assignmentId, answers }),
+          body: JSON.stringify({ assignmentId, answers, startedAt }),
         });
       } catch (err) {
         // Optionally handle error
@@ -113,7 +139,7 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
       // @ts-ignore
       router.events?.off("routeChangeStart", handleRouteChange);
     };
-  }, [answers, questions.length, assignmentId, quiz.id, router]);
+  }, [answers, questions.length, assignmentId, quiz.id, router, startedAt]);
 
   const answeredCount = Object.keys(answers).length;
   const progress = Math.round((answeredCount / questions.length) * 100);
@@ -153,14 +179,21 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!startedAt) {
+      toast.error("Quiz not started", { description: "Please wait for the quiz to initialize." });
+      return;
+    }
     setSubmitting(true);
     try {
       const res = await fetch(`/api/quiz/${quiz.id}/submit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ assignmentId, answers }),
+        body: JSON.stringify({ assignmentId, answers, startedAt }),
       });
-      if (!res.ok) throw new Error("Failed to submit quiz");
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Failed to submit quiz");
+      }
       const data = await res.json();
       console.log('Quiz submitted successfully:', data);
       // Use router.push for better navigation
@@ -345,8 +378,8 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
         ))}
       </div>
       <div className="mt-8 flex justify-end">
-        <Button type="submit" disabled={submitting} className="w-full md:w-auto">
-          {submitting ? "Submitting..." : "Submit Quiz"}
+        <Button type="submit" disabled={submitting || !quizStarted} className="w-full md:w-auto">
+          {!quizStarted ? "Starting quiz..." : submitting ? "Submitting..." : "Submit Quiz"}
         </Button>
       </div>
     </form>

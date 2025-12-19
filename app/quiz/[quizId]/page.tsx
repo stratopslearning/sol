@@ -24,6 +24,15 @@ export default async function QuizPage(props: QuizPageProps) {
   });
   if (!quiz) redirect('/dashboard/student');
 
+  // Validate quiz availability dates
+  const now = new Date();
+  if (quiz.startDate && now < quiz.startDate) {
+    redirect(`/dashboard/student?error=quiz_not_started&quizId=${quizId}&message=${encodeURIComponent('This quiz has not started yet.')}`);
+  }
+  if (quiz.endDate && now > quiz.endDate) {
+    redirect(`/dashboard/student?error=quiz_ended&quizId=${quizId}&message=${encodeURIComponent('This quiz has ended.')}`);
+  }
+
   // Fetch questions for this quiz
   const quizQuestions = await db.query.questions.findMany({
     where: eq(questions.quizId, quizId),
