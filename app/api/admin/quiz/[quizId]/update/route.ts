@@ -3,7 +3,6 @@ import { db } from '@/app/db';
 import { quizzes, questions, quizSections, users } from '@/app/db/schema';
 import { eq } from 'drizzle-orm';
 import { auth } from '@clerk/nextjs/server';
-import { toUTC } from '@/lib/utils';
 
 export async function PUT(
   request: NextRequest,
@@ -40,14 +39,16 @@ export async function PUT(
     }
 
     // Update quiz
+    // Note: startDate and endDate are already ISO strings in UTC from the client
+    // We just need to convert them to Date objects - no need for toUTC conversion
     await db.update(quizzes)
       .set({
         title,
         description,
         maxAttempts,
         timeLimit,
-        startDate: startDate ? toUTC(new Date(startDate)) : null,
-        endDate: endDate ? toUTC(new Date(endDate)) : null,
+        startDate: startDate ? new Date(startDate) : null,
+        endDate: endDate ? new Date(endDate) : null,
         isActive,
         updatedAt: new Date(),
       })

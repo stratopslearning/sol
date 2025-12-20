@@ -159,13 +159,21 @@ export function QuizEditForm({ quiz, courses, apiEndpoint = `/api/professor/quiz
     setSectionError(null);
     
     // Combine date and time into ISO strings
+    // Treat user input as UTC to avoid timezone conversion issues
+    // This way, if user enters "12:55 PM", it's stored as 12:55 PM UTC
     const combineDateTime = (date: string, time: string) => {
       if (!date) return undefined;
       if (!time) {
-        // If no time provided, use start of day
-        return new Date(`${date}T00:00:00`).toISOString();
+        // If no time provided, use start of day in UTC
+        const [year, month, day] = date.split('-').map(Number);
+        return new Date(Date.UTC(year, month - 1, day, 0, 0, 0)).toISOString();
       }
-      return new Date(`${date}T${time}:00`).toISOString();
+      // Parse date and time components
+      const [year, month, day] = date.split('-').map(Number);
+      const [hours, minutes] = time.split(':').map(Number);
+      // Create UTC date directly (treating user input as UTC)
+      // This ensures the time entered is stored exactly as entered
+      return new Date(Date.UTC(year, month - 1, day, hours, minutes, 0)).toISOString();
     };
 
     const startDateTime = combineDateTime(formData.startDate, formData.startTime);
@@ -451,7 +459,7 @@ export function QuizEditForm({ quiz, courses, apiEndpoint = `/api/professor/quiz
                     min={formData.startDate || undefined}
                     onChange={(e) => {
                       const newEndDate = e.target.value;
-                      // If end date is before start date, reset it
+                      // Allow same day, but if end date is before start date, reset it to start date
                       if (formData.startDate && newEndDate < formData.startDate) {
                         setFormData({ ...formData, endDate: formData.startDate });
                       } else {
@@ -478,9 +486,9 @@ export function QuizEditForm({ quiz, courses, apiEndpoint = `/api/professor/quiz
                     }}
                   />
                 </div>
-                {formData.startDate && formData.endDate === formData.startDate && (
+                {formData.startDate && formData.endDate === formData.startDate && formData.startTime && (
                   <p className="text-xs text-white/60 mt-1">
-                    End time must be after {formData.startTime || 'start time'} on the same day
+                    Same day selected: End time must be after {formData.startTime}
                   </p>
                 )}
               </div>

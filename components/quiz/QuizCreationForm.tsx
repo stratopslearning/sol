@@ -63,11 +63,12 @@ const quizBasicSchema = z.object({
   hideFeedbackAfterDue: z.boolean(),
 }).refine((data) => {
   if (data.startDate && data.endDate) {
-    return data.endDate > data.startDate;
+    // Allow same day, but end date/time must be after start date/time
+    return data.endDate >= data.startDate;
   }
   return true;
 }, {
-  message: "End date must be after start date",
+  message: "End date and time must be on or after start date and time",
   path: ["endDate"],
 });
 
@@ -90,11 +91,12 @@ const quizSchema = z.object({
   questions: z.array(questionSchema).min(1, 'At least one question is required'),
 }).refine((data) => {
   if (data.startDate && data.endDate) {
-    return data.endDate > data.startDate;
+    // Allow same day, but end date/time must be after start date/time
+    return data.endDate >= data.startDate;
   }
   return true;
 }, {
-  message: "End date must be after start date",
+  message: "End date and time must be on or after start date and time",
   path: ["endDate"],
 });
 
@@ -639,10 +641,11 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
                                   today.setHours(0, 0, 0, 0);
                                   const startDate = form.getValues('startDate');
                                   if (startDate) {
-                                    // Only allow end dates after or equal to today and after startDate
+                                    // Allow end dates on or after start date (same day is allowed)
+                                    // Time validation will ensure end time is after start time
                                     const start = new Date(startDate);
                                     start.setHours(0, 0, 0, 0);
-                                    return date < today || date <= start;
+                                    return date < today || date < start;
                                   }
                                   return date < today;
                                 }}
@@ -660,6 +663,22 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
                                 const newDate = new Date(field.value);
                                 newDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
                                 field.onChange(newDate);
+                                
+                                // Validate that end time is after start time if same day
+                                const startDate = form.getValues('startDate');
+                                if (startDate && field.value) {
+                                  const start = new Date(startDate);
+                                  const end = newDate;
+                                  // Check if same day
+                                  if (start.toDateString() === end.toDateString() && end <= start) {
+                                    form.setError('endDate', {
+                                      type: 'manual',
+                                      message: 'End time must be after start time on the same day'
+                                    });
+                                  } else {
+                                    form.clearErrors('endDate');
+                                  }
+                                }
                               }
                             }}
                             defaultValue={field.value ? format(field.value, 'HH:mm') : ''}
