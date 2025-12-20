@@ -66,6 +66,33 @@ export async function PUT(
       }, { status: 403 });
     }
 
+    // Validate date/time: end date must be after start date, or same day with end time after start time
+    if (validatedData.startDate && validatedData.endDate) {
+      const startDate = new Date(validatedData.startDate);
+      const endDate = new Date(validatedData.endDate);
+      
+      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+        return NextResponse.json({ 
+          error: 'Invalid date format' 
+        }, { status: 400 });
+      }
+
+      // Check if end date is before start date
+      if (endDate < startDate) {
+        return NextResponse.json({ 
+          error: 'End date and time must be after start date and time' 
+        }, { status: 400 });
+      }
+
+      // If same day, end time must be after start time (already handled by date comparison if times are included)
+      // The dates include time, so this check is sufficient
+      if (endDate <= startDate) {
+        return NextResponse.json({ 
+          error: 'End date and time must be after start date and time' 
+        }, { status: 400 });
+      }
+    }
+
     // Update the quiz
     await db.update(quizzes)
       .set({

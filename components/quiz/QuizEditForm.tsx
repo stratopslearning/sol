@@ -72,6 +72,29 @@ export function QuizEditForm({ quiz, courses, apiEndpoint = `/api/professor/quiz
   // Extract metadata from description
   const quizMetadata = extractQuizMetadata(quiz.description);
   
+  // Helper function to extract date and time from a Date object
+  const extractDateAndTime = (date: Date | string | null | undefined) => {
+    if (!date) return { date: '', time: '' };
+    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    if (isNaN(dateObj.getTime())) return { date: '', time: '' };
+    
+    // Get date in YYYY-MM-DD format (local timezone)
+    const year = dateObj.getFullYear();
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const day = String(dateObj.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+    
+    // Get time in HH:MM format (local timezone)
+    const hours = String(dateObj.getHours()).padStart(2, '0');
+    const minutes = String(dateObj.getMinutes()).padStart(2, '0');
+    const timeStr = `${hours}:${minutes}`;
+    
+    return { date: dateStr, time: timeStr };
+  };
+
+  const startDateTime = extractDateAndTime(quiz.startDate);
+  const endDateTime = extractDateAndTime(quiz.endDate);
+
   // Form state
   const [formData, setFormData] = useState({
     title: quiz.title,
@@ -79,8 +102,10 @@ export function QuizEditForm({ quiz, courses, apiEndpoint = `/api/professor/quiz
     courseId: quiz.courseId || 'global',
     maxAttempts: quiz.maxAttempts,
     timeLimit: quiz.timeLimit || 30,
-    startDate: quiz.startDate ? new Date(quiz.startDate).toISOString().split('T')[0] : '',
-    endDate: quiz.endDate ? new Date(quiz.endDate).toISOString().split('T')[0] : '',
+    startDate: startDateTime.date,
+    startTime: startDateTime.time,
+    endDate: endDateTime.date,
+    endTime: endDateTime.time,
     isActive: quiz.isActive,
     hideFeedbackAfterDue: quizMetadata.hideFeedbackAfterDue,
   });
@@ -132,6 +157,30 @@ export function QuizEditForm({ quiz, courses, apiEndpoint = `/api/professor/quiz
       return;
     }
     setSectionError(null);
+    
+    // Combine date and time into ISO strings
+    const combineDateTime = (date: string, time: string) => {
+      if (!date) return undefined;
+      if (!time) {
+        // If no time provided, use start of day
+        return new Date(`${date}T00:00:00`).toISOString();
+      }
+      return new Date(`${date}T${time}:00`).toISOString();
+    };
+
+    const startDateTime = combineDateTime(formData.startDate, formData.startTime);
+    const endDateTime = combineDateTime(formData.endDate, formData.endTime);
+
+    // Validate that end date/time is after start date/time
+    if (startDateTime && endDateTime) {
+      const start = new Date(startDateTime);
+      const end = new Date(endDateTime);
+      if (end <= start) {
+        alert('End date and time must be after start date and time');
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     try {
       const response = await fetch(apiEndpoint, {
@@ -140,10 +189,13 @@ export function QuizEditForm({ quiz, courses, apiEndpoint = `/api/professor/quiz
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          ...formData,
-          startDate: formData.startDate ? new Date(formData.startDate).toISOString() : undefined,
-          endDate: formData.endDate ? new Date(formData.endDate).toISOString() : undefined,
+          title: formData.title,
           description: formData.description ? `${formData.description}\n\n<!-- QUIZ_METADATA: ${JSON.stringify({ hideFeedbackAfterDue: formData.hideFeedbackAfterDue })} -->` : (formData.hideFeedbackAfterDue ? `<!-- QUIZ_METADATA: ${JSON.stringify({ hideFeedbackAfterDue: formData.hideFeedbackAfterDue })} -->` : ''),
+          maxAttempts: formData.maxAttempts,
+          timeLimit: formData.timeLimit,
+          isActive: formData.isActive,
+          startDate: startDateTime,
+          endDate: endDateTime,
           questions: questions.map((q, index) => ({
             ...q,
             order: index + 1,
@@ -382,15 +434,9 @@ export function QuizEditForm({ quiz, courses, apiEndpoint = `/api/professor/quiz
                   <Input
                     id="startTime"
                     type="time"
-                    placeholder="00:00"
+                    value={formData.startTime}
                     className="bg-white/10 border-white/20 text-white"
-                    onChange={(e) => {
-                      if (formData.startDate && e.target.value) {
-                        const [hours, minutes] = e.target.value.split(':');
-                        const newDateTime = `${formData.startDate}T${e.target.value}:00`;
-                        setFormData({ ...formData, startDate: newDateTime });
-                      }
-                    }}
+                    onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
                   />
                 </div>
               </div>
@@ -402,23 +448,41 @@ export function QuizEditForm({ quiz, courses, apiEndpoint = `/api/professor/quiz
                     id="endDate"
                     type="date"
                     value={formData.endDate}
-                    onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                    min={formData.startDate || undefined}
+                    onChange={(e) => {
+                      const newEndDate = e.target.value;
+                      // If end date is before start date, reset it
+                      if (formData.startDate && newEndDate < formData.startDate) {
+                        setFormData({ ...formData, endDate: formData.startDate });
+                      } else {
+                        setFormData({ ...formData, endDate: newEndDate });
+                      }
+                    }}
                     className="bg-white/10 border-white/20 text-white"
                   />
                   <Input
                     id="endTime"
                     type="time"
-                    placeholder="23:59"
+                    value={formData.endTime}
                     className="bg-white/10 border-white/20 text-white"
                     onChange={(e) => {
-                      if (formData.endDate && e.target.value) {
-                        const [hours, minutes] = e.target.value.split(':');
-                        const newDateTime = `${formData.endDate}T${e.target.value}:00`;
-                        setFormData({ ...formData, endDate: newDateTime });
+                      const newEndTime = e.target.value;
+                      // If same day, validate that end time is after start time
+                      if (formData.startDate && formData.endDate === formData.startDate && formData.startTime) {
+                        if (newEndTime <= formData.startTime) {
+                          alert('End time must be after start time on the same day');
+                          return;
+                        }
                       }
+                      setFormData({ ...formData, endTime: newEndTime });
                     }}
                   />
                 </div>
+                {formData.startDate && formData.endDate === formData.startDate && (
+                  <p className="text-xs text-white/60 mt-1">
+                    End time must be after {formData.startTime || 'start time'} on the same day
+                  </p>
+                )}
               </div>
             </div>
           </CardContent>

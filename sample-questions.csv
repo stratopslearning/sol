@@ -1,7 +1,6 @@
 question,type,options,correct_answer,points
-What is the capital of France?,MULTIPLE_CHOICE,Paris|London|Berlin|Madrid,Paris,2
-Is the Earth round?,TRUE_FALSE,,true,1
-Explain the concept of photosynthesis in one sentence.,SHORT_ANSWER,,Photosynthesis is the process by which plants convert sunlight into energy to produce glucose and oxygen.,3
-What is 2 + 2?,MULTIPLE_CHOICE,3|4|5|6,4,2
-Is JavaScript a programming language?,TRUE_FALSE,,true,
-Describe the main features of object-oriented programming.,SHORT_ANSWER,,Object-oriented programming uses classes and objects to organize code, with features like inheritance, encapsulation, and polymorphism.,4 
+Explain the concept of supply chain management in your own words.,SHORT_ANSWER,,Supply chain management involves coordinating and managing the flow of goods, services, and information from suppliers to customers to ensure efficient operations and customer satisfaction.,2
+What are the key benefits of digital transformation in business?,SHORT_ANSWER,,Digital transformation improves efficiency, enables data-driven decision making, enhances customer experience, and creates new business opportunities through technology integration.,2
+Describe the importance of customer relationship management (CRM) systems.,SHORT_ANSWER,,CRM systems help businesses manage customer interactions, track sales opportunities, improve customer service, and build stronger relationships to increase customer retention and revenue.,2
+Explain how data analytics can help businesses make better decisions.,SHORT_ANSWER,,Data analytics allows businesses to identify patterns, trends, and insights from large datasets, enabling evidence-based decision making, predicting future outcomes, and optimizing operations.,2
+What role does innovation play in maintaining competitive advantage?,SHORT_ANSWER,,Innovation helps businesses develop new products, services, or processes that differentiate them from competitors, meet evolving customer needs, and adapt to changing market conditions.,2
