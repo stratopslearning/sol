@@ -46,14 +46,41 @@ export function formatDateTime(date: Date | string | null | undefined): string {
 export function formatDateTimeUTC(date: Date | string | null | undefined): string {
   if (!date) return 'Not set';
   
-  const dateObj = typeof date === 'string' ? new Date(date) : date;
+  // Parse the date - if it's a string without timezone, treat it as UTC
+  let dateObj: Date;
+  if (typeof date === 'string') {
+    const dateStr = date.trim();
+    // Check if string has timezone indicator (Z, +, or - after the time portion)
+    // Format: YYYY-MM-DDTHH:MM:SS or YYYY-MM-DD HH:MM:SS
+    const hasTimezone = dateStr.endsWith('Z') || 
+                        /[+-]\d{2}:?\d{2}$/.test(dateStr) || // Has +05:00 or +0500
+                        dateStr.includes('GMT');
+    
+    if (!hasTimezone && dateStr.includes('T')) {
+      // String like "2025-12-21T21:00:00" without timezone - append Z to treat as UTC
+      // This is the format PostgreSQL timestamps often use
+      dateObj = new Date(dateStr + 'Z');
+    } else if (!hasTimezone && /^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}$/.test(dateStr)) {
+      // String like "2025-12-21 21:00:00" - convert to ISO format and append Z
+      dateObj = new Date(dateStr.replace(' ', 'T') + 'Z');
+    } else {
+      dateObj = new Date(dateStr);
+    }
+  } else {
+    dateObj = date;
+  }
+  
   if (isNaN(dateObj.getTime())) return 'Invalid date';
   
-  // Check if the date has time information (not just midnight)
-  const hasTime = dateObj.getHours() !== 0 || dateObj.getMinutes() !== 0;
+  // Check if the date has time information (not just midnight UTC)
+  // Use UTC methods to check, but display in local time
+  const hasTime = dateObj.getUTCHours() !== 0 || dateObj.getUTCMinutes() !== 0 || 
+                  dateObj.getUTCSeconds() !== 0 || dateObj.getUTCMilliseconds() !== 0;
   
   if (hasTime) {
-    // Use local timezone formatting - display what user sees
+    // Use local timezone formatting - toLocaleString automatically converts UTC to local
+    // This ensures the time the user entered (e.g., 2 PM) is displayed as 2 PM in their timezone
+    // The Date object internally stores UTC, and toLocaleString converts it to the user's local timezone
     return dateObj.toLocaleString('en-US', {
       year: 'numeric',
       month: 'short',
