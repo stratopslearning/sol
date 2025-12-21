@@ -38,6 +38,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
     }
 
     // Validate quiz availability dates
+    // Quiz endDate is the primary control - if professor extends it, quiz becomes available
     const now = new Date();
     if (quiz.startDate && now < quiz.startDate) {
       return NextResponse.json({ 
@@ -52,8 +53,9 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
       }, { status: 400 });
     }
 
-    // Validate assignment due date
-    if (assignment.dueDate && now > assignment.dueDate) {
+    // Assignment dueDate is secondary - only check if quiz endDate is not set
+    // If quiz endDate is extended by professor, it overrides assignment dueDate
+    if (!quiz.endDate && assignment.dueDate && now > assignment.dueDate) {
       return NextResponse.json({ 
         error: 'The due date for this assignment has passed.',
         dueDatePassed: true 

@@ -40,8 +40,8 @@ export function formatDateTime(date: Date | string | null | undefined): string {
 }
 
 /**
- * Format a UTC date to show both date and time in local timezone
- * This is the new timezone-aware version of formatDateTime
+ * Format a date to show both date and time in local timezone
+ * Uses local timezone methods - displays what the user sees
  */
 export function formatDateTimeUTC(date: Date | string | null | undefined): string {
   if (!date) return 'Not set';
@@ -53,9 +53,21 @@ export function formatDateTimeUTC(date: Date | string | null | undefined): strin
   const hasTime = dateObj.getHours() !== 0 || dateObj.getMinutes() !== 0;
   
   if (hasTime) {
-    return formatUTCToLocal(dateObj, 'PPP p');
+    // Use local timezone formatting - display what user sees
+    return dateObj.toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
   } else {
-    return formatUTCToLocal(dateObj, 'PPP');
+    return dateObj.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
   }
 }
 

@@ -73,18 +73,19 @@ export function QuizEditForm({ quiz, courses, apiEndpoint = `/api/professor/quiz
   const quizMetadata = extractQuizMetadata(quiz.description);
   
   // Helper function to extract date and time from a Date object
+  // Use local timezone methods - display what the user sees in their local time
   const extractDateAndTime = (date: Date | string | null | undefined) => {
     if (!date) return { date: '', time: '' };
     const dateObj = typeof date === 'string' ? new Date(date) : date;
     if (isNaN(dateObj.getTime())) return { date: '', time: '' };
     
-    // Get date in YYYY-MM-DD format (local timezone)
+    // Get date in YYYY-MM-DD format (local timezone - what user sees)
     const year = dateObj.getFullYear();
     const month = String(dateObj.getMonth() + 1).padStart(2, '0');
     const day = String(dateObj.getDate()).padStart(2, '0');
     const dateStr = `${year}-${month}-${day}`;
     
-    // Get time in HH:MM format (local timezone)
+    // Get time in HH:MM format (local timezone - what user sees)
     const hours = String(dateObj.getHours()).padStart(2, '0');
     const minutes = String(dateObj.getMinutes()).padStart(2, '0');
     const timeStr = `${hours}:${minutes}`;
@@ -159,21 +160,20 @@ export function QuizEditForm({ quiz, courses, apiEndpoint = `/api/professor/quiz
     setSectionError(null);
     
     // Combine date and time into ISO strings
-    // Treat user input as UTC to avoid timezone conversion issues
-    // This way, if user enters "12:55 PM", it's stored as 12:55 PM UTC
+    // Use local timezone - store what the user enters as-is
+    // This way, if user enters "12:55 PM", it's stored and displayed as 12:55 PM
     const combineDateTime = (date: string, time: string) => {
       if (!date) return undefined;
       if (!time) {
-        // If no time provided, use start of day in UTC
+        // If no time provided, use start of day in local timezone
         const [year, month, day] = date.split('-').map(Number);
-        return new Date(Date.UTC(year, month - 1, day, 0, 0, 0)).toISOString();
+        return new Date(year, month - 1, day, 0, 0, 0).toISOString();
       }
-      // Parse date and time components
+      // Parse date and time components and create date in local timezone
       const [year, month, day] = date.split('-').map(Number);
       const [hours, minutes] = time.split(':').map(Number);
-      // Create UTC date directly (treating user input as UTC)
-      // This ensures the time entered is stored exactly as entered
-      return new Date(Date.UTC(year, month - 1, day, hours, minutes, 0)).toISOString();
+      // Create date in local timezone (what user sees is what gets stored)
+      return new Date(year, month - 1, day, hours, minutes, 0).toISOString();
     };
 
     const startDateTime = combineDateTime(formData.startDate, formData.startTime);
