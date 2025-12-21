@@ -56,17 +56,32 @@ export function formatDateTimeUTC(date: Date | string | null | undefined): strin
                         /[+-]\d{2}:?\d{2}$/.test(dateStr) || // Has +05:00 or +0500
                         dateStr.includes('GMT');
     
-    if (!hasTimezone && dateStr.includes('T')) {
-      // String like "2025-12-21T21:00:00" without timezone - append Z to treat as UTC
-      // This is the format PostgreSQL timestamps often use
-      dateObj = new Date(dateStr + 'Z');
-    } else if (!hasTimezone && /^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}$/.test(dateStr)) {
-      // String like "2025-12-21 21:00:00" - convert to ISO format and append Z
-      dateObj = new Date(dateStr.replace(' ', 'T') + 'Z');
+    if (!hasTimezone) {
+      // No timezone indicator - treat as UTC (database timestamps are stored as UTC)
+      if (dateStr.includes('T')) {
+        // String like "2025-12-21T21:00:00" or "2025-12-21T21:00:00.000" - append Z to treat as UTC
+        dateObj = new Date(dateStr + 'Z');
+      } else if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}/.test(dateStr)) {
+        // String like "2025-12-21 21:00:00" or "2025-12-21 21:00:00.000" - convert to ISO format and append Z
+        // This is the format PostgreSQL often returns when queried directly
+        dateObj = new Date(dateStr.replace(' ', 'T').replace(/\.\d+$/, '') + 'Z');
+      } else {
+        // Try to parse as-is, but if it looks like a timestamp, treat as UTC
+        dateObj = new Date(dateStr);
+        // If the parsed date seems wrong (e.g., interpreted as local instead of UTC), 
+        // we can't easily fix it here, but the regex above should catch most cases
+      }
     } else {
+      // Has timezone indicator - parse normally
       dateObj = new Date(dateStr);
     }
   } else {
+    // It's already a Date object from Drizzle
+    // Date objects in JavaScript store time internally as UTC milliseconds since epoch
+    // However, if the Date object was constructed from a string without timezone info,
+    // it might have been interpreted as local time, making the UTC value wrong.
+    // We can't easily detect or fix this, so we trust that Drizzle returns correct Date objects.
+    // If issues persist, the problem is likely at the Drizzle/PostgreSQL level.
     dateObj = date;
   }
   
