@@ -47,6 +47,32 @@ export default async function StudentQuizzesPage() {
       index === self.findIndex(q => q.id === quiz.id)
     );
 
+  // DEBUG: Log what Drizzle is returning for dates
+  if (assignedQuizzes.length > 0 && assignedQuizzes[0].endDate) {
+    const testDate = assignedQuizzes[0].endDate;
+    console.log('=== DRIZZLE DATE DEBUG ===');
+    console.log('Type:', typeof testDate);
+    console.log('Raw value:', testDate);
+    console.log('Is Date object?', testDate instanceof Date);
+    if (testDate instanceof Date) {
+      console.log('Date.toString():', testDate.toString());
+      console.log('Date.toISOString():', testDate.toISOString());
+      console.log('Date.getUTCHours():', testDate.getUTCHours());
+      console.log('Date.getHours():', testDate.getHours());
+      console.log('Date.getTime():', testDate.getTime());
+    } else if (typeof testDate === 'string') {
+      console.log('String length:', testDate.length);
+      console.log('String format:', testDate);
+    }
+    const normalized = normalizeDatabaseDate(testDate);
+    console.log('After normalizeDatabaseDate:', normalized);
+    if (normalized) {
+      console.log('Normalized.toISOString():', normalized.toISOString());
+      console.log('Normalized.toLocaleString():', normalized.toLocaleString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit' }));
+    }
+    console.log('=== END DEBUG ===');
+  }
+
   // Fetch all attempts for this student
   const allAttempts = await db.query.attempts.findMany({
     where: eq(attempts.studentId, user.id),
