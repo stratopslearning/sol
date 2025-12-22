@@ -40,52 +40,66 @@ export function formatDateTime(date: Date | string | null | undefined): string {
 }
 
 /**
+ * Normalize a date from the database to a UTC Date object
+ * Database timestamps are stored as UTC, but when retrieved they might be:
+ * - Strings without timezone info (e.g., "2025-12-21 21:00:00") - need to treat as UTC
+ * - Date objects that were incorrectly constructed as local time
+ * This function ensures we always get a proper UTC Date object
+ */
+export function normalizeDatabaseDate(date: Date | string | null | undefined): Date | null {
+  if (!date) return null;
+  
+  if (typeof date === 'string') {
+    const dateStr = date.trim();
+    // Check if string has timezone indicator
+    const hasTimezone = dateStr.endsWith('Z') || 
+                        /[+-]\d{2}:?\d{2}$/.test(dateStr) || 
+                        dateStr.includes('GMT');
+    
+    if (!hasTimezone) {
+      // No timezone indicator - treat as UTC (database timestamps are stored as UTC)
+      if (dateStr.includes('T')) {
+        // String like "2025-12-21T21:00:00" - append Z to treat as UTC
+        return new Date(dateStr + 'Z');
+      } else if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}/.test(dateStr)) {
+        // String like "2025-12-21 21:00:00" - convert to ISO format and append Z
+        return new Date(dateStr.replace(' ', 'T').replace(/\.\d+$/, '') + 'Z');
+      } else {
+        // Try to parse as-is
+        return new Date(dateStr);
+      }
+    } else {
+      // Has timezone indicator - parse normally
+      return new Date(dateStr);
+    }
+  } else {
+    // It's a Date object
+    // If it was incorrectly constructed from a string without timezone, we can't easily detect it
+    // But we can reconstruct it from its UTC components to ensure it's correct
+    // This handles the case where Drizzle might have created a Date from a string without timezone
+    const utcYear = date.getUTCFullYear();
+    const utcMonth = date.getUTCMonth();
+    const utcDay = date.getUTCDate();
+    const utcHours = date.getUTCHours();
+    const utcMinutes = date.getUTCMinutes();
+    const utcSeconds = date.getUTCSeconds();
+    const utcMs = date.getUTCMilliseconds();
+    
+    // Reconstruct as UTC to ensure correctness
+    return new Date(Date.UTC(utcYear, utcMonth, utcDay, utcHours, utcMinutes, utcSeconds, utcMs));
+  }
+}
+
+/**
  * Format a date to show both date and time in local timezone
  * Uses local timezone methods - displays what the user sees
  */
 export function formatDateTimeUTC(date: Date | string | null | undefined): string {
   if (!date) return 'Not set';
   
-  // Parse the date - if it's a string without timezone, treat it as UTC
-  let dateObj: Date;
-  if (typeof date === 'string') {
-    const dateStr = date.trim();
-    // Check if string has timezone indicator (Z, +, or - after the time portion)
-    // Format: YYYY-MM-DDTHH:MM:SS or YYYY-MM-DD HH:MM:SS
-    const hasTimezone = dateStr.endsWith('Z') || 
-                        /[+-]\d{2}:?\d{2}$/.test(dateStr) || // Has +05:00 or +0500
-                        dateStr.includes('GMT');
-    
-    if (!hasTimezone) {
-      // No timezone indicator - treat as UTC (database timestamps are stored as UTC)
-      if (dateStr.includes('T')) {
-        // String like "2025-12-21T21:00:00" or "2025-12-21T21:00:00.000" - append Z to treat as UTC
-        dateObj = new Date(dateStr + 'Z');
-      } else if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}/.test(dateStr)) {
-        // String like "2025-12-21 21:00:00" or "2025-12-21 21:00:00.000" - convert to ISO format and append Z
-        // This is the format PostgreSQL often returns when queried directly
-        dateObj = new Date(dateStr.replace(' ', 'T').replace(/\.\d+$/, '') + 'Z');
-      } else {
-        // Try to parse as-is, but if it looks like a timestamp, treat as UTC
-        dateObj = new Date(dateStr);
-        // If the parsed date seems wrong (e.g., interpreted as local instead of UTC), 
-        // we can't easily fix it here, but the regex above should catch most cases
-      }
-    } else {
-      // Has timezone indicator - parse normally
-      dateObj = new Date(dateStr);
-    }
-  } else {
-    // It's already a Date object from Drizzle
-    // Date objects in JavaScript store time internally as UTC milliseconds since epoch
-    // However, if the Date object was constructed from a string without timezone info,
-    // it might have been interpreted as local time, making the UTC value wrong.
-    // We can't easily detect or fix this, so we trust that Drizzle returns correct Date objects.
-    // If issues persist, the problem is likely at the Drizzle/PostgreSQL level.
-    dateObj = date;
-  }
-  
-  if (isNaN(dateObj.getTime())) return 'Invalid date';
+  // Normalize the date to ensure it's treated as UTC
+  const dateObj = normalizeDatabaseDate(date);
+  if (!dateObj || isNaN(dateObj.getTime())) return 'Invalid date';
   
   // Check if the date has time information (not just midnight UTC)
   // Use UTC methods to check, but display in local time

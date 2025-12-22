@@ -4,6 +4,7 @@ import { db } from '@/app/db';
 import { quizzes, assignments, attempts, quizSections, studentSections } from '@/app/db/schema';
 import { eq, and, inArray } from 'drizzle-orm';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
+import { normalizeDatabaseDate } from '@/lib/utils';
 
 export async function POST(req: NextRequest, context: { params: Promise<{ quizId: string }> }) {
   const params = await context.params;
@@ -39,14 +40,19 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
 
     // Validate quiz availability dates
     // Quiz endDate is the primary control - if professor extends it, quiz becomes available
+    // Normalize dates to ensure correct UTC comparison
     const now = new Date();
-    if (quiz.startDate && now < quiz.startDate) {
+    const startDate = normalizeDatabaseDate(quiz.startDate);
+    const endDate = normalizeDatabaseDate(quiz.endDate);
+    const assignmentDueDate = normalizeDatabaseDate(assignment.dueDate);
+    
+    if (startDate && now < startDate) {
       return NextResponse.json({ 
         error: 'This quiz has not started yet.',
         quizNotStarted: true 
       }, { status: 400 });
     }
-    if (quiz.endDate && now > quiz.endDate) {
+    if (endDate && now > endDate) {
       return NextResponse.json({ 
         error: 'This quiz has ended.',
         quizEnded: true 
@@ -55,7 +61,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
 
     // Assignment dueDate is secondary - only check if quiz endDate is not set
     // If quiz endDate is extended by professor, it overrides assignment dueDate
-    if (!quiz.endDate && assignment.dueDate && now > assignment.dueDate) {
+    if (!endDate && assignmentDueDate && now > assignmentDueDate) {
       return NextResponse.json({ 
         error: 'The due date for this assignment has passed.',
         dueDatePassed: true 

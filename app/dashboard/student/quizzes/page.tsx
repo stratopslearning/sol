@@ -1,6 +1,6 @@
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import { db } from '@/app/db';
-import { formatDateTimeUTC } from '@/lib/utils';
+import { formatDateTimeUTC, normalizeDatabaseDate } from '@/lib/utils';
 import { sections, studentSections, quizzes, attempts, users, quizSections } from '@/app/db/schema';
 import { eq, inArray } from 'drizzle-orm';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -89,16 +89,20 @@ export default async function StudentQuizzesPage() {
                   const hasAttempted = attempts.length > 0;
                   const latestAttempt = attempts.length > 0 ? attempts[attempts.length - 1] : null;
                   
+                  // Normalize the endDate to ensure correct UTC comparison
+                  const endDate = normalizeDatabaseDate(quiz.endDate);
+                  const isOverdue = endDate ? endDate < new Date() : false;
+                  
                   return (
                     <Card key={quiz.id} className={`flex flex-col justify-between rounded-xl shadow-lg border hover:shadow-2xl transition-shadow ${
-                      quiz.endDate && new Date(quiz.endDate) < new Date() 
+                      isOverdue
                         ? 'bg-red-900/20 border-red-500/30' 
                         : 'bg-white/10 border-white/10'
                     }`}>
                       <CardHeader className="flex flex-row items-center justify-between pb-2">
                         <CardTitle className="text-lg text-white flex-1 truncate">{quiz.title}</CardTitle>
                         <div className="flex gap-2">
-                          {quiz.endDate && new Date(quiz.endDate) < new Date() && (
+                          {isOverdue && (
                             <Badge className="bg-red-600/20 text-red-400 border-red-600">
                               Overdue
                             </Badge>
@@ -122,7 +126,7 @@ export default async function StudentQuizzesPage() {
                         {quiz.endDate && (
                           <div className="flex items-center gap-2 text-white/70 text-sm">
                             <Calendar className="w-4 h-4" />
-                            <span className={new Date(quiz.endDate) < new Date() ? 'text-red-400' : 'text-white/70'}>
+                            <span className={isOverdue ? 'text-red-400' : 'text-white/70'}>
                               Due: {formatDateTimeUTC(quiz.endDate)}
                             </span>
                           </div>

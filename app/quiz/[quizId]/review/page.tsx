@@ -11,7 +11,7 @@ import { SidebarProvider } from '@/components/ui/sidebar';
 import { SignOutButton } from '@clerk/nextjs';
 import { questions } from '@/app/db/schema';
 import { GPTFeedbackDisplay } from '@/components/quiz/GPTFeedbackDisplay';
-import { shouldHideFeedbackForStudent } from '@/lib/utils';
+import { shouldHideFeedbackForStudent, normalizeDatabaseDate } from '@/lib/utils';
 
 interface ReviewPageProps {
   params: Promise<{ quizId: string }>;
@@ -128,7 +128,10 @@ export default async function ReviewPage({ params, searchParams }: ReviewPagePro
                         <span className="text-sm font-semibold text-yellow-300">Feedback Status</span>
                       </div>
                       <p className="text-base text-yellow-100 font-medium italic">
-                        {quiz.endDate && new Date() <= new Date(quiz.endDate) 
+                        {quiz.endDate && (() => {
+                          const endDate = normalizeDatabaseDate(quiz.endDate);
+                          return endDate ? new Date() <= endDate : false;
+                        })() 
                           ? "Feedback will be available after the due date" 
                           : "Feedback is now available"}
                       </p>

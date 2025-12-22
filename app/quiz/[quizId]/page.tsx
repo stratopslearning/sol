@@ -4,7 +4,7 @@ import { db } from '@/app/db';
 import { quizzes, questions, assignments } from '@/app/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { QuizTakeForm } from '@/components/quiz/QuizTakeForm';
-import { cleanQuizDescription } from '@/lib/utils';
+import { cleanQuizDescription, normalizeDatabaseDate } from '@/lib/utils';
 
 interface QuizPageProps {
   params: Promise<{ quizId: string }>;
@@ -25,11 +25,15 @@ export default async function QuizPage(props: QuizPageProps) {
   if (!quiz) redirect('/dashboard/student');
 
   // Validate quiz availability dates
+  // Normalize dates to ensure correct UTC comparison
   const now = new Date();
-  if (quiz.startDate && now < quiz.startDate) {
+  const startDate = normalizeDatabaseDate(quiz.startDate);
+  const endDate = normalizeDatabaseDate(quiz.endDate);
+  
+  if (startDate && now < startDate) {
     redirect(`/dashboard/student?error=quiz_not_started&quizId=${quizId}&message=${encodeURIComponent('This quiz has not started yet.')}`);
   }
-  if (quiz.endDate && now > quiz.endDate) {
+  if (endDate && now > endDate) {
     redirect(`/dashboard/student?error=quiz_ended&quizId=${quizId}&message=${encodeURIComponent('This quiz has ended.')}`);
   }
 
