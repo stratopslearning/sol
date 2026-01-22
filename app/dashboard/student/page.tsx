@@ -19,7 +19,8 @@ import {
 } from 'lucide-react';
 import { SignOutButton } from '@clerk/nextjs';
 import StudentEnrollFormWrapper from '@/components/StudentEnrollFormWrapper';
-import LeaveSectionButton from '@/components/LeaveSectionButton';
+import { EnrollmentList } from '@/components/EnrollmentList';
+import { AttemptList } from '@/components/AttemptList';
 
 export default async function StudentDashboard() {
   const user = await getOrCreateUser();
@@ -96,10 +97,10 @@ export default async function StudentDashboard() {
           <section className="w-full max-w-7xl mx-auto mb-8">
             <h2 className="text-xl font-semibold text-white mb-4">Your Progress</h2>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
+              <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl hover:scale-[1.02] hover:bg-white/15 transition-all duration-300 cursor-pointer group animate-scale-in">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-white/60">Enrolled Sections</CardTitle>
-                  <BookOpen className="h-4 w-4 text-blue-400" />
+                  <CardTitle className="text-sm font-medium text-white/60 group-hover:text-white/80 transition-colors">Enrolled Sections</CardTitle>
+                  <BookOpen className="h-4 w-4 text-blue-400 group-hover:scale-110 transition-transform" />
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-blue-400">{totalSections}</div>
@@ -107,10 +108,10 @@ export default async function StudentDashboard() {
                 </CardContent>
               </Card>
 
-              <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
+              <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl hover:scale-[1.02] hover:bg-white/15 transition-all duration-300 cursor-pointer group animate-scale-in" style={{ animationDelay: '0.1s' }}>
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-white/60">Available Quizzes</CardTitle>
-                  <FileText className="h-4 w-4 text-green-400" />
+                  <CardTitle className="text-sm font-medium text-white/60 group-hover:text-white/80 transition-colors">Available Quizzes</CardTitle>
+                  <FileText className="h-4 w-4 text-green-400 group-hover:scale-110 transition-transform" />
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-green-400">{totalQuizzes}</div>
@@ -118,10 +119,10 @@ export default async function StudentDashboard() {
                 </CardContent>
               </Card>
 
-              <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
+              <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl hover:scale-[1.02] hover:bg-white/15 transition-all duration-300 cursor-pointer group animate-scale-in" style={{ animationDelay: '0.2s' }}>
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-white/60">Quiz Attempts</CardTitle>
-                  <CheckCircle className="h-4 w-4 text-orange-400" />
+                  <CardTitle className="text-sm font-medium text-white/60 group-hover:text-white/80 transition-colors">Quiz Attempts</CardTitle>
+                  <CheckCircle className="h-4 w-4 text-orange-400 group-hover:scale-110 transition-transform" />
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-orange-400">{totalAttempts}</div>
@@ -129,10 +130,10 @@ export default async function StudentDashboard() {
                 </CardContent>
               </Card>
 
-              <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
+              <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl hover:scale-[1.02] hover:bg-white/15 transition-all duration-300 cursor-pointer group animate-scale-in" style={{ animationDelay: '0.3s' }}>
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-white/60">Avg Score</CardTitle>
-                  <TrendingUp className="h-4 w-4 text-emerald-400" />
+                  <CardTitle className="text-sm font-medium text-white/60 group-hover:text-white/80 transition-colors">Avg Score</CardTitle>
+                  <TrendingUp className="h-4 w-4 text-emerald-400 group-hover:scale-110 transition-transform" />
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-emerald-400">{averageScore}%</div>
@@ -147,71 +148,22 @@ export default async function StudentDashboard() {
             <h2 className="text-xl font-semibold text-white mb-4">Your Sections & Recent Activity</h2>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Enrolled Sections */}
-              <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
+              <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl hover:scale-[1.01] transition-all duration-300 animate-scale-in">
                 <CardHeader>
                   <CardTitle className="text-lg text-white">Enrolled Sections</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {enrollments.length > 0 ? (
-                    enrollments.map(enrollment => (
-                      <div key={enrollment.id} className="flex items-center justify-between p-3 rounded-lg bg-white/5">
-                        <div className="flex-1">
-                          <div className="text-sm font-medium text-white">
-                            {enrollment.section.name}
-                          </div>
-                          <div className="text-xs text-white/60">
-                            Section
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge className="bg-green-600/20 text-green-400 border-green-600">
-                            Enrolled
-                          </Badge>
-                          <LeaveSectionButton 
-                            sectionId={enrollment.section.id} 
-                            sectionName={enrollment.section.name}
-                          />
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-center py-6 text-white/40">
-                      <BookOpen className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                      <p>No sections enrolled yet</p>
-                      <div className="text-white/40 text-sm">Join a section using the enrollment code from your dashboard.</div>
-                    </div>
-                  )}
+                  <EnrollmentList enrollments={enrollments} />
                 </CardContent>
               </Card>
 
               {/* Recent Activity */}
-              <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
+              <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl hover:scale-[1.01] transition-all duration-300 animate-scale-in" style={{ animationDelay: '0.1s' }}>
                 <CardHeader>
                   <CardTitle className="text-lg text-white">Recent Quiz Attempts</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {recentAttempts.length > 0 ? (
-                    recentAttempts.map(attempt => (
-                      <div key={attempt.id} className="flex items-center justify-between p-3 rounded-lg bg-white/5">
-                        <div className="flex-1">
-                          <div className="text-sm font-medium text-white">
-                            {attempt.quiz.title}
-                          </div>
-                          <div className="text-xs text-white/60">
-                            {attempt.section.name} • {attempt.percentage}%
-                          </div>
-                        </div>
-                        <Badge className={attempt.passed ? 'bg-green-600/20 text-green-400 border-green-600' : 'bg-red-600/20 text-red-400 border-red-600'}>
-                          {attempt.passed ? 'Passed' : 'Failed'}
-                        </Badge>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-center py-6 text-white/40">
-                      <FileText className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                      <p>No recent attempts</p>
-                    </div>
-                  )}
+                  <AttemptList attempts={recentAttempts} />
                 </CardContent>
               </Card>
             </div>

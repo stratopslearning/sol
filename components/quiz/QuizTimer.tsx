@@ -2,6 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
+import { Clock, AlertTriangle } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { cn } from '@/lib/utils';
 
 interface QuizTimerProps {
   timeLimit: number; // in seconds
@@ -41,15 +45,64 @@ export function QuizTimer({ timeLimit, onTimeUp }: QuizTimerProps) {
     return `${minutes}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const progress = (timeRemaining / timeLimit) * 100;
+  const isWarning = timeRemaining <= 300; // 5 minutes
+  const isCritical = timeRemaining <= 60; // 1 minute
+
   const getTimeColor = () => {
-    if (timeRemaining <= 300) return 'text-red-500'; // 5 minutes or less
-    if (timeRemaining <= 600) return 'text-yellow-500'; // 10 minutes or less
-    return 'text-gray-400';
+    if (isCritical) return 'text-red-500';
+    if (isWarning) return 'text-yellow-500';
+    return 'text-blue-400';
+  };
+
+  const getProgressColor = () => {
+    if (isCritical) return 'bg-red-500';
+    if (isWarning) return 'bg-yellow-500';
+    return 'bg-blue-500';
   };
 
   return (
-    <Badge variant="outline" className={`font-mono ${getTimeColor()}`}>
-      {formatTime(timeRemaining)}
-    </Badge>
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-2">
+        <Clock className={cn("w-4 h-4", getTimeColor())} />
+        <Badge 
+          variant="outline" 
+          className={cn(
+            "font-mono text-base px-3 py-1.5 border-2 transition-all duration-300",
+            isCritical && "border-red-500/50 bg-red-500/10 animate-pulse",
+            isWarning && !isCritical && "border-yellow-500/50 bg-yellow-500/10",
+            !isWarning && "border-blue-500/50 bg-blue-500/10",
+            getTimeColor()
+          )}
+        >
+          {formatTime(timeRemaining)}
+        </Badge>
+        {isWarning && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="flex items-center gap-1 text-yellow-500"
+          >
+            <AlertTriangle className="w-4 h-4" />
+            <span className="text-xs font-medium">
+              {isCritical ? 'Time almost up!' : 'Less than 5 minutes'}
+            </span>
+          </motion.div>
+        )}
+      </div>
+      <div className="w-full">
+        <Progress 
+          value={progress} 
+          className="h-2"
+        />
+        <div 
+          className={cn(
+            "h-2 rounded-full transition-all duration-1000",
+            getProgressColor()
+          )}
+          style={{ width: `${progress}%`, marginTop: '-8px' }}
+        />
+      </div>
+    </div>
   );
 } 

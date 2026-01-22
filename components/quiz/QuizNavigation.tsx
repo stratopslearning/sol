@@ -3,6 +3,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { CheckCircle, Circle } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { cn } from '@/lib/utils';
+import { Progress } from '@/components/ui/progress';
 
 interface QuizNavigationProps {
   questions: any[];
@@ -39,70 +42,83 @@ export function QuizNavigation({
     return 'unanswered';
   };
 
-  const getQuestionButtonStyle = (status: string) => {
-    switch (status) {
-      case 'current':
-        return 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700';
-      case 'answered':
-        return 'bg-green-600 text-white border-green-600 hover:bg-green-700';
-      case 'unanswered':
-        return 'bg-gray-700 text-gray-300 border-gray-600 hover:bg-gray-600';
-      default:
-        return 'bg-gray-700 text-gray-300 border-gray-600';
-    }
-  };
+  const answeredCount = Object.keys(answers).filter(key => {
+    const answer = answers[key];
+    return answer && (typeof answer !== 'string' || answer.trim().length > 0);
+  }).length;
+  const progress = (answeredCount / questions.length) * 100;
 
   return (
-    <Card>
+    <Card className="bg-white/10 border-white/10 backdrop-blur-sm">
       <CardHeader>
         <CardTitle className="text-lg text-white">Question Navigation</CardTitle>
+        <div className="mt-2">
+          <Progress value={progress} className="h-2" />
+          <div className="flex justify-between text-xs text-white/60 mt-1">
+            <span>{answeredCount} of {questions.length} answered</span>
+            <span>{Math.round(progress)}%</span>
+          </div>
+        </div>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-5 gap-2">
+        <div className="grid grid-cols-5 sm:grid-cols-10 gap-2">
           {questions.map((question, index) => {
             const status = getQuestionStatus(question, index);
             const isAnswered = isQuestionAnswered(question.id);
+            const isCurrent = index === currentQuestionIndex;
             
             return (
-              <Button
+              <motion.div
                 key={question.id}
-                variant="outline"
-                size="sm"
-                className={`h-10 w-10 p-0 ${getQuestionButtonStyle(status)}`}
-                onClick={() => onQuestionSelect(index)}
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: index * 0.05 }}
               >
-                <div className="flex items-center justify-center">
-                  {isAnswered ? (
-                    <CheckCircle className="h-4 w-4" />
-                  ) : (
-                    <span className="text-xs font-medium">{index + 1}</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={cn(
+                    "h-10 w-10 p-0 transition-all duration-200 relative",
+                    isCurrent && "bg-blue-600 text-white border-blue-600 hover:bg-blue-700 ring-2 ring-blue-400/50 scale-110",
+                    !isCurrent && isAnswered && "bg-green-600/80 text-white border-green-600 hover:bg-green-700 hover:scale-105",
+                    !isCurrent && !isAnswered && "bg-white/5 text-white/60 border-white/20 hover:bg-white/10 hover:text-white hover:scale-105"
                   )}
-                </div>
-              </Button>
+                  onClick={() => onQuestionSelect(index)}
+                  aria-label={`Go to question ${index + 1}${isAnswered ? ' (answered)' : ''}`}
+                >
+                  <div className="flex items-center justify-center">
+                    {isAnswered ? (
+                      <CheckCircle className="h-4 w-4" />
+                    ) : (
+                      <span className="text-xs font-medium">{index + 1}</span>
+                    )}
+                  </div>
+                  {isCurrent && (
+                    <motion.div
+                      layoutId="currentQuestion"
+                      className="absolute inset-0 border-2 border-blue-400 rounded-md"
+                      initial={false}
+                      transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                    />
+                  )}
+                </Button>
+              </motion.div>
             );
           })}
         </div>
         
-        <div className="mt-4 space-y-2 text-sm">
+        <div className="mt-6 space-y-2 text-sm">
           <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 bg-blue-600 rounded-full"></div>
-            <span className="text-gray-400">Current</span>
+            <div className="w-3 h-3 bg-blue-600 rounded-full ring-2 ring-blue-400/50"></div>
+            <span className="text-white/60">Current</span>
           </div>
           <div className="flex items-center space-x-2">
             <div className="w-3 h-3 bg-green-600 rounded-full"></div>
-            <span className="text-gray-400">Answered</span>
+            <span className="text-white/60">Answered</span>
           </div>
           <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 bg-gray-600 rounded-full"></div>
-            <span className="text-gray-400">Unanswered</span>
-          </div>
-        </div>
-        
-        <div className="mt-4 p-3 bg-gray-800 rounded-lg">
-          <div className="text-sm text-gray-400">
-            <div>Total: {questions.length}</div>
-            <div>Answered: {Object.keys(answers).length}</div>
-            <div>Remaining: {questions.length - Object.keys(answers).length}</div>
+            <div className="w-3 h-3 bg-white/20 rounded-full border border-white/30"></div>
+            <span className="text-white/60">Unanswered</span>
           </div>
         </div>
       </CardContent>

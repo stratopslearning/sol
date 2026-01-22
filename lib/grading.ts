@@ -230,7 +230,7 @@ export async function gradeShortAnswer(request: GradingRequest): Promise<Grading
         }
       ],
       temperature: 0.05, // Very low temperature for highly consistent grading
-      max_tokens: 800,
+      max_completion_tokens: 800,
       response_format: { type: 'text' }
     });
     
