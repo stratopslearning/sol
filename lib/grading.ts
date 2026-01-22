@@ -231,10 +231,12 @@ export async function gradeShortAnswer(request: GradingRequest): Promise<Grading
       ],
       // gpt-5-mini parameters:
       // - temperature: NOT supported (must be omitted)
-      // - max_completion_tokens: Required (replaces max_tokens)
-      // - reasoning_effort: Optional (low/medium/high) - using "medium" for balanced accuracy/speed
-      max_completion_tokens: 800,
-      reasoning_effort: 'medium', // Balanced reasoning for accurate grading
+      // - max_completion_tokens: Total budget for reasoning + output tokens
+      // - reasoning_effort: Optional (low/medium/high) - using "low" to reserve tokens for response
+      // Note: reasoning_tokens + output_tokens <= max_completion_tokens
+      // Setting to 2000 to ensure enough tokens for both reasoning and response
+      max_completion_tokens: 2000,
+      reasoning_effort: 'low', // Low reasoning to reserve more tokens for actual response output
       response_format: { type: 'text' }
     });
     
