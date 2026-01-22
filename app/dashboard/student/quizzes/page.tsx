@@ -60,9 +60,10 @@ export default async function StudentQuizzesPage() {
       console.log('Date.getUTCHours():', testDate.getUTCHours());
       console.log('Date.getHours():', testDate.getHours());
       console.log('Date.getTime():', testDate.getTime());
-    } else if (typeof testDate === 'string') {
-      console.log('String length:', testDate.length);
-      console.log('String format:', testDate);
+    } else {
+      const dateStr = String(testDate);
+      console.log('String length:', dateStr.length);
+      console.log('String format:', dateStr);
     }
     const normalized = normalizeDatabaseDate(testDate);
     console.log('After normalizeDatabaseDate:', normalized);
