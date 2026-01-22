@@ -229,8 +229,12 @@ export async function gradeShortAnswer(request: GradingRequest): Promise<Grading
           content: prompt
         }
       ],
-      temperature: 0.05, // Very low temperature for highly consistent grading
+      // gpt-5-mini parameters:
+      // - temperature: NOT supported (must be omitted)
+      // - max_completion_tokens: Required (replaces max_tokens)
+      // - reasoning_effort: Optional (low/medium/high) - using "medium" for balanced accuracy/speed
       max_completion_tokens: 800,
+      reasoning_effort: 'medium', // Balanced reasoning for accurate grading
       response_format: { type: 'text' }
     });
     
