@@ -154,9 +154,20 @@ export async function gradeShortAnswer(request: GradingRequest): Promise<Grading
   let score = 0;
   let feedback = '';
   
+  // #region agent log
+  const logData = {location:'grading.ts:152',message:'gradeShortAnswer entry',data:{hasStudentAnswer:!!request.studentAnswer,hasCorrectAnswer:!!request.correctAnswer,correctAnswerLength:request.correctAnswer?.length||0,maxPoints:request.maxPoints},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'};
+  console.log('[DEBUG]', JSON.stringify(logData));
+  fetch('http://127.0.0.1:7244/ingest/1109f94d-80f7-49ca-87a3-95efe0645b46',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logData)}).catch(()=>{});
+  // #endregion
+  
   try {
     // Input validation
     if (!request.studentAnswer || request.studentAnswer.trim().length === 0) {
+      // #region agent log
+      const logData = {location:'grading.ts:159',message:'Empty student answer - returning early',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'};
+      console.log('[DEBUG]', JSON.stringify(logData));
+      fetch('http://127.0.0.1:7244/ingest/1109f94d-80f7-49ca-87a3-95efe0645b46',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logData)}).catch(()=>{});
+      // #endregion
       return {
         score: 0,
         feedback: 'Please read the textbook and try again.',
@@ -166,6 +177,11 @@ export async function gradeShortAnswer(request: GradingRequest): Promise<Grading
     
     // Critical: correctAnswer is required for accurate grading
     if (!request.correctAnswer || request.correctAnswer.trim().length === 0) {
+      // #region agent log
+      const logData = {location:'grading.ts:168',message:'correctAnswer missing - returning early',data:{correctAnswer:request.correctAnswer},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'};
+      console.log('[DEBUG]', JSON.stringify(logData));
+      fetch('http://127.0.0.1:7244/ingest/1109f94d-80f7-49ca-87a3-95efe0645b46',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logData)}).catch(()=>{});
+      // #endregion
       console.warn('correctAnswer is missing - cannot provide accurate grading');
       return {
         score: 0,
@@ -174,7 +190,19 @@ export async function gradeShortAnswer(request: GradingRequest): Promise<Grading
       };
     }
     
-    if (!process.env.OPENAI_API_KEY) {
+    const hasApiKey = !!process.env.OPENAI_API_KEY;
+    // #region agent log
+    const logData = {location:'grading.ts:177',message:'Checking API key',data:{hasApiKey,apiKeyLength:process.env.OPENAI_API_KEY?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'};
+    console.log('[DEBUG]', JSON.stringify(logData));
+    fetch('http://127.0.0.1:7244/ingest/1109f94d-80f7-49ca-87a3-95efe0645b46',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logData)}).catch(()=>{});
+    // #endregion
+    
+    if (!hasApiKey) {
+      // #region agent log
+      const logData = {location:'grading.ts:178',message:'API key missing - using fallback',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'};
+      console.log('[DEBUG]', JSON.stringify(logData));
+      fetch('http://127.0.0.1:7244/ingest/1109f94d-80f7-49ca-87a3-95efe0645b46',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logData)}).catch(()=>{});
+      // #endregion
       console.warn('OpenAI API key not configured, using fallback grading');
       return fallbackGrading(request);
     }
@@ -183,6 +211,12 @@ export async function gradeShortAnswer(request: GradingRequest): Promise<Grading
     await new Promise(resolve => setTimeout(resolve, 100)); // 100ms delay between requests
     
     const prompt = createGradingPrompt(request);
+    // #region agent log
+    const logData = {location:'grading.ts:185',message:'Before OpenAI API call',data:{model:'gpt-5-mini',promptLength:prompt.length,hasCorrectAnswer:!!request.correctAnswer},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'};
+    console.log('[DEBUG]', JSON.stringify(logData));
+    fetch('http://127.0.0.1:7244/ingest/1109f94d-80f7-49ca-87a3-95efe0645b46',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logData)}).catch(()=>{});
+    // #endregion
+    
     const completion = await openai.chat.completions.create({
       model: 'gpt-5-mini',
       messages: [
@@ -200,15 +234,38 @@ export async function gradeShortAnswer(request: GradingRequest): Promise<Grading
       response_format: { type: 'text' }
     });
     
+    // #region agent log
+    const logData = {location:'grading.ts:201',message:'OpenAI API call succeeded',data:{hasResponse:!!completion.choices[0]?.message?.content,responseLength:completion.choices[0]?.message?.content?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'};
+    console.log('[DEBUG]', JSON.stringify(logData));
+    fetch('http://127.0.0.1:7244/ingest/1109f94d-80f7-49ca-87a3-95efe0645b46',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logData)}).catch(()=>{});
+    // #endregion
+    
     const responseText = completion.choices[0]?.message?.content;
     if (!responseText) {
+      // #region agent log
+      const logData = {location:'grading.ts:204',message:'No response text from OpenAI',data:{completion:JSON.stringify(completion)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'};
+      console.log('[DEBUG]', JSON.stringify(logData));
+      fetch('http://127.0.0.1:7244/ingest/1109f94d-80f7-49ca-87a3-95efe0645b46',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logData)}).catch(()=>{});
+      // #endregion
       throw new Error('No response from OpenAI');
     }
     
     // Enhanced parsing with confidence score
+    // #region agent log
+    const logData = {location:'grading.ts:208',message:'Parsing OpenAI response',data:{responseText:responseText.substring(0,200),responseLength:responseText.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'};
+    console.log('[DEBUG]', JSON.stringify(logData));
+    fetch('http://127.0.0.1:7244/ingest/1109f94d-80f7-49ca-87a3-95efe0645b46',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logData)}).catch(()=>{});
+    // #endregion
+    
     const feedbackMatch = responseText.match(/Feedback:\s*(.*?)(?=\n|$)/i);
     const scoreMatch = responseText.match(/Score:\s*(\d+)/i);
     const confidenceMatch = responseText.match(/Confidence:\s*(\d+)/i);
+    
+    // #region agent log
+    const logData = {location:'grading.ts:212',message:'Regex match results',data:{hasFeedbackMatch:!!feedbackMatch,hasScoreMatch:!!scoreMatch,hasConfidenceMatch:!!confidenceMatch,scoreMatchValue:scoreMatch?.[1]},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'};
+    console.log('[DEBUG]', JSON.stringify(logData));
+    fetch('http://127.0.0.1:7244/ingest/1109f94d-80f7-49ca-87a3-95efe0645b46',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logData)}).catch(()=>{});
+    // #endregion
     
     feedback = feedbackMatch ? feedbackMatch[1].trim() : '';
     score = scoreMatch ? parseInt(scoreMatch[1], 10) : 0;
@@ -216,19 +273,43 @@ export async function gradeShortAnswer(request: GradingRequest): Promise<Grading
     
     // Validate the response
     const gradingSchema = createGradingSchema(request.maxPoints);
+    // #region agent log
+    const logData = {location:'grading.ts:219',message:'Before schema validation',data:{score,feedbackLength:feedback.length,confidence,maxPoints:request.maxPoints},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'};
+    console.log('[DEBUG]', JSON.stringify(logData));
+    fetch('http://127.0.0.1:7244/ingest/1109f94d-80f7-49ca-87a3-95efe0645b46',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logData)}).catch(()=>{});
+    // #endregion
+    
     const validatedResponse = gradingSchema.parse({ 
       score, 
       feedback, 
       confidence: Math.min(confidence, 100) 
     });
     
+    // #region agent log
+    const logData = {location:'grading.ts:225',message:'Grading successful - returning result',data:{score:validatedResponse.score,feedbackLength:validatedResponse.feedback.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'};
+    console.log('[DEBUG]', JSON.stringify(logData));
+    fetch('http://127.0.0.1:7244/ingest/1109f94d-80f7-49ca-87a3-95efe0645b46',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logData)}).catch(()=>{});
+    // #endregion
+    
     return validatedResponse;
     
   } catch (error) {
+    // #region agent log
+    const logData = {location:'grading.ts:227',message:'Error caught in gradeShortAnswer',data:{errorName:error?.constructor?.name,errorMessage:error instanceof Error?error.message:String(error),hasCorrectAnswer:!!request.correctAnswer},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'};
+    console.log('[DEBUG]', JSON.stringify(logData));
+    console.error('[DEBUG ERROR]', error);
+    fetch('http://127.0.0.1:7244/ingest/1109f94d-80f7-49ca-87a3-95efe0645b46',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logData)}).catch(()=>{});
+    // #endregion
+    
     console.error('Grading error:', error);
     
     // Enhanced error handling with specific fallback strategies
     if (error instanceof z.ZodError) {
+      // #region agent log
+      const logData = {location:'grading.ts:231',message:'Zod validation error',data:{errors:error.errors},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'};
+      console.log('[DEBUG]', JSON.stringify(logData));
+      fetch('http://127.0.0.1:7244/ingest/1109f94d-80f7-49ca-87a3-95efe0645b46',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logData)}).catch(()=>{});
+      // #endregion
       console.error('Validation error:', error.errors);
       // If score is out of range, clamp it
       const clampedScore = Math.max(0, Math.min(request.maxPoints, score || 0));
@@ -238,6 +319,12 @@ export async function gradeShortAnswer(request: GradingRequest): Promise<Grading
         confidence: 50
       };
     }
+    
+    // #region agent log
+    const logData = {location:'grading.ts:242',message:'Using fallback grading',data:{hasCorrectAnswer:!!request.correctAnswer},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'};
+    console.log('[DEBUG]', JSON.stringify(logData));
+    fetch('http://127.0.0.1:7244/ingest/1109f94d-80f7-49ca-87a3-95efe0645b46',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logData)}).catch(()=>{});
+    // #endregion
     
     return fallbackGrading(request);
   }

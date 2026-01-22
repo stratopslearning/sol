@@ -122,6 +122,12 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
         }
       } else if (question.type === 'SHORT_ANSWER') {
         try {
+          // #region agent log
+          const logData = {location:'submit/route.ts:125',message:'Creating grading request',data:{questionId:question.id,hasCorrectAnswer:!!question.correctAnswer,correctAnswerLength:question.correctAnswer?.length||0,correctAnswerValue:question.correctAnswer?.substring(0,50)||null,hasStudentAnswer:!!userAnswer},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'};
+          console.log('[DEBUG]', JSON.stringify(logData));
+          fetch('http://127.0.0.1:7244/ingest/1109f94d-80f7-49ca-87a3-95efe0645b46',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logData)}).catch(()=>{});
+          // #endregion
+          
           const gradingRequest: GradingRequest = {
             question: question.question,
             studentAnswer: userAnswer,
@@ -131,6 +137,12 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
           };
 
           const gradingResult = await gradeShortAnswer(gradingRequest);
+          
+          // #region agent log
+          const logData = {location:'submit/route.ts:133',message:'Grading result received',data:{score:gradingResult.score,feedback:gradingResult.feedback.substring(0,100),confidence:gradingResult.confidence},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'};
+          console.log('[DEBUG]', JSON.stringify(logData));
+          fetch('http://127.0.0.1:7244/ingest/1109f94d-80f7-49ca-87a3-95efe0645b46',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logData)}).catch(()=>{});
+          // #endregion
           totalScore += gradingResult.score;
           gptFeedback[question.id] = {
             score: gradingResult.score,
@@ -139,6 +151,13 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
             maxPoints: question.points
           };
         } catch (error) {
+          // #region agent log
+          const logData = {location:'submit/route.ts:141',message:'Error in submit route catch block',data:{questionId:question.id,errorName:error?.constructor?.name,errorMessage:error instanceof Error?error.message:String(error)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'};
+          console.log('[DEBUG]', JSON.stringify(logData));
+          console.error('[DEBUG ERROR]', error);
+          fetch('http://127.0.0.1:7244/ingest/1109f94d-80f7-49ca-87a3-95efe0645b46',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logData)}).catch(()=>{});
+          // #endregion
+          
           console.error(`Error grading question ${question.id}:`, error);
           gptFeedback[question.id] = {
             score: 0,

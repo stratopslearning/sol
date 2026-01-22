@@ -2,7 +2,6 @@ import { db } from '@/app/db';
 import { courses, sections } from '@/app/db/schema';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { SidebarProvider } from '@/components/ui/sidebar';
-import { BookOpen, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import AdminSidebar from '@/components/AdminSidebar';
 import { CourseFormModal } from '@/components/admin/CourseFormModal';
@@ -39,7 +38,6 @@ export default async function AdminCoursesPage() {
                   <Card key={course.id} className="rounded-2xl shadow-xl bg-white/5 border border-white/10 hover:shadow-2xl transition-shadow flex flex-col justify-between min-h-[120px] p-0">
                     <CardHeader className="flex flex-row items-center justify-between gap-4 p-6 pb-2">
                       <div className="flex items-center gap-3">
-                        <BookOpen className="w-6 h-6 text-blue-400" />
                         <CardTitle className="text-xl text-white font-semibold">{course.title}</CardTitle>
                       </div>
                       <div className="flex items-center">
