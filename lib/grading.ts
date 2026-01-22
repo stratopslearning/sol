@@ -233,17 +233,11 @@ export async function gradeShortAnswer(request: GradingRequest): Promise<Grading
             content: prompt
           }
         ],
-        // gpt-5-mini parameters for Chat Completions:
+        // gpt-5-mini-2025-08-07 parameters:
         // - max_completion_tokens: Total budget for reasoning + output tokens
-        // - reasoning: Object with effort parameter (minimal/low/medium/high)
-        // - text: Object with verbosity parameter (low/medium/high)
-        max_completion_tokens: 2000,
-        reasoning: {
-          effort: 'low' // Low reasoning to reserve more tokens for actual response
-        },
-        text: {
-          verbosity: 'medium' // Medium verbosity for detailed feedback
-        }
+        // Note: reasoning and text parameters may not be available in current SDK version
+        // Using only max_completion_tokens which is supported
+        max_completion_tokens: 2000
       });
     } catch (apiError: any) {
       // #region agent log
