@@ -12,10 +12,10 @@ import {
   FileText, 
   LogOut, 
   BarChart2, 
-  BookOpen,
   TrendingUp,
   Clock,
-  Users
+  Users,
+  Layers
 } from 'lucide-react';
 import { SignOutButton } from '@clerk/nextjs';
 import StudentEnrollFormWrapper from '@/components/StudentEnrollFormWrapper';
@@ -100,7 +100,7 @@ export default async function StudentDashboard() {
               <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl hover:scale-[1.02] hover:bg-white/15 transition-all duration-300 cursor-pointer group animate-scale-in">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-medium text-white/60 group-hover:text-white/80 transition-colors">Enrolled Sections</CardTitle>
-                  <BookOpen className="h-4 w-4 text-blue-400 group-hover:scale-110 transition-transform" />
+                  <Layers className="h-4 w-4 text-blue-400 group-hover:scale-110 transition-transform" />
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-blue-400">{totalSections}</div>

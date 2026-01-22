@@ -6,7 +6,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Trophy, XCircle, FileText, BookOpen } from 'lucide-react';
+import { Trophy, XCircle, FileText } from 'lucide-react';
 import StudentSidebar from '@/components/StudentSidebar';
 import { SignOutButton } from '@clerk/nextjs';
 
@@ -46,7 +46,7 @@ export default async function GradesPage() {
             <CardContent>
               {allAttempts.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 text-white/80">
-                  <BookOpen className="w-12 h-12 mb-4 opacity-70" />
+                  <FileText className="w-12 h-12 mb-4 opacity-70" />
                   <div className="text-lg font-medium">No quiz attempts yet.</div>
                   <div className="text-sm text-gray-400 mt-1">Your grades will appear here after you complete a quiz.</div>
                 </div>

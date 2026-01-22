@@ -1,5 +1,5 @@
 "use client";
-import { BookOpen, Layers, User, LogOut, FileText, Menu, X, BarChart2 } from 'lucide-react';
+import { Layers, User, LogOut, FileText, Menu, X, BarChart2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { SignOutButton, useUser } from '@clerk/nextjs';
 import * as React from 'react';
@@ -35,7 +35,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ active }) => {
   
   const navItems = [
     { href: '/dashboard/admin', label: 'Dashboard', icon: BarChart2, key: 'dashboard' },
-    { href: '/dashboard/admin/courses', label: 'Courses', icon: BookOpen, key: 'courses' },
+    { href: '/dashboard/admin/courses', label: 'Courses', icon: FileText, key: 'courses' },
     { href: '/dashboard/admin/sections', label: 'Sections', icon: Layers, key: 'sections' },
     { href: '/dashboard/admin/quizzes', label: 'Quizzes', icon: FileText, key: 'quizzes' },
     { href: '/dashboard/admin/users', label: 'Users', icon: User, key: 'users' },
@@ -66,8 +66,8 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ active }) => {
               >
                 {isActive && (
                   <motion.div
-                    layoutId="activeIndicator"
-                    className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-purple-400 to-pink-500 rounded-r-full"
+                    layoutId="adminActiveIndicator"
+                    className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-purple-400 to-pink-500 rounded-r-full pointer-events-none"
                     initial={false}
                     transition={{ type: "spring", stiffness: 500, damping: 30 }}
                   />

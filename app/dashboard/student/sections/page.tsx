@@ -5,7 +5,7 @@ import { eq } from 'drizzle-orm';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import StudentSidebar from '@/components/StudentSidebar';
-import { BookOpen, Users, Calendar } from 'lucide-react';
+import { Users, Calendar, Layers } from 'lucide-react';
 import LeaveSectionButton from '@/components/LeaveSectionButton';
 import StudentEnrollFormWrapper from '@/components/StudentEnrollFormWrapper';
 
@@ -46,7 +46,7 @@ export default async function StudentSectionsPage() {
             {sectionsList.length === 0 ? (
               <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 text-center py-12">
                 <CardContent>
-                  <BookOpen className="w-16 h-16 mx-auto mb-4 text-white/40" />
+                  <Layers className="w-16 h-16 mx-auto mb-4 text-white/40" />
                   <h3 className="text-xl font-semibold text-white mb-2">No Sections Enrolled</h3>
                   <p className="text-white/60 mb-4">You haven't enrolled in any sections yet.</p>
                   <div className="text-white/40 text-sm">Use the enrollment form above to join a section using the enrollment code from your professor.</div>
@@ -58,7 +58,7 @@ export default async function StudentSectionsPage() {
                   <Card key={section.id} className="rounded-xl shadow-lg bg-white/10 border border-white/10">
                     <CardHeader>
                       <CardTitle className="text-xl text-white flex items-center gap-2">
-                        <BookOpen className="w-6 h-6" />
+                        <Layers className="w-6 h-6" />
                         {section.name}
                       </CardTitle>
                       {section.course && (

@@ -53,6 +53,14 @@ function Button({
 }: ButtonProps) {
   const Comp = asChild ? Slot : "button"
 
+  // When using asChild, we can't add the loading spinner as a sibling
+  // because Slot expects exactly one child
+  if (asChild && loading) {
+    // If asChild is true and loading is true, we need to wrap children
+    // But this breaks asChild pattern, so we'll just disable loading when asChild is true
+    console.warn('Button: loading prop is ignored when asChild is true');
+  }
+
   return (
     <Comp
       data-slot="button"
@@ -60,8 +68,14 @@ function Button({
       disabled={disabled || loading}
       {...props}
     >
-      {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-      {children}
+      {asChild ? (
+        children
+      ) : (
+        <>
+          {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+          {children}
+        </>
+      )}
     </Comp>
   )
 }

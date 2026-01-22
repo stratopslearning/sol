@@ -1,5 +1,5 @@
 "use client";
-import { BookOpen, FileText, CheckCircle, LogOut, BarChart2, Menu, X } from 'lucide-react';
+import { FileText, CheckCircle, LogOut, BarChart2, Menu, X, Layers } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { SignOutButton, useUser } from '@clerk/nextjs';
 import { useState } from 'react';
@@ -30,7 +30,7 @@ export default function StudentSidebar({ user }: { user: any }) {
 
   const navItems = [
     { href: '/dashboard/student', label: 'Dashboard', icon: BarChart2, active: true },
-    { href: '/dashboard/student/sections', label: 'My Sections', icon: BookOpen },
+    { href: '/dashboard/student/sections', label: 'My Sections', icon: Layers },
     { href: '/dashboard/student/quizzes', label: 'My Quizzes', icon: FileText },
     { href: '/dashboard/student/grades', label: 'My Grades', icon: CheckCircle },
   ];
@@ -60,8 +60,8 @@ export default function StudentSidebar({ user }: { user: any }) {
               >
                 {isActive && (
                   <motion.div
-                    layoutId="activeIndicator"
-                    className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-blue-400 to-indigo-500 rounded-r-full"
+                    layoutId="studentActiveIndicator"
+                    className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-blue-400 to-indigo-500 rounded-r-full pointer-events-none"
                     initial={false}
                     transition={{ type: "spring", stiffness: 500, damping: 30 }}
                   />

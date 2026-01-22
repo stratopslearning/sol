@@ -4,7 +4,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { notFound } from 'next/navigation';
-import { Plus, BookOpen, Users as UsersIcon, Layers, LogOut, User } from 'lucide-react';
+import { Plus, Users as UsersIcon, Layers, LogOut, User, FileText } from 'lucide-react';
 import Link from 'next/link';
 import { CourseFormModal } from '@/components/admin/CourseFormModal';
 import { Badge } from '@/components/ui/badge';
@@ -37,7 +37,7 @@ export default async function AdminDashboardPage() {
               <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-medium text-white/60">Total Courses</CardTitle>
-                  <BookOpen className="h-4 w-4 text-blue-400" />
+                  <FileText className="h-4 w-4 text-blue-400" />
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-blue-400">{allCourses.length}</div>
@@ -75,7 +75,7 @@ export default async function AdminDashboardPage() {
               <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
                 <CardHeader>
                   <CardTitle className="text-lg text-white flex items-center gap-2">
-                    <BookOpen className="w-5 h-5" />
+                    <FileText className="w-5 h-5" />
                     Course Management
                   </CardTitle>
                 </CardHeader>
@@ -101,7 +101,7 @@ export default async function AdminDashboardPage() {
                     <CardHeader className="flex flex-row items-center justify-between">
                       <CardTitle className="text-lg text-white">{course.title}</CardTitle>
                       {/* Removed link to /dashboard/admin/courses/[course.id] */}
-                      <BookOpen className="w-4 h-4 text-blue-400 ml-2" />
+                      <FileText className="w-4 h-4 text-blue-400 ml-2" />
                     </CardHeader>
                     <CardContent>
                       <div className="flex flex-col gap-2">

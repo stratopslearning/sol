@@ -7,7 +7,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import StudentSidebar from '@/components/StudentSidebar';
-import { FileText, CheckCircle, Clock, BookOpen, Calendar, RefreshCw } from 'lucide-react';
+import { FileText, CheckCircle, Clock, Calendar, RefreshCw, Layers } from 'lucide-react';
 
 export default async function StudentQuizzesPage() {
   const user = await getOrCreateUser();
@@ -141,7 +141,7 @@ export default async function StudentQuizzesPage() {
                       </CardHeader>
                       <CardContent className="flex flex-col gap-2">
                         <div className="flex items-center gap-2 text-white/70 text-sm">
-                          <BookOpen className="w-4 h-4" />
+                          <Layers className="w-4 h-4" />
                           {quiz.sectionAssignments[0]?.section.name || 'Unknown Section'}
                         </div>
                         <div className="flex items-center gap-2 text-white/70 text-sm">

@@ -1,5 +1,5 @@
 "use client";
-import { BarChart2, BookOpen, FileText, LogOut, TrendingUp, Menu, X } from 'lucide-react';
+import { BarChart2, FileText, LogOut, TrendingUp, Menu, X, Layers } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { SignOutButton, useUser } from '@clerk/nextjs';
 import * as React from 'react';
@@ -35,7 +35,7 @@ const ProfessorSidebar: React.FC<ProfessorSidebarProps> = ({ active }) => {
   
   const navItems = [
     { href: '/dashboard/professor', label: 'Dashboard', icon: BarChart2, key: 'dashboard' },
-    { href: '/dashboard/professor/sections', label: 'My Sections', icon: BookOpen, key: 'sections' },
+    { href: '/dashboard/professor/sections', label: 'My Sections', icon: Layers, key: 'sections' },
     { href: '/dashboard/professor/quizzes', label: 'My Quizzes', icon: FileText, key: 'quizzes' },
     { href: '/dashboard/professor/quiz-results', label: 'All Results', icon: TrendingUp, key: 'quiz-results' },
   ];
@@ -65,8 +65,8 @@ const ProfessorSidebar: React.FC<ProfessorSidebarProps> = ({ active }) => {
               >
                 {isActive && (
                   <motion.div
-                    layoutId="activeIndicator"
-                    className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-blue-400 to-indigo-500 rounded-r-full"
+                    layoutId="professorActiveIndicator"
+                    className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-blue-400 to-indigo-500 rounded-r-full pointer-events-none"
                     initial={false}
                     transition={{ type: "spring", stiffness: 500, damping: 30 }}
                   />

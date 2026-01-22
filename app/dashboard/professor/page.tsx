@@ -14,10 +14,10 @@ import {
   BarChart2, 
   Plus, 
   Users, 
-  BookOpen,
   TrendingUp,
   Clock,
-  Download
+  Download,
+  Layers
 } from 'lucide-react';
 import { SignOutButton } from '@clerk/nextjs';
 import ExportResultsWrapper from '@/components/ExportResultsWrapper';
@@ -120,7 +120,7 @@ export default async function ProfessorDashboard() {
               <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-medium text-white/60">Enrolled Sections</CardTitle>
-                  <BookOpen className="h-4 w-4 text-blue-400" />
+                  <Layers className="h-4 w-4 text-blue-400" />
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-blue-400">{totalSections}</div>
@@ -289,7 +289,7 @@ export default async function ProfessorDashboard() {
                   ))}
                   {professorQuizzes.length === 0 && (
                     <div className="text-center py-6 text-white/40">
-                      <BookOpen className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                      <FileText className="w-8 h-8 mx-auto mb-2 opacity-50" />
                       <p>No quizzes created yet</p>
                       <Button
                         asChild

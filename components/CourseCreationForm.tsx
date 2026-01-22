@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Copy, Check, Plus, BookOpen } from 'lucide-react';
+import { Copy, Check, Plus, FileText } from 'lucide-react';
 
 interface Course {
   id: string;
@@ -125,7 +125,7 @@ export default function CourseCreationForm() {
     <Card className="w-full max-w-md mx-auto bg-white/10 border border-white/10">
       <CardHeader className="text-center">
         <div className="mx-auto mb-4 w-12 h-12 bg-blue-600/20 rounded-full flex items-center justify-center">
-          <BookOpen className="w-6 h-6 text-blue-400" />
+          <FileText className="w-6 h-6 text-blue-400" />
         </div>
         <CardTitle className="text-xl text-white">Create New Course</CardTitle>
         <p className="text-white/60 text-sm">

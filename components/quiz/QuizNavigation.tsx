@@ -95,8 +95,8 @@ export function QuizNavigation({
                   </div>
                   {isCurrent && (
                     <motion.div
-                      layoutId="currentQuestion"
-                      className="absolute inset-0 border-2 border-blue-400 rounded-md"
+                      layoutId="currentQuestionIndicator"
+                      className="absolute inset-0 border-2 border-blue-400 rounded-md pointer-events-none"
                       initial={false}
                       transition={{ type: "spring", stiffness: 500, damping: 30 }}
                     />
