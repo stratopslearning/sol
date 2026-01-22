@@ -212,33 +212,48 @@ export async function gradeShortAnswer(request: GradingRequest): Promise<Grading
     
     const prompt = createGradingPrompt(request);
     // #region agent log
-    const logDataBefore = {location:'grading.ts:185',message:'Before OpenAI API call',data:{model:'gpt-5-mini',promptLength:prompt.length,hasCorrectAnswer:!!request.correctAnswer},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'};
+    const logDataBefore = {location:'grading.ts:185',message:'Before OpenAI API call',data:{model:'gpt-5-mini-2025-08-07',promptLength:prompt.length,hasCorrectAnswer:!!request.correctAnswer},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'};
     console.log('[DEBUG]', JSON.stringify(logDataBefore));
     fetch('http://127.0.0.1:7244/ingest/1109f94d-80f7-49ca-87a3-95efe0645b46',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logDataBefore)}).catch(()=>{});
     // #endregion
     
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-5-mini',
-      messages: [
-        {
-          role: 'system',
-          content: 'You are a strict and precise business professor. Your grading must be accurate, consistent, and based ONLY on the reference answer provided. Be critical and specific in your feedback. Do not give points for vague, related-but-incorrect, or partially correct answers. Always follow the exact format requested and use the strict scoring rubric provided.'
+    // Use Chat Completions API for gpt-5-mini
+    // gpt-5-mini supports chat.completions with reasoning and text parameters
+    let completion;
+    try {
+      completion = await openai.chat.completions.create({
+        model: 'gpt-5-mini-2025-08-07',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a strict and precise business professor. Your grading must be accurate, consistent, and based ONLY on the reference answer provided. Be critical and specific in your feedback. Do not give points for vague, related-but-incorrect, or partially correct answers. Always follow the exact format requested and use the strict scoring rubric provided.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        // gpt-5-mini parameters for Chat Completions:
+        // - max_completion_tokens: Total budget for reasoning + output tokens
+        // - reasoning: Object with effort parameter (minimal/low/medium/high)
+        // - text: Object with verbosity parameter (low/medium/high)
+        max_completion_tokens: 2000,
+        reasoning: {
+          effort: 'low' // Low reasoning to reserve more tokens for actual response
         },
-        {
-          role: 'user',
-          content: prompt
+        text: {
+          verbosity: 'medium' // Medium verbosity for detailed feedback
         }
-      ],
-      // gpt-5-mini parameters:
-      // - temperature: NOT supported (must be omitted)
-      // - max_completion_tokens: Total budget for reasoning + output tokens
-      // - reasoning_effort: Optional (low/medium/high) - using "low" to reserve tokens for response
-      // Note: reasoning_tokens + output_tokens <= max_completion_tokens
-      // Setting to 2000 to ensure enough tokens for both reasoning and response
-      max_completion_tokens: 2000,
-      reasoning_effort: 'low', // Low reasoning to reserve more tokens for actual response output
-      response_format: { type: 'text' }
-    });
+      });
+    } catch (apiError: any) {
+      // #region agent log
+      const logDataApiError = {location:'grading.ts:220',message:'OpenAI API call failed',data:{errorName:apiError?.constructor?.name,errorMessage:apiError?.message,errorCode:apiError?.code,errorStatus:apiError?.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'};
+      console.log('[DEBUG]', JSON.stringify(logDataApiError));
+      console.error('[DEBUG ERROR]', apiError);
+      fetch('http://127.0.0.1:7244/ingest/1109f94d-80f7-49ca-87a3-95efe0645b46',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logDataApiError)}).catch(()=>{});
+      // #endregion
+      throw apiError; // Re-throw to be caught by outer catch block
+    }
     
     // #region agent log
     const logDataSuccess = {location:'grading.ts:201',message:'OpenAI API call succeeded',data:{hasResponse:!!completion.choices[0]?.message?.content,responseLength:completion.choices[0]?.message?.content?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'};
