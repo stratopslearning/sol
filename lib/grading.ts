@@ -38,41 +38,60 @@ function createGradingSchema(maxPoints: number) {
   });
 }
 
-// Enhanced prompt with correct answer comparison and dynamic scoring
+// Strict prompt with reference-based comparison and accuracy requirements
 function createGradingPrompt(request: GradingRequest): string {
   const { question, studentAnswer, correctAnswer, maxPoints } = request;
   
-  return `You are an expert business professor grading a short answer question worth ${maxPoints} points.
+  return `You are a strict business professor grading a short answer question worth ${maxPoints} points. Your grading must be accurate and precise.
 
-REFERENCE ANSWER: ${correctAnswer}
-STUDENT ANSWER: ${studentAnswer}
+REFERENCE ANSWER (THE ONLY ACCEPTABLE STANDARD):
+${correctAnswer}
 
-GRADING INSTRUCTIONS:
-Grade only against the "Correct Answer" provided by the instructor in the conversation. Treat it as the sole authoritative key. Do not use outside knowledge or popular alternatives.
+STUDENT ANSWER:
+${studentAnswer}
 
-SCORING RUBRIC (${maxPoints} points total):
-- ${maxPoints} points: Excellent - captures all key concepts from reference answer
-- ${Math.round(maxPoints * 0.8)}-${maxPoints - 1} points: Very Good - captures most key concepts
-- ${Math.round(maxPoints * 0.6)}-${Math.round(maxPoints * 0.79)} points: Good - captures many key concepts
-- ${Math.round(maxPoints * 0.4)}-${Math.round(maxPoints * 0.59)} points: Satisfactory - captures some key concepts
-- 1-${Math.round(maxPoints * 0.39)} points: Needs Improvement - captures few key concepts
-- 0 points: Incorrect or shows no understanding
+CRITICAL GRADING INSTRUCTIONS:
+1. The Reference Answer is the ONLY acceptable standard. Do NOT use outside knowledge, popular alternatives, or related concepts.
+2. You MUST compare the student answer point-by-point with the reference answer.
+3. Identify EXACTLY what the student got right and what they got wrong or missed.
+4. Penalize answers that are "related but not accurate" - being close is NOT enough.
+5. Vague, partially correct, or tangentially related answers should receive LOW scores.
+6. Only award high scores when the student answer accurately matches the reference answer's key points, terminology, and accuracy.
 
-FEEDBACK REQUIREMENTS:
-- 1 sentence: What the student did well (be specific about concepts covered)
-- 1 sentence: One concrete area for improvement with actionable advice
+REQUIRED COMPARISON PROCESS:
+Before assigning a score, you MUST:
+- List the specific key points, terminology, and concepts from the reference answer
+- Identify which of these the student answer includes correctly
+- Identify which are missing, incorrect, or vague in the student answer
+- Note any inaccuracies or misunderstandings in the student answer
+
+STRICT SCORING RUBRIC (${maxPoints} points total):
+- ${maxPoints} points: EXCELLENT - Includes ALL key points, terminology, and accuracy from reference answer. No missing elements or inaccuracies.
+- ${Math.round(maxPoints * 0.8)}-${maxPoints - 1} points: VERY GOOD - Missing only 1-2 minor elements, but core concepts are accurate and complete. Minor terminology gaps acceptable.
+- ${Math.round(maxPoints * 0.6)}-${Math.round(maxPoints * 0.79)} points: GOOD - Missing key elements OR contains inaccuracies, but shows substantial understanding of core concepts.
+- ${Math.round(maxPoints * 0.4)}-${Math.round(maxPoints * 0.59)} points: SATISFACTORY - Significant gaps or inaccuracies present. Partial understanding demonstrated, but major elements missing or incorrect.
+- 1-${Math.round(maxPoints * 0.39)} points: NEEDS IMPROVEMENT - Mostly incorrect, vague, or shows minimal understanding. Most key elements missing or wrong.
+- 0 points: INCORRECT - Completely incorrect, unrelated, shows no understanding, or is completely off-topic.
+
+FEEDBACK REQUIREMENTS (Be Critical and Specific):
+Your feedback MUST:
+1. Identify SPECIFIC missing elements from the reference answer (not generic statements)
+2. Point out SPECIFIC inaccuracies or vague statements in the student answer
+3. Be constructive but honest - avoid generic praise like "well said" or "good job"
+4. If the answer is wrong or vague, clearly state what was expected from the reference answer
+5. Provide actionable guidance on what needs to be included or corrected
 
 RESPONSE FORMAT:
-Feedback: [your feedback here - exactly 2 sentences]
+Feedback: [your feedback here - 2-3 sentences that are specific and critical]
 Score: [0 to ${maxPoints}]
 Confidence: [0-100, how confident are you in this grade]
 
 QUESTION: ${question}`;
 }
 
-// Enhanced fallback grading with dynamic scoring
+// Strict fallback grading - only used when correctAnswer is unavailable or AI fails
 function fallbackGrading(request: GradingRequest): GradingResponse {
-  const { studentAnswer, maxPoints } = request;
+  const { studentAnswer, maxPoints, correctAnswer } = request;
   const answer = studentAnswer.trim();
   
   if (!answer) {
@@ -91,30 +110,41 @@ function fallbackGrading(request: GradingRequest): GradingResponse {
     };
   }
   
-  // Simple length-based scoring as fallback
+  // If correctAnswer is available but AI failed, be very strict
+  // Only give minimal points since we can't accurately compare
+  if (correctAnswer && correctAnswer.trim().length > 0) {
+    return {
+      score: Math.round(maxPoints * 0.2), // Only 20% - strict because we can't verify accuracy
+      feedback: "Grading system temporarily unavailable. Your answer has been recorded, but accurate evaluation requires the reference answer. Please review the material to ensure your answer matches the expected response.",
+      confidence: 30
+    };
+  }
+  
+  // If no correctAnswer available, use strict length-based scoring (much stricter than before)
   const answerLength = answer.length;
-  const minLength = 20; // Minimum expected length for a good answer
+  const minLength = 30; // Increased minimum length requirement
   
   if (answerLength < minLength) {
     return {
-      score: Math.round(maxPoints * 0.3), // 30% of max points
-      feedback: "Your answer is quite brief. Try to provide more detail and examples to demonstrate your understanding.",
-      confidence: 70
+      score: Math.round(maxPoints * 0.1), // Only 10% - very strict for brief answers
+      feedback: "Your answer is too brief and lacks sufficient detail. Provide a more comprehensive response that demonstrates your understanding of the topic.",
+      confidence: 60
     };
   }
   
   if (answerLength < minLength * 2) {
     return {
-      score: Math.round(maxPoints * 0.6), // 60% of max points
-      feedback: "Good effort! Your answer shows some understanding. Consider adding more specific examples or business terminology.",
-      confidence: 75
+      score: Math.round(maxPoints * 0.3), // Only 30% - strict for moderate length
+      feedback: "Your answer needs more depth and specificity. Include key concepts, terminology, and examples to demonstrate full understanding.",
+      confidence: 50
     };
   }
   
+  // Even for longer answers, be conservative without reference answer
   return {
-    score: Math.round(maxPoints * 0.8), // 80% of max points
-    feedback: "Good answer! You've demonstrated understanding of the topic. Review the material to strengthen any weak areas.",
-    confidence: 80
+    score: Math.round(maxPoints * 0.5), // Maximum 50% without reference answer
+    feedback: "Without a reference answer for comparison, accurate grading is limited. Review the material to ensure your answer includes all required elements and is accurate.",
+    confidence: 40
   };
 }
 
@@ -134,6 +164,16 @@ export async function gradeShortAnswer(request: GradingRequest): Promise<Grading
       };
     }
     
+    // Critical: correctAnswer is required for accurate grading
+    if (!request.correctAnswer || request.correctAnswer.trim().length === 0) {
+      console.warn('correctAnswer is missing - cannot provide accurate grading');
+      return {
+        score: 0,
+        feedback: 'Grading unavailable: Reference answer not provided. Please contact your instructor.',
+        confidence: 0
+      };
+    }
+    
     if (!process.env.OPENAI_API_KEY) {
       console.warn('OpenAI API key not configured, using fallback grading');
       return fallbackGrading(request);
@@ -148,7 +188,7 @@ export async function gradeShortAnswer(request: GradingRequest): Promise<Grading
       messages: [
         {
           role: 'system',
-          content: 'You are an expert business professor providing accurate, consistent grading. Always follow the exact format requested and use the scoring rubric provided.'
+          content: 'You are a strict and precise business professor. Your grading must be accurate, consistent, and based ONLY on the reference answer provided. Be critical and specific in your feedback. Do not give points for vague, related-but-incorrect, or partially correct answers. Always follow the exact format requested and use the strict scoring rubric provided.'
         },
         {
           role: 'user',
