@@ -260,7 +260,7 @@ export default function AdminQuizzesPageClient({
                             size="sm"
                             variant="outline"
                             onClick={() => setEditingQuizId(quiz.id)}
-                            className="text-white border-white/20"
+                            className="bg-white/15 text-white border-white/30 hover:bg-white/25"
                           >
                             Edit
                           </Button>
@@ -276,8 +276,8 @@ export default function AdminQuizzesPageClient({
                               <DropdownMenuTrigger asChild>
                                 <Button
                                   size="sm"
-                                  variant="secondary"
-                                  className="text-white border-white/20"
+                                  variant="outline"
+                                  className="bg-white/15 text-white border-white/30 hover:bg-white/25"
                                 >
                                   <MoreHorizontal className="w-4 h-4" />
                                 </Button>
@@ -316,7 +316,7 @@ export default function AdminQuizzesPageClient({
                       e.preventDefault();
                       if (currentPage > 1) setPage(currentPage - 1);
                     }}
-                    className={currentPage <= 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                    className={currentPage <= 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer text-white/90 hover:bg-white/15 hover:text-white'}
                   />
                 </PaginationItem>
                 {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
@@ -328,7 +328,7 @@ export default function AdminQuizzesPageClient({
                         setPage(p);
                       }}
                       isActive={p === currentPage}
-                      className="cursor-pointer"
+                      className={p === currentPage ? 'cursor-pointer border-white/30 bg-white/15 text-white' : 'cursor-pointer text-white/90 hover:bg-white/15 hover:text-white'}
                     >
                       {p}
                     </PaginationLink>
@@ -341,7 +341,7 @@ export default function AdminQuizzesPageClient({
                       e.preventDefault();
                       if (currentPage < totalPages) setPage(currentPage + 1);
                     }}
-                    className={currentPage >= totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                    className={currentPage >= totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer text-white/90 hover:bg-white/15 hover:text-white'}
                   />
                 </PaginationItem>
               </PaginationContent>

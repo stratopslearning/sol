@@ -218,7 +218,7 @@ export default function ProfessorQuizzesTableClient({
                     e.preventDefault();
                     if (currentPage > 1) setPage(currentPage - 1);
                   }}
-                  className={currentPage <= 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  className={currentPage <= 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer text-white/90 hover:bg-white/15 hover:text-white'}
                 />
               </PaginationItem>
               {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
@@ -230,7 +230,7 @@ export default function ProfessorQuizzesTableClient({
                       setPage(p);
                     }}
                     isActive={p === currentPage}
-                    className="cursor-pointer"
+                    className={p === currentPage ? 'cursor-pointer border-white/30 bg-white/15 text-white' : 'cursor-pointer text-white/90 hover:bg-white/15 hover:text-white'}
                   >
                     {p}
                   </PaginationLink>
@@ -243,7 +243,7 @@ export default function ProfessorQuizzesTableClient({
                     e.preventDefault();
                     if (currentPage < totalPages) setPage(currentPage + 1);
                   }}
-                  className={currentPage >= totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  className={currentPage >= totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer text-white/90 hover:bg-white/15 hover:text-white'}
                 />
               </PaginationItem>
             </PaginationContent>

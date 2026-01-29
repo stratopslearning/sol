@@ -47,28 +47,26 @@ export function QuizActions({ quizId, isActive }: QuizActionsProps) {
 
   return (
     <div className="flex items-center gap-2">
-      <Button asChild variant="ghost" size="sm" className="text-white hover:text-white hover:bg-white/10">
+      <Button asChild size="sm" className="bg-white/15 text-white border border-white/30 hover:bg-white/25">
         <a href={`/dashboard/professor/quiz/${quizId}/results`}>
           <Eye className="w-4 h-4" />
         </a>
       </Button>
-      <Button asChild variant="ghost" size="sm" className="text-white hover:text-white hover:bg-white/10">
+      <Button asChild size="sm" className="bg-white/15 text-white border border-white/30 hover:bg-white/25">
         <a href={`/dashboard/professor/quiz/${quizId}/edit`}>
           <Edit className="w-4 h-4" />
         </a>
       </Button>
       <Button 
-        variant="ghost" 
         size="sm"
-        className="text-white hover:text-white hover:bg-white/10"
+        className="bg-white/15 text-white border border-white/30 hover:bg-white/25"
         onClick={handleDuplicate}
       >
         <Copy className="w-4 h-4" />
       </Button>
       <Button 
-        variant="ghost" 
         size="sm"
-        className="text-white hover:text-white hover:bg-white/10"
+        className="bg-white/15 text-white border border-white/30 hover:bg-white/25"
         onClick={handleArchive}
       >
         <Archive className="w-4 h-4" />
