@@ -209,10 +209,13 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
     
     const submitTime = new Date();
     const timeElapsedMinutes = (submitTime.getTime() - attemptStartTime.getTime()) / (1000 * 60);
-    
-    // Validate time limit if set
-    if (quiz.timeLimit && timeElapsedMinutes > quiz.timeLimit) {
-      return NextResponse.json({ 
+
+    // Validate time limit if set. Allow a short grace period (like Canvas) so auto-submit
+    // when the client timer hits 0 is accepted even with clock skew or submission delay.
+    const graceMinutes = Math.max(2, Math.min(5, Math.ceil((quiz.timeLimit ?? 0) * 0.15)));
+    const effectiveLimit = (quiz.timeLimit ?? 0) + graceMinutes;
+    if (quiz.timeLimit && timeElapsedMinutes > effectiveLimit) {
+      return NextResponse.json({
         error: `Time limit exceeded. The quiz has a ${quiz.timeLimit} minute time limit, but ${Math.ceil(timeElapsedMinutes)} minutes have elapsed.`,
         timeLimitExceeded: true,
         timeElapsed: Math.ceil(timeElapsedMinutes),
