@@ -100,7 +100,7 @@ export default async function QuizResultsPage({
   }
 
   // Fetch all attempts for this quiz, with student and section
-  const quizAttempts = await db.query.attempts.findMany({
+  const allQuizAttempts = await db.query.attempts.findMany({
     where: eq(attempts.quizId, quizId),
     with: {
       student: true,
@@ -112,14 +112,24 @@ export default async function QuizResultsPage({
     },
     orderBy: (attempts, { desc }) => desc(attempts.submittedAt),
   });
+  const quizAttempts = allQuizAttempts.filter(a => a.submittedAt != null);
 
-  // Calculate statistics
+  // Best percentage per student for this quiz; average = avg of those best scores
+  const bestPerStudent: Record<string, number> = {};
+  quizAttempts.forEach((a) => {
+    const pct = a.percentage ?? (a.maxScore ? Math.round(((a.score ?? 0) / a.maxScore) * 100) : 0);
+    if (bestPerStudent[a.studentId] == null || pct > bestPerStudent[a.studentId]) bestPerStudent[a.studentId] = pct;
+  });
+  const bestPercentages = Object.values(bestPerStudent);
+
   const totalAttempts = quizAttempts.length;
   const uniqueStudents = new Set(quizAttempts.map(a => a.studentId)).size;
-  const averageScore = totalAttempts > 0 
-    ? Math.round(quizAttempts.reduce((sum, a) => sum + (a.percentage || 0), 0) / totalAttempts)
+  const averageScore = bestPercentages.length > 0
+    ? Math.round(bestPercentages.reduce((sum, p) => sum + p, 0) / bestPercentages.length)
     : 0;
-  const passRate = totalAttempts > 0 ? Math.round((quizAttempts.filter(a => a.passed).length / totalAttempts) * 100) : 0;
+  const passRate = bestPercentages.length > 0
+    ? Math.round((Object.values(bestPerStudent).filter(p => p >= 60).length / bestPercentages.length) * 100)
+    : 0;
 
   // Question analysis
   const questionStats = quiz.questions.map(question => {

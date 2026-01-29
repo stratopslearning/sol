@@ -99,7 +99,7 @@ export default async function ProfessorDashboard() {
       })
     : [];
 
-  // Calculate stats (only submitted attempts count toward students, attempts, and average)
+  // Calculate stats (only submitted attempts count; average = avg of best score per student per quiz)
   const totalSections = professorEnrollments.length;
   const activeQuizzes = professorQuizzes.filter(q => q.isActive).length;
   const draftQuizzes = professorQuizzes.filter(q => !q.isActive).length;
@@ -108,11 +108,17 @@ export default async function ProfessorDashboard() {
   );
   const totalStudents = new Set(submittedAttemptsList.map((a) => a.studentId)).size;
   const totalAttempts = submittedAttemptsList.length;
+  // Best percentage per (student, quiz); then average those (one data point per student-quiz)
+  const bestPerStudentQuiz: Record<string, number> = {};
+  submittedAttemptsList.forEach((a) => {
+    const key = `${a.studentId}:${a.quizId}`;
+    const pct = a.percentage ?? (a.maxScore ? Math.round(((a.score ?? 0) / a.maxScore) * 100) : 0);
+    if (bestPerStudentQuiz[key] == null || pct > bestPerStudentQuiz[key]) bestPerStudentQuiz[key] = pct;
+  });
+  const bestPercentages = Object.values(bestPerStudentQuiz);
   const averageScore =
-    totalAttempts > 0
-      ? Math.round(
-          submittedAttemptsList.reduce((sum, a) => sum + (a.percentage ?? 0), 0) / totalAttempts
-        )
+    bestPercentages.length > 0
+      ? Math.round(bestPercentages.reduce((sum, p) => sum + p, 0) / bestPercentages.length)
       : 0;
 
   return (

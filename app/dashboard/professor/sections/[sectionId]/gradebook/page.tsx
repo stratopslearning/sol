@@ -31,35 +31,45 @@ export default async function SectionGradebookPage({ params }: any) {
   const sectionQuizzes = quizSectionAssignments.map(qs => qs.quiz);
   const quizIds = sectionQuizzes.map(q => q.id);
 
-  // Fetch all attempts for these students/quizzes
+  // Fetch all attempts for these students/quizzes (submitted only)
   const studentIds = students.map(s => s.id);
   let allAttempts: any[] = [];
   if (studentIds.length && quizIds.length) {
-    allAttempts = await db.query.attempts.findMany({
+    const raw = await db.query.attempts.findMany({
       where: and(
         inArray(attempts.studentId, studentIds),
         inArray(attempts.quizId, quizIds)
       ),
       with: { student: true, quiz: true },
     });
+    allAttempts = raw.filter(a => a.submittedAt != null);
   }
 
-  // Calculate per-student, per-quiz scores
+  // Per-student, per-quiz: keep only the BEST attempt (highest percentage, then highest score)
   const studentQuizScores: Record<string, Record<string, { score: number; percentage: number; attemptId: string; maxScore: number }>> = {};
   allAttempts.forEach(attempt => {
+    const pct = attempt.percentage ?? (attempt.maxScore ? Math.round(((attempt.score ?? 0) / attempt.maxScore) * 100) : 0);
+    const score = attempt.score ?? 0;
     if (!studentQuizScores[attempt.studentId]) studentQuizScores[attempt.studentId] = {};
-    studentQuizScores[attempt.studentId][attempt.quizId] = {
-      score: attempt.score,
-      percentage: attempt.percentage,
-      attemptId: attempt.id,
-      maxScore: attempt.maxScore,
-    };
+    const existing = studentQuizScores[attempt.studentId][attempt.quizId];
+    if (!existing || pct > (existing.percentage ?? 0) || (pct === (existing.percentage ?? 0) && score > existing.score)) {
+      studentQuizScores[attempt.studentId][attempt.quizId] = {
+        score: attempt.score ?? 0,
+        percentage: pct,
+        attemptId: attempt.id,
+        maxScore: attempt.maxScore ?? 0,
+      };
+    }
   });
 
-  // Calculate averages
+  // Quiz averages: average of each student's BEST score on that quiz (one data point per student)
   const quizAverages = sectionQuizzes.map(quiz => {
-    const attemptsForQuiz = allAttempts.filter(a => a.quizId === quiz.id);
-    const avg = attemptsForQuiz.length > 0 ? Math.round(attemptsForQuiz.reduce((sum, a) => sum + (a.percentage || 0), 0) / attemptsForQuiz.length) : 0;
+    const bestPercentages: number[] = [];
+    students.forEach(s => {
+      const best = studentQuizScores[s.id]?.[quiz.id];
+      if (best != null) bestPercentages.push(best.percentage);
+    });
+    const avg = bestPercentages.length > 0 ? Math.round(bestPercentages.reduce((a, b) => a + b, 0) / bestPercentages.length) : 0;
     return { quizId: quiz.id, average: avg };
   });
 
@@ -95,8 +105,12 @@ export default async function SectionGradebookPage({ params }: any) {
                   </thead>
                   <tbody>
                     {students.map(student => {
-                      const scores = sectionQuizzes.map(quiz => studentQuizScores[student.id]?.[quiz.id]?.score ?? '-');
-                      // Remove avg percentage calculation
+                      const bestPercentages = sectionQuizzes
+                        .map(quiz => studentQuizScores[student.id]?.[quiz.id]?.percentage)
+                        .filter((p): p is number => p != null);
+                      const studentAvg = bestPercentages.length > 0
+                        ? Math.round(bestPercentages.reduce((a, b) => a + b, 0) / bestPercentages.length)
+                        : '-';
                       return (
                         <tr key={student.id} className="border-t border-white/10">
                           <td className="px-4 py-2">{student.firstName} {student.lastName}</td>
@@ -107,7 +121,7 @@ export default async function SectionGradebookPage({ params }: any) {
                                 : '-'}
                             </td>
                           ))}
-                          {/* Remove avg column */}
+                          <td className="px-4 py-2 font-medium">{studentAvg}{typeof studentAvg === 'number' ? '%' : ''}</td>
                         </tr>
                       );
                     })}
@@ -118,7 +132,7 @@ export default async function SectionGradebookPage({ params }: any) {
                       {quizAverages.map(q => (
                         <td key={q.quizId} className="px-4 py-2 font-bold">{q.average}%</td>
                       ))}
-                      <td></td>
+                      <td className="px-4 py-2 font-bold">—</td>
                     </tr>
                   </tfoot>
                 </table>

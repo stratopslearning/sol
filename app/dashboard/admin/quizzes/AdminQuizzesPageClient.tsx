@@ -1,72 +1,130 @@
 "use client";
-import { QuizCreationForm } from '@/components/quiz/QuizCreationForm';
+import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/components/ui/pagination';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { QuizEditForm } from '@/components/quiz/QuizEditForm';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
 import { cleanQuizDescription } from '@/lib/utils';
+import { Plus, MoreHorizontal } from 'lucide-react';
 
-export default function AdminQuizzesPageClient({ allSections, allQuizzes, allQuizSections }: { allSections: any[]; allQuizzes: any[]; allQuizSections: any[] }) {
+const ROWS_PER_PAGE = 15;
+
+export default function AdminQuizzesPageClient({
+  allSections,
+  allQuizzes,
+  allQuizSections,
+}: {
+  allSections: any[];
+  allQuizzes: any[];
+  allQuizSections: any[];
+}) {
   const [quizzesWithQuestions, setQuizzesWithQuestions] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  // Prepare course options for the form (for admin, these are actually sections)
+  const [sectionFilter, setSectionFilter] = useState<string>('ALL');
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [editingQuizId, setEditingQuizId] = useState<string | null>(null);
+
   const courseOptions = allSections.map(section => ({
     id: section.id,
     title: `${section.name} (${section.course?.title || 'Unknown'})`,
   }));
 
-  // Group quizzes by section
-  const quizzesBySection: Record<string, any[]> = {};
-  for (const section of allSections) {
-    quizzesBySection[section.id] = [];
-  }
-  for (const quiz of quizzesWithQuestions) {
-    const assignedSections = allQuizSections.filter(qs => qs.quizId === quiz.id).map(qs => qs.sectionId);
-    if (assignedSections.length === 0) {
-      quizzesBySection['__unassigned'] = quizzesBySection['__unassigned'] || [];
-      quizzesBySection['__unassigned'].push(quiz);
-    } else {
-      for (const sectionId of assignedSections) {
-        if (!quizzesBySection[sectionId]) quizzesBySection[sectionId] = [];
-        quizzesBySection[sectionId].push(quiz);
-      }
-    }
-  }
+  // Flat list: one row per quiz with assigned section names
+  const flatQuizzes = useMemo(() => {
+    return quizzesWithQuestions.map(quiz => {
+      const sectionIds = allQuizSections.filter(qs => qs.quizId === quiz.id).map(qs => qs.sectionId);
+      const sectionNames = sectionIds
+        .map(sid => allSections.find(s => s.id === sid)?.name)
+        .filter(Boolean) as string[];
+      return {
+        ...quiz,
+        assignedSectionIds: sectionIds,
+        assignedSectionNames: sectionNames,
+      };
+    });
+  }, [quizzesWithQuestions, allQuizSections, allSections]);
 
-  const [editingQuizId, setEditingQuizId] = useState<string | null>(null);
+  const filteredQuizzes = useMemo(() => {
+    return flatQuizzes.filter(quiz => {
+      const matchesSearch = !search || quiz.title.toLowerCase().includes(search.toLowerCase());
+      const matchesSection =
+        sectionFilter === 'ALL' || quiz.assignedSectionIds.includes(sectionFilter);
+      return matchesSearch && matchesSection;
+    });
+  }, [flatQuizzes, search, sectionFilter]);
 
-  // Load questions for all quizzes
+  const totalPages = Math.max(1, Math.ceil(filteredQuizzes.length / ROWS_PER_PAGE));
+  const currentPage = Math.min(page, totalPages);
+  const paginatedQuizzes = useMemo(() => {
+    const start = (currentPage - 1) * ROWS_PER_PAGE;
+    return filteredQuizzes.slice(start, start + ROWS_PER_PAGE);
+  }, [filteredQuizzes, currentPage]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, sectionFilter]);
+
   useEffect(() => {
     async function loadQuizQuestions() {
       try {
-        const quizzesWithQuestionsData = await Promise.all(
-          allQuizzes.map(async (quiz) => {
-            const response = await fetch(`/api/quiz/${quiz.id}/questions`);
-            if (response.ok) {
-              const questions = await response.json();
-              return { ...quiz, questions: questions.questions || [] };
+        const data = await Promise.all(
+          allQuizzes.map(async quiz => {
+            const res = await fetch(`/api/quiz/${quiz.id}/questions`);
+            if (res.ok) {
+              const json = await res.json();
+              return { ...quiz, questions: json.questions || [] };
             }
             return { ...quiz, questions: [] };
           })
         );
-        setQuizzesWithQuestions(quizzesWithQuestionsData);
+        setQuizzesWithQuestions(data);
       } catch (error) {
         console.error('Error loading quiz questions:', error);
-        setQuizzesWithQuestions(allQuizzes.map(quiz => ({ ...quiz, questions: [] })));
+        setQuizzesWithQuestions(allQuizzes.map(q => ({ ...q, questions: [] })));
       } finally {
         setIsLoading(false);
       }
     }
-
     loadQuizQuestions();
   }, [allQuizzes]);
 
   async function handleDeleteQuiz(quizId: string) {
     if (!confirm('Are you sure you want to delete this quiz?')) return;
     try {
-      const response = await fetch(`/api/admin/quiz/${quizId}`, { method: 'DELETE' });
-      if (response.ok) {
+      const res = await fetch(`/api/admin/quiz/${quizId}`, { method: 'DELETE' });
+      if (res.ok) {
         toast.success('Quiz deleted successfully');
         window.location.reload();
       } else {
@@ -81,8 +139,8 @@ export default function AdminQuizzesPageClient({ allSections, allQuizzes, allQui
   async function handleUnassignQuiz(quizId: string, sectionId: string) {
     if (!confirm('Are you sure you want to unassign this quiz from this section?')) return;
     try {
-      const response = await fetch(`/api/admin/quiz/${quizId}/section/${sectionId}`, { method: 'DELETE' });
-      if (response.ok) {
+      const res = await fetch(`/api/admin/quiz/${quizId}/section/${sectionId}`, { method: 'DELETE' });
+      if (res.ok) {
         toast.success('Quiz unassigned from section');
         window.location.reload();
       } else {
@@ -103,73 +161,214 @@ export default function AdminQuizzesPageClient({ allSections, allQuizzes, allQui
   if (isLoading) {
     return (
       <main className="flex-1 flex flex-col py-10 px-4 md:px-8 overflow-x-hidden">
-        <div className="w-full max-w-7xl mx-auto">
-          <div className="text-white text-center">Loading quizzes...</div>
-        </div>
+        <div className="w-full max-w-7xl mx-auto text-white text-center">Loading quizzes...</div>
       </main>
     );
   }
 
   return (
     <main className="flex-1 flex flex-col py-10 px-4 md:px-8 overflow-x-hidden">
-      <section className="w-full max-w-7xl mx-auto mb-8">
-        <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">Quizzes</h1>
-        <p className="text-white/60 text-lg">Create and manage quizzes. Assign them to any section.</p>
-        <div className="mt-4">
-          <QuizCreationForm
-            courses={courseOptions}
-            apiEndpoint="/api/admin/quiz/create"
-          />
+      <section className="w-full max-w-7xl mx-auto mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">Quizzes</h1>
+          <p className="text-white/60 text-lg">Create and manage quizzes. Assign them to any section.</p>
         </div>
+        <Button asChild className="shrink-0">
+          <Link href="/dashboard/admin/quizzes/new">
+            <Plus className="w-4 h-4 mr-2" />
+            Create Quiz
+          </Link>
+        </Button>
       </section>
-      <section className="w-full max-w-7xl mx-auto">
-        {allSections.map(section => (
-          <div key={section.id} className="mb-8">
-            <h2 className="text-2xl font-semibold text-white mb-4">
-              {section.name} <span className="text-white/40">({section.course?.title || 'Unknown'})</span>
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {quizzesBySection[section.id]?.length > 0 ? (
-                quizzesBySection[section.id].map(quiz => (
-                  <Card key={quiz.id} className="rounded-2xl shadow-xl bg-white/5 border border-white/10 hover:shadow-2xl transition-shadow flex flex-col justify-between min-h-[180px] p-0 overflow-hidden">
-                    <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between p-6 pb-2">
-                      <CardTitle className="text-xl text-white font-semibold break-words max-w-full">{quiz.title}</CardTitle>
-                      <div className="flex flex-wrap gap-2 mt-2 md:mt-0">
-                        <Button size="sm" variant="outline" onClick={() => setEditingQuizId(quiz.id)}>Edit</Button>
-                        <Button size="sm" variant="destructive" onClick={() => handleDeleteQuiz(quiz.id)}>Delete</Button>
-                        <Button size="sm" variant="secondary" onClick={() => handleUnassignQuiz(quiz.id, section.id)}>Unassign</Button>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="px-6 pb-6 pt-2 flex flex-col gap-2 break-words max-w-full">
-                      {cleanQuizDescription(quiz.description) && (
-                        <div className="text-white/70 text-base block min-h-[24px] break-words">{cleanQuizDescription(quiz.description)}</div>
-                      )}
-                      <div className="text-white/60 text-sm mt-2">Attempts: {quiz.maxAttempts} | Time Limit: {quiz.timeLimit || 'N/A'} min</div>
-                      <div className="text-white/60 text-sm">Questions: {quiz.questions?.length ?? 0}</div>
-                    </CardContent>
-                    {editingQuizId === quiz.id && (
-                      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-                        <div className="bg-[#18181b] rounded-xl shadow-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-                          <QuizEditForm 
-                            quiz={{ ...quiz, questions: quiz.questions ?? [] }} 
-                            courses={courseOptions}
-                            apiEndpoint={`/api/admin/quiz/${quiz.id}/update`}
-                            onSuccess={handleEditSuccess}
-                            assignedSectionIds={allQuizSections.filter(qs => qs.quizId === quiz.id).map(qs => qs.sectionId)}
-                          />
-                          <Button className="mt-4" onClick={() => setEditingQuizId(null)}>Close</Button>
-                        </div>
-                      </div>
-                    )}
-                  </Card>
-                ))
-              ) : (
-                <div className="text-white/40">No quizzes assigned to this section.</div>
-              )}
+
+      <Card className="w-full max-w-7xl mx-auto rounded-xl shadow-lg bg-white/10 border border-white/10">
+        <CardHeader>
+          <CardTitle className="text-lg text-white">All Quizzes</CardTitle>
+          <div className="flex flex-col md:flex-row gap-4 mt-4">
+            <div className="w-full md:w-48">
+              <Select value={sectionFilter} onValueChange={setSectionFilter}>
+                <SelectTrigger className="w-full border-white/20 bg-white dark:bg-[#18181b] text-black dark:text-white rounded-md px-3 py-2">
+                  <SelectValue placeholder="All sections" />
+                </SelectTrigger>
+                <SelectContent className="border-white/20 bg-white dark:bg-[#18181b] text-black dark:text-white rounded-md">
+                  <SelectItem value="ALL">All sections</SelectItem>
+                  {allSections.map(s => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex-1">
+              <Input
+                type="text"
+                placeholder="Search by quiz title..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="w-full bg-white/5 border-white/20 text-white"
+              />
             </div>
           </div>
-        ))}
-      </section>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-white/10">
+                  <TableHead className="text-white/60 font-medium">Title</TableHead>
+                  <TableHead className="text-white/60 font-medium">Section(s)</TableHead>
+                  <TableHead className="text-white/60 font-medium">Attempts</TableHead>
+                  <TableHead className="text-white/60 font-medium">Time limit</TableHead>
+                  <TableHead className="text-white/60 font-medium">Questions</TableHead>
+                  <TableHead className="text-white/60 font-medium text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paginatedQuizzes.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center text-white/60 py-8">
+                      No quizzes found.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  paginatedQuizzes.map(quiz => (
+                    <TableRow key={quiz.id} className="border-white/10 hover:bg-white/5">
+                      <TableCell className="font-medium text-white">
+                        <div>
+                          <div className="font-semibold">{quiz.title}</div>
+                          {cleanQuizDescription(quiz.description) && (
+                            <div className="text-xs text-white/60 truncate max-w-[200px]">
+                              {cleanQuizDescription(quiz.description)}
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-white/80 text-sm">
+                        {quiz.assignedSectionNames.length > 0
+                          ? quiz.assignedSectionNames.join(', ')
+                          : 'Unassigned'}
+                      </TableCell>
+                      <TableCell className="text-white/80">{quiz.maxAttempts ?? '—'}</TableCell>
+                      <TableCell className="text-white/80">
+                        {quiz.timeLimit != null ? `${quiz.timeLimit} min` : 'N/A'}
+                      </TableCell>
+                      <TableCell className="text-white/80">{quiz.questions?.length ?? 0}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setEditingQuizId(quiz.id)}
+                            className="text-white border-white/20"
+                          >
+                            Edit
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => handleDeleteQuiz(quiz.id)}
+                          >
+                            Delete
+                          </Button>
+                          {quiz.assignedSectionIds.length > 0 && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  className="text-white border-white/20"
+                                >
+                                  <MoreHorizontal className="w-4 h-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="bg-[#18181b] border-white/10">
+                                {quiz.assignedSectionIds.map((sectionId: string) => {
+                                  const section = allSections.find(s => s.id === sectionId);
+                                  return (
+                                    <DropdownMenuItem
+                                      key={sectionId}
+                                      onClick={() => handleUnassignQuiz(quiz.id, sectionId)}
+                                      className="text-white focus:bg-white/10"
+                                    >
+                                      Unassign from {section?.name ?? sectionId}
+                                    </DropdownMenuItem>
+                                  );
+                                })}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+          {totalPages > 1 && (
+            <Pagination className="mt-4">
+              <PaginationContent className="gap-1">
+                <PaginationItem>
+                  <PaginationPrevious
+                    href="#"
+                    onClick={e => {
+                      e.preventDefault();
+                      if (currentPage > 1) setPage(currentPage - 1);
+                    }}
+                    className={currentPage <= 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  />
+                </PaginationItem>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                  <PaginationItem key={p}>
+                    <PaginationLink
+                      href="#"
+                      onClick={e => {
+                        e.preventDefault();
+                        setPage(p);
+                      }}
+                      isActive={p === currentPage}
+                      className="cursor-pointer"
+                    >
+                      {p}
+                    </PaginationLink>
+                  </PaginationItem>
+                ))}
+                <PaginationItem>
+                  <PaginationNext
+                    href="#"
+                    onClick={e => {
+                      e.preventDefault();
+                      if (currentPage < totalPages) setPage(currentPage + 1);
+                    }}
+                    className={currentPage >= totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          )}
+        </CardContent>
+      </Card>
+
+      {editingQuizId && (() => {
+        const quiz = quizzesWithQuestions.find(q => q.id === editingQuizId);
+        return quiz ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+            <div className="bg-[#18181b] rounded-xl shadow-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+              <QuizEditForm
+                quiz={{ ...quiz, questions: quiz.questions ?? [] }}
+                courses={courseOptions}
+                apiEndpoint={`/api/admin/quiz/${quiz.id}/update`}
+                onSuccess={handleEditSuccess}
+                assignedSectionIds={allQuizSections.filter(qs => qs.quizId === quiz.id).map(qs => qs.sectionId)}
+              />
+              <Button className="mt-4" onClick={() => setEditingQuizId(null)}>
+                Close
+              </Button>
+            </div>
+          </div>
+        ) : null;
+      })()}
     </main>
   );
-} 
+}

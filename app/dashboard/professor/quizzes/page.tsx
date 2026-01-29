@@ -26,6 +26,7 @@ import {
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { SignOutButton } from '@clerk/nextjs';
 import { QuizActions } from '@/components/quiz/QuizActions';
+import ProfessorQuizzesTableClient from './ProfessorQuizzesTableClient';
 
 function getStatusBadge(status: 'Active' | 'Draft' | 'Closed') {
   if (status === 'Active') return <Badge className="bg-green-600/20 text-green-400 border-green-600">Active</Badge>;
@@ -67,27 +68,37 @@ export default async function ProfessorQuizzesPage() {
     orderBy: (quizSections, { desc }) => desc(quizSections.assignedAt),
   });
 
-  // Extract quizzes and add metadata about whether they were created by this professor
-  const allQuizzes = sectionQuizzes.map(qs => ({
-    ...qs.quiz,
-    isCreatedByProfessor: qs.quiz.professorId === user.id,
-    assignedSectionId: qs.sectionId,
-  }));
+  // Dedupe: one row per quiz (same quiz can appear in multiple sectionQuizzes)
+  const seenQuizIds = new Set<string>();
+  const uniqueQuizzes = sectionQuizzes
+    .map(qs => qs.quiz)
+    .filter(quiz => {
+      if (seenQuizIds.has(quiz.id)) return false;
+      seenQuizIds.add(quiz.id);
+      return true;
+    });
 
-  // Calculate stats for each quiz (only submitted attempts count toward attempts, students, and average)
-  const quizzesWithStats = allQuizzes.map(quiz => {
+  // Calculate stats for each quiz: only submitted; average = avg of each student's BEST score on this quiz
+  const quizzesWithStats = uniqueQuizzes.map(quiz => {
+    const isCreatedByProfessor = quiz.professorId === user.id;
     const submitted = quiz.attempts.filter((a) => a.submittedAt != null);
     const totalAttempts = submitted.length;
     const uniqueStudents = new Set(submitted.map((a) => a.studentId)).size;
+    // Best percentage per student for this quiz
+    const bestPerStudent: Record<string, number> = {};
+    submitted.forEach((a) => {
+      const pct = a.percentage ?? (a.maxScore ? Math.round(((a.score ?? 0) / a.maxScore) * 100) : 0);
+      if (bestPerStudent[a.studentId] == null || pct > bestPerStudent[a.studentId]) bestPerStudent[a.studentId] = pct;
+    });
+    const bestPercentages = Object.values(bestPerStudent);
     const averageScore =
-      totalAttempts > 0
-        ? Math.round(
-            submitted.reduce((sum, a) => sum + (a.percentage ?? 0), 0) / totalAttempts
-          )
+      bestPercentages.length > 0
+        ? Math.round(bestPercentages.reduce((sum, p) => sum + p, 0) / bestPercentages.length)
         : 0;
 
     return {
       ...quiz,
+      isCreatedByProfessor,
       submittedAttempts: submitted,
       totalAttempts,
       uniqueStudents,
@@ -211,97 +222,11 @@ export default async function ProfessorQuizzesPage() {
           {/* Quizzes Table */}
           <section className="w-full max-w-6xl">
             <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
-              <CardHeader>
-                <CardTitle className="text-xl text-white">Quiz Management</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {quizzesWithStats.length === 0 ? (
-                  <div className="text-center py-12">
-                    <FileText className="w-12 h-12 mx-auto mb-4 text-white/40" />
-                    <h3 className="text-lg font-medium text-white mb-2">No quizzes available</h3>
-                    <p className="text-white/60 mb-6">No quizzes have been assigned to your enrolled sections yet</p>
-                    <Button asChild>
-                      <a href="/dashboard/professor/quiz/new">
-                        <Plus className="w-4 h-4 mr-2" />
-                        Create Your First Quiz
-                      </a>
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="border-white/10">
-                          <TableHead className="text-white/60 font-medium">Quiz Title</TableHead>
-                          <TableHead className="text-white/60 font-medium">Type</TableHead>
-                          <TableHead className="text-white/60 font-medium">Section(s)</TableHead>
-                          <TableHead className="text-white/60 font-medium">Status</TableHead>
-                          <TableHead className="text-white/60 font-medium">Students</TableHead>
-                          <TableHead className="text-white/60 font-medium">Attempts</TableHead>
-                          <TableHead className="text-white/60 font-medium">Avg Score</TableHead>
-                          <TableHead className="text-white/60 font-medium">Created</TableHead>
-                          <TableHead className="text-white/60 font-medium">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {quizzesWithStats.map((quiz) => (
-                          <TableRow key={quiz.id} className="border-white/10 hover:bg-white/5">
-                            <TableCell className="font-medium text-white">
-                              <div>
-                                <div className="font-semibold">{quiz.title}</div>
-                                <div className="text-xs text-white/60">
-                                  {quiz.questions.length} questions
-                                </div>
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-white/80">
-                              <Badge 
-                                variant={quiz.isCreatedByProfessor ? "default" : "secondary"}
-                                className={quiz.isCreatedByProfessor 
-                                  ? "bg-blue-600/20 text-blue-400 border-blue-600" 
-                                  : "bg-purple-600/20 text-purple-400 border-purple-600"
-                                }
-                              >
-                                {quiz.isCreatedByProfessor ? 'Created' : 'Assigned'}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-white/80">
-                              {quiz.sectionAssignments.length > 0
-                                ? quiz.sectionAssignments.map(sa => sa.section.name).join(', ')
-                                : 'No Section'}
-                            </TableCell>
-                            <TableCell>
-                              {getStatusBadge(quiz.isActive ? 'Active' : 'Draft')}
-                            </TableCell>
-                            <TableCell className="text-white/80">
-                              <div className="flex items-center gap-1">
-                                <Users className="w-4 h-4" />
-                                {quiz.uniqueStudents}
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-white/80">
-                              {quiz.totalAttempts}
-                            </TableCell>
-                            <TableCell className="text-white/80">
-                              <div className="flex items-center gap-1">
-                                <TrendingUp className="w-4 h-4" />
-                                {quiz.averageScore}%
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-white/60 text-sm">
-                              {new Date(quiz.createdAt).toLocaleDateString()}
-                            </TableCell>
-                            <TableCell>
-                              <QuizActions quizId={quiz.id} isActive={quiz.isActive} />
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            <ProfessorQuizzesTableClient
+              quizzesWithStats={quizzesWithStats}
+              sections={professorEnrollments.map(e => ({ id: e.section.id, name: e.section.name }))}
+            />
+          </Card>
           </section>
         </main>
       </div>

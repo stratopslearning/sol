@@ -61,23 +61,30 @@ export default async function StudentDashboard() {
     index === self.findIndex(q => q.id === quiz.id)
   );
 
-  // Fetch recent attempts
-  const recentAttempts = await db.query.attempts.findMany({
+  // Fetch all submitted attempts (for stats) and recent 5 (for list)
+  const allSubmittedAttempts = await db.query.attempts.findMany({
     where: eq(attempts.studentId, user.id),
-    with: {
-      quiz: true,
-      section: true
-    },
-    orderBy: (attempts, { desc }) => desc(attempts.submittedAt),
-    limit: 5,
+    with: { quiz: true, section: true },
   });
+  const submittedOnly = allSubmittedAttempts.filter(a => a.submittedAt != null);
+  const recentAttempts = [...submittedOnly]
+    .sort((a, b) => new Date(b.submittedAt!).getTime() - new Date(a.submittedAt!).getTime())
+    .slice(0, 5);
 
-  // Calculate stats
+  // Best score per quiz (highest percentage) for average
+  const bestPerQuiz: Record<string, number> = {};
+  submittedOnly.forEach(a => {
+    const pct = a.percentage ?? (a.maxScore ? Math.round(((a.score ?? 0) / a.maxScore) * 100) : 0);
+    if (bestPerQuiz[a.quizId] == null || pct > bestPerQuiz[a.quizId]) bestPerQuiz[a.quizId] = pct;
+  });
+  const bestPercentages = Object.values(bestPerQuiz);
+
+  // Calculate stats: totalAttempts = all submissions; averageScore = avg of best score per quiz
   const totalSections = enrollments.length;
   const totalQuizzes = uniqueActiveQuizzes.length;
-  const totalAttempts = recentAttempts.length;
-  const averageScore = totalAttempts > 0 
-    ? Math.round(recentAttempts.reduce((sum, a) => sum + (a.percentage || 0), 0) / totalAttempts)
+  const totalAttempts = submittedOnly.length;
+  const averageScore = bestPercentages.length > 0
+    ? Math.round(bestPercentages.reduce((sum, p) => sum + p, 0) / bestPercentages.length)
     : 0;
 
   return (

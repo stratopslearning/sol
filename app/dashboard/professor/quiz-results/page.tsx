@@ -132,15 +132,23 @@ export default async function QuizResultsPage() {
   // Calculate statistics for each quiz
   const quizStats = quizAssignments.map(qa => {
     const quiz = qa.quiz;
-    // Only include attempts for this section
-    const attempts = quiz.attempts.filter(a => a.sectionId === qa.section.id);
+    const raw = quiz.attempts.filter(a => a.sectionId === qa.section.id);
+    const attempts = raw.filter(a => a.submittedAt != null);
 
     const totalAttempts = attempts.length;
     const uniqueStudents = new Set(attempts.map(a => a.studentId)).size;
-    const averageScore = totalAttempts > 0 
-      ? Math.round(attempts.reduce((sum, a) => sum + (a.percentage || 0), 0) / totalAttempts)
+    const bestPerStudent: Record<string, number> = {};
+    attempts.forEach((a) => {
+      const pct = a.percentage ?? (a.maxScore ? Math.round(((a.score ?? 0) / a.maxScore) * 100) : 0);
+      if (bestPerStudent[a.studentId] == null || pct > bestPerStudent[a.studentId]) bestPerStudent[a.studentId] = pct;
+    });
+    const bestPercentages = Object.values(bestPerStudent);
+    const averageScore = bestPercentages.length > 0
+      ? Math.round(bestPercentages.reduce((sum, p) => sum + p, 0) / bestPercentages.length)
       : 0;
-    const passRate = totalAttempts > 0 ? Math.round((attempts.filter(a => a.passed).length / totalAttempts) * 100) : 0;
+    const passRate = bestPercentages.length > 0
+      ? Math.round((bestPercentages.filter(p => p >= 60).length / bestPercentages.length) * 100)
+      : 0;
 
     return {
       quizAssignment: qa,
