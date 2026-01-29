@@ -219,6 +219,7 @@ export async function gradeShortAnswer(request: GradingRequest): Promise<Grading
     
     // Use Chat Completions API for gpt-5-mini
     // gpt-5-mini supports chat.completions with reasoning and text parameters
+    // Note: TypeScript types may not include these yet, but they're supported at runtime
     let completion;
     try {
       completion = await openai.chat.completions.create({
@@ -233,12 +234,13 @@ export async function gradeShortAnswer(request: GradingRequest): Promise<Grading
             content: prompt
           }
         ],
-        // gpt-5-mini-2025-08-07 parameters:
+        // GPT-5-mini parameters for Chat Completions API:
+        // - reasoning_effort: Controls reasoning depth (low/medium/high) - top-level parameter
         // - max_completion_tokens: Total budget for reasoning + output tokens
-        // Note: reasoning and text parameters may not be available in current SDK version
-        // Using only max_completion_tokens which is supported
+        // Note: verbosity is NOT available in Chat Completions, only in Responses API
+        reasoning_effort: 'low', // Low reasoning to reserve more tokens for actual response
         max_completion_tokens: 2000
-      });
+      } as any); // Type assertion: SDK types not updated yet, but parameters work at runtime
     } catch (apiError: any) {
       // #region agent log
       const logDataApiError = {location:'grading.ts:220',message:'OpenAI API call failed',data:{errorName:apiError?.constructor?.name,errorMessage:apiError?.message,errorCode:apiError?.code,errorStatus:apiError?.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'};

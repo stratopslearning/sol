@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/app/db';
 import { quizzes, attempts, users, professorSections, quizSections } from '@/app/db/schema';
-import { eq, and, inArray, gte, lte } from 'drizzle-orm';
+import { eq, and, inArray, gte, lte, isNotNull } from 'drizzle-orm';
 import { auth } from '@clerk/nextjs/server';
 import { parse } from 'json2csv';
 
@@ -44,8 +44,11 @@ export async function GET(req: NextRequest) {
     const dateFrom = searchParams.get('dateFrom');
     const dateTo = searchParams.get('dateTo');
 
-    // Build where conditions
-    let whereConditions = [inArray(attempts.quizId, allowedQuizIds)];
+    // Build where conditions: only submitted attempts (exclude in-progress)
+    let whereConditions = [
+      inArray(attempts.quizId, allowedQuizIds),
+      isNotNull(attempts.submittedAt),
+    ];
     if (quizId) {
       if (!allowedQuizIds.includes(quizId)) {
         return NextResponse.json({ error: 'Access denied for this quiz' }, { status: 403 });
@@ -85,7 +88,7 @@ export async function GET(req: NextRequest) {
       attemptCounts.set(key, (attemptCounts.get(key) || 0) + 1);
     });
 
-    // Format data for CSV
+    // Format data for CSV (score/maxScore may be null for legacy data; show 0 or N/A)
     const csvData = results.map(result => {
       const key = `${result.studentEmail}-${result.quizTitle}`;
       const fullName = [result.studentFirstName, result.studentLastName].filter(Boolean).join(' ') || 'Unknown';
@@ -94,8 +97,8 @@ export async function GET(req: NextRequest) {
         'Student Email': result.studentEmail,
         'Quiz Name': result.quizTitle,
         'Attempt Date': result.attemptDate ? new Date(result.attemptDate).toLocaleString() : 'N/A',
-        'Score': result.score,
-        'Max Score': result.maxScore,
+        'Score': result.score ?? 0,
+        'Max Score': result.maxScore ?? 0,
         'Attempt Number': attemptCounts.get(key) || 1,
       };
     });

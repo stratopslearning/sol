@@ -9,8 +9,10 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { QuizTimer } from "@/components/quiz/QuizTimer";
+import { Clock } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useRef, useEffect } from "react";
 import { formatDateTimeUTC, shouldHideFeedbackForStudent, cleanQuizDescription } from "@/lib/utils";
@@ -58,6 +60,7 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
 
   const router = useRouter();
   const submittingRef = useRef(false);
+  const autoSubmitTriggeredRef = useRef(false);
 
   // Check if feedback should be hidden for this user
   const shouldHideFeedback = shouldHideFeedbackForStudent(
@@ -144,14 +147,13 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
   const answeredCount = Object.keys(answers).length;
   const progress = Math.round((answeredCount / questions.length) * 100);
 
-  // Auto-submit when time is up
+  // Auto-submit when time is up (only once)
   React.useEffect(() => {
-    if (timeUp && !submitting) {
-      // Simulate a submit event
-      handleSubmit(new Event('submit') as any);
-    }
+    if (!timeUp || submitting || autoSubmitTriggeredRef.current) return;
+    autoSubmitTriggeredRef.current = true;
+    handleSubmit(new Event('submit') as unknown as React.FormEvent<HTMLFormElement>);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeUp]);
+  }, [timeUp, submitting]);
 
   const handleChange = (qid: string, value: string) => {
     setAnswers((prev) => ({ ...prev, [qid]: value }));
@@ -280,12 +282,24 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
 
   return (
     <form onSubmit={handleSubmit} className="max-w-2xl mx-auto py-8">
+      {timeUp && (
+        <Alert className="mb-4 border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-400 dark:border-amber-500/50 dark:bg-amber-500/10">
+          <Clock className="h-4 w-4" />
+          <AlertDescription>
+            Time&apos;s up! Your quiz is being submitted automatically. Please wait…
+          </AlertDescription>
+        </Alert>
+      )}
       <Card className="mb-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-white/10">
         <CardHeader>
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
             <CardTitle className="text-2xl text-black dark:text-white">{quiz.title}</CardTitle>
             {quiz.timeLimit && (
-              <QuizTimer timeLimit={quiz.timeLimit * 60} onTimeUp={() => setTimeUp(true)} />
+              <QuizTimer
+                timeLimit={quiz.timeLimit * 60}
+                onTimeUp={() => setTimeUp(true)}
+                paused={submitting}
+              />
             )}
           </div>
         </CardHeader>
@@ -378,7 +392,12 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
         ))}
       </div>
       <div className="mt-8 flex justify-end">
-        <Button type="submit" disabled={submitting || !quizStarted} className="w-full md:w-auto">
+        <Button
+          type="submit"
+          disabled={submitting || !quizStarted}
+          loading={submitting}
+          className="w-full md:w-auto"
+        >
           {!quizStarted ? "Starting quiz..." : submitting ? "Submitting..." : "Submit Quiz"}
         </Button>
       </div>

@@ -74,16 +74,21 @@ export default async function ProfessorQuizzesPage() {
     assignedSectionId: qs.sectionId,
   }));
 
-  // Calculate stats for each quiz
+  // Calculate stats for each quiz (only submitted attempts count toward attempts, students, and average)
   const quizzesWithStats = allQuizzes.map(quiz => {
-    const totalAttempts = quiz.attempts.length;
-    const uniqueStudents = new Set(quiz.attempts.map(a => a.studentId)).size;
-    const averageScore = totalAttempts > 0 
-      ? Math.round(quiz.attempts.reduce((sum, a) => sum + (a.percentage || 0), 0) / totalAttempts)
-      : 0;
-    
+    const submitted = quiz.attempts.filter((a) => a.submittedAt != null);
+    const totalAttempts = submitted.length;
+    const uniqueStudents = new Set(submitted.map((a) => a.studentId)).size;
+    const averageScore =
+      totalAttempts > 0
+        ? Math.round(
+            submitted.reduce((sum, a) => sum + (a.percentage ?? 0), 0) / totalAttempts
+          )
+        : 0;
+
     return {
       ...quiz,
+      submittedAttempts: submitted,
       totalAttempts,
       uniqueStudents,
       averageScore,
@@ -180,7 +185,7 @@ export default async function ProfessorQuizzesPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-white">
-                    {new Set(quizzesWithStats.flatMap(q => q.attempts.map(a => a.studentId))).size}
+                    {new Set(quizzesWithStats.flatMap(q => q.submittedAttempts.map(a => a.studentId))).size}
                   </div>
                   <p className="text-xs text-white/40">Engaged students</p>
                 </CardContent>

@@ -106,11 +106,30 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
     // Check if there's an in-progress attempt (started but not submitted)
     const inProgressAttempt = existingAttempts.find(a => !a.submittedAt);
     if (inProgressAttempt) {
-      // Return the existing attempt's start time
+      let startedAt = inProgressAttempt.startedAt;
+
+      // If the quiz has a time limit and the attempt was started long ago (e.g. student
+      // left and came back), the server would reject submit due to "time limit exceeded"
+      // while the client timer shows time left. Reset startedAt so the attempt gets a
+      // fresh timer when the student resumes.
+      const timeLimitMinutes = quiz.timeLimit ?? null;
+      if (timeLimitMinutes != null) {
+        const elapsedMs = now.getTime() - inProgressAttempt.startedAt.getTime();
+        const elapsedMinutes = elapsedMs / (60 * 1000);
+        if (elapsedMinutes >= timeLimitMinutes) {
+          const [updated] = await db
+            .update(attempts)
+            .set({ startedAt: now })
+            .where(eq(attempts.id, inProgressAttempt.id))
+            .returning({ startedAt: attempts.startedAt });
+          startedAt = updated?.startedAt ?? now;
+        }
+      }
+
       return NextResponse.json({
         success: true,
         attemptId: inProgressAttempt.id,
-        startedAt: inProgressAttempt.startedAt.toISOString(),
+        startedAt: startedAt instanceof Date ? startedAt.toISOString() : startedAt,
         message: 'Resuming existing attempt'
       });
     }

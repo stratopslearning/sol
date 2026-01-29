@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -24,6 +24,7 @@ export function QuizInterface({ quiz, questions, assignment, user }: QuizInterfa
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState(quiz.timeLimit ? quiz.timeLimit * 60 : null);
   const [isTimeUp, setIsTimeUp] = useState(false);
+  const autoSubmitTriggeredRef = useRef(false);
 
   const currentQuestion = questions[currentQuestionIndex];
   const progress = (Object.keys(answers).length / questions.length) * 100;
@@ -89,12 +90,12 @@ export function QuizInterface({ quiz, questions, assignment, user }: QuizInterfa
     }
   };
 
-  // Auto-submit when time is up
+  // Auto-submit when time is up (only once)
   useEffect(() => {
-    if (isTimeUp && !isSubmitting) {
-      handleSubmit();
-    }
-  }, [isTimeUp]);
+    if (!isTimeUp || isSubmitting || autoSubmitTriggeredRef.current) return;
+    autoSubmitTriggeredRef.current = true;
+    handleSubmit();
+  }, [isTimeUp, isSubmitting]);
 
   if (!currentQuestion) {
     return (
@@ -122,9 +123,10 @@ export function QuizInterface({ quiz, questions, assignment, user }: QuizInterfa
               {quiz.timeLimit && (
                 <div className="flex items-center space-x-2">
                   <Clock className="w-4 h-4 text-gray-400" />
-                  <QuizTimer 
+                  <QuizTimer
                     timeLimit={quiz.timeLimit * 60}
                     onTimeUp={() => setIsTimeUp(true)}
+                    paused={isSubmitting}
                   />
                 </div>
               )}
@@ -175,9 +177,10 @@ export function QuizInterface({ quiz, questions, assignment, user }: QuizInterfa
                   Next
                 </Button>
               ) : (
-                <Button 
+                <Button
                   onClick={handleSubmit}
                   disabled={isSubmitting}
+                  loading={isSubmitting}
                   className="bg-green-600 hover:bg-green-700"
                 >
                   {isSubmitting ? 'Submitting...' : 'Submit Quiz'}

@@ -1,6 +1,6 @@
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import { db } from '@/app/db';
-import { sections, professorSections, quizzes, attempts, users } from '@/app/db/schema';
+import { sections, professorSections, quizzes, attempts, users, quizSections } from '@/app/db/schema';
 import { eq, inArray } from 'drizzle-orm';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -42,30 +42,19 @@ export default async function ProfessorDashboard() {
   // Get section IDs for filtering
   const sectionIds = professorEnrollments.map(e => e.sectionId);
 
-  // Fetch professor's quizzes (created by professor)
-  const professorQuizzes = await db.query.quizzes.findMany({
-    where: eq(quizzes.professorId, user.id),
-    with: {
-      sectionAssignments: {
-        with: {
-          section: {
-            with: {
-              course: true
-            }
-          }
-        }
-      },
-      attempts: true,
-    }
-  });
+  // Quiz IDs assigned to any of the professor's sections (so dashboard shows stats for quizzes in their sections, not only created by them)
+  const sectionQuizLinks = sectionIds.length > 0
+    ? await db.query.quizSections.findMany({
+        where: inArray(quizSections.sectionId, sectionIds),
+      })
+    : [];
+  const assignedQuizIds = [...new Set(sectionQuizLinks.map((qs) => qs.quizId))];
 
-  // Fetch recent attempts for professor's quizzes
-  const recentAttempts = await db.query.attempts.findMany({
-    where: inArray(attempts.quizId, professorQuizzes.map(q => q.id)),
-    with: {
-      student: true,
-      quiz: {
-        with: { 
+  // Fetch quizzes assigned to professor's sections (so Analytics Overview reflects their sections)
+  const professorQuizzes = assignedQuizIds.length > 0
+    ? await db.query.quizzes.findMany({
+        where: inArray(quizzes.id, assignedQuizIds),
+        with: {
           sectionAssignments: {
             with: {
               section: {
@@ -74,29 +63,57 @@ export default async function ProfessorDashboard() {
                 }
               }
             }
-          }
+          },
+          attempts: true,
         }
-      },
-      section: {
-        with: {
-          course: true
-        }
-      }
-    },
-    orderBy: (attempts, { desc }) => desc(attempts.submittedAt),
-    limit: 5,
-  });
+      })
+    : [];
 
-  // Calculate stats
+  // Fetch recent attempts for these quizzes (submitted only for display)
+  const recentAttempts = professorQuizzes.length > 0
+    ? await db.query.attempts.findMany({
+        where: inArray(attempts.quizId, professorQuizzes.map(q => q.id)),
+        with: {
+          student: true,
+          quiz: {
+            with: {
+              sectionAssignments: {
+                with: {
+                  section: {
+                    with: {
+                      course: true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          section: {
+            with: {
+              course: true
+            }
+          }
+        },
+        orderBy: (attempts, { desc }) => desc(attempts.submittedAt),
+        limit: 5,
+      })
+    : [];
+
+  // Calculate stats (only submitted attempts count toward students, attempts, and average)
   const totalSections = professorEnrollments.length;
   const activeQuizzes = professorQuizzes.filter(q => q.isActive).length;
   const draftQuizzes = professorQuizzes.filter(q => !q.isActive).length;
-  const totalStudents = new Set(professorQuizzes.flatMap(q => q.attempts.map(a => a.studentId))).size;
-  const totalAttempts = professorQuizzes.reduce((sum, q) => sum + q.attempts.length, 0);
-  const averageScore = totalAttempts > 0 
-    ? Math.round(professorQuizzes.reduce((sum, q) => 
-        sum + q.attempts.reduce((quizSum, a) => quizSum + (a.percentage || 0), 0), 0) / totalAttempts)
-    : 0;
+  const submittedAttemptsList = professorQuizzes.flatMap(q =>
+    q.attempts.filter((a) => a.submittedAt != null)
+  );
+  const totalStudents = new Set(submittedAttemptsList.map((a) => a.studentId)).size;
+  const totalAttempts = submittedAttemptsList.length;
+  const averageScore =
+    totalAttempts > 0
+      ? Math.round(
+          submittedAttemptsList.reduce((sum, a) => sum + (a.percentage ?? 0), 0) / totalAttempts
+        )
+      : 0;
 
   return (
     <div className="min-h-screen w-screen bg-[#030303] flex">

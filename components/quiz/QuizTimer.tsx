@@ -10,12 +10,15 @@ import { cn } from '@/lib/utils';
 interface QuizTimerProps {
   timeLimit: number; // in seconds
   onTimeUp: () => void;
+  /** When true, the countdown stops (e.g. while submission is in progress). */
+  paused?: boolean;
 }
 
-export function QuizTimer({ timeLimit, onTimeUp }: QuizTimerProps) {
+export function QuizTimer({ timeLimit, onTimeUp, paused = false }: QuizTimerProps) {
   const [timeRemaining, setTimeRemaining] = useState(timeLimit);
 
   useEffect(() => {
+    if (paused) return;
     if (timeRemaining <= 0) {
       onTimeUp();
       return;
@@ -32,7 +35,7 @@ export function QuizTimer({ timeLimit, onTimeUp }: QuizTimerProps) {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [timeRemaining, onTimeUp]);
+  }, [timeRemaining, onTimeUp, paused]);
 
   const formatTime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
