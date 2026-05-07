@@ -1,17 +1,5 @@
-import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
-import { 
-  Brain, 
-  Lightbulb, 
-  Target, 
-  AlertTriangle, 
-  CheckCircle, 
-  Clock,
-  TrendingUp,
-  MessageSquare
-} from 'lucide-react';
+import React from "react";
+import { Sparkles } from "lucide-react";
 
 interface GPTFeedbackData {
   score: number;
@@ -25,35 +13,28 @@ interface GPTFeedbackDisplayProps {
   className?: string;
 }
 
-export function GPTFeedbackDisplay({ 
-  feedback, 
-  questionText, 
-  studentAnswer, 
-  className = "" 
+export function GPTFeedbackDisplay({
+  feedback,
+  className = "",
 }: GPTFeedbackDisplayProps) {
   return (
-    <Card className={`bg-gradient-to-br from-blue-900/20 to-purple-900/20 border-blue-500/30 ${className}`}>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-lg text-white flex items-center gap-2">
-          AI Feedback
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-white">Feedback</span>
-          </div>
-          <div className="p-3 bg-white/5 rounded-lg">
-            <p className="text-sm text-gray-200 leading-relaxed">
-              {feedback.feedback}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 mt-2">
-          <span className="text-sm font-medium text-white">Score:</span>
-          <span className="text-lg font-bold text-blue-300">{feedback.score}</span>
-        </div>
-      </CardContent>
-    </Card>
+    <section
+      className={`border border-info/30 bg-info-soft/40 rounded-md p-5 ${className}`}
+    >
+      <header className="flex items-center gap-2 eyebrow text-info-fg">
+        <Sparkles className="h-3.5 w-3.5" />
+        AI feedback
+      </header>
+      <p className="mt-3 text-sm text-ink leading-relaxed max-w-prose">
+        {feedback.feedback}
+      </p>
+      <div className="mt-4 hairline" />
+      <div className="mt-3 flex items-baseline gap-2">
+        <span className="eyebrow text-ink-faint">Score</span>
+        <span className="font-display text-lg text-ink tnum">
+          {feedback.score}
+        </span>
+      </div>
+    </section>
   );
-} 
+}

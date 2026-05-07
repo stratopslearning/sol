@@ -1,56 +1,76 @@
 import { clerkMiddleware } from '@clerk/nextjs/server';
+import { NextResponse } from 'next/server';
 import { db } from '@/app/db';
 import { users as dbUsers } from '@/app/db/schema';
 import { eq } from 'drizzle-orm';
+import { BASE_PATH, withBasePath } from '@/lib/basePath';
+import { paymentsEnabled } from '@/lib/featureFlags';
+
+function redirectWithinApp(path: string, req: Request) {
+  const p = path.startsWith('/') ? path : `/${path}`;
+  return NextResponse.redirect(new URL(withBasePath(p), req.url));
+}
 
 export default clerkMiddleware(async (auth, req) => {
-  // Allow public routes
-  const publicRoutes = ['/', '/login', '/signup', '/api/stripe/webhook'];
-  const isPublicRoute = publicRoutes.some(route => req.url.includes(route));
-  if (isPublicRoute) {
+  const { pathname } = req.nextUrl;
+  // With Next.js `basePath`, middleware can see paths with or without the basePath.
+  const appPath = pathname.startsWith(BASE_PATH)
+    ? pathname.slice(BASE_PATH.length) || '/'
+    : pathname;
+
+  const isPublic =
+    appPath === '/' ||
+    appPath === '/login' ||
+    appPath.startsWith('/login/') ||
+    appPath === '/signup' ||
+    appPath.startsWith('/signup/') ||
+    // Allow the frontend to query user state without getting redirected to an HTML login page.
+    // During first login, the DB row might not exist yet; we want `/api/user` to return JSON 404 instead.
+    appPath === '/api/user' ||
+    appPath.startsWith('/api/user/') ||
+    // Payment product details must be public so the payment page can render.
+    appPath === '/api/stripe/product' ||
+    appPath.startsWith('/api/stripe/product') ||
+    appPath.startsWith('/api/stripe/webhook');
+
+  if (isPublic) {
     return;
   }
 
-  // Protect all other routes
   const { userId } = await auth();
   if (!userId) {
-    return Response.redirect(new URL('/login', req.url));
+    return redirectWithinApp('/login', req);
   }
 
-  // Get user data for role-based access control
   const user = await db.query.users.findFirst({ where: eq(dbUsers.clerkId, userId) });
   if (!user) {
-    return Response.redirect(new URL('/login', req.url));
+    return redirectWithinApp('/login', req);
   }
 
-  const url = req.nextUrl.pathname;
-
-  // Restrict unpaid students from /quiz/* and /dashboard/student
-  if (url.startsWith('/quiz') || url.startsWith('/dashboard/student')) {
-    if (user.role === 'STUDENT' && !user.paid) {
-      return Response.redirect(new URL('/payment', req.url));
+  if (appPath.startsWith('/quiz') || appPath.startsWith('/dashboard/student')) {
+    // Paywall — only enforced when the payments feature flag is on. While
+    // disabled, every authenticated student is treated as entitled.
+    if (paymentsEnabled() && user.role === 'STUDENT' && !user.paid) {
+      return redirectWithinApp('/payment', req);
     }
   }
 
-  // Restrict professor routes to PROFESSOR and ADMIN roles only
-  if (url.startsWith('/dashboard/professor')) {
+  if (appPath.startsWith('/dashboard/professor')) {
     if (user.role !== 'PROFESSOR' && user.role !== 'ADMIN') {
-      return Response.redirect(new URL('/dashboard/student', req.url));
+      return redirectWithinApp('/dashboard/student', req);
     }
   }
 
-  if (url.startsWith('/dashboard/admin') || url.startsWith('/api/admin')) {
+  if (appPath.startsWith('/dashboard/admin') || appPath.startsWith('/api/admin')) {
     if (user.role !== 'ADMIN') {
-      return Response.redirect(new URL('/dashboard/' + user.role.toLowerCase(), req.url));
+      return redirectWithinApp('/dashboard/' + user.role.toLowerCase(), req);
     }
   }
 });
 
 export const config = {
   matcher: [
-    // Skip Next.js internals and all static files, unless found in search params
     '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-    // Always run for API routes
     '/(api|trpc)(.*)',
   ],
 };

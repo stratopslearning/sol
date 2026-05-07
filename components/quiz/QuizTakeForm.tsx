@@ -16,6 +16,7 @@ import { Clock } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useRef, useEffect } from "react";
 import { formatDateTimeUTC, shouldHideFeedbackForStudent, cleanQuizDescription } from "@/lib/utils";
+import { apiUrl, withBasePath } from "@/lib/basePath";
 
 interface QuizTakeFormProps {
   quiz: {
@@ -73,7 +74,7 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
     const startQuiz = async () => {
       if (quizStarted) return;
       try {
-        const res = await fetch(`/api/quiz/${quiz.id}/start`, {
+        const res = await fetch(apiUrl(`/api/quiz/${quiz.id}/start`), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ assignmentId }),
@@ -104,7 +105,7 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
       if (submittingRef.current || !startedAt) return;
       submittingRef.current = true;
       try {
-        await fetch(`/api/quiz/${quiz.id}/submit`, {
+        await fetch(apiUrl(`/api/quiz/${quiz.id}/submit`), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ assignmentId, answers, startedAt }),
@@ -187,7 +188,7 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
     }
     setSubmitting(true);
     try {
-      const res = await fetch(`/api/quiz/${quiz.id}/submit`, {
+      const res = await fetch(apiUrl(`/api/quiz/${quiz.id}/submit`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ assignmentId, answers, startedAt }),
@@ -210,169 +211,215 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
 
   // --- UI ---
   if (submitted) {
+    const totalPoints = questions.reduce((a, q) => a + q.points, 0);
     return (
-      <div className="max-w-2xl mx-auto py-8">
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="text-2xl text-white">Quiz Results</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col gap-2 mb-4">
-              <div className="text-lg text-white font-semibold">Score: {score} / {questions.reduce((a, q) => a + q.points, 0)}</div>
-            </div>
-            <div className="mb-4">
-              <Button asChild variant="secondary">
-                <a href="/dashboard/student">Back to Dashboard</a>
-              </Button>
-            </div>
-            <div className="space-y-6">
-              {questions.map((q, idx) => (
-                <Card key={q.id} className="bg-white/5 border border-white/10">
-                  <CardHeader>
-                    <div className="flex items-center gap-2 mb-2">
-                      <Badge variant="outline">Question {idx + 1}</Badge>
-                      <Badge variant="secondary">{q.type.replace("_", " ")}</Badge>
-                      <span className="text-xs text-gray-400">{q.points} pts</span>
-                    </div>
-                    <CardTitle className="text-white text-base font-medium">{q.question}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="mb-2">
-                      <Label className="text-gray-300">Your answer:</Label>
-                      <div className="mt-1 text-white/90">
-                        {answers[q.id] || <span className="italic text-gray-400">No answer</span>}
-                      </div>
-                    </div>
-                    {results && (
-                      <div className="flex items-center gap-2 mt-2">
-                        {results[q.id]?.correct ? (
-                          <Badge className="bg-green-600/20 text-green-400 border-green-600">Correct</Badge>
-                        ) : (
-                          <Badge className="bg-red-600/20 text-red-400 border-red-600">Incorrect</Badge>
-                        )}
-                        {results[q.id]?.feedback && !shouldHideFeedback && (
-                          <span className="text-sm text-blue-300">{results[q.id].feedback}</span>
-                        )}
-                        {gptFeedback[q.id] && !shouldHideFeedback && (
-                          <span className="text-sm text-purple-300">AI: {gptFeedback[q.id]}</span>
-                        )}
-                        {shouldHideFeedback && (
-                          <span className="text-sm text-yellow-300 italic">
-                            {quiz.dueDate && new Date() <= new Date(quiz.dueDate) 
-                              ? "Feedback will be available after the due date" 
-                              : "Feedback is now available"}
-                          </span>
-                        )}
-                      </div>
+      <div className="max-w-2xl mx-auto py-8 px-4">
+        <section className="paper paper-shadow p-6">
+          <header>
+            <span className="eyebrow text-ink-faint">Result</span>
+            <h2 className="font-display text-2xl text-ink mt-1">
+              Quiz submitted
+            </h2>
+            <p className="mt-2 text-sm text-ink-muted">
+              Score{" "}
+              <span className="font-display tnum text-ink">
+                {score}
+              </span>{" "}
+              of <span className="tnum">{totalPoints}</span>.
+            </p>
+          </header>
+          <div className="mt-5">
+            <Button asChild variant="outline">
+              <a href={withBasePath("/dashboard/student")}>Back to dashboard</a>
+            </Button>
+          </div>
+          <div className="mt-8 space-y-4">
+            {questions.map((q, idx) => (
+              <article
+                key={q.id}
+                className="paper paper-shadow p-5"
+              >
+                <header className="flex flex-wrap items-center gap-2">
+                  <span className="eyebrow text-ink-faint">
+                    Question {idx + 1}
+                  </span>
+                  <Badge variant="outline" className="capitalize">
+                    {q.type.replace("_", " ")}
+                  </Badge>
+                  <span className="text-xs tnum text-ink-faint ml-auto">
+                    {q.points} pts
+                  </span>
+                </header>
+                <h3 className="font-display text-base text-ink mt-3">
+                  {q.question}
+                </h3>
+                <div className="mt-3">
+                  <Label className="eyebrow text-ink-faint">Your answer</Label>
+                  <div className="mt-1 text-ink">
+                    {answers[q.id] || (
+                      <span className="italic text-ink-faint">No answer</span>
                     )}
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-            <div className="mt-8 text-center">
-              <Button variant="outline" disabled>
-                View Attempt History (coming soon)
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+                  </div>
+                </div>
+                {results && (
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    {results[q.id]?.correct ? (
+                      <Badge variant="success">Correct</Badge>
+                    ) : (
+                      <Badge variant="destructive">Incorrect</Badge>
+                    )}
+                    {results[q.id]?.feedback && !shouldHideFeedback && (
+                      <span className="text-sm text-ink-muted">
+                        {results[q.id].feedback}
+                      </span>
+                    )}
+                    {gptFeedback[q.id] && !shouldHideFeedback && (
+                      <span className="text-sm text-info">
+                        AI: {gptFeedback[q.id]}
+                      </span>
+                    )}
+                    {shouldHideFeedback && (
+                      <span className="text-sm italic text-ink-faint">
+                        {quiz.dueDate && new Date() <= new Date(quiz.dueDate)
+                          ? "Feedback will be available after the due date."
+                          : "Feedback is now available."}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </article>
+            ))}
+          </div>
+        </section>
       </div>
     );
   }
 
   return (
-    <form onSubmit={handleSubmit} className="max-w-2xl mx-auto py-8">
+    <form onSubmit={handleSubmit} className="max-w-3xl mx-auto py-12 px-6">
       {timeUp && (
-        <Alert className="mb-4 border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-400 dark:border-amber-500/50 dark:bg-amber-500/10">
+        <Alert variant="destructive" className="mb-6">
           <Clock className="h-4 w-4" />
           <AlertDescription>
-            Time&apos;s up! Your quiz is being submitted automatically. Please wait…
+            Time&apos;s up — your quiz is being submitted automatically.
           </AlertDescription>
         </Alert>
       )}
-      <Card className="mb-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-white/10">
-        <CardHeader>
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-            <CardTitle className="text-2xl text-black dark:text-white">{quiz.title}</CardTitle>
-            {quiz.timeLimit && (
+      <header className="paper paper-shadow p-6 md:p-8 mb-8">
+        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 flex-wrap">
+          <div className="flex flex-col gap-2 max-w-prose">
+            <span className="eyebrow text-ink-faint">In session</span>
+            <h1 className="font-display text-3xl text-ink leading-tight">
+              {quiz.title}
+            </h1>
+            {quiz.description ? (
+              <p className="text-ink-muted">
+                {cleanQuizDescription(quiz.description)}
+              </p>
+            ) : null}
+          </div>
+          {quiz.timeLimit ? (
+            <div className="inline-flex items-center gap-2 paper border border-rule px-3 py-2 rounded">
+              <Clock className="h-4 w-4 text-ink-faint" />
               <QuizTimer
                 timeLimit={quiz.timeLimit * 60}
                 onTimeUp={() => setTimeUp(true)}
                 paused={submitting}
               />
-            )}
+            </div>
+          ) : null}
+        </div>
+
+        <div className="mt-6 flex flex-wrap gap-2">
+          <Badge variant="outline">{questions.length} questions</Badge>
+          {quiz.dueDate ? (
+            <Badge variant="outline">Due {formatDateTimeUTC(quiz.dueDate)}</Badge>
+          ) : null}
+          {quiz.timeLimit ? (
+            <Badge variant="outline">{quiz.timeLimit} min</Badge>
+          ) : null}
+        </div>
+
+        <div className="mt-4 hairline" />
+        <div className="mt-4">
+          <Progress value={progress} className="h-1.5" />
+          <div className="text-xs text-ink-faint mt-2 tnum">
+            {answeredCount} of {questions.length} answered
           </div>
-        </CardHeader>
-        <CardContent>
-          {quiz.description && <div className="mb-2 text-black dark:text-white/80">{cleanQuizDescription(quiz.description)}</div>}
-          <div className="flex flex-wrap gap-4 items-center mb-2">
-            <Badge variant="secondary" className="text-black dark:text-white bg-gray-200 dark:bg-gray-800">{questions.length} questions</Badge>
-            {quiz.dueDate && (
-              <Badge variant="outline" className="text-black dark:text-white border-gray-400 dark:border-gray-600">
-                Due: {formatDateTimeUTC(quiz.dueDate)}
-              </Badge>
-            )}
-            {quiz.timeLimit && (
-              <Badge variant="outline" className="text-black dark:text-white border-gray-400 dark:border-gray-600">Time limit: {quiz.timeLimit} min</Badge>
-            )}
-          </div>
-          <div className="mb-2">
-            <Progress value={progress} className="h-2" />
-            <div className="text-xs text-black dark:text-gray-400 mt-1">{answeredCount} of {questions.length} answered</div>
-          </div>
-        </CardContent>
-      </Card>
-      <div className="space-y-8">
+        </div>
+      </header>
+
+      <div className="flex flex-col gap-6">
         {questions.map((q, idx) => (
-          <Card key={q.id} className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-white/10">
-            <CardHeader>
-              <div className="flex items-center gap-2 mb-2">
-                <Badge variant="outline" className="text-black dark:text-white border-gray-400 dark:border-gray-600">Question {idx + 1} of {questions.length}</Badge>
-                <Badge variant="secondary" className="text-black dark:text-white bg-gray-200 dark:bg-gray-800">{q.type.replace("_", " ")}</Badge>
-                <span className="text-xs text-black dark:text-gray-400">{q.points} pts</span>
-              </div>
-              <CardTitle className="text-black dark:text-white text-base font-medium">{q.question}</CardTitle>
-            </CardHeader>
-            <CardContent>
+          <article key={q.id} className="paper paper-shadow p-6 md:p-8">
+            <header className="flex items-center gap-2 flex-wrap">
+              <span className="eyebrow text-ink-faint">
+                Question {idx + 1} of {questions.length}
+              </span>
+              <span className="text-ink-faint">·</span>
+              <Badge variant="outline">{q.type.replace("_", " ").toLowerCase()}</Badge>
+              <span className="text-xs text-ink-faint tnum">{q.points} pts</span>
+            </header>
+            <h2 className="font-display text-xl md:text-2xl text-ink leading-tight mt-3">
+              {q.question}
+            </h2>
+            <div className="mt-5 hairline" />
+            <div className="mt-5">
               {q.type === "MULTIPLE_CHOICE" && q.options && (
-                <>
-                  {console.log('MCQ options for question', q.id, q.options)}
-                  <RadioGroup
-                    value={answers[q.id] || ""}
-                    onValueChange={(val) => handleChange(q.id, val)}
-                    disabled={submitting}
-                    className="space-y-2"
-                    onKeyDown={handleKeyDown}
-                    onContextMenu={handleContextMenu}
-                  >
-                    {q.options.map((opt, i) => (
-                      <div key={i} className="flex items-center space-x-2">
-                        <RadioGroupItem value={opt} id={`${q.id}-opt-${i}`} />
-                        <Label htmlFor={`${q.id}-opt-${i}`} className="text-black dark:text-white cursor-pointer">
-                          {opt}
-                        </Label>
-                      </div>
-                    ))}
-                  </RadioGroup>
-                </>
+                <RadioGroup
+                  value={answers[q.id] || ""}
+                  onValueChange={(val) => handleChange(q.id, val)}
+                  disabled={submitting}
+                  className="flex flex-col gap-2"
+                  onKeyDown={handleKeyDown}
+                  onContextMenu={handleContextMenu}
+                >
+                  {q.options.map((opt, i) => {
+                    const id = `${q.id}-opt-${i}`;
+                    const isSelected = answers[q.id] === opt;
+                    return (
+                      <Label
+                        key={i}
+                        htmlFor={id}
+                        className={`flex items-start gap-3 px-4 py-3 rounded-md border cursor-pointer transition-colors ${
+                          isSelected
+                            ? "border-brand bg-brand-soft/40"
+                            : "border-rule hover:border-rule-strong hover:bg-surface-sunken/40"
+                        }`}
+                      >
+                        <RadioGroupItem value={opt} id={id} className="mt-0.5" />
+                        <span className="text-ink leading-snug">{opt}</span>
+                      </Label>
+                    );
+                  })}
+                </RadioGroup>
               )}
               {q.type === "TRUE_FALSE" && (
                 <RadioGroup
                   value={answers[q.id] || ""}
                   onValueChange={(val) => handleChange(q.id, val)}
                   disabled={submitting}
-                  className="space-y-2"
+                  className="flex flex-col gap-2"
                   onKeyDown={handleKeyDown}
                   onContextMenu={handleContextMenu}
                 >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="true" id={`${q.id}-true`} />
-                    <Label htmlFor={`${q.id}-true`} className="text-black dark:text-white cursor-pointer">True</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="false" id={`${q.id}-false`} />
-                    <Label htmlFor={`${q.id}-false`} className="text-black dark:text-white cursor-pointer">False</Label>
-                  </div>
+                  {["true", "false"].map((value) => {
+                    const isSelected = answers[q.id] === value;
+                    return (
+                      <Label
+                        key={value}
+                        htmlFor={`${q.id}-${value}`}
+                        className={`flex items-center gap-3 px-4 py-3 rounded-md border cursor-pointer capitalize transition-colors ${
+                          isSelected
+                            ? "border-brand bg-brand-soft/40"
+                            : "border-rule hover:border-rule-strong hover:bg-surface-sunken/40"
+                        }`}
+                      >
+                        <RadioGroupItem value={value} id={`${q.id}-${value}`} />
+                        <span className="text-ink">{value}</span>
+                      </Label>
+                    );
+                  })}
                 </RadioGroup>
               )}
               {q.type === "SHORT_ANSWER" && (
@@ -382,25 +429,28 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
                   onKeyDown={handleKeyDown}
                   onPaste={handlePaste}
                   onContextMenu={handleContextMenu}
-                  placeholder="Type your answer here..."
+                  placeholder="Compose your answer…"
                   disabled={submitting}
-                  className="min-h-[100px] resize-none text-black dark:text-white bg-gray-100 dark:bg-gray-800"
+                  className="min-h-[140px]"
                 />
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </article>
         ))}
       </div>
-      <div className="mt-8 flex justify-end">
+      <div className="mt-10 flex justify-end">
         <Button
           type="submit"
           disabled={submitting || !quizStarted}
           loading={submitting}
-          className="w-full md:w-auto"
         >
-          {!quizStarted ? "Starting quiz..." : submitting ? "Submitting..." : "Submit Quiz"}
+          {!quizStarted
+            ? "Starting quiz…"
+            : submitting
+              ? "Submitting…"
+              : "Submit quiz"}
         </Button>
       </div>
     </form>
   );
-} 
+}

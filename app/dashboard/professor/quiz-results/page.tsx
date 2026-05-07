@@ -1,106 +1,73 @@
-import { getOrCreateUser } from '@/lib/getOrCreateUser';
-import { db } from '@/app/db';
-import { quizzes, quizSections, professorSections, sections, courses } from '@/app/db/schema';
-import { eq, and, inArray } from 'drizzle-orm';
-import { cleanQuizDescription } from '@/lib/utils';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
-} from '@/components/ui/table';
-import { 
-  FileText, 
-  LogOut, 
-  BarChart2, 
-  Users, 
-  ArrowLeft,
-  TrendingUp,
-  Clock,
-  CheckCircle,
-  XCircle,
-  Eye,
-  Calendar,
-  Target,
-  Search
-} from 'lucide-react';
-import { SidebarProvider } from '@/components/ui/sidebar';
-import { SignOutButton } from '@clerk/nextjs';
+import { eq, inArray } from "drizzle-orm";
+import { Eye, FileText, TrendingUp, Users } from "lucide-react";
+
+import { db } from "@/app/db";
+import { professorSections, quizSections } from "@/app/db/schema";
+import { AppShell } from "@/components/layout/AppShell";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { SectionHeading } from "@/components/layout/SectionHeading";
+import { EmptyState } from "@/components/patterns/EmptyState";
+import { StatCard } from "@/components/patterns/StatCard";
+import { Button } from "@/components/ui/button";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { withBasePath } from "@/lib/basePath";
+import { getOrCreateUser } from "@/lib/getOrCreateUser";
+import { cleanQuizDescription } from "@/lib/utils";
 
 export default async function QuizResultsPage() {
   const user = await getOrCreateUser();
-  
-  if (!user || user.role !== 'PROFESSOR') return null;
+  if (!user || user.role !== "PROFESSOR") return null;
 
-  // Get professor's enrolled sections
   const professorSectionsList = await db.query.professorSections.findMany({
     where: eq(professorSections.professorId, user.id),
-    with: {
-      section: {
-        with: {
-          course: true
-        }
-      }
-    }
+    with: { section: { with: { course: true } } },
   });
 
-  const enrolledSectionIds = professorSectionsList.map(ps => ps.section.id);
+  const enrolledSectionIds = professorSectionsList.map((ps) => ps.section.id);
 
   if (enrolledSectionIds.length === 0) {
     return (
-      <SidebarProvider>
-        <div className="min-h-screen w-screen bg-[#030303] flex">
-          {/* Sidebar */}
-          <aside className="hidden md:flex sticky top-0 h-screen w-64 bg-white/5 border-r border-white/10 flex-col p-6">
-            <div className="mb-8">
-              <a href="/" className="text-lg font-bold text-white flex items-center gap-2 hover:underline">S-O-L</a>
-              <div className="text-xs text-white/40">Professor Dashboard</div>
-            </div>
-            <nav className="flex flex-col gap-2">
-              <a href="/dashboard/professor" className="flex items-center gap-2 text-white/80 hover:bg-white/10 rounded px-3 py-2"><BarChart2 className="w-4 h-4" /> Dashboard</a>
-              <a href="/dashboard/professor/quizzes" className="flex items-center gap-2 text-white/80 hover:bg-white/10 rounded px-3 py-2"><FileText className="w-4 h-4" /> My Quizzes</a>
-              <SignOutButton redirectUrl="/">
-                <button className="flex items-center gap-2 text-red-400 hover:bg-red-400/10 rounded px-3 py-2 mt-8 w-full text-left">
-                  <LogOut className="w-4 h-4" /> Logout
-                </button>
-              </SignOutButton>
-            </nav>
-            <div className="mt-auto pt-8 flex flex-col gap-2">
-              <div>
-                <Badge className="bg-blue-600/20 text-blue-400 border-blue-600">
-                  Professor
-                </Badge>
-              </div>
-              <div className="text-xs text-white/30">&copy; {new Date().getFullYear()} S-O-L</div>
-            </div>
-          </aside>
-
-          {/* Main Content */}
-          <main className="flex-1 flex flex-col items-center py-10 px-2 md:px-8">
-            <section className="w-full max-w-4xl">
-              <div className="text-center py-12">
-                <FileText className="w-12 h-12 mx-auto mb-4 text-white/40" />
-                <h3 className="text-lg font-medium text-white mb-2">No sections available</h3>
-                <p className="text-white/60 mb-6">You need to be enrolled in at least one section to view quiz results.</p>
-                <Button asChild>
-                  <a href="/dashboard/professor/sections">
-                    Join a Section
-                  </a>
-                </Button>
-              </div>
-            </section>
-          </main>
+      <AppShell
+        role="professor"
+        active="quiz-results"
+        topbarEyebrow="Faculty"
+        topbarTitle="All results"
+      >
+        <PageHeader
+          breadcrumbs={[
+            { label: "Dashboard", href: withBasePath("/dashboard/professor") },
+            { label: "All results" },
+          ]}
+          eyebrow="Results"
+          title="No sections to report on."
+          description="You need to be enrolled in at least one section before student results appear here."
+        />
+        <div className="mt-12">
+          <EmptyState
+            icon={<FileText className="h-5 w-5" />}
+            eyebrow="Empty"
+            title="No quiz results yet."
+            description="Once you're enrolled in a section, all assigned quiz results will be summarised on this page."
+            actions={
+              <Button asChild>
+                <a href={withBasePath("/dashboard/professor/sections")}>
+                  Join a section
+                </a>
+              </Button>
+            }
+          />
         </div>
-      </SidebarProvider>
+      </AppShell>
     );
   }
 
-  // Get all quizzes assigned to professor's enrolled sections
   const quizAssignments = await db.query.quizSections.findMany({
     where: inArray(quizSections.sectionId, enrolledSectionIds),
     with: {
@@ -111,196 +78,221 @@ export default async function QuizResultsPage() {
           attempts: {
             with: {
               student: true,
-              section: {
-                with: {
-                  course: true
-                }
-              }
-            }
-          }
-        }
+              section: { with: { course: true } },
+            },
+          },
+        },
       },
-      section: {
-        with: {
-          course: true
-        }
-      }
+      section: { with: { course: true } },
     },
     orderBy: (quizSections, { desc }) => desc(quizSections.assignedAt),
   });
 
-  // Calculate statistics for each quiz
-  const quizStats = quizAssignments.map(qa => {
+  const quizStats = quizAssignments.map((qa) => {
     const quiz = qa.quiz;
-    const raw = quiz.attempts.filter(a => a.sectionId === qa.section.id);
-    const attempts = raw.filter(a => a.submittedAt != null);
+    const raw = quiz.attempts.filter((a) => a.sectionId === qa.section.id);
+    const attempts = raw.filter((a) => a.submittedAt != null);
 
     const totalAttempts = attempts.length;
-    const uniqueStudents = new Set(attempts.map(a => a.studentId)).size;
+    const uniqueStudents = new Set(attempts.map((a) => a.studentId)).size;
     const bestPerStudent: Record<string, number> = {};
     attempts.forEach((a) => {
-      const pct = a.percentage ?? (a.maxScore ? Math.round(((a.score ?? 0) / a.maxScore) * 100) : 0);
-      if (bestPerStudent[a.studentId] == null || pct > bestPerStudent[a.studentId]) bestPerStudent[a.studentId] = pct;
+      const pct =
+        a.percentage ??
+        (a.maxScore ? Math.round(((a.score ?? 0) / a.maxScore) * 100) : 0);
+      if (
+        bestPerStudent[a.studentId] == null ||
+        pct > bestPerStudent[a.studentId]
+      ) {
+        bestPerStudent[a.studentId] = pct;
+      }
     });
     const bestPercentages = Object.values(bestPerStudent);
-    const averageScore = bestPercentages.length > 0
-      ? Math.round(bestPercentages.reduce((sum, p) => sum + p, 0) / bestPercentages.length)
-      : 0;
-    const passRate = bestPercentages.length > 0
-      ? Math.round((bestPercentages.filter(p => p >= 60).length / bestPercentages.length) * 100)
-      : 0;
+    const averageScore =
+      bestPercentages.length > 0
+        ? Math.round(
+            bestPercentages.reduce((sum, p) => sum + p, 0) /
+              bestPercentages.length,
+          )
+        : 0;
 
     return {
-      quizAssignment: qa,
       quiz,
       section: qa.section,
       totalAttempts,
       uniqueStudents,
       averageScore,
-      passRate,
-      lastAttempt: attempts.length > 0 ? new Date(Math.max(...attempts.map(a => new Date(a.submittedAt || 0).getTime()))) : null
+      lastAttempt:
+        attempts.length > 0
+          ? new Date(
+              Math.max(
+                ...attempts.map((a) =>
+                  new Date(a.submittedAt || 0).getTime(),
+                ),
+              ),
+            )
+          : null,
     };
   });
 
+  const totalAttempts = quizStats.reduce((s, q) => s + q.totalAttempts, 0);
+  const totalLearners = new Set(
+    quizStats.flatMap((q) => Array(q.uniqueStudents).fill(q.section.id + "-")),
+  ).size;
+  const overallAvg =
+    quizStats.length > 0
+      ? Math.round(
+          quizStats.reduce((s, q) => s + q.averageScore, 0) / quizStats.length,
+        )
+      : 0;
+
   return (
-    <SidebarProvider>
-      <div className="min-h-screen w-screen bg-[#030303] flex">
-        {/* Sidebar */}
-        <aside className="hidden md:flex sticky top-0 h-screen w-64 bg-white/5 border-r border-white/10 flex-col p-6">
-          <div className="mb-8">
-            <a href="/" className="text-lg font-bold text-white flex items-center gap-2 hover:underline">S-O-L</a>
-            <div className="text-xs text-white/40">Professor Dashboard</div>
-          </div>
-          <nav className="flex flex-col gap-2">
-            <a href="/dashboard/professor" className="flex items-center gap-2 text-white/80 hover:bg-white/10 rounded px-3 py-2"><BarChart2 className="w-4 h-4" /> Dashboard</a>
-            <a href="/dashboard/professor/quizzes" className="flex items-center gap-2 text-white/80 hover:bg-white/10 rounded px-3 py-2"><FileText className="w-4 h-4" /> My Quizzes</a>
-            <a href="/dashboard/professor/quiz-results" className="flex items-center gap-2 text-white hover:bg-white/10 rounded px-3 py-2"><BarChart2 className="w-4 h-4" /> All Results</a>
-            <SignOutButton redirectUrl="/">
-              <button className="flex items-center gap-2 text-red-400 hover:bg-red-400/10 rounded px-3 py-2 mt-8 w-full text-left">
-                <LogOut className="w-4 h-4" /> Logout
-              </button>
-            </SignOutButton>
-          </nav>
-          <div className="mt-auto pt-8 flex flex-col gap-2">
-            <div>
-              <Badge className="bg-blue-600/20 text-blue-400 border-blue-600">
-                Professor
-              </Badge>
-            </div>
-            <div className="text-xs text-white/30">&copy; {new Date().getFullYear()} S-O-L</div>
-          </div>
-        </aside>
+    <AppShell
+      role="professor"
+      active="quiz-results"
+      topbarEyebrow="Faculty"
+      topbarTitle="All results"
+    >
+      <PageHeader
+        breadcrumbs={[
+          { label: "Dashboard", href: withBasePath("/dashboard/professor") },
+          { label: "All results" },
+        ]}
+        eyebrow="Results"
+        title="A bird's-eye view of every quiz."
+        description="Aggregated performance across every quiz assigned to a section you teach."
+      />
 
-        {/* Main Content */}
-        <main className="flex-1 flex flex-col items-center py-10 px-2 md:px-8">
-          {/* Header */}
-          <section className="w-full max-w-6xl mb-8">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-              <div>
-                <div className="flex items-center gap-4 mb-2">
-                  <Button asChild variant="ghost" size="sm">
-                    <a href="/dashboard/professor">
-                      <ArrowLeft className="w-4 h-4 mr-2" />
-                      Back to Dashboard
-                    </a>
-                  </Button>
-                </div>
-                <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">All Quiz Results</h1>
-                <p className="text-white/60 text-lg">View results for all quizzes in your enrolled sections</p>
-              </div>
-            </div>
-          </section>
+      <section className="mt-12 flex flex-col gap-6">
+        <SectionHeading eyebrow="Summary" title="Across your sections" />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard
+            label="Quizzes"
+            value={quizStats.length}
+            icon={<FileText className="h-4 w-4" />}
+            hint="Tracked"
+          />
+          <StatCard
+            label="Submissions"
+            value={totalAttempts}
+            icon={<TrendingUp className="h-4 w-4" />}
+            hint="Total attempts"
+          />
+          <StatCard
+            label="Learners"
+            value={totalLearners}
+            icon={<Users className="h-4 w-4" />}
+            hint="Active in sections"
+          />
+          <StatCard
+            label="Average"
+            value={`${overallAvg}%`}
+            hint="Best score per learner"
+            accent
+          />
+        </div>
+      </section>
 
-          {/* Quiz Results Table */}
-          <section className="w-full max-w-6xl">
-            <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
-              <CardHeader>
-                <CardTitle className="text-xl text-white">Quiz Results Overview</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {quizStats.length === 0 ? (
-                  <div className="text-center py-12">
-                    <FileText className="w-12 h-12 mx-auto mb-4 text-white/40" />
-                    <h3 className="text-lg font-medium text-white mb-2">No quiz results found</h3>
-                    <p className="text-white/60">No quizzes have been assigned to your enrolled sections yet</p>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="border-white/10">
-                          <TableHead className="text-white/60 font-medium">Quiz</TableHead>
-                          <TableHead className="text-white/60 font-medium">Section</TableHead>
-                          <TableHead className="text-white/60 font-medium">Created By</TableHead>
-                          <TableHead className="text-white/60 font-medium">Attempts</TableHead>
-                          <TableHead className="text-white/60 font-medium">Avg Score</TableHead>
-                          <TableHead className="text-white/60 font-medium">Last Attempt</TableHead>
-                          <TableHead className="text-white/60 font-medium">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {quizStats.map((stat) => (
-                          <TableRow key={`${stat.quiz.id}-${stat.section.id}`} className="border-white/10 hover:bg-white/5">
-                            <TableCell className="font-medium text-white">
-                              <div>
-                                <div className="font-semibold">{stat.quiz.title}</div>
-                                {cleanQuizDescription(stat.quiz.description) && (
-                                  <div className="text-xs text-white/60">
-                                    {cleanQuizDescription(stat.quiz.description)}
-                                  </div>
-                                )}
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-white/80">
-                              <div>
-                                <div className="font-medium">{stat.section.name}</div>
-                                <div className="text-xs text-white/60">
-                                  {stat.section.course.title}
-                                </div>
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-white/80">
-                              <div>
-                                <div className="font-medium">
-                                  {stat.quiz.professor.firstName} {stat.quiz.professor.lastName}
-                                </div>
-                                <div className="text-xs text-white/60">
-                                  {stat.quiz.professor.email}
-                                </div>
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-white/80">
-                              <div className="flex items-center gap-2">
-                                <div className="text-lg font-bold">{stat.totalAttempts}</div>
-                                <div className="text-xs text-white/40">
-                                  ({stat.uniqueStudents} students)
-                                </div>
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-white/80">
-                              <div className="text-lg font-bold">{stat.averageScore}%</div>
-                            </TableCell>
-                            <TableCell className="text-white/60 text-sm">
-                              {stat.lastAttempt ? stat.lastAttempt.toLocaleDateString() : 'No attempts'}
-                            </TableCell>
-                            <TableCell>
-                              <Button asChild variant="ghost" size="sm">
-                                <a href={`/dashboard/professor/quiz/${stat.quiz.id}/results`}>
-                                  <Eye className="w-4 h-4" />
-                                </a>
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </section>
-        </main>
-      </div>
-    </SidebarProvider>
+      <section className="mt-16">
+        <SectionHeading eyebrow="Detail" title="Per-section results" />
+        {quizStats.length === 0 ? (
+          <div className="mt-6">
+            <EmptyState
+              icon={<FileText className="h-5 w-5" />}
+              eyebrow="Empty"
+              title="No quizzes assigned yet."
+              description="Once a quiz is assigned to one of your sections, results will appear here."
+            />
+          </div>
+        ) : (
+          <div className="mt-6 paper paper-shadow overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Quiz</TableHead>
+                  <TableHead>Section</TableHead>
+                  <TableHead>Author</TableHead>
+                  <TableHead className="tnum">Attempts</TableHead>
+                  <TableHead className="tnum">Average</TableHead>
+                  <TableHead>Last attempt</TableHead>
+                  <TableHead className="text-right">View</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {quizStats.map((stat) => (
+                  <TableRow key={`${stat.quiz.id}-${stat.section.id}`}>
+                    <TableCell>
+                      <div className="flex flex-col">
+                        <span className="font-medium text-ink">
+                          {stat.quiz.title}
+                        </span>
+                        {cleanQuizDescription(stat.quiz.description) ? (
+                          <span className="text-xs text-ink-faint line-clamp-1">
+                            {cleanQuizDescription(stat.quiz.description)}
+                          </span>
+                        ) : null}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-col">
+                        <span className="font-medium text-ink">
+                          {stat.section.name}
+                        </span>
+                        <span className="text-xs text-ink-faint">
+                          {stat.section.course.title}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-col">
+                        <span className="text-sm text-ink">
+                          {stat.quiz.professor.firstName}{" "}
+                          {stat.quiz.professor.lastName}
+                        </span>
+                        <span className="text-xs text-ink-faint">
+                          {stat.quiz.professor.email}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="tnum">
+                      <div className="flex flex-col">
+                        <span className="font-medium text-ink">
+                          {stat.totalAttempts}
+                        </span>
+                        <span className="text-xs text-ink-faint">
+                          {stat.uniqueStudents} learners
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="tnum">
+                      <span className="font-display text-lg text-ink">
+                        {stat.averageScore}%
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-sm text-ink-muted tnum">
+                      {stat.lastAttempt
+                        ? stat.lastAttempt.toLocaleDateString()
+                        : "—"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button asChild variant="ghost" size="sm">
+                        <a
+                          href={withBasePath(
+                            `/dashboard/professor/quiz/${stat.quiz.id}/results`,
+                          )}
+                          aria-label="View detail"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </a>
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </section>
+    </AppShell>
   );
-} 
+}

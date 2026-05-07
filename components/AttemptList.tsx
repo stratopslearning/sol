@@ -1,7 +1,8 @@
 "use client";
 
-import { motion } from 'framer-motion';
-import { Badge } from '@/components/ui/badge';
+import { motion, useReducedMotion } from "framer-motion";
+
+import { Badge } from "@/components/ui/badge";
 
 interface Attempt {
   id: string;
@@ -20,39 +21,60 @@ interface AttemptListProps {
 }
 
 export function AttemptList({ attempts }: AttemptListProps) {
+  const reduced = useReducedMotion();
+
   if (attempts.length === 0) {
     return (
-      <div className="text-center py-8 text-white/60 animate-fade-in">
-        <div className="w-12 h-12 mx-auto mb-4 opacity-50 text-white/40">📝</div>
-        <p className="text-base font-medium text-white/80 mb-2">No recent attempts</p>
-        <div className="text-white/50 text-sm">Complete quizzes to see your attempts here.</div>
+      <div className="text-center py-10 px-4 flex flex-col gap-2 items-center">
+        <span className="eyebrow text-ink-faint">Empty</span>
+        <p
+          className="font-display text-ink"
+          style={{
+            fontSize: "1.25rem",
+            lineHeight: 1.25,
+            fontVariationSettings: '"opsz" 36',
+          }}
+        >
+          No attempts yet.
+        </p>
+        <p className="text-sm text-ink-muted max-w-sm leading-relaxed">
+          Complete a quiz from one of your sections — every attempt will appear
+          here, with the most recent first.
+        </p>
       </div>
     );
   }
 
   return (
-    <>
+    <ul className="divide-y divide-rule">
       {attempts.map((attempt, index) => (
-        <motion.div
+        <motion.li
           key={attempt.id}
-          initial={{ opacity: 0, y: 10 }}
+          initial={reduced ? false : { opacity: 0, y: 4 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: index * 0.1 }}
-          className="flex items-center justify-between p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
+          transition={{ delay: reduced ? 0 : index * 0.04, duration: 0.25 }}
+          className="flex items-center justify-between gap-3 px-4 py-3.5"
         >
-          <div className="flex-1">
-            <div className="text-sm font-medium text-white">
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-medium text-ink truncate">
               {attempt.quiz.title}
             </div>
-            <div className="text-xs text-white/60">
-              {attempt.section.name} • {attempt.percentage ?? 0}%
+            <div className="text-xs text-ink-muted truncate mt-0.5">
+              {attempt.section.name}
             </div>
           </div>
-          <Badge className={attempt.passed === true ? 'bg-green-600/20 text-green-400 border-green-600' : 'bg-red-600/20 text-red-400 border-red-600'}>
-            {attempt.passed === true ? 'Passed' : 'Failed'}
-          </Badge>
-        </motion.div>
+          <div className="flex items-center gap-3 shrink-0">
+            <span className="font-mono tnum text-sm text-ink">
+              {attempt.percentage ?? 0}%
+            </span>
+            <Badge
+              variant={attempt.passed === true ? "success" : "destructive"}
+            >
+              {attempt.passed === true ? "Passed" : "Failed"}
+            </Badge>
+          </div>
+        </motion.li>
       ))}
-    </>
+    </ul>
   );
 }

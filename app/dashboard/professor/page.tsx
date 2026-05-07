@@ -1,337 +1,332 @@
-import { getOrCreateUser } from '@/lib/getOrCreateUser';
-import { db } from '@/app/db';
-import { sections, professorSections, quizzes, attempts, users, quizSections } from '@/app/db/schema';
-import { eq, inArray } from 'drizzle-orm';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import ProfessorSidebar from '@/components/ProfessorSidebar';
-import { 
-  CalendarDays, 
-  CheckCircle, 
-  FileText, 
-  LogOut, 
-  BarChart2, 
-  Plus, 
-  Users, 
-  TrendingUp,
-  Clock,
+import { and, eq, inArray } from 'drizzle-orm';
+import {
+  CheckCircle,
   Download,
-  Layers
+  FileText,
+  Layers,
+  Plus,
+  TrendingUp,
+  Users,
 } from 'lucide-react';
-import { SignOutButton } from '@clerk/nextjs';
+
+import { db } from '@/app/db';
+import {
+  attempts,
+  professorSections,
+  quizSections,
+  quizzes,
+} from '@/app/db/schema';
 import ExportResultsWrapper from '@/components/ExportResultsWrapper';
 import ProfessorEnrollForm from '@/components/ProfessorEnrollForm';
+import { AppShell } from '@/components/layout/AppShell';
+import { PageHeader } from '@/components/layout/PageHeader';
+import { SectionHeading } from '@/components/layout/SectionHeading';
+import { EmptyState } from '@/components/patterns/EmptyState';
+import { StatCard } from '@/components/patterns/StatCard';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { activeOnly } from '@/lib/db/filters';
+import { withBasePath } from '@/lib/basePath';
+import { getOrCreateUser } from '@/lib/getOrCreateUser';
 
 export default async function ProfessorDashboard() {
   const user = await getOrCreateUser();
   if (!user || user.role !== 'PROFESSOR') return null;
 
-  // Fetch professor's section enrollments
   const professorEnrollments = await db.query.professorSections.findMany({
     where: eq(professorSections.professorId, user.id),
     with: {
-      section: {
-        with: {
-          course: true
-        }
-      }
-    }
+      section: { with: { course: true } },
+    },
   });
 
-  // Get section IDs for filtering
-  const sectionIds = professorEnrollments.map(e => e.sectionId);
+  const sectionIds = professorEnrollments.map((e) => e.sectionId);
 
-  // Quiz IDs assigned to any of the professor's sections (so dashboard shows stats for quizzes in their sections, not only created by them)
-  const sectionQuizLinks = sectionIds.length > 0
-    ? await db.query.quizSections.findMany({
-        where: inArray(quizSections.sectionId, sectionIds),
-      })
-    : [];
-  const assignedQuizIds = [...new Set(sectionQuizLinks.map((qs) => qs.quizId))];
+  const sectionQuizLinks =
+    sectionIds.length > 0
+      ? await db.query.quizSections.findMany({
+          where: inArray(quizSections.sectionId, sectionIds),
+        })
+      : [];
+  const assignedQuizIds = [
+    ...new Set(sectionQuizLinks.map((qs) => qs.quizId)),
+  ];
 
-  // Fetch quizzes assigned to professor's sections (so Analytics Overview reflects their sections)
-  const professorQuizzes = assignedQuizIds.length > 0
-    ? await db.query.quizzes.findMany({
-        where: inArray(quizzes.id, assignedQuizIds),
-        with: {
-          sectionAssignments: {
-            with: {
-              section: {
-                with: {
-                  course: true
-                }
-              }
-            }
+  const professorQuizzes =
+    assignedQuizIds.length > 0
+      ? await db.query.quizzes.findMany({
+          where: and(
+            inArray(quizzes.id, assignedQuizIds),
+            activeOnly(quizzes.deletedAt),
+          ),
+          with: {
+            sectionAssignments: {
+              with: { section: { with: { course: true } } },
+            },
+            attempts: true,
           },
-          attempts: true,
-        }
-      })
-    : [];
+        })
+      : [];
 
-  // Fetch recent attempts for these quizzes (submitted only for display)
-  const recentAttempts = professorQuizzes.length > 0
-    ? await db.query.attempts.findMany({
-        where: inArray(attempts.quizId, professorQuizzes.map(q => q.id)),
-        with: {
-          student: true,
-          quiz: {
-            with: {
-              sectionAssignments: {
-                with: {
-                  section: {
-                    with: {
-                      course: true
-                    }
-                  }
-                }
-              }
-            }
+  const recentAttempts =
+    professorQuizzes.length > 0
+      ? await db.query.attempts.findMany({
+          where: inArray(
+            attempts.quizId,
+            professorQuizzes.map((q) => q.id),
+          ),
+          with: {
+            student: true,
+            quiz: {
+              with: {
+                sectionAssignments: {
+                  with: { section: { with: { course: true } } },
+                },
+              },
+            },
+            section: { with: { course: true } },
           },
-          section: {
-            with: {
-              course: true
-            }
-          }
-        },
-        orderBy: (attempts, { desc }) => desc(attempts.submittedAt),
-        limit: 5,
-      })
-    : [];
+          orderBy: (attempts, { desc }) => desc(attempts.submittedAt),
+          limit: 5,
+        })
+      : [];
 
-  // Calculate stats (only submitted attempts count; average = avg of best score per student per quiz)
   const totalSections = professorEnrollments.length;
-  const activeQuizzes = professorQuizzes.filter(q => q.isActive).length;
-  const draftQuizzes = professorQuizzes.filter(q => !q.isActive).length;
-  const submittedAttemptsList = professorQuizzes.flatMap(q =>
-    q.attempts.filter((a) => a.submittedAt != null)
+  const activeQuizzes = professorQuizzes.filter((q) => q.isActive).length;
+  const draftQuizzes = professorQuizzes.filter((q) => !q.isActive).length;
+  const submittedAttemptsList = professorQuizzes.flatMap((q) =>
+    q.attempts.filter((a) => a.submittedAt != null),
   );
-  const totalStudents = new Set(submittedAttemptsList.map((a) => a.studentId)).size;
+  const totalStudents = new Set(submittedAttemptsList.map((a) => a.studentId))
+    .size;
   const totalAttempts = submittedAttemptsList.length;
-  // Best percentage per (student, quiz); then average those (one data point per student-quiz)
   const bestPerStudentQuiz: Record<string, number> = {};
   submittedAttemptsList.forEach((a) => {
     const key = `${a.studentId}:${a.quizId}`;
-    const pct = a.percentage ?? (a.maxScore ? Math.round(((a.score ?? 0) / a.maxScore) * 100) : 0);
-    if (bestPerStudentQuiz[key] == null || pct > bestPerStudentQuiz[key]) bestPerStudentQuiz[key] = pct;
+    const pct =
+      a.percentage ??
+      (a.maxScore ? Math.round(((a.score ?? 0) / a.maxScore) * 100) : 0);
+    if (
+      bestPerStudentQuiz[key] == null ||
+      pct > bestPerStudentQuiz[key]
+    ) {
+      bestPerStudentQuiz[key] = pct;
+    }
   });
   const bestPercentages = Object.values(bestPerStudentQuiz);
   const averageScore =
     bestPercentages.length > 0
-      ? Math.round(bestPercentages.reduce((sum, p) => sum + p, 0) / bestPercentages.length)
+      ? Math.round(
+          bestPercentages.reduce((sum, p) => sum + p, 0) /
+            bestPercentages.length,
+        )
       : 0;
 
   return (
-    <div className="min-h-screen w-screen bg-[#030303] flex">
-      {/* Sidebar */}
-      <ProfessorSidebar active="dashboard" />
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col py-10 px-4 md:px-8 overflow-x-hidden">
+    <AppShell role="professor" topbarEyebrow="Faculty" topbarTitle="Overview">
+      <PageHeader
+        eyebrow="Faculty"
+        title={
+          <>
+            Good to see you,{' '}
+            <em
+              className="text-brand"
+              style={{ fontVariationSettings: '"opsz" 96, "WONK" 1' }}
+            >
+              {user.firstName || user.email}.
+            </em>
+          </>
+        }
+        description="Your sections, your quizzes, and the work waiting for you today."
+        actions={
+          <Button asChild>
+            <a href={withBasePath('/dashboard/professor/quiz/new')}>
+              <Plus className="h-4 w-4" />
+              Compose quiz
+            </a>
+          </Button>
+        }
+      />
+
+      <div className="mt-10">
         <ProfessorEnrollForm />
-        <ExportResultsWrapper quizzes={professorQuizzes} />
-        
-        {/* Hero/Header */}
-        <section className="w-full max-w-7xl mx-auto mb-8">
-          <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">Welcome back, {user.firstName || user.email}!</h1>
-          <p className="text-white/60 text-lg">Here's your teaching overview</p>
-        </section>
-
-          {/* Analytics Section - Top */}
-          <section className="w-full max-w-7xl mx-auto mb-8">
-            <h2 className="text-xl font-semibold text-white mb-4">Analytics Overview</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-              <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-white/60">Enrolled Sections</CardTitle>
-                  <Layers className="h-4 w-4 text-blue-400" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-blue-400">{totalSections}</div>
-                  <p className="text-xs text-white/40">Your sections</p>
-                </CardContent>
-              </Card>
-
-              <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-white/60">Active Quizzes</CardTitle>
-                  <FileText className="h-4 w-4 text-green-400" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-green-400">{activeQuizzes}</div>
-                  <p className="text-xs text-white/40">Live quizzes</p>
-                </CardContent>
-              </Card>
-
-              <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-white/60">Draft Quizzes</CardTitle>
-                  <FileText className="h-4 w-4 text-yellow-400" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-yellow-400">{draftQuizzes}</div>
-                  <p className="text-xs text-white/40">Inactive quizzes</p>
-                </CardContent>
-              </Card>
-
-              <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-white/60">Total Students</CardTitle>
-                  <Users className="h-4 w-4 text-purple-400" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-purple-400">{totalStudents}</div>
-                  <p className="text-xs text-white/40">Enrolled students</p>
-                </CardContent>
-              </Card>
-
-              <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-white/60">Total Attempts</CardTitle>
-                  <CheckCircle className="h-4 w-4 text-orange-400" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-orange-400">{totalAttempts}</div>
-                  <p className="text-xs text-white/40">Quiz submissions</p>
-                </CardContent>
-              </Card>
-
-              <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-white/60">Avg Score</CardTitle>
-                  <TrendingUp className="h-4 w-4 text-emerald-400" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-emerald-400">{averageScore}%</div>
-                  <p className="text-xs text-white/40">Class average</p>
-                </CardContent>
-              </Card>
-            </div>
-          </section>
-
-          {/* Course & Quiz Creation Section - Side by Side */}
-          <section className="w-full max-w-7xl mx-auto mb-8">
-            <h2 className="text-xl font-semibold text-white mb-4">Quick Actions</h2>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Quiz Creation */}
-              <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
-                <CardHeader>
-                  <CardTitle className="text-lg text-white flex items-center gap-2">
-                    <FileText className="w-5 h-5" />
-                    Quiz Management
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <Button asChild className="flex items-center gap-2 w-full">
-                    <a href="/dashboard/professor/quiz/new">
-                      <Plus className="w-4 h-4" />
-                      Create New Quiz
-                    </a>
-                  </Button>
-                  <Button asChild variant="outline" className="flex items-center gap-2 w-full">
-                    <a href="/dashboard/professor/quiz-results">
-                      <TrendingUp className="w-4 h-4" />
-                      View All Results
-                    </a>
-                  </Button>
-                </CardContent>
-              </Card>
-            </div>
-          </section>
-
-          {/* Recent Activity & Export Section - Bottom */}
-          <section className="w-full max-w-7xl mx-auto">
-            <h2 className="text-xl font-semibold text-white mb-4">Recent Activity & Data Export</h2>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Recent Activity */}
-              <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
-                <CardHeader>
-                  <CardTitle className="text-lg text-white">Recent Submissions</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {recentAttempts.length > 0 ? (
-                    recentAttempts.map(attempt => (
-                      <div key={attempt.id} className="flex items-center justify-between p-3 rounded-lg bg-white/5">
-                        <div className="flex-1">
-                          <div className="text-sm font-medium text-white">
-                            {attempt.student.firstName} {attempt.student.lastName}
-                          </div>
-                          <div className="text-xs text-white/60">
-                            {attempt.quiz.title} • {attempt.section.course.title} • {attempt.percentage}%
-                          </div>
-                        </div>
-                        <Badge className={attempt.passed ? 'bg-green-600/20 text-green-400 border-green-600' : 'bg-red-600/20 text-red-400 border-red-600'}>
-                          {attempt.passed ? 'Passed' : 'Failed'}
-                        </Badge>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-center py-6 text-white/40">
-                      <FileText className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                      <p>No recent submissions</p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Export Results */}
-              <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
-                <CardHeader>
-                  <CardTitle className="text-lg text-white flex items-center gap-2">
-                    <Download className="w-5 h-5" />
-                    Export Quiz Results
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-white/60 text-sm mb-4">Export student results as CSV files</p>
-                  <ExportResultsWrapper quizzes={professorQuizzes} />
-                </CardContent>
-              </Card>
-            </div>
-          </section>
-
-          {/* Your Quizzes Section */}
-          <section className="w-full max-w-7xl mx-auto mt-8">
-            <h2 className="text-xl font-semibold text-white mb-4">Your Quizzes</h2>
-            <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
-              <CardContent className="p-6">
-                <div className="space-y-3">
-                  {professorQuizzes.slice(0, 5).map(quiz => (
-                    <div key={quiz.id} className="flex items-center justify-between p-3 rounded-lg bg-white/5">
-                      <div className="flex-1">
-                        <div className="text-sm font-medium text-white">{quiz.title}</div>
-                        <div className="text-xs text-white/60">
-                          {quiz.sectionAssignments[0]?.section.course.title || 'No Course'} • {quiz.attempts.length} attempts
-                        </div>
-                      </div>
-                      <Button asChild variant="ghost" size="sm">
-                        <a href={`/dashboard/professor/quiz/${quiz.id}/results`}>
-                          View Results
-                        </a>
-                      </Button>
-                    </div>
-                  ))}
-                  {professorQuizzes.length === 0 && (
-                    <div className="text-center py-6 text-white/40">
-                      <FileText className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                      <p>No quizzes created yet</p>
-                      <Button
-                        asChild
-                        variant="secondary"
-                        size="lg"
-                        className="mt-4 shadow rounded-lg font-semibold min-w-[180px] h-12 text-base flex items-center justify-center gap-2"
-                      >
-                        <a href="/dashboard/professor/quiz/new">
-                          <Plus className="w-5 h-5 mr-2" />
-                          Create Your First Quiz
-                        </a>
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </section>
-        </main>
       </div>
-    );
-} 
+
+      <section className="mt-12 flex flex-col gap-6">
+        <SectionHeading
+          eyebrow="At a glance"
+          title="The term, in numbers"
+          description="Aggregated across all the sections assigned to you."
+        />
+        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+          <StatCard
+            label="Sections"
+            value={totalSections}
+            icon={<Layers className="h-4 w-4" />}
+            hint="You teach"
+          />
+          <StatCard
+            label="Live quizzes"
+            value={activeQuizzes}
+            icon={<FileText className="h-4 w-4" />}
+            hint="Open to learners"
+          />
+          <StatCard
+            label="Drafts"
+            value={draftQuizzes}
+            icon={<FileText className="h-4 w-4" />}
+            hint="Not yet published"
+          />
+          <StatCard
+            label="Students"
+            value={totalStudents}
+            icon={<Users className="h-4 w-4" />}
+            hint="Have attempted"
+          />
+          <StatCard
+            label="Submissions"
+            value={totalAttempts}
+            icon={<CheckCircle className="h-4 w-4" />}
+            hint="All time"
+          />
+          <StatCard
+            label="Average"
+            value={`${averageScore}%`}
+            icon={<TrendingUp className="h-4 w-4" />}
+            hint="Best per learner per quiz"
+            accent
+          />
+        </div>
+      </section>
+
+      <section className="mt-16 grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <div className="lg:col-span-7 flex flex-col gap-6">
+          <SectionHeading
+            eyebrow="Recent submissions"
+            title="What just came in"
+            actions={
+              <Button asChild variant="ghost" size="sm">
+                <a href={withBasePath('/dashboard/professor/quiz-results')}>
+                  See all
+                </a>
+              </Button>
+            }
+          />
+          {recentAttempts.length > 0 ? (
+            <ul className="paper paper-shadow divide-y divide-rule">
+              {recentAttempts.map((attempt) => (
+                <li
+                  key={attempt.id}
+                  className="flex items-center justify-between gap-4 px-5 py-4"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium text-ink truncate">
+                      {attempt.student.firstName} {attempt.student.lastName}
+                    </div>
+                    <div className="text-xs text-ink-muted truncate mt-0.5">
+                      {attempt.quiz.title} ·{' '}
+                      {attempt.section.course.title}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono tnum text-sm text-ink">
+                      {attempt.percentage ?? 0}%
+                    </span>
+                    <Badge
+                      variant={attempt.passed ? 'success' : 'destructive'}
+                    >
+                      {attempt.passed ? 'Passed' : 'Failed'}
+                    </Badge>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <EmptyState
+              icon={<FileText className="h-5 w-5" />}
+              title="Nothing submitted yet."
+              description="When learners begin completing your quizzes, their work will show up here in real time."
+            />
+          )}
+        </div>
+
+        <div className="lg:col-span-5 flex flex-col gap-6">
+          <SectionHeading
+            eyebrow="Export"
+            title="Take it with you"
+            description="Download attempt data as CSV for your gradebook."
+          />
+          <div className="paper paper-shadow p-5 flex flex-col gap-4">
+            <div className="flex items-center gap-2 text-ink-muted">
+              <Download className="h-4 w-4" />
+              <span className="text-sm">Export quiz results</span>
+            </div>
+            <p className="text-sm text-ink-muted leading-relaxed">
+              Pick a quiz, download the CSV. Includes per-question scores,
+              timestamps, and AI-grader reasoning.
+            </p>
+            <ExportResultsWrapper quizzes={professorQuizzes} />
+          </div>
+        </div>
+      </section>
+
+      <section className="mt-16 flex flex-col gap-6">
+        <SectionHeading
+          eyebrow="Your quizzes"
+          title="Five most recent"
+          actions={
+            <Button asChild variant="ghost" size="sm">
+              <a href={withBasePath('/dashboard/professor/quizzes')}>
+                Open library
+              </a>
+            </Button>
+          }
+        />
+        {professorQuizzes.length > 0 ? (
+          <ul className="paper paper-shadow divide-y divide-rule">
+            {professorQuizzes.slice(0, 5).map((quiz) => (
+              <li
+                key={quiz.id}
+                className="flex items-center justify-between gap-4 px-5 py-4"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium text-ink truncate">
+                    {quiz.title}
+                  </div>
+                  <div className="text-xs text-ink-muted truncate mt-0.5">
+                    {quiz.sectionAssignments[0]?.section.course.title ||
+                      'No course'}{' '}
+                    · {quiz.attempts.length} attempts
+                  </div>
+                </div>
+                <Button asChild variant="outline" size="sm">
+                  <a
+                    href={withBasePath(
+                      `/dashboard/professor/quiz/${quiz.id}/results`,
+                    )}
+                  >
+                    Results
+                  </a>
+                </Button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <EmptyState
+            icon={<FileText className="h-5 w-5" />}
+            title="No quizzes yet."
+            description="Compose your first quiz to begin assigning work to your sections. Every quiz versions as you edit."
+            actions={
+              <Button asChild size="lg">
+                <a href={withBasePath('/dashboard/professor/quiz/new')}>
+                  <Plus className="h-4 w-4" />
+                  Compose your first quiz
+                </a>
+              </Button>
+            }
+          />
+        )}
+      </section>
+    </AppShell>
+  );
+}

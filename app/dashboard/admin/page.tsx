@@ -1,124 +1,164 @@
+import { FileText, Layers, Users as UsersIcon } from 'lucide-react';
+
 import { db } from '@/app/db';
-import { courses, sections, users } from '@/app/db/schema';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { SidebarProvider } from '@/components/ui/sidebar';
-import { notFound } from 'next/navigation';
-import { Plus, Users as UsersIcon, Layers, LogOut, User, FileText } from 'lucide-react';
-import Link from 'next/link';
+import { courses, sections } from '@/app/db/schema';
 import { CourseFormModal } from '@/components/admin/CourseFormModal';
-import { Badge } from '@/components/ui/badge';
-import { SignOutButton } from '@clerk/nextjs';
-import AdminSidebar from '@/components/AdminSidebar';
+import { AppShell } from '@/components/layout/AppShell';
+import { PageHeader } from '@/components/layout/PageHeader';
+import { SectionHeading } from '@/components/layout/SectionHeading';
+import { EmptyState } from '@/components/patterns/EmptyState';
+import { StatCard } from '@/components/patterns/StatCard';
+import { activeOnly } from '@/lib/db/filters';
+import { withBasePath } from '@/lib/basePath';
+import { requireAdmin } from '@/lib/auth';
+
+function getCourseCardLayoutClass(courseCount: number, index: number) {
+  const isLast = index === courseCount - 1;
+  const hasSingleMdRemainder = courseCount > 1 && courseCount % 2 === 1;
+  const hasSingleLgRemainder = courseCount > 3 && courseCount % 3 === 1;
+
+  if (!isLast) return '';
+
+  return [
+    hasSingleMdRemainder ? 'md:col-span-2' : '',
+    hasSingleLgRemainder ? 'lg:col-span-1 lg:col-start-2' : 'lg:col-span-1',
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
 
 export default async function AdminDashboardPage() {
-  // Fetch all courses, sections, and users for analytics
-  const allCourses = await db.query.courses.findMany();
-  const allSections = await db.query.sections.findMany();
-  const allUsers = await db.query.users.findMany();
+  // Defense in depth: middleware also enforces admin-only on /dashboard/admin,
+  // but RSCs that read from the DB should re-check so a misconfigured matcher
+  // can never leak data.
+  await requireAdmin();
+
+  const [allCourses, allSections, allUsers] = await Promise.all([
+    db.query.courses.findMany({ where: activeOnly(courses.deletedAt) }),
+    db.query.sections.findMany({ where: activeOnly(sections.deletedAt) }),
+    db.query.users.findMany(),
+  ]);
+
+  const studentCount = allUsers.filter((u) => u.role === 'STUDENT').length;
+  const professorCount = allUsers.filter((u) => u.role === 'PROFESSOR').length;
 
   return (
-    <SidebarProvider>
-      <div className="min-h-screen w-screen bg-[#030303] flex">
-        {/* Sidebar */}
-        <AdminSidebar active="dashboard" />
-        {/* Main Content */}
-        <main className="flex-1 flex flex-col py-10 px-4 md:px-8 overflow-x-hidden">
-          {/* Header */}
-          <section className="w-full max-w-7xl mx-auto mb-8">
-            <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">Welcome back, Admin!</h1>
-            <p className="text-white/60 text-lg">Here's your platform overview</p>
-          </section>
+    <AppShell role="admin" topbarEyebrow="Administration" topbarTitle="Overview">
+      <PageHeader
+        eyebrow="Administration"
+        title="Institution overview."
+        description="A snapshot of the catalog, the cohort, and the people who keep both running."
+      />
 
-          {/* Analytics Section */}
-          <section className="w-full max-w-7xl mx-auto mb-8">
-            <h2 className="text-xl font-semibold text-white mb-4">Analytics Overview</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-              <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-white/60">Total Courses</CardTitle>
-                  <FileText className="h-4 w-4 text-blue-400" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-blue-400">{allCourses.length}</div>
-                  <p className="text-xs text-white/40">Courses</p>
-                </CardContent>
-              </Card>
-              <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-white/60">Total Sections</CardTitle>
-                  <Layers className="h-4 w-4 text-green-400" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-green-400">{allSections.length}</div>
-                  <p className="text-xs text-white/40">Sections</p>
-                </CardContent>
-              </Card>
-              <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-white/60">Total Users</CardTitle>
-                  <UsersIcon className="h-4 w-4 text-purple-400" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-purple-400">{allUsers.length}</div>
-                  <p className="text-xs text-white/40">Users</p>
-                </CardContent>
-              </Card>
-            </div>
-          </section>
+      <section className="mt-12 flex flex-col gap-6">
+        <SectionHeading
+          eyebrow="At a glance"
+          title="Catalog & cohort"
+          description="Counts across every term, every section, every role."
+        />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard
+            label="Courses"
+            value={allCourses.length}
+            hint="All published and draft courses"
+            icon={<FileText className="h-4 w-4" />}
+          />
+          <StatCard
+            label="Sections"
+            value={allSections.length}
+            hint="Active sections across all terms"
+            icon={<Layers className="h-4 w-4" />}
+          />
+          <StatCard
+            label="Students"
+            value={studentCount}
+            hint={`${professorCount} faculty also enrolled`}
+            icon={<UsersIcon className="h-4 w-4" />}
+          />
+          <StatCard
+            label="Total people"
+            value={allUsers.length}
+            hint="Students, faculty, administrators"
+            icon={<UsersIcon className="h-4 w-4" />}
+            accent
+          />
+        </div>
+      </section>
 
-          {/* Quick Actions */}
-          <section className="w-full max-w-7xl mx-auto mb-8">
-            <h2 className="text-xl font-semibold text-white mb-4">Quick Actions</h2>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Course Creation */}
-              <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
-                <CardHeader>
-                  <CardTitle className="text-lg text-white flex items-center gap-2">
-                    <FileText className="w-5 h-5" />
-                    Course Management
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <CourseFormModal mode="create" />
-                </CardContent>
-              </Card>
-              {/* Add more quick actions here if needed */}
-            </div>
-          </section>
+      <section className="mt-16 flex flex-col gap-6">
+        <SectionHeading
+          eyebrow="Quick actions"
+          title="What needs doing"
+          actions={<CourseFormModal mode="create" />}
+        />
+        <p className="text-sm text-ink-muted max-w-[60ch]">
+          Create a new course, then assign sections from the{' '}
+          <a
+            href={withBasePath('/dashboard/admin/sections')}
+            className="text-brand underline underline-offset-4 decoration-brand-soft hover:decoration-brand"
+          >
+            sections page
+          </a>
+          . Bulk import students from <em>People</em> when registrations open.
+        </p>
+      </section>
 
-          {/* Courses List */}
-          <section className="w-full max-w-7xl mx-auto">
-            <h2 className="text-xl font-semibold text-white mb-4">All Courses</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {allCourses.map(course => {
-                const safeCourse = {
-                  ...course,
-                  description: course.description ?? undefined,
-                };
-                return (
-                  <Card key={course.id} className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
-                    <CardHeader className="flex flex-row items-center justify-between">
-                      <CardTitle className="text-lg text-white">{course.title}</CardTitle>
-                      {/* Removed link to /dashboard/admin/courses/[course.id] */}
-                      <FileText className="w-4 h-4 text-blue-400 ml-2" />
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex flex-col gap-2">
-                        <span className="text-white/60 text-sm">{course.description}</span>
-                        <div className="flex gap-2 mt-4">
-                          {/* Removed edit button */}
-                          <CourseFormModal mode="delete" course={safeCourse} />
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          </section>
-        </main>
-      </div>
-    </SidebarProvider>
+      <section className="mt-16 flex flex-col gap-6">
+        <SectionHeading eyebrow="Catalog" title="All courses" />
+
+        {allCourses.length === 0 ? (
+          <EmptyState
+            icon={<FileText className="h-5 w-5" />}
+            eyebrow="No courses yet"
+            title="The catalog is empty."
+            description="Create your first course to begin building sections and quizzes for the term."
+            actions={<CourseFormModal mode="create" />}
+          />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {allCourses.map((course, index) => {
+              const safeCourse = {
+                ...course,
+                description: course.description ?? undefined,
+              };
+              return (
+                <article
+                  key={course.id}
+                  className={`paper paper-shadow p-6 flex flex-col gap-3 hover:bg-surface-sunken/40 transition-colors ${getCourseCardLayoutClass(
+                    allCourses.length,
+                    index,
+                  )}`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="font-mono tnum text-xs text-ink-faint">
+                      {String(course.id).padStart(3, '0')}
+                    </span>
+                    <FileText className="h-4 w-4 text-brand" />
+                  </div>
+                  <h3
+                    className="font-display text-ink"
+                    style={{
+                      fontSize: '1.25rem',
+                      lineHeight: 1.25,
+                      fontVariationSettings: '"opsz" 36',
+                    }}
+                  >
+                    {course.title}
+                  </h3>
+                  {course.description ? (
+                    <p className="text-sm text-ink-muted leading-relaxed line-clamp-3">
+                      {course.description}
+                    </p>
+                  ) : null}
+                  <div className="mt-auto pt-3">
+                    <CourseFormModal mode="delete" course={safeCourse} />
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </section>
+    </AppShell>
   );
-} 
+}

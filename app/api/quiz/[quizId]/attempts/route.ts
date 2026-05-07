@@ -1,16 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
 import { db } from '@/app/db';
 import { attempts, assignments, quizzes } from '@/app/db/schema';
 import { eq, and } from 'drizzle-orm';
+import { getOrCreateUser } from '@/lib/getOrCreateUser';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(
   req: NextRequest,
   context: { params: Promise<{ quizId: string }> }
 ) {
   try {
-    const { userId } = await auth();
-    if (!userId) {
+    const user = await getOrCreateUser();
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -23,7 +25,26 @@ export async function GET(
       return NextResponse.json({ error: 'Assignment ID is required' }, { status: 400 });
     }
 
-    // Get all attempts for this assignment
+    // Authorization: the assignment must belong to the caller (or caller must be
+    // a privileged role). This prevents IDOR where one student reads another's attempts.
+    const assignment = await db.query.assignments.findFirst({
+      where: and(
+        eq(assignments.id, assignmentId),
+        eq(assignments.quizId, quizId),
+      ),
+    });
+    if (!assignment) {
+      return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+    }
+
+    const isOwner = assignment.studentId === user.id;
+    const isPrivileged = user.role === 'ADMIN' || user.role === 'PROFESSOR';
+    if (!isOwner && !isPrivileged) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    // Get all attempts for this assignment (already scoped by assignmentId, which
+    // we've verified above).
     const allAttempts = await db.query.attempts.findMany({
       where: and(
         eq(attempts.assignmentId, assignmentId),
@@ -38,8 +59,10 @@ export async function GET(
 
     // Calculate best score
     const bestScore = Math.max(...allAttempts.map(a => a.score || 0));
-    const maxScore = allAttempts[0]?.maxScore || 0;
-    const bestPercentage = Math.round((bestScore / maxScore) * 100);
+    const candidateMaxScore = allAttempts.find(a => a.maxScore)?.maxScore || 0;
+    const bestPercentage = candidateMaxScore > 0
+      ? Math.round((bestScore / candidateMaxScore) * 100)
+      : 0;
 
     // Get quiz details for max attempts
     const quiz = await db.query.quizzes.findFirst({

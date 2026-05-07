@@ -1,10 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
-import { db } from '@/app/db';
-import { quizzes, assignments, attempts, quizSections, studentSections } from '@/app/db/schema';
 import { eq, and, inArray } from 'drizzle-orm';
+import { z } from 'zod';
+
+import { db } from '@/app/db';
+import {
+  assignments,
+  attempts,
+  quizSections,
+  quizzes,
+  studentSections,
+} from '@/app/db/schema';
+import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
+import { activeOnly } from '@/lib/db/filters';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import { normalizeDatabaseDate } from '@/lib/utils';
+
+export const dynamic = 'force-dynamic';
+
+const startBodySchema = z.object({
+  assignmentId: z.string().uuid(),
+});
 
 export async function POST(req: NextRequest, context: { params: Promise<{ quizId: string }> }) {
   const params = await context.params;
@@ -15,7 +30,26 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { assignmentId } = await req.json();
+    // Cheap call but it does write to attempts; rate-limit per user to stop a
+    // hot loop from spamming attempt rows.
+    const limited = await enforceRateLimit({
+      key: `start:${user.id}`,
+      limit: 60,
+      windowMs: 60_000,
+      prefix: 'rl',
+      message: 'Too many quiz start requests. Please wait a moment.',
+    });
+    if (limited) return limited;
+
+    const rawBody = await req.json().catch(() => null);
+    const parseResult = startBodySchema.safeParse(rawBody);
+    if (!parseResult.success) {
+      return NextResponse.json(
+        { error: 'Invalid request body', details: parseResult.error.errors },
+        { status: 400 },
+      );
+    }
+    const { assignmentId } = parseResult.data;
 
     // Verify the assignment belongs to the user
     const assignment = await db.query.assignments.findFirst({
@@ -30,12 +64,18 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
       return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
     }
 
-    // Get quiz details
+    // Get quiz details. Soft-deleted quizzes are presented as not-found.
     const quiz = await db.query.quizzes.findFirst({
-      where: eq(quizzes.id, quizId),
+      where: and(eq(quizzes.id, quizId), activeOnly(quizzes.deletedAt)),
     });
     if (!quiz) {
       return NextResponse.json({ error: 'Quiz not found' }, { status: 404 });
+    }
+    if (!quiz.isActive) {
+      return NextResponse.json(
+        { error: 'This quiz is no longer available.', quizArchived: true },
+        { status: 400 },
+      );
     }
 
     // Validate quiz availability dates
@@ -87,51 +127,60 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
       return NextResponse.json({ error: 'No valid section found for this quiz/assignment' }, { status: 400 });
     }
 
-    // Check attempt count against maxAttempts
+    // Load every attempt for this assignment so we can separate submitted (count
+    // toward the cap) from in-progress (resumable but never counted twice).
     const existingAttempts = await db.query.attempts.findMany({
       where: and(
         eq(attempts.assignmentId, assignmentId),
         eq(attempts.studentId, user.id)
       ),
     });
-    const attemptCount = existingAttempts.length;
+    const submittedAttempts = existingAttempts.filter((a) => a.submittedAt != null);
+    const inProgressAttempt = existingAttempts.find((a) => !a.submittedAt);
 
-    if (attemptCount >= quiz.maxAttempts) {
-      return NextResponse.json({
-        error: `Maximum attempts (${quiz.maxAttempts}) reached for this quiz. You cannot retake this quiz.`,
-        maxAttemptsReached: true
-      }, { status: 400 });
-    }
-
-    // Check if there's an in-progress attempt (started but not submitted)
-    const inProgressAttempt = existingAttempts.find(a => !a.submittedAt);
+    // If a resumable in-progress attempt exists, return it without resetting the
+    // timer. Resetting would let a student bypass the server-side time limit by
+    // simply restarting the quiz after the original window expired.
     if (inProgressAttempt) {
-      let startedAt = inProgressAttempt.startedAt;
+      // Edge case: max submitted attempts already reached but there is still
+      // an in-progress row. Submitting it would be rejected by the submit
+      // route, so refuse to resume instead of misleading the student.
+      if (submittedAttempts.length >= quiz.maxAttempts) {
+        return NextResponse.json(
+          {
+            error: `Maximum attempts (${quiz.maxAttempts}) reached for this quiz. You cannot retake this quiz.`,
+            maxAttemptsReached: true,
+          },
+          { status: 400 },
+        );
+      }
 
-      // If the quiz has a time limit and the attempt was started long ago (e.g. student
-      // left and came back), the server would reject submit due to "time limit exceeded"
-      // while the client timer shows time left. Reset startedAt so the attempt gets a
-      // fresh timer when the student resumes.
+      const startedAt = inProgressAttempt.startedAt;
       const timeLimitMinutes = quiz.timeLimit ?? null;
+      let timeLimitExceeded = false;
       if (timeLimitMinutes != null) {
         const elapsedMs = now.getTime() - inProgressAttempt.startedAt.getTime();
         const elapsedMinutes = elapsedMs / (60 * 1000);
-        if (elapsedMinutes >= timeLimitMinutes) {
-          const [updated] = await db
-            .update(attempts)
-            .set({ startedAt: now })
-            .where(eq(attempts.id, inProgressAttempt.id))
-            .returning({ startedAt: attempts.startedAt });
-          startedAt = updated?.startedAt ?? now;
-        }
+        timeLimitExceeded = elapsedMinutes >= timeLimitMinutes;
       }
 
       return NextResponse.json({
         success: true,
         attemptId: inProgressAttempt.id,
         startedAt: startedAt instanceof Date ? startedAt.toISOString() : startedAt,
-        message: 'Resuming existing attempt'
+        timeLimitExceeded,
+        message: timeLimitExceeded
+          ? 'Resuming attempt — time limit already exceeded; submit immediately.'
+          : 'Resuming existing attempt',
       });
+    }
+
+    // No resumable attempt: enforce the cap on the count of *submitted* attempts.
+    if (submittedAttempts.length >= quiz.maxAttempts) {
+      return NextResponse.json({
+        error: `Maximum attempts (${quiz.maxAttempts}) reached for this quiz. You cannot retake this quiz.`,
+        maxAttemptsReached: true
+      }, { status: 400 });
     }
 
     // Create a new attempt record to track the start time

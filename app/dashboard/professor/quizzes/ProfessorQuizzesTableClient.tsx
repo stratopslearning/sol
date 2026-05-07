@@ -1,22 +1,14 @@
 "use client";
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import { FileText, Plus, TrendingUp, Users } from "lucide-react";
+
+import { QuizActions } from "@/components/quiz/QuizActions";
+import { EmptyState } from "@/components/patterns/EmptyState";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Pagination,
   PaginationContent,
@@ -24,19 +16,30 @@ import {
   PaginationLink,
   PaginationNext,
   PaginationPrevious,
-} from '@/components/ui/pagination';
-import { Badge } from '@/components/ui/badge';
-import { FileText, Plus, TrendingUp, Users } from 'lucide-react';
-import Link from 'next/link';
-import { QuizActions } from '@/components/quiz/QuizActions';
-import { useMemo, useState } from 'react';
+} from "@/components/ui/pagination";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { withBasePath } from "@/lib/basePath";
 
 const ROWS_PER_PAGE = 15;
 
-function getStatusBadge(status: 'Active' | 'Draft' | 'Closed') {
-  if (status === 'Active') return <Badge className="bg-green-600/20 text-green-400 border-green-600">Active</Badge>;
-  if (status === 'Draft') return <Badge className="bg-yellow-600/20 text-yellow-400 border-yellow-600">Draft</Badge>;
-  return <Badge className="bg-gray-600/20 text-gray-300 border-gray-600">Closed</Badge>;
+function getStatusBadge(status: "Active" | "Draft" | "Closed") {
+  if (status === "Active") return <Badge variant="success">Active</Badge>;
+  if (status === "Draft") return <Badge variant="warning">Draft</Badge>;
+  return <Badge variant="outline">Closed</Badge>;
 }
 
 export default function ProfessorQuizzesTableClient({
@@ -46,210 +49,254 @@ export default function ProfessorQuizzesTableClient({
   quizzesWithStats: any[];
   sections: { id: string; name: string }[];
 }) {
-  const [sectionFilter, setSectionFilter] = useState<string>('ALL');
-  const [search, setSearch] = useState('');
+  const [sectionFilter, setSectionFilter] = useState<string>("ALL");
+  const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
 
   const filteredQuizzes = useMemo(() => {
-    return quizzesWithStats.filter(quiz => {
-      const matchesSearch = !search || quiz.title.toLowerCase().includes(search.toLowerCase());
-      const sectionNames = quiz.sectionAssignments?.map((sa: any) => sa.section?.name).filter(Boolean) ?? [];
-      const sectionIds = quiz.sectionAssignments?.map((sa: any) => sa.section?.id).filter(Boolean) ?? [];
+    return quizzesWithStats.filter((quiz) => {
+      const matchesSearch =
+        !search || quiz.title.toLowerCase().includes(search.toLowerCase());
+      const sectionIds =
+        quiz.sectionAssignments
+          ?.map((sa: any) => sa.section?.id)
+          .filter(Boolean) ?? [];
       const matchesSection =
-        sectionFilter === 'ALL' || sectionIds.includes(sectionFilter);
+        sectionFilter === "ALL" || sectionIds.includes(sectionFilter);
       return matchesSearch && matchesSection;
     });
   }, [quizzesWithStats, search, sectionFilter]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredQuizzes.length / ROWS_PER_PAGE));
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredQuizzes.length / ROWS_PER_PAGE),
+  );
   const currentPage = Math.min(page, totalPages);
   const paginatedQuizzes = useMemo(() => {
     const start = (currentPage - 1) * ROWS_PER_PAGE;
     return filteredQuizzes.slice(start, start + ROWS_PER_PAGE);
   }, [filteredQuizzes, currentPage]);
 
-  const resetPage = () => setPage(1);
+  useEffect(() => {
+    setPage(1);
+  }, [search, sectionFilter]);
 
   if (quizzesWithStats.length === 0) {
     return (
-      <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10">
-        <CardHeader>
-          <CardTitle className="text-xl text-white">Quiz Management</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center py-12">
-            <FileText className="w-12 h-12 mx-auto mb-4 text-white/40" />
-            <h3 className="text-lg font-medium text-white mb-2">No quizzes available</h3>
-            <p className="text-white/60 mb-6">No quizzes have been assigned to your enrolled sections yet</p>
-            <Button asChild>
-              <Link href="/dashboard/professor/quiz/new">
-                <Plus className="w-4 h-4 mr-2" />
-                Create Your First Quiz
-              </Link>
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      <EmptyState
+        icon={<FileText className="h-5 w-5" />}
+        eyebrow="Empty"
+        title="No quizzes assigned yet."
+        description="Compose your first quiz, or wait until an administrator assigns one to a section you teach."
+        actions={
+          <Button asChild>
+            <Link href="/dashboard/professor/quiz/new">
+              <Plus className="h-4 w-4" />
+              Compose quiz
+            </Link>
+          </Button>
+        }
+      />
     );
   }
 
   return (
-    <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10">
-      <CardHeader>
-        <CardTitle className="text-xl text-white">Quiz Management</CardTitle>
-        <div className="flex flex-col md:flex-row gap-4 mt-4">
-          <div className="w-full md:w-48">
-            <Select
-              value={sectionFilter}
-              onValueChange={v => {
-                setSectionFilter(v);
-                resetPage();
-              }}
-            >
-              <SelectTrigger className="w-full border-white/20 bg-white dark:bg-[#18181b] text-black dark:text-white rounded-md px-3 py-2">
-                <SelectValue placeholder="All sections" />
-              </SelectTrigger>
-              <SelectContent className="border-white/20 bg-white dark:bg-[#18181b] text-black dark:text-white rounded-md">
-                <SelectItem value="ALL">All sections</SelectItem>
-                {sections.map(s => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex-1">
-            <Input
-              type="text"
-              placeholder="Search by quiz title..."
-              value={search}
-              onChange={e => {
-                setSearch(e.target.value);
-                resetPage();
-              }}
-              className="w-full bg-white/5 border-white/20 text-white"
-            />
-          </div>
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col md:flex-row gap-3">
+        <div className="md:w-56">
+          <Select
+            value={sectionFilter}
+            onValueChange={(v) => setSectionFilter(v)}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="All sections" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All sections</SelectItem>
+              {sections.map((s) => (
+                <SelectItem key={s.id} value={s.id}>
+                  {s.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-      </CardHeader>
-      <CardContent>
+        <Input
+          type="search"
+          placeholder="Search by quiz title…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="flex-1"
+        />
+      </div>
+
+      <div className="paper paper-shadow overflow-hidden">
         <div className="overflow-x-auto">
-          <Table>
+          <Table className="table-fixed min-w-[1100px]">
+            <colgroup>
+              <col className="w-[20%]" />
+              <col className="w-[8%]" />
+              <col className="w-[18%]" />
+              <col className="w-[8%]" />
+              <col className="w-[9%]" />
+              <col className="w-[9%]" />
+              <col className="w-[9%]" />
+              <col className="w-[10%]" />
+              <col className="w-[9%]" />
+            </colgroup>
             <TableHeader>
-              <TableRow className="border-white/10">
-                <TableHead className="text-white/60 font-medium">Quiz Title</TableHead>
-                <TableHead className="text-white/60 font-medium">Type</TableHead>
-                <TableHead className="text-white/60 font-medium">Section(s)</TableHead>
-                <TableHead className="text-white/60 font-medium">Status</TableHead>
-                <TableHead className="text-white/60 font-medium">Students</TableHead>
-                <TableHead className="text-white/60 font-medium">Attempts</TableHead>
-                <TableHead className="text-white/60 font-medium">Avg Score</TableHead>
-                <TableHead className="text-white/60 font-medium">Created</TableHead>
-                <TableHead className="text-white/60 font-medium">Actions</TableHead>
+              <TableRow>
+                <TableHead>Title</TableHead>
+                <TableHead>Origin</TableHead>
+                <TableHead>Sections</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="tnum">Learners</TableHead>
+                <TableHead className="tnum">Attempts</TableHead>
+                <TableHead className="tnum">Average</TableHead>
+                <TableHead>Created</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {paginatedQuizzes.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center text-white/60 py-8">
-                    No quizzes found.
+                  <TableCell
+                    colSpan={9}
+                    className="text-center text-ink-muted py-8"
+                  >
+                    No quizzes match your filters.
                   </TableCell>
                 </TableRow>
               ) : (
-                paginatedQuizzes.map(quiz => (
-                  <TableRow key={quiz.id} className="border-white/10 hover:bg-white/5">
-                    <TableCell className="font-medium text-white">
-                      <div>
-                        <div className="font-semibold">{quiz.title}</div>
-                        <div className="text-xs text-white/60">{quiz.questions?.length ?? 0} questions</div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-white/80">
-                      <Badge
-                        variant={quiz.isCreatedByProfessor ? 'default' : 'secondary'}
-                        className={
-                          quiz.isCreatedByProfessor
-                            ? 'bg-blue-600/20 text-blue-400 border-blue-600'
-                            : 'bg-purple-600/20 text-purple-400 border-purple-600'
-                        }
-                      >
-                        {quiz.isCreatedByProfessor ? 'Created' : 'Assigned'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-white/80 text-sm">
-                      {quiz.sectionAssignments?.length > 0
-                        ? quiz.sectionAssignments.map((sa: any) => sa.section?.name).filter(Boolean).join(', ')
-                        : 'No Section'}
-                    </TableCell>
-                    <TableCell>{getStatusBadge(quiz.isActive ? 'Active' : 'Draft')}</TableCell>
-                    <TableCell className="text-white/80">
-                      <div className="flex items-center gap-1">
-                        <Users className="w-4 h-4" />
-                        {quiz.uniqueStudents}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-white/80">{quiz.totalAttempts}</TableCell>
-                    <TableCell className="text-white/80">
-                      <div className="flex items-center gap-1">
-                        <TrendingUp className="w-4 h-4" />
-                        {quiz.averageScore}%
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-white/60 text-sm">
-                      {quiz.createdAt ? new Date(quiz.createdAt).toLocaleDateString() : '—'}
-                    </TableCell>
-                    <TableCell>
-                      <QuizActions quizId={quiz.id} isActive={quiz.isActive} />
-                    </TableCell>
-                  </TableRow>
-                ))
+                paginatedQuizzes.map((quiz) => {
+                  const sectionLabel =
+                    quiz.sectionAssignments?.length > 0
+                      ? quiz.sectionAssignments
+                          .map((sa: any) => sa.section?.name)
+                          .filter(Boolean)
+                          .join(", ")
+                      : "—";
+                  return (
+                    <TableRow key={quiz.id}>
+                      <TableCell className="align-top">
+                        <div className="flex flex-col min-w-0">
+                          <span
+                            className="font-medium text-ink truncate"
+                            title={quiz.title}
+                          >
+                            {quiz.title}
+                          </span>
+                          <span className="text-xs text-ink-faint tnum">
+                            {quiz.questions?.length ?? 0} questions
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="align-top">
+                        <Badge
+                          variant={
+                            quiz.isCreatedByProfessor ? "default" : "accent"
+                          }
+                        >
+                          {quiz.isCreatedByProfessor ? "Created" : "Assigned"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm text-ink-muted align-top">
+                        <span
+                          className="block truncate"
+                          title={sectionLabel}
+                        >
+                          {sectionLabel}
+                        </span>
+                      </TableCell>
+                      <TableCell className="align-top">
+                        {getStatusBadge(quiz.isActive ? "Active" : "Draft")}
+                      </TableCell>
+                      <TableCell className="tnum align-top">
+                        <span className="inline-flex items-center gap-1.5">
+                          <Users className="h-3.5 w-3.5 text-ink-faint" />
+                          {quiz.uniqueStudents}
+                        </span>
+                      </TableCell>
+                      <TableCell className="tnum align-top">
+                        {quiz.totalAttempts}
+                      </TableCell>
+                      <TableCell className="tnum align-top">
+                        <span className="inline-flex items-center gap-1.5">
+                          <TrendingUp className="h-3.5 w-3.5 text-ink-faint" />
+                          {quiz.averageScore}%
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-sm text-ink-muted tnum align-top">
+                        {quiz.createdAt
+                          ? new Date(quiz.createdAt).toLocaleDateString()
+                          : "—"}
+                      </TableCell>
+                      <TableCell className="text-right align-top">
+                        <div className="flex items-center justify-end">
+                          <QuizActions
+                            quizId={quiz.id}
+                            isActive={quiz.isActive}
+                          />
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               )}
             </TableBody>
           </Table>
         </div>
-        {totalPages > 1 && (
-          <Pagination className="mt-4">
-            <PaginationContent className="gap-1">
-              <PaginationItem>
-                <PaginationPrevious
+      </div>
+
+      {totalPages > 1 ? (
+        <Pagination>
+          <PaginationContent className="gap-1">
+            <PaginationItem>
+              <PaginationPrevious
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (currentPage > 1) setPage(currentPage - 1);
+                }}
+                className={
+                  currentPage <= 1
+                    ? "pointer-events-none opacity-50"
+                    : "cursor-pointer"
+                }
+              />
+            </PaginationItem>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+              <PaginationItem key={p}>
+                <PaginationLink
                   href="#"
-                  onClick={e => {
+                  onClick={(e) => {
                     e.preventDefault();
-                    if (currentPage > 1) setPage(currentPage - 1);
+                    setPage(p);
                   }}
-                  className={currentPage <= 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer text-white/90 hover:bg-white/15 hover:text-white'}
-                />
+                  isActive={p === currentPage}
+                  className="cursor-pointer"
+                >
+                  {p}
+                </PaginationLink>
               </PaginationItem>
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-                <PaginationItem key={p}>
-                  <PaginationLink
-                    href="#"
-                    onClick={e => {
-                      e.preventDefault();
-                      setPage(p);
-                    }}
-                    isActive={p === currentPage}
-                    className={p === currentPage ? 'cursor-pointer border-white/30 bg-white/15 text-white' : 'cursor-pointer text-white/90 hover:bg-white/15 hover:text-white'}
-                  >
-                    {p}
-                  </PaginationLink>
-                </PaginationItem>
-              ))}
-              <PaginationItem>
-                <PaginationNext
-                  href="#"
-                  onClick={e => {
-                    e.preventDefault();
-                    if (currentPage < totalPages) setPage(currentPage + 1);
-                  }}
-                  className={currentPage >= totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer text-white/90 hover:bg-white/15 hover:text-white'}
-                />
-              </PaginationItem>
-            </PaginationContent>
-          </Pagination>
-        )}
-      </CardContent>
-    </Card>
+            ))}
+            <PaginationItem>
+              <PaginationNext
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (currentPage < totalPages) setPage(currentPage + 1);
+                }}
+                className={
+                  currentPage >= totalPages
+                    ? "pointer-events-none opacity-50"
+                    : "cursor-pointer"
+                }
+              />
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
+      ) : null}
+    </div>
   );
 }

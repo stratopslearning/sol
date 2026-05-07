@@ -1,5 +1,6 @@
 'use client';
 
+import { apiUrl, withBasePath } from '@/lib/basePath';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -41,6 +42,7 @@ interface Quiz {
   courseId?: string | null;
   maxAttempts: number;
   timeLimit?: number | null;
+  passingScore?: number | null;
   startDate?: Date | null;
   endDate?: Date | null;
   isActive: boolean;
@@ -103,6 +105,8 @@ export function QuizEditForm({ quiz, courses, apiEndpoint = `/api/professor/quiz
     courseId: quiz.courseId || 'global',
     maxAttempts: quiz.maxAttempts,
     timeLimit: quiz.timeLimit || 30,
+    passingScore:
+      typeof quiz.passingScore === 'number' ? quiz.passingScore : 60,
     startDate: startDateTime.date,
     startTime: startDateTime.time,
     endDate: endDateTime.date,
@@ -110,6 +114,7 @@ export function QuizEditForm({ quiz, courses, apiEndpoint = `/api/professor/quiz
     isActive: quiz.isActive,
     hideFeedbackAfterDue: quizMetadata.hideFeedbackAfterDue,
   });
+  const [passingScoreError, setPassingScoreError] = useState<string | null>(null);
 
   const [questions, setQuestions] = useState<Question[]>(quiz.questions || []);
   const [sectionIds, setSectionIds] = useState<string[]>(assignedSectionIds);
@@ -158,7 +163,18 @@ export function QuizEditForm({ quiz, courses, apiEndpoint = `/api/professor/quiz
       return;
     }
     setSectionError(null);
-    
+
+    if (
+      typeof formData.passingScore !== 'number' ||
+      Number.isNaN(formData.passingScore) ||
+      formData.passingScore < 0 ||
+      formData.passingScore > 100
+    ) {
+      setPassingScoreError('Passing score must be a whole number between 0 and 100.');
+      return;
+    }
+    setPassingScoreError(null);
+
     // Combine date and time into ISO strings
     // The user enters time in their local timezone (e.g., "2:00 PM")
     // We need to store it as UTC, but interpret the input as local time
@@ -197,7 +213,7 @@ export function QuizEditForm({ quiz, courses, apiEndpoint = `/api/professor/quiz
 
     setIsSubmitting(true);
     try {
-      const response = await fetch(apiEndpoint, {
+      const response = await fetch(apiUrl(apiEndpoint), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -207,6 +223,7 @@ export function QuizEditForm({ quiz, courses, apiEndpoint = `/api/professor/quiz
           description: formData.description ? `${formData.description}\n\n<!-- QUIZ_METADATA: ${JSON.stringify({ hideFeedbackAfterDue: formData.hideFeedbackAfterDue })} -->` : (formData.hideFeedbackAfterDue ? `<!-- QUIZ_METADATA: ${JSON.stringify({ hideFeedbackAfterDue: formData.hideFeedbackAfterDue })} -->` : ''),
           maxAttempts: formData.maxAttempts,
           timeLimit: formData.timeLimit,
+          passingScore: formData.passingScore,
           isActive: formData.isActive,
           startDate: startDateTime,
           endDate: endDateTime,
@@ -258,487 +275,484 @@ export function QuizEditForm({ quiz, courses, apiEndpoint = `/api/professor/quiz
     return 'upcoming';
   };
 
+  const stepTitles = ['Settings', 'Questions', 'Review'];
+
   return (
-    <div className="space-y-8">
-      {/* Progress Steps */}
-      <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10">
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div className={`flex items-center justify-center w-8 h-8 rounded-full ${
-                getStepStatus(1) === 'completed' ? 'bg-green-600' : 
-                getStepStatus(1) === 'current' ? 'bg-blue-600' : 'bg-white/20'
-              }`}>
-                <span className="text-sm font-medium text-white">1</span>
-              </div>
-              <span className={`text-sm font-medium ${
-                getStepStatus(1) === 'current' ? 'text-white' : 'text-white/60'
-              }`}>Quiz Settings</span>
-            </div>
-            <div className="flex-1 h-px bg-white/20 mx-4" />
-            <div className="flex items-center space-x-4">
-              <div className={`flex items-center justify-center w-8 h-8 rounded-full ${
-                getStepStatus(2) === 'completed' ? 'bg-green-600' : 
-                getStepStatus(2) === 'current' ? 'bg-blue-600' : 'bg-white/20'
-              }`}>
-                <span className="text-sm font-medium text-white">2</span>
-              </div>
-              <span className={`text-sm font-medium ${
-                getStepStatus(2) === 'current' ? 'text-white' : 'text-white/60'
-              }`}>Questions</span>
-            </div>
-            <div className="flex-1 h-px bg-white/20 mx-4" />
-            <div className="flex items-center space-x-4">
-              <div className={`flex items-center justify-center w-8 h-8 rounded-full ${
-                getStepStatus(3) === 'completed' ? 'bg-green-600' : 
-                getStepStatus(3) === 'current' ? 'bg-blue-600' : 'bg-white/20'
-              }`}>
-                <span className="text-sm font-medium text-white">3</span>
-              </div>
-              <span className={`text-sm font-medium ${
-                getStepStatus(3) === 'current' ? 'text-white' : 'text-white/60'
-              }`}>Review & Save</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+    <div className="flex flex-col gap-8">
+      <nav aria-label="Progress" className="paper paper-shadow p-6">
+        <ol className="flex items-center justify-between gap-4">
+          {stepTitles.map((title, idx) => {
+            const stepNum = idx + 1;
+            const status = getStepStatus(stepNum);
+            const isCompleted = status === 'completed';
+            const isCurrent = status === 'current';
+            return (
+              <li key={title} className="flex items-center gap-3 flex-1">
+                <div
+                  className={`flex h-9 w-9 items-center justify-center rounded-full border tnum text-xs font-medium ${
+                    isCompleted ? 'bg-brand text-paper border-brand' :
+                    isCurrent ? 'bg-paper text-brand border-brand shadow-[0_0_0_2px_var(--brand-soft)]' :
+                    'bg-surface text-ink-faint border-rule'
+                  }`}
+                >
+                  {stepNum}
+                </div>
+                <span className={`eyebrow whitespace-nowrap ${isCurrent ? 'text-ink' : 'text-ink-faint'}`}>
+                  {title}
+                </span>
+                {idx < stepTitles.length - 1 ? (
+                  <div className={`flex-1 h-px ${isCompleted ? 'bg-brand' : 'bg-rule'}`} />
+                ) : null}
+              </li>
+            );
+          })}
+        </ol>
+      </nav>
 
-      {/* Step 1: Quiz Settings */}
       {currentStep === 1 && (
-        <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10">
-          <CardHeader>
-            <CardTitle className="text-xl text-white flex items-center gap-2">
-              <FileText className="w-5 h-5" />
-              Quiz Settings
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <Label htmlFor="title" className="text-white">Quiz Title</Label>
-                <Input
-                  id="title"
-                  value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  placeholder="Enter quiz title"
-                  className="bg-white/10 border-white/20 text-white placeholder:text-white/40"
-                />
-              </div>
-            </div>
+        <section className="paper paper-shadow p-6 md:p-8 flex flex-col gap-6">
+          <header>
+            <span className="eyebrow text-ink-faint">Step 1</span>
+            <h2 className="font-display text-2xl text-ink mt-1">Settings</h2>
+          </header>
 
-            <div className="space-y-2">
-              <Label htmlFor="description" className="text-white">Description</Label>
-              <Textarea
-                id="description"
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="Enter quiz description (optional)"
-                className="bg-white/10 border-white/20 text-white placeholder:text-white/40"
-                rows={3}
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="title">Quiz title</Label>
+            <Input
+              id="title"
+              value={formData.title}
+              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              placeholder="Enter quiz title"
+            />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="description">Description</Label>
+            <Textarea
+              id="description"
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              placeholder="Enter quiz description (optional)"
+              rows={3}
+            />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="sectionIds">
+              Assign to sections <span className="text-danger">*</span>
+            </Label>
+            {courses.length === 0 ? (
+              <div className="p-4 border border-warning/40 bg-warning-soft/40 rounded-md">
+                <div className="flex items-center gap-2 text-warning-fg">
+                  <AlertCircle className="h-4 w-4" />
+                  <span className="text-sm font-medium">No sections available</span>
+                </div>
+                <p className="text-xs text-ink-muted mt-1">
+                  You need to be enrolled in at least one section.{" "}
+                  <a href={withBasePath('/dashboard/professor/sections')} className="text-brand hover:underline">
+                    Join a section
+                  </a>
+                </p>
+              </div>
+            ) : (
+              <>
+                <SectionMultiSelect
+                  options={courses}
+                  value={sectionIds}
+                  onChange={selected => {
+                    setSectionIds(selected);
+                    setSectionError(null);
+                  }}
+                  placeholder="Select sections…"
+                />
+                {sectionError && <div className="text-xs text-danger mt-1">{sectionError}</div>}
+              </>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="maxAttempts" className="flex items-center gap-2">
+                <Users className="h-4 w-4 text-ink-faint" />
+                Max attempts
+              </Label>
+              <Input
+                id="maxAttempts"
+                type="number"
+                min="1"
+                max="10"
+                value={typeof formData.maxAttempts === 'number' && !isNaN(formData.maxAttempts) ? formData.maxAttempts : 1}
+                onChange={(e) => setFormData({ ...formData, maxAttempts: parseInt(e.target.value) || 1 })}
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="sectionIds" className="text-white">Assign to Sections <span className="text-red-400">*</span></Label>
-              {courses.length === 0 ? (
-                <div className="p-4 border border-yellow-500/20 bg-yellow-500/10 rounded-lg">
-                  <div className="flex items-center gap-2 text-yellow-400">
-                    <AlertCircle className="w-4 h-4" />
-                    <span className="text-sm font-medium">No sections available</span>
-                  </div>
-                  <p className="text-xs text-yellow-300 mt-1">
-                    You need to be enrolled in at least one section to edit quizzes. 
-                    <a href="/dashboard/professor/sections" className="text-blue-400 hover:underline ml-1">
-                      Join a section
-                    </a>
-                  </p>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="timeLimit" className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-ink-faint" />
+                Time limit (min)
+              </Label>
+              <Input
+                id="timeLimit"
+                type="number"
+                min="1"
+                max="180"
+                value={typeof formData.timeLimit === 'number' && !isNaN(formData.timeLimit) ? formData.timeLimit : 30}
+                onChange={(e) => setFormData({ ...formData, timeLimit: parseInt(e.target.value) || 30 })}
+              />
+            </div>
+
+            <div className="md:col-span-2 lg:col-span-4 flex flex-col gap-2">
+              <Label htmlFor="passingScore" className="flex items-center gap-2">
+                <Target className="h-4 w-4 text-ink-faint" />
+                Passing score (%)
+              </Label>
+              <Input
+                id="passingScore"
+                type="number"
+                min={0}
+                max={100}
+                value={
+                  typeof formData.passingScore === 'number' &&
+                  !isNaN(formData.passingScore)
+                    ? formData.passingScore
+                    : 60
+                }
+                onChange={(e) => {
+                  const next = parseInt(e.target.value);
+                  setFormData({
+                    ...formData,
+                    passingScore: Number.isFinite(next) ? next : 0,
+                  });
+                  if (passingScoreError) setPassingScoreError(null);
+                }}
+              />
+              <p className="text-xs text-ink-faint">
+                Learners scoring at or above this percentage are marked passed.
+              </p>
+              {passingScoreError ? (
+                <p className="text-xs text-danger">{passingScoreError}</p>
+              ) : null}
+            </div>
+
+            <div className="md:col-span-2 flex flex-row items-start justify-between rounded-md border border-rule p-4 bg-surface-sunken/40">
+              <div className="space-y-0.5 max-w-prose">
+                <Label className="text-base">
+                  Hide feedback until after the due date
+                </Label>
+                <div className="text-sm text-ink-muted">
+                  Students see only their score before the due date; full feedback unlocks afterwards.
                 </div>
-              ) : (
-                <>
-                  <SectionMultiSelect
-                    options={courses}
-                    value={sectionIds}
-                    onChange={selected => {
-                      setSectionIds(selected);
-                      setSectionError(null);
-                    }}
-                    placeholder="Select sections..."
-                  />
-                  {sectionError && <div className="text-xs text-red-400 mt-1">{sectionError}</div>}
-                </>
+              </div>
+              <Switch
+                checked={formData.hideFeedbackAfterDue}
+                onCheckedChange={(checked) => setFormData({ ...formData, hideFeedbackAfterDue: checked })}
+              />
+            </div>
+
+            <div className="md:col-span-2 flex flex-row items-center justify-between rounded-md border border-rule p-4 bg-surface-sunken/40">
+              <div>
+                <Label className="text-base">Quiz status</Label>
+                <p className="text-sm text-ink-muted">
+                  {formData.isActive ? 'Visible to learners' : 'Hidden from learners'}
+                </p>
+              </div>
+              <Switch
+                checked={formData.isActive}
+                onCheckedChange={(checked) => setFormData({ ...formData, isActive: checked })}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="startDate">Start date & time</Label>
+              <Input
+                id="startDate"
+                type="date"
+                value={formData.startDate}
+                onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+              />
+              <Input
+                id="startTime"
+                type="time"
+                value={formData.startTime}
+                onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
+              />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="endDate">End date & time (due)</Label>
+              <Input
+                id="endDate"
+                type="date"
+                value={formData.endDate}
+                min={formData.startDate || undefined}
+                onChange={(e) => {
+                  const newEndDate = e.target.value;
+                  if (formData.startDate && newEndDate < formData.startDate) {
+                    setFormData({ ...formData, endDate: formData.startDate });
+                  } else {
+                    setFormData({ ...formData, endDate: newEndDate });
+                  }
+                }}
+              />
+              <Input
+                id="endTime"
+                type="time"
+                value={formData.endTime}
+                onChange={(e) => {
+                  const newEndTime = e.target.value;
+                  if (formData.startDate && formData.endDate === formData.startDate && formData.startTime) {
+                    if (newEndTime <= formData.startTime) {
+                      alert('End time must be after start time on the same day');
+                      return;
+                    }
+                  }
+                  setFormData({ ...formData, endTime: newEndTime });
+                }}
+              />
+              {formData.startDate && formData.endDate === formData.startDate && formData.startTime && (
+                <p className="text-xs text-ink-faint">
+                  Same day: end time must be after {formData.startTime}.
+                </p>
               )}
             </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div className="space-y-2">
-                <Label htmlFor="maxAttempts" className="text-white flex items-center gap-2">
-                  <Users className="w-4 h-4" />
-                  Max Attempts
-                </Label>
-                <Input
-                  id="maxAttempts"
-                  type="number"
-                  min="1"
-                  max="10"
-                  value={typeof formData.maxAttempts === 'number' && !isNaN(formData.maxAttempts) ? formData.maxAttempts : 1}
-                  onChange={(e) => setFormData({ ...formData, maxAttempts: parseInt(e.target.value) || 1 })}
-                  className="bg-white/10 border-white/20 text-white"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="timeLimit" className="text-white flex items-center gap-2">
-                  <Clock className="w-4 h-4" />
-                  Time Limit (min)
-                </Label>
-                <Input
-                  id="timeLimit"
-                  type="number"
-                  min="1"
-                  max="180"
-                  value={typeof formData.timeLimit === 'number' && !isNaN(formData.timeLimit) ? formData.timeLimit : 30}
-                  onChange={(e) => setFormData({ ...formData, timeLimit: parseInt(e.target.value) || 30 })}
-                  className="bg-white/10 border-white/20 text-white"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between rounded-lg border border-white/20 p-4 bg-white/5">
-                  <div className="space-y-0.5">
-                    <Label className="text-white text-base">
-                      Hide Feedback Until After Due Date
-                    </Label>
-                    <div className="text-sm text-white/60">
-                      Students will only see their score before the due date, but can see detailed feedback after
-                    </div>
-                  </div>
-                  <Switch
-                    checked={formData.hideFeedbackAfterDue}
-                    onCheckedChange={(checked) => setFormData({ ...formData, hideFeedbackAfterDue: checked })}
-                    className="data-[state=checked]:bg-blue-600"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-white">Quiz Status</Label>
-                <div className="flex items-center space-x-2">
-                  <Switch
-                    checked={formData.isActive}
-                    onCheckedChange={(checked) => setFormData({ ...formData, isActive: checked })}
-                  />
-                  <span className="text-white text-sm">
-                    {formData.isActive ? 'Active' : 'Inactive'}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <Label htmlFor="startDate" className="text-white">Start Date & Time</Label>
-                <div className="space-y-2">
-                  <Input
-                    id="startDate"
-                    type="date"
-                    value={formData.startDate}
-                    onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                    className="bg-white/10 border-white/20 text-white"
-                  />
-                  <Input
-                    id="startTime"
-                    type="time"
-                    value={formData.startTime}
-                    className="bg-white/10 border-white/20 text-white"
-                    onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="endDate" className="text-white">End Date & Time (Due Date)</Label>
-                <div className="space-y-2">
-                  <Input
-                    id="endDate"
-                    type="date"
-                    value={formData.endDate}
-                    min={formData.startDate || undefined}
-                    onChange={(e) => {
-                      const newEndDate = e.target.value;
-                      // Allow same day, but if end date is before start date, reset it to start date
-                      if (formData.startDate && newEndDate < formData.startDate) {
-                        setFormData({ ...formData, endDate: formData.startDate });
-                      } else {
-                        setFormData({ ...formData, endDate: newEndDate });
-                      }
-                    }}
-                    className="bg-white/10 border-white/20 text-white"
-                  />
-                  <Input
-                    id="endTime"
-                    type="time"
-                    value={formData.endTime}
-                    className="bg-white/10 border-white/20 text-white"
-                    onChange={(e) => {
-                      const newEndTime = e.target.value;
-                      // If same day, validate that end time is after start time
-                      if (formData.startDate && formData.endDate === formData.startDate && formData.startTime) {
-                        if (newEndTime <= formData.startTime) {
-                          alert('End time must be after start time on the same day');
-                          return;
-                        }
-                      }
-                      setFormData({ ...formData, endTime: newEndTime });
-                    }}
-                  />
-                </div>
-                {formData.startDate && formData.endDate === formData.startDate && formData.startTime && (
-                  <p className="text-xs text-white/60 mt-1">
-                    Same day selected: End time must be after {formData.startTime}
-                  </p>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+          </div>
+        </section>
       )}
 
-      {/* Step 2: Questions */}
       {currentStep === 2 && (
-        <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10">
-          <CardHeader>
-            <CardTitle className="text-xl text-white flex items-center justify-between">
-              <span className="flex items-center gap-2">
-                <FileText className="w-5 h-5" />
-                Questions ({questions.length})
-              </span>
-              <Button onClick={addQuestion} size="sm">
-                <Plus className="w-4 h-4 mr-2" />
-                Add Question
+        <section className="paper paper-shadow p-6 md:p-8 flex flex-col gap-6">
+          <header className="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <span className="eyebrow text-ink-faint">Step 2</span>
+              <h2 className="font-display text-2xl text-ink mt-1">
+                Questions <span className="text-ink-faint tnum text-base">· {questions.length}</span>
+              </h2>
+            </div>
+            <Button onClick={addQuestion} size="sm">
+              <Plus className="h-4 w-4" />
+              Add question
+            </Button>
+          </header>
+
+          {questions.length === 0 ? (
+            <div className="paper border border-rule rounded-md p-10 text-center">
+              <FileText className="h-8 w-8 mx-auto mb-3 text-ink-faint" />
+              <h3 className="font-display text-lg text-ink mb-1">No questions yet.</h3>
+              <p className="text-sm text-ink-muted mb-5">
+                Add your first question to get started.
+              </p>
+              <Button onClick={addQuestion}>
+                <Plus className="h-4 w-4" />
+                Add first question
               </Button>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {questions.map((question, index) => (
-              <Card key={question.id} className="bg-white/5 border border-white/10">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-white">Question {index + 1}</h3>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-6">
+              {questions.map((question, index) => (
+                <article
+                  key={question.id}
+                  className="border border-rule rounded-md p-5 bg-surface flex flex-col gap-4"
+                >
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <h3 className="eyebrow text-ink-faint">
+                      Question {index + 1}
+                    </h3>
                     <div className="flex items-center gap-2">
                       <Select
                         value={question.type}
-                        onValueChange={(value: 'MULTIPLE_CHOICE' | 'TRUE_FALSE' | 'SHORT_ANSWER') => 
+                        onValueChange={(value: 'MULTIPLE_CHOICE' | 'TRUE_FALSE' | 'SHORT_ANSWER') =>
                           updateQuestion(index, 'type', value)
                         }
                       >
-                        <SelectTrigger className="w-40 bg-white/10 border-white/20 text-white">
+                        <SelectTrigger className="w-44">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="MULTIPLE_CHOICE">Multiple Choice</SelectItem>
-                          <SelectItem value="TRUE_FALSE">True/False</SelectItem>
-                          <SelectItem value="SHORT_ANSWER">Short Answer</SelectItem>
+                          <SelectItem value="MULTIPLE_CHOICE">Multiple choice</SelectItem>
+                          <SelectItem value="TRUE_FALSE">True / false</SelectItem>
+                          <SelectItem value="SHORT_ANSWER">Short answer</SelectItem>
                         </SelectContent>
                       </Select>
                       <Button
                         variant="ghost"
-                        size="sm"
+                        size="icon"
                         onClick={() => removeQuestion(index)}
-                        className="text-red-400 hover:text-red-300"
+                        aria-label="Remove question"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="h-4 w-4 text-danger" />
                       </Button>
                     </div>
                   </div>
 
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label className="text-white">Question Text</Label>
-                      <Textarea
-                        value={question.question}
-                        onChange={(e) => updateQuestion(index, 'question', e.target.value)}
-                        placeholder="Enter your question"
-                        className="bg-white/10 border-white/20 text-white placeholder:text-white/40"
-                        rows={2}
-                      />
-                    </div>
-
-                    {question.type === 'MULTIPLE_CHOICE' && (
-                      <div className="space-y-2">
-                        <Label className="text-white">Options</Label>
-                        {question.options?.map((option, optionIndex) => (
-                          <div key={optionIndex} className="flex items-center gap-2">
-                            <Input
-                              value={option}
-                              onChange={(e) => updateQuestionOption(index, optionIndex, e.target.value)}
-                              placeholder={`Option ${optionIndex + 1}`}
-                              className="bg-white/10 border-white/20 text-white placeholder:text-white/40"
-                            />
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => updateQuestion(index, 'correctAnswer', option)}
-                              className={`text-white hover:text-white hover:bg-white/10 ${
-                                question.correctAnswer === option ? 'bg-green-600/20 text-green-400' : ''
-                              }`}
-                            >
-                              Correct
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {(question.type === 'TRUE_FALSE' || question.type === 'SHORT_ANSWER') && (
-                      <div className="space-y-2">
-                        <Label className="text-white">Correct Answer</Label>
-                        <Input
-                          value={question.correctAnswer || ''}
-                          onChange={(e) => updateQuestion(index, 'correctAnswer', e.target.value)}
-                          placeholder={question.type === 'TRUE_FALSE' ? 'True or False' : 'Enter correct answer'}
-                          className="bg-white/10 border-white/20 text-white placeholder:text-white/40"
-                        />
-                      </div>
-                    )}
-
-                    <div className="space-y-2">
-                      <Label className="text-white">Points</Label>
-                      <Input
-                        type="number"
-                        min="1"
-                        value={typeof question.points === 'number' && !isNaN(question.points) ? question.points : 1}
-                        onChange={(e) => updateQuestion(index, 'points', parseInt(e.target.value) || 1)}
-                        className="bg-white/10 border-white/20 text-white w-24"
-                      />
-                    </div>
+                  <div className="flex flex-col gap-2">
+                    <Label>Question text</Label>
+                    <Textarea
+                      value={question.question}
+                      onChange={(e) => updateQuestion(index, 'question', e.target.value)}
+                      placeholder="Enter your question"
+                      rows={2}
+                    />
                   </div>
-                </CardContent>
-              </Card>
-            ))}
 
-            {questions.length === 0 && (
-              <div className="text-center py-12">
-                <FileText className="w-12 h-12 mx-auto mb-4 text-white/40" />
-                <h3 className="text-lg font-medium text-white mb-2">No questions yet</h3>
-                <p className="text-white/60 mb-6">Add your first question to get started. You need at least one question to proceed.</p>
-                <Button onClick={addQuestion}>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add First Question
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                  {question.type === 'MULTIPLE_CHOICE' && (
+                    <div className="flex flex-col gap-2">
+                      <Label>Options</Label>
+                      {question.options?.map((option, optionIndex) => (
+                        <div key={optionIndex} className="flex items-center gap-2">
+                          <Input
+                            value={option}
+                            onChange={(e) => updateQuestionOption(index, optionIndex, e.target.value)}
+                            placeholder={`Option ${optionIndex + 1}`}
+                          />
+                          <Button
+                            variant={question.correctAnswer === option ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => updateQuestion(index, 'correctAnswer', option)}
+                          >
+                            Correct
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {(question.type === 'TRUE_FALSE' || question.type === 'SHORT_ANSWER') && (
+                    <div className="flex flex-col gap-2">
+                      <Label>Correct answer</Label>
+                      <Input
+                        value={question.correctAnswer || ''}
+                        onChange={(e) => updateQuestion(index, 'correctAnswer', e.target.value)}
+                        placeholder={question.type === 'TRUE_FALSE' ? 'true or false' : 'Enter correct answer'}
+                      />
+                    </div>
+                  )}
+
+                  <div className="flex flex-col gap-2 max-w-[200px]">
+                    <Label>Points</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={typeof question.points === 'number' && !isNaN(question.points) ? question.points : 1}
+                      onChange={(e) => updateQuestion(index, 'points', parseInt(e.target.value) || 1)}
+                    />
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
       )}
 
-      {/* Step 3: Review & Save */}
       {currentStep === 3 && (
-        <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10">
-          <CardHeader>
-            <CardTitle className="text-xl text-white flex items-center gap-2">
-              <Eye className="w-5 h-5" />
-              Review & Save
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-white">Quiz Information</h3>
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-white/60">Title:</span>
-                    <span className="text-white font-medium">{formData.title}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-white/60">Status:</span>
-                    <Badge className={formData.isActive ? "bg-green-600/20 text-green-400 border-green-600" : "bg-gray-600/20 text-gray-300 border-gray-600"}>
+        <section className="paper paper-shadow p-6 md:p-8 flex flex-col gap-8">
+          <header>
+            <span className="eyebrow text-ink-faint">Step 3</span>
+            <h2 className="font-display text-2xl text-ink mt-1">Review & save</h2>
+          </header>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div>
+              <h3 className="eyebrow text-ink-faint mb-3">Quiz</h3>
+              <dl className="text-sm flex flex-col gap-2">
+                <div className="flex gap-2">
+                  <dt className="text-ink-muted w-32 shrink-0">Title</dt>
+                  <dd className="text-ink">{formData.title}</dd>
+                </div>
+                <div className="flex gap-2 items-center">
+                  <dt className="text-ink-muted w-32 shrink-0">Status</dt>
+                  <dd>
+                    <Badge variant={formData.isActive ? 'success' : 'outline'}>
                       {formData.isActive ? 'Active' : 'Inactive'}
                     </Badge>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-white/60">Max Attempts:</span>
-                    <span className="text-white font-medium">{formData.maxAttempts}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-white/60">Time Limit:</span>
-                    <span className="text-white font-medium">{formData.timeLimit} minutes</span>
-                  </div>
+                  </dd>
                 </div>
-              </div>
-
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-white">Questions Summary</h3>
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-white/60">Total Questions:</span>
-                    <span className="text-white font-medium">{questions.length}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-white/60">Multiple Choice:</span>
-                    <span className="text-white font-medium">
-                      {questions.filter(q => q.type === 'MULTIPLE_CHOICE').length}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-white/60">True/False:</span>
-                    <span className="text-white font-medium">
-                      {questions.filter(q => q.type === 'TRUE_FALSE').length}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-white/60">Short Answer:</span>
-                    <span className="text-white font-medium">
-                      {questions.filter(q => q.type === 'SHORT_ANSWER').length}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-white/60">Total Points:</span>
-                    <span className="text-white font-medium">
-                      {questions.reduce((sum, q) => sum + q.points, 0)}
-                    </span>
-                  </div>
+                <div className="flex gap-2">
+                  <dt className="text-ink-muted w-32 shrink-0">Max attempts</dt>
+                  <dd className="text-ink tnum">{formData.maxAttempts}</dd>
                 </div>
-              </div>
+                <div className="flex gap-2">
+                  <dt className="text-ink-muted w-32 shrink-0">Time limit</dt>
+                  <dd className="text-ink tnum">{formData.timeLimit} min</dd>
+                </div>
+              </dl>
             </div>
 
-            {formData.description && (
-              <div className="space-y-2">
-                <h3 className="text-lg font-semibold text-white">Description</h3>
-                <p className="text-white/80">{formData.description}</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+            <div>
+              <h3 className="eyebrow text-ink-faint mb-3">Questions</h3>
+              <dl className="text-sm flex flex-col gap-2">
+                <div className="flex gap-2">
+                  <dt className="text-ink-muted w-32 shrink-0">Total</dt>
+                  <dd className="text-ink tnum">{questions.length}</dd>
+                </div>
+                <div className="flex gap-2">
+                  <dt className="text-ink-muted w-32 shrink-0">Multiple choice</dt>
+                  <dd className="text-ink tnum">
+                    {questions.filter(q => q.type === 'MULTIPLE_CHOICE').length}
+                  </dd>
+                </div>
+                <div className="flex gap-2">
+                  <dt className="text-ink-muted w-32 shrink-0">True / false</dt>
+                  <dd className="text-ink tnum">
+                    {questions.filter(q => q.type === 'TRUE_FALSE').length}
+                  </dd>
+                </div>
+                <div className="flex gap-2">
+                  <dt className="text-ink-muted w-32 shrink-0">Short answer</dt>
+                  <dd className="text-ink tnum">
+                    {questions.filter(q => q.type === 'SHORT_ANSWER').length}
+                  </dd>
+                </div>
+                <div className="flex gap-2">
+                  <dt className="text-ink-muted w-32 shrink-0">Total points</dt>
+                  <dd className="text-ink tnum">
+                    {questions.reduce((sum, q) => sum + q.points, 0)}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          </div>
+
+          {formData.description ? (
+            <div>
+              <h3 className="eyebrow text-ink-faint mb-2">Description</h3>
+              <p className="text-ink-muted max-w-prose">{formData.description}</p>
+            </div>
+          ) : null}
+        </section>
       )}
 
-      {/* Navigation Buttons */}
       <div className="flex justify-between">
-        <Button
-          variant="outline"
-          onClick={prevStep}
-          disabled={currentStep === 1}
-        >
+        <Button variant="outline" onClick={prevStep} disabled={currentStep === 1}>
           Previous
         </Button>
 
-        <div className="flex gap-2">
-          {currentStep < 3 ? (
-            <Button 
-              onClick={nextStep} 
-              disabled={questions.length === 0 || sectionIds.length === 0 || courses.length === 0}
-            >
-              {questions.length === 0 ? 'Add Questions First' : courses.length === 0 ? 'No Sections Available' : 'Next'}
-            </Button>
-          ) : (
-            <Button 
-              onClick={onSubmit} 
-              disabled={isSubmitting || sectionIds.length === 0 || courses.length === 0}
-            >
-              <Save className="w-4 h-4 mr-2" />
-              {isSubmitting ? 'Saving...' : courses.length === 0 ? 'No Sections Available' : 'Save Changes'}
-            </Button>
-          )}
-        </div>
+        {currentStep < 3 ? (
+          <Button
+            onClick={nextStep}
+            disabled={questions.length === 0 || sectionIds.length === 0 || courses.length === 0}
+          >
+            {questions.length === 0
+              ? 'Add questions first'
+              : courses.length === 0
+                ? 'No sections available'
+                : 'Next'}
+          </Button>
+        ) : (
+          <Button
+            onClick={onSubmit}
+            disabled={isSubmitting || sectionIds.length === 0 || courses.length === 0}
+            loading={isSubmitting}
+          >
+            <Save className="h-4 w-4" />
+            {isSubmitting
+              ? 'Saving…'
+              : courses.length === 0
+                ? 'No sections available'
+                : 'Save changes'}
+          </Button>
+        )}
       </div>
     </div>
   );

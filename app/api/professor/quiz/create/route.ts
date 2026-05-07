@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getOrCreateUser } from '@/lib/getOrCreateUser';
-import { db } from '@/app/db';
-import { quizzes, questions, sections, professorSections, users, quizSections } from '@/app/db/schema';
-import { eq, inArray } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { z } from 'zod';
+
+import { db } from '@/app/db';
+import { professorSections, questions, quizSections, quizzes } from '@/app/db/schema';
+import { getOrCreateUser } from '@/lib/getOrCreateUser';
+
+export const dynamic = 'force-dynamic';
 
 const createQuizSchema = z.object({
   title: z.string().min(1),
@@ -11,6 +14,7 @@ const createQuizSchema = z.object({
   sectionIds: z.array(z.string()).min(1, 'Select at least one section'),
   maxAttempts: z.number().min(1).max(10).default(1),
   timeLimit: z.number().min(1).optional(),
+  passingScore: z.number().int().min(0).max(100).default(60),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
   questions: z.array(z.object({
@@ -47,51 +51,51 @@ export async function POST(req: NextRequest) {
       }, { status: 403 });
     }
 
-    // Create the quiz
-    // Note: validatedData.startDate and endDate are already ISO strings in UTC from the client
-    // We just need to convert them to Date objects - no need for toUTC conversion
-    const [newQuiz] = await db.insert(quizzes).values({
-      title: validatedData.title,
-      description: validatedData.description,
-      professorId: user.id,
-      maxAttempts: validatedData.maxAttempts,
-      timeLimit: validatedData.timeLimit,
-      startDate: validatedData.startDate ? new Date(validatedData.startDate) : null,
-      endDate: validatedData.endDate ? new Date(validatedData.endDate) : null,
-      isActive: true,
-    }).returning();
+    const newQuiz = await db.transaction(async (tx) => {
+      const [created] = await tx.insert(quizzes).values({
+        title: validatedData.title,
+        description: validatedData.description,
+        professorId: user.id,
+        maxAttempts: validatedData.maxAttempts,
+        timeLimit: validatedData.timeLimit,
+        passingScore: validatedData.passingScore,
+        startDate: validatedData.startDate ? new Date(validatedData.startDate) : null,
+        endDate: validatedData.endDate ? new Date(validatedData.endDate) : null,
+        isActive: true,
+      }).returning();
 
-    // Create questions
-    if (validatedData.questions.length > 0) {
-      await db.insert(questions).values(
-        validatedData.questions.map(q => ({
-          quizId: newQuiz.id,
-          type: q.type,
-          question: q.question,
-          options: q.options,
-          correctAnswer: q.correctAnswer,
-          points: q.points,
-          order: q.order,
-        }))
+      if (validatedData.questions.length > 0) {
+        await tx.insert(questions).values(
+          validatedData.questions.map((q) => ({
+            quizId: created.id,
+            type: q.type,
+            question: q.question,
+            options: q.options,
+            correctAnswer: q.correctAnswer,
+            points: q.points,
+            order: q.order,
+          })),
+        );
+      }
+
+      await tx.insert(quizSections).values(
+        validatedData.sectionIds.map((sectionId: string) => ({
+          quizId: created.id,
+          sectionId,
+          assignedBy: user.id,
+        })),
       );
-    }
 
-    // Assign quiz to sections
-    await db.insert(quizSections).values(
-      validatedData.sectionIds.map((sectionId: string) => ({
-        quizId: newQuiz.id,
-        sectionId,
-        assignedBy: user.id,
-      }))
-    );
+      return created;
+    });
 
-    return NextResponse.json({ 
-      success: true, 
+    return NextResponse.json({
+      success: true,
       quiz: {
         id: newQuiz.id,
         title: newQuiz.title,
         sectionIds: validatedData.sectionIds,
-      }
+      },
     });
 
   } catch (error) {

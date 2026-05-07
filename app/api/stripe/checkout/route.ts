@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import Stripe from 'stripe';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-06-30.basil',
-});
+import { withBasePath } from '@/lib/basePath';
+import {
+  getRequiredBaseUrl,
+  resolveCheckoutPrice,
+  stripe,
+} from '@/lib/stripe';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
   const { userId } = await auth();
@@ -12,43 +17,35 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || req.headers.get('origin') || '';
+  let baseUrl: string;
+  try {
+    baseUrl = getRequiredBaseUrl();
+  } catch (configError) {
+    console.error('Stripe checkout misconfiguration:', configError);
+    return NextResponse.json({ error: 'Checkout is not configured.' }, { status: 500 });
+  }
 
   try {
-    // Fetch the product to get its details
-    const product = await stripe.products.retrieve(process.env.STRIPE_PRODUCT_ID!);
-    
-    // Get the default price for the product
-    const prices = await stripe.prices.list({
-      product: process.env.STRIPE_PRODUCT_ID!,
-      active: true,
-      limit: 1,
-    });
-
-    if (prices.data.length === 0) {
-      throw new Error('No active price found for product');
-    }
-
-    const price = prices.data[0];
+    const price = await resolveCheckoutPrice();
 
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       payment_method_types: ['card'],
-      line_items: [
-        {
-          price: price.id, // Use the actual price ID from your product
-          quantity: 1,
-        },
-      ],
-      metadata: {
-        clerkUserId: userId,
+      line_items: [{ price: price.id, quantity: 1 }],
+      // Tag the Clerk userId on both the Session and the resulting
+      // PaymentIntent so the webhook can correlate the payment back to the
+      // application user no matter which event Stripe fires.
+      client_reference_id: userId,
+      metadata: { clerkUserId: userId },
+      payment_intent_data: {
+        metadata: { clerkUserId: userId },
       },
-      success_url: `${baseUrl}/dashboard/student`,
-      cancel_url: `${baseUrl}/payment`,
+      success_url: `${baseUrl}${withBasePath('/dashboard/student')}`,
+      cancel_url: `${baseUrl}${withBasePath('/payment')}`,
     });
     return NextResponse.redirect(session.url!, 303);
   } catch (error) {
     console.error('Stripe checkout error:', error);
     return NextResponse.json({ error: 'Stripe checkout failed' }, { status: 500 });
   }
-} 
+}

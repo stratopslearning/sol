@@ -1,8 +1,8 @@
-import { auth } from '@clerk/nextjs/server';
+import { auth, clerkClient } from '@clerk/nextjs/server';
+import { eq } from 'drizzle-orm';
+
 import { db } from '@/app/db';
 import { users as dbUsers } from '@/app/db/schema';
-import { eq } from 'drizzle-orm';
-import { clerkClient } from '@clerk/express';
 
 export interface UserData {
   id: string;
@@ -17,46 +17,71 @@ export interface UserData {
 }
 
 /**
- * Gets or creates a user in the database based on Clerk authentication
- * This function syncs Clerk userId and details to our NeonDB for business logic
+ * Gets or creates a user in the database based on Clerk authentication.
+ * Syncs the Clerk userId / profile fields into our database for business logic.
+ *
+ * Implementation notes:
+ *   - We use Postgres `INSERT ... ON CONFLICT (clerk_id) DO UPDATE` so that
+ *     two concurrent requests from the same fresh user (e.g. dashboard +
+ *     navigation) do not race to create duplicate rows. The unique index on
+ *     `clerk_id` is what makes this safe.
+ *   - Clerk profile fields (email, names) are refreshed on every login since
+ *     the user can change them on Clerk's side and we don't want to drift.
+ *     `role` and `paid` are NEVER touched here — those are managed by admins
+ *     and the Stripe webhook respectively.
  */
 export async function getOrCreateUser(): Promise<UserData | null> {
   try {
     const { userId } = await auth();
     if (!userId) return null;
 
-    // Check if user already exists in our database
+    // Fast path: row already exists. Only the read is needed for the common case.
     const existingUser = await db.query.users.findFirst({
       where: eq(dbUsers.clerkId, userId),
     });
     if (existingUser) return existingUser as UserData;
 
-    // Fetch user details from Clerk backend API
+    // Slow path: fetch profile from Clerk and upsert. We tolerate Clerk failures
+    // by falling back to placeholder values, but we still create the row so the
+    // request can proceed (the user can update their profile later).
     let email = '';
-    let firstName = null;
-    let lastName = null;
+    let firstName: string | null = null;
+    let lastName: string | null = null;
     try {
-      const clerkUser = await clerkClient.users.getUser(userId);
+      const clerk = await clerkClient();
+      const clerkUser = await clerk.users.getUser(userId);
       email = clerkUser.emailAddresses?.[0]?.emailAddress || '';
       firstName = clerkUser.firstName || null;
       lastName = clerkUser.lastName || null;
     } catch (e) {
-      // fallback: leave as null/empty
+      console.warn('Failed to fetch Clerk user profile during sync', e);
     }
 
-    // Create new user in our database
-    const [newUser] = await db.insert(dbUsers).values({
-      clerkId: userId,
-      email,
-      firstName,
-      lastName,
-      role: 'STUDENT',
-      paid: false,
-    }).returning();
+    const [upserted] = await db
+      .insert(dbUsers)
+      .values({
+        clerkId: userId,
+        email,
+        firstName,
+        lastName,
+        role: 'STUDENT',
+        paid: false,
+      })
+      .onConflictDoUpdate({
+        target: dbUsers.clerkId,
+        // Only refresh profile metadata. Role and paid are governed elsewhere.
+        set: {
+          email,
+          firstName,
+          lastName,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
 
-    return newUser as UserData;
+    return upserted as UserData;
   } catch (error) {
-    console.error('❌ Error in getOrCreateUser:', error);
+    console.error('Error in getOrCreateUser:', error);
     return null;
   }
 }
@@ -81,11 +106,14 @@ export async function getUser(): Promise<UserData | null> {
 /**
  * Updates user data in the database
  */
-export async function updateUser(updates: Partial<Pick<UserData, 'role' | 'paid' | 'firstName' | 'lastName'>>): Promise<UserData | null> {
+export async function updateUser(
+  updates: Partial<Pick<UserData, 'role' | 'paid' | 'firstName' | 'lastName'>>,
+): Promise<UserData | null> {
   try {
     const { userId } = await auth();
     if (!userId) return null;
-    const [updatedUser] = await db.update(dbUsers)
+    const [updatedUser] = await db
+      .update(dbUsers)
       .set({
         ...updates,
         updatedAt: new Date(),
@@ -97,4 +125,4 @@ export async function updateUser(updates: Partial<Pick<UserData, 'role' | 'paid'
     console.error('Error in updateUser:', error);
     return null;
   }
-} 
+}

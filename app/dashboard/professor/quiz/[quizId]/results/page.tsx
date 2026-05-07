@@ -1,153 +1,138 @@
-import { getOrCreateUser } from '@/lib/getOrCreateUser';
-import { db } from '@/app/db';
-import { quizzes, attempts, questions, professorSections, quizSections } from '@/app/db/schema';
-import { eq, and, inArray } from 'drizzle-orm';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
-} from '@/components/ui/table';
-import { 
-  FileText, 
-  LogOut, 
-  BarChart2, 
-  Users, 
-  ArrowLeft,
-  TrendingUp,
-  Clock,
+import { and, eq, inArray } from "drizzle-orm";
+import {
   CheckCircle,
-  XCircle,
-  Download,
   Eye,
-  Calendar,
-  Target
-} from 'lucide-react';
-import { SidebarProvider } from '@/components/ui/sidebar';
-import { SignOutButton } from '@clerk/nextjs';
-import { notFound } from 'next/navigation';
-import ExportResultsWrapper from '@/components/ExportResultsWrapper';
+  FileText,
+  TrendingUp,
+  Users,
+  XCircle,
+} from "lucide-react";
+import { notFound } from "next/navigation";
 
-export default async function QuizResultsPage({ 
-  params 
-}: { 
-  params: Promise<{ quizId: string }> 
+import { db } from "@/app/db";
+import {
+  attempts,
+  professorSections,
+  questions,
+  quizSections,
+} from "@/app/db/schema";
+import ExportResultsWrapper from "@/components/ExportResultsWrapper";
+import { AppShell } from "@/components/layout/AppShell";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { SectionHeading } from "@/components/layout/SectionHeading";
+import { EmptyState } from "@/components/patterns/EmptyState";
+import { StatCard } from "@/components/patterns/StatCard";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { withBasePath } from "@/lib/basePath";
+import { getOrCreateUser } from "@/lib/getOrCreateUser";
+
+export default async function QuizResultsPage({
+  params,
+}: {
+  params: Promise<{ quizId: string }>;
 }) {
   const { quizId } = await params;
   const user = await getOrCreateUser();
-  
-  if (!user || user.role !== 'PROFESSOR') return null;
+  if (!user || user.role !== "PROFESSOR") return null;
 
-  // Get professor's enrolled sections
   const professorSectionsList = await db.query.professorSections.findMany({
     where: eq(professorSections.professorId, user.id),
-    with: {
-      section: {
-        with: {
-          course: true
-        }
-      }
-    }
+    with: { section: { with: { course: true } } },
   });
 
-  const enrolledSectionIds = professorSectionsList.map(ps => ps.section.id);
+  const enrolledSectionIds = professorSectionsList.map((ps) => ps.section.id);
+  if (enrolledSectionIds.length === 0) notFound();
 
-  if (enrolledSectionIds.length === 0) {
-    notFound();
-  }
-
-  // Fetch quiz with questions and section assignments
-  // Check if quiz is assigned to any of professor's enrolled sections
   const quizAssignment = await db.query.quizSections.findFirst({
     where: and(
       eq(quizSections.quizId, quizId),
-      inArray(quizSections.sectionId, enrolledSectionIds)
+      inArray(quizSections.sectionId, enrolledSectionIds),
     ),
     with: {
       quiz: {
         with: {
           professor: true,
-          questions: {
-            orderBy: questions.order,
-          },
+          questions: { orderBy: questions.order },
           sectionAssignments: {
-            with: {
-              section: {
-                with: {
-                  course: true
-                }
-              }
-            }
+            with: { section: { with: { course: true } } },
           },
-        }
-      }
-    }
+        },
+      },
+    },
   });
 
-  if (!quizAssignment) {
-    notFound();
-  }
-
+  if (!quizAssignment) notFound();
   const quiz = quizAssignment.quiz;
+  if (!quiz) notFound();
 
-  if (!quiz) {
-    notFound();
-  }
-
-  // Fetch all attempts for this quiz, with student and section
+  // Scope attempts to sections the caller actually teaches. Without this,
+  // a co-teaching professor could see attempts from another section even when
+  // they are only enrolled in one of the quiz's assigned sections.
   const allQuizAttempts = await db.query.attempts.findMany({
-    where: eq(attempts.quizId, quizId),
+    where: and(
+      eq(attempts.quizId, quizId),
+      inArray(attempts.sectionId, enrolledSectionIds),
+    ),
     with: {
       student: true,
-      section: {
-        with: {
-          course: true
-        }
-      }
+      section: { with: { course: true } },
     },
     orderBy: (attempts, { desc }) => desc(attempts.submittedAt),
   });
-  const quizAttempts = allQuizAttempts.filter(a => a.submittedAt != null);
+  const quizAttempts = allQuizAttempts.filter((a) => a.submittedAt != null);
 
-  // Best percentage per student for this quiz; average = avg of those best scores
   const bestPerStudent: Record<string, number> = {};
   quizAttempts.forEach((a) => {
-    const pct = a.percentage ?? (a.maxScore ? Math.round(((a.score ?? 0) / a.maxScore) * 100) : 0);
-    if (bestPerStudent[a.studentId] == null || pct > bestPerStudent[a.studentId]) bestPerStudent[a.studentId] = pct;
+    const pct =
+      a.percentage ??
+      (a.maxScore ? Math.round(((a.score ?? 0) / a.maxScore) * 100) : 0);
+    if (
+      bestPerStudent[a.studentId] == null ||
+      pct > bestPerStudent[a.studentId]
+    ) {
+      bestPerStudent[a.studentId] = pct;
+    }
   });
   const bestPercentages = Object.values(bestPerStudent);
 
   const totalAttempts = quizAttempts.length;
-  const uniqueStudents = new Set(quizAttempts.map(a => a.studentId)).size;
-  const averageScore = bestPercentages.length > 0
-    ? Math.round(bestPercentages.reduce((sum, p) => sum + p, 0) / bestPercentages.length)
-    : 0;
-  const passRate = bestPercentages.length > 0
-    ? Math.round((Object.values(bestPerStudent).filter(p => p >= 60).length / bestPercentages.length) * 100)
-    : 0;
+  const uniqueStudents = new Set(quizAttempts.map((a) => a.studentId)).size;
+  const averageScore =
+    bestPercentages.length > 0
+      ? Math.round(
+          bestPercentages.reduce((sum, p) => sum + p, 0) /
+            bestPercentages.length,
+        )
+      : 0;
 
-  // Question analysis
-  const questionStats = quiz.questions.map(question => {
-    const questionAttempts = quizAttempts.filter(a => 
-      a.answers && typeof a.answers === 'string' && 
-      JSON.parse(a.answers).some((ans: any) => ans.questionId === question.id)
+  const questionStats = quiz.questions.map((question) => {
+    const questionAttempts = quizAttempts.filter(
+      (a) =>
+        a.answers &&
+        typeof a.answers === "string" &&
+        JSON.parse(a.answers).some((ans: any) => ans.questionId === question.id),
     );
-    
-    const correctAnswers = questionAttempts.filter(a => {
+
+    const correctAnswers = questionAttempts.filter((a) => {
       const answers = JSON.parse(a.answers as string);
       const answer = answers.find((ans: any) => ans.questionId === question.id);
       return answer && answer.isCorrect;
     }).length;
-    
-    const questionSuccessRate = questionAttempts.length > 0 
-      ? Math.round((correctAnswers / questionAttempts.length) * 100)
-      : 0;
-    
+
+    const questionSuccessRate =
+      questionAttempts.length > 0
+        ? Math.round((correctAnswers / questionAttempts.length) * 100)
+        : 0;
+
     return {
       ...question,
       attempts: questionAttempts.length,
@@ -157,257 +142,221 @@ export default async function QuizResultsPage({
   });
 
   return (
-    <SidebarProvider>
-      <div className="min-h-screen w-screen bg-[#030303] flex">
-        {/* Sidebar */}
-        <aside className="hidden md:flex sticky top-0 h-screen w-64 bg-white/5 border-r border-white/10 flex-col p-6">
-          <div className="mb-8">
-            <a href="/" className="text-lg font-bold text-white flex items-center gap-2 hover:underline">S-O-L</a>
-            <div className="text-xs text-white/40">Professor Dashboard</div>
+    <AppShell
+      role="professor"
+      active="quizzes"
+      topbarEyebrow="Faculty"
+      topbarTitle={quiz.title}
+      maxWidth="wide"
+    >
+      <PageHeader
+        breadcrumbs={[
+          { label: "Dashboard", href: withBasePath("/dashboard/professor") },
+          {
+            label: "My quizzes",
+            href: withBasePath("/dashboard/professor/quizzes"),
+          },
+          { label: "Results" },
+        ]}
+        eyebrow="Results"
+        title={quiz.title}
+        description={
+          quiz.sectionAssignments.length > 0
+            ? `Aggregated results across ${quiz.sectionAssignments
+                .map((sa) => sa.section.name)
+                .join(", ")}.`
+            : "Aggregated results across all assigned sections."
+        }
+        actions={
+          <ExportResultsWrapper
+            quizzes={[{ id: quiz.id, title: quiz.title }]}
+          />
+        }
+      />
+
+      <section className="mt-12 flex flex-col gap-6">
+        <SectionHeading eyebrow="Performance" title="Summary metrics" />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard
+            label="Submissions"
+            value={totalAttempts}
+            icon={<FileText className="h-4 w-4" />}
+          />
+          <StatCard
+            label="Learners"
+            value={uniqueStudents}
+            icon={<Users className="h-4 w-4" />}
+          />
+          <StatCard
+            label="Average"
+            value={`${averageScore}%`}
+            icon={<TrendingUp className="h-4 w-4" />}
+            accent
+          />
+          <StatCard
+            label="Questions"
+            value={quiz.questions.length}
+            hint={`${quiz.maxAttempts} max attempts`}
+          />
+        </div>
+      </section>
+
+      <section className="mt-16">
+        <SectionHeading eyebrow="Submissions" title="Per-attempt detail" />
+        {quizAttempts.length === 0 ? (
+          <div className="mt-6">
+            <EmptyState
+              icon={<FileText className="h-5 w-5" />}
+              eyebrow="Empty"
+              title="No attempts yet."
+              description="Once learners submit, individual attempts will appear here."
+            />
           </div>
-                      <nav className="flex flex-col gap-2">
-              <a href="/dashboard/professor" className="flex items-center gap-2 text-white/80 hover:bg-white/10 rounded px-3 py-2"><BarChart2 className="w-4 h-4" /> Dashboard</a>
-              <a href="/dashboard/professor/quizzes" className="flex items-center gap-2 text-white/80 hover:bg-white/10 rounded px-3 py-2"><FileText className="w-4 h-4" /> My Quizzes</a>
-              <a href="/dashboard/professor/quiz-results" className="flex items-center gap-2 text-white/80 hover:bg-white/10 rounded px-3 py-2"><BarChart2 className="w-4 h-4" /> All Results</a>
-              <SignOutButton redirectUrl="/">
-              <button className="flex items-center gap-2 text-red-400 hover:bg-red-400/10 rounded px-3 py-2 mt-8 w-full text-left">
-                <LogOut className="w-4 h-4" /> Logout
-              </button>
-            </SignOutButton>
-          </nav>
-          <div className="mt-auto pt-8 flex flex-col gap-2">
-            <div>
-              <Badge className="bg-blue-600/20 text-blue-400 border-blue-600">
-                Professor
-              </Badge>
-            </div>
-            <div className="text-xs text-white/30">&copy; {new Date().getFullYear()} S-O-L</div>
+        ) : (
+          <div className="mt-6 paper paper-shadow overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Learner</TableHead>
+                  <TableHead>Section</TableHead>
+                  <TableHead className="tnum">Score</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Submitted</TableHead>
+                  <TableHead className="text-right">View</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {quizAttempts.map((attempt) => (
+                  <TableRow key={attempt.id}>
+                    <TableCell>
+                      <div className="flex flex-col">
+                        <span className="font-medium text-ink">
+                          {attempt.student.firstName} {attempt.student.lastName}
+                        </span>
+                        <span className="text-xs text-ink-faint">
+                          {attempt.student.email}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-sm text-ink-muted">
+                      {attempt.section?.name || "—"}
+                      {attempt.section?.course?.title ? (
+                        <span className="text-ink-faint">
+                          {" · "}
+                          {attempt.section.course.title}
+                        </span>
+                      ) : null}
+                    </TableCell>
+                    <TableCell className="tnum">
+                      <div className="flex items-center gap-2">
+                        <span className="font-display text-lg text-ink">
+                          {attempt.percentage}%
+                        </span>
+                        <span className="text-xs text-ink-faint">
+                          {attempt.score}/{attempt.maxScore}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {attempt.passed ? (
+                        <Badge variant="success">
+                          <CheckCircle className="h-3 w-3" />
+                          Passed
+                        </Badge>
+                      ) : (
+                        <Badge variant="destructive">
+                          <XCircle className="h-3 w-3" />
+                          Failed
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-sm text-ink-muted tnum">
+                      {attempt.submittedAt
+                        ? new Date(attempt.submittedAt).toLocaleDateString()
+                        : "—"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button asChild variant="ghost" size="sm">
+                        <a
+                          href={withBasePath(
+                            `/dashboard/professor/attempt/${attempt.id}`,
+                          )}
+                          aria-label="View attempt"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </a>
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </div>
-        </aside>
+        )}
+      </section>
 
-        {/* Main Content */}
-        <main className="flex-1 flex flex-col items-center py-10 px-2 md:px-8">
-          {/* Header */}
-          <section className="w-full max-w-6xl mb-8">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-              <div>
-                <div className="flex items-center gap-4 mb-2">
-                  <Button asChild variant="ghost" size="sm">
-                    <a href="/dashboard/professor/quizzes">
-                      <ArrowLeft className="w-4 h-4 mr-2" />
-                      Back to Quizzes
-                    </a>
-                  </Button>
-                </div>
-                <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">{quiz.title}</h1>
-                <p className="text-white/60 text-lg">Quiz Results & Analytics</p>
-                <div className="flex flex-col gap-1 mt-2">
-                  {quiz.professor.id !== user.id && (
-                    <p className="text-white/40 text-sm">
-                      Created by: {quiz.professor.firstName} {quiz.professor.lastName} ({quiz.professor.email})
-                    </p>
-                  )}
-                  {quiz.sectionAssignments.length > 0 && (
-                    <p className="text-white/40 text-sm">
-                      Section(s): {quiz.sectionAssignments.map(sa => sa.section.name).join(', ')}
-                    </p>
-                  )}
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <ExportResultsWrapper quizzes={[{ id: quiz.id, title: quiz.title }]} />
-              </div>
-            </div>
-          </section>
-
-          {/* Overview Stats */}
-          <section className="w-full max-w-6xl mb-8">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-white/60">Total Attempts</CardTitle>
-                  <FileText className="h-4 w-4 text-white/40" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-white">{totalAttempts}</div>
-                  <p className="text-xs text-white/40">Student submissions</p>
-                </CardContent>
-              </Card>
-
-              <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-white/60">Unique Students</CardTitle>
-                  <Users className="h-4 w-4 text-white/40" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-white">{uniqueStudents}</div>
-                  <p className="text-xs text-white/40">Active participants</p>
-                </CardContent>
-              </Card>
-
-              <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-white/60">Average Score</CardTitle>
-                  <TrendingUp className="h-4 w-4 text-white/40" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-white">{averageScore}%</div>
-                  <p className="text-xs text-white/40">Class performance</p>
-                </CardContent>
-              </Card>
-
-            </div>
-          </section>
-
-          {/* Student Attempts Table */}
-          <section className="w-full max-w-6xl mb-8">
-            <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
-              <CardHeader>
-                <CardTitle className="text-xl text-white">Student Attempts</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {quizAttempts.length === 0 ? (
-                  <div className="text-center py-12">
-                    <FileText className="w-12 h-12 mx-auto mb-4 text-white/40" />
-                    <h3 className="text-lg font-medium text-white mb-2">No attempts yet</h3>
-                    <p className="text-white/60">Students haven't taken this quiz yet</p>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="border-white/10">
-                          <TableHead className="text-white/60 font-medium">Student</TableHead>
-                          <TableHead className="text-white/60 font-medium">Section</TableHead>
-                          <TableHead className="text-white/60 font-medium">Score</TableHead>
-                          <TableHead className="text-white/60 font-medium">Status</TableHead>
-                          <TableHead className="text-white/60 font-medium">Submitted</TableHead>
-                          <TableHead className="text-white/60 font-medium">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {quizAttempts.map((attempt) => (
-                          <TableRow key={attempt.id} className="border-white/10 hover:bg-white/5">
-                            <TableCell className="font-medium text-white">
-                              <div>
-                                <div className="font-semibold">
-                                  {attempt.student.firstName} {attempt.student.lastName}
-                                </div>
-                                <div className="text-xs text-white/60">
-                                  {attempt.student.email}
-                                </div>
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-white/80">
-                              {attempt.section?.name || 'N/A'} ({attempt.section?.course?.title || 'N/A'})
-                            </TableCell>
-                            <TableCell className="text-white/80">
-                              <div className="flex items-center gap-2">
-                                <div className="text-lg font-bold">{attempt.percentage}%</div>
-                                <div className="text-xs text-white/40">
-                                  ({attempt.score}/{attempt.maxScore})
-                                </div>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              {attempt.passed ? (
-                                <Badge className="bg-green-600/20 text-green-400 border-green-600">
-                                  <CheckCircle className="w-3 h-3 mr-1" />
-                                  Passed
-                                </Badge>
-                              ) : (
-                                <Badge className="bg-red-600/20 text-red-400 border-red-600">
-                                  <XCircle className="w-3 h-3 mr-1" />
-                                  Failed
-                                </Badge>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-white/60 text-sm">
-                              {attempt.submittedAt ? new Date(attempt.submittedAt).toLocaleDateString() : 'N/A'}
-                            </TableCell>
-                            <TableCell>
-                              <Button asChild variant="ghost" size="sm">
-                                <a href={`/dashboard/professor/attempt/${attempt.id}`}>
-                                  <Eye className="w-4 h-4" />
-                                </a>
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </section>
-
-          {/* Question Analysis */}
-          <section className="w-full max-w-6xl">
-            <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10 hover:shadow-2xl transition-shadow">
-              <CardHeader>
-                <CardTitle className="text-xl text-white">Question Analysis</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {questionStats.length === 0 ? (
-                  <div className="text-center py-12">
-                    <FileText className="w-12 h-12 mx-auto mb-4 text-white/40" />
-                    <h3 className="text-lg font-medium text-white mb-2">No questions found</h3>
-                    <p className="text-white/60">This quiz has no questions</p>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="border-white/10">
-                          <TableHead className="text-white/60 font-medium">Question</TableHead>
-                          <TableHead className="text-white/60 font-medium">Type</TableHead>
-                          <TableHead className="text-white/60 font-medium">Attempts</TableHead>
-                          <TableHead className="text-white/60 font-medium">Success Rate</TableHead>
-                          <TableHead className="text-white/60 font-medium">Points</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {questionStats.map((question, index) => (
-                          <TableRow key={question.id} className="border-white/10 hover:bg-white/5">
-                            <TableCell className="font-medium text-white">
-                              <div>
-                                <div className="font-semibold">Q{index + 1}</div>
-                                <div className="text-sm text-white/60 max-w-md truncate">
-                                  {question.question}
-                                </div>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <Badge className="bg-blue-600/20 text-blue-400 border-blue-600">
-                                {question.type.replace('_', ' ')}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-white/80">
-                              {question.attempts}
-                            </TableCell>
-                            <TableCell className="text-white/80">
-                              <div className="flex items-center gap-2">
-                                <div className="text-lg font-bold">{question.successRate}%</div>
-                                <div className="text-xs text-white/40">
-                                  ({question.correctAnswers}/{question.attempts})
-                                </div>
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-white/80">
-                              {question.points}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </section>
-        </main>
-      </div>
-    </SidebarProvider>
+      <section className="mt-16">
+        <SectionHeading
+          eyebrow="Diagnostic"
+          title="Question-by-question analysis"
+        />
+        {questionStats.length === 0 ? (
+          <div className="mt-6">
+            <EmptyState
+              icon={<FileText className="h-5 w-5" />}
+              eyebrow="Empty"
+              title="No questions found."
+            />
+          </div>
+        ) : (
+          <div className="mt-6 paper paper-shadow overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Question</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead className="tnum">Attempts</TableHead>
+                  <TableHead className="tnum">Success</TableHead>
+                  <TableHead className="tnum">Points</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {questionStats.map((question, index) => (
+                  <TableRow key={question.id}>
+                    <TableCell>
+                      <div className="flex flex-col gap-1 max-w-prose">
+                        <span className="eyebrow text-ink-faint">
+                          Q{index + 1}
+                        </span>
+                        <span className="text-ink line-clamp-2">
+                          {question.question}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="info">
+                        {question.type.replace("_", " ")}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="tnum">{question.attempts}</TableCell>
+                    <TableCell className="tnum">
+                      <div className="flex flex-col">
+                        <span className="font-display text-lg text-ink">
+                          {question.successRate}%
+                        </span>
+                        <span className="text-xs text-ink-faint">
+                          {question.correctAnswers}/{question.attempts}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="tnum">{question.points}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </section>
+    </AppShell>
   );
-} 
+}

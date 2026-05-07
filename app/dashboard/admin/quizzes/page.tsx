@@ -1,26 +1,29 @@
-import { db } from '@/app/db';
-import { quizzes, sections, quizSections } from '@/app/db/schema';
-import { SidebarProvider } from '@/components/ui/sidebar';
-import AdminSidebar from '@/components/AdminSidebar';
-import { Toaster } from '@/components/ui/sonner';
-import AdminQuizzesPageClient from './AdminQuizzesPageClient';
+import { db } from "@/app/db";
+import { quizzes, sections } from "@/app/db/schema";
+import { AppShell } from "@/components/layout/AppShell";
+import { activeOnly } from "@/lib/db/filters";
+import { requireAdmin } from "@/lib/auth";
+
+import AdminQuizzesPageClient from "./AdminQuizzesPageClient";
 
 export default async function AdminQuizzesPage() {
-  const allSections = await db.query.sections.findMany({ with: { course: true } });
-  const allQuizzes = await db.query.quizzes.findMany();
+  await requireAdmin();
+  const allSections = await db.query.sections.findMany({
+    where: activeOnly(sections.deletedAt),
+    with: { course: true },
+  });
+  const allQuizzes = await db.query.quizzes.findMany({
+    where: activeOnly(quizzes.deletedAt),
+  });
   const allQuizSections = await db.query.quizSections.findMany();
 
   return (
-    <SidebarProvider>
-      <Toaster />
-      <div className="min-h-screen w-screen bg-[#030303] flex">
-        <AdminSidebar active="quizzes" />
-        <AdminQuizzesPageClient
-          allSections={allSections}
-          allQuizzes={allQuizzes}
-          allQuizSections={allQuizSections}
-        />
-      </div>
-    </SidebarProvider>
+    <AppShell role="admin" active="quizzes" topbarEyebrow="Administration" topbarTitle="Quizzes">
+      <AdminQuizzesPageClient
+        allSections={allSections}
+        allQuizzes={allQuizzes}
+        allQuizSections={allQuizSections}
+      />
+    </AppShell>
   );
-} 
+}

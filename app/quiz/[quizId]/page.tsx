@@ -1,9 +1,11 @@
-import { redirect } from 'next/navigation';
+import { appRedirect } from '@/lib/serverRedirect';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import { db } from '@/app/db';
 import { quizzes, questions, assignments } from '@/app/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { QuizTakeForm } from '@/components/quiz/QuizTakeForm';
+import { activeOnly } from '@/lib/db/filters';
+import { isStudentEntitled } from '@/lib/featureFlags';
 import { cleanQuizDescription, normalizeDatabaseDate } from '@/lib/utils';
 
 interface QuizPageProps {
@@ -15,14 +17,16 @@ export default async function QuizPage(props: QuizPageProps) {
   const quizId = params.quizId;
 
   const user = await getOrCreateUser();
-  if (!user) redirect('/login');
-  if (user.role !== 'STUDENT' || !user.paid) redirect('/payment');
+  if (!user) appRedirect('/login');
+  if (user.role !== 'STUDENT') appRedirect('/payment');
+  if (!isStudentEntitled(user)) appRedirect('/payment');
 
-  // Fetch quiz details
+  // Fetch quiz details. Soft-deleted (deletedAt set) quizzes are treated as
+  // not found to keep the redirect behavior identical for students.
   const quiz = await db.query.quizzes.findFirst({
-    where: eq(quizzes.id, quizId),
+    where: and(eq(quizzes.id, quizId), activeOnly(quizzes.deletedAt)),
   });
-  if (!quiz) redirect('/dashboard/student');
+  if (!quiz) appRedirect('/dashboard/student');
 
   // Validate quiz availability dates
   // Normalize dates to ensure correct UTC comparison
@@ -31,10 +35,10 @@ export default async function QuizPage(props: QuizPageProps) {
   const endDate = normalizeDatabaseDate(quiz.endDate);
   
   if (startDate && now < startDate) {
-    redirect(`/dashboard/student?error=quiz_not_started&quizId=${quizId}&message=${encodeURIComponent('This quiz has not started yet.')}`);
+    appRedirect(`/dashboard/student?error=quiz_not_started&quizId=${quizId}&message=${encodeURIComponent('This quiz has not started yet.')}`);
   }
   if (endDate && now > endDate) {
-    redirect(`/dashboard/student?error=quiz_ended&quizId=${quizId}&message=${encodeURIComponent('This quiz has ended.')}`);
+    appRedirect(`/dashboard/student?error=quiz_ended&quizId=${quizId}&message=${encodeURIComponent('This quiz has ended.')}`);
   }
 
   // Fetch questions for this quiz
@@ -59,9 +63,9 @@ export default async function QuizPage(props: QuizPageProps) {
     assignment = newAssignment;
   }
 
-  // Only pass serializable data to the client
   return (
-    <QuizTakeForm
+    <div className="bg-paper text-ink min-h-screen">
+      <QuizTakeForm
       quiz={{
         id: quiz.id,
         title: quiz.title,
@@ -87,5 +91,6 @@ export default async function QuizPage(props: QuizPageProps) {
       userId={user.id}
       userRole={user.role}
     />
+    </div>
   );
-} 
+}

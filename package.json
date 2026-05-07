@@ -3,10 +3,18 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "migrate": "drizzle-kit migrate",
+    "migrate:generate": "drizzle-kit generate",
+    "db:preflight": "tsx scripts/preflight.ts",
+    "db:reconcile-history": "tsx scripts/reconcile-drizzle-history.ts",
+    "db:backfill-stripe-customer": "tsx scripts/backfill-stripe-customer.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@clerk/express": "^1.7.5",
@@ -39,7 +47,11 @@
     "@radix-ui/react-toggle": "^1.1.9",
     "@radix-ui/react-toggle-group": "^1.1.10",
     "@radix-ui/react-tooltip": "^1.2.7",
+    "@sentry/nextjs": "^10.38.0",
     "@types/papaparse": "^5.3.16",
+    "@types/ws": "^8.18.1",
+    "@upstash/ratelimit": "^2.0.8",
+    "@upstash/redis": "^1.38.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
@@ -67,6 +79,7 @@
     "stripe": "^18.3.0",
     "tailwind-merge": "^3.3.1",
     "vaul": "^1.1.2",
+    "ws": "^8.20.0",
     "zod": "^3.25.75"
   },
   "devDependencies": {
@@ -74,11 +87,13 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitest/coverage-v8": "^4.1.5",
     "dotenv-cli": "^8.0.0",
     "drizzle-kit": "^0.31.4",
     "tailwindcss": "^4",
     "tsx": "^4.20.3",
     "tw-animate-css": "^1.3.5",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.5"
   }
 }

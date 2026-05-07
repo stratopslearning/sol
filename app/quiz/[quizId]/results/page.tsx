@@ -1,120 +1,125 @@
-import { redirect } from 'next/navigation';
-import { getOrCreateUser } from '@/lib/getOrCreateUser';
-import { db } from '@/app/db';
-import { attempts, quizzes } from '@/app/db/schema';
-import { eq } from 'drizzle-orm';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { CheckCircle, Trophy, FileText, LogOut, BarChart2 } from 'lucide-react';
-import { SidebarProvider } from '@/components/ui/sidebar';
-import { SignOutButton } from '@clerk/nextjs';
+import { eq } from "drizzle-orm";
+
+import { db } from "@/app/db";
+import { attempts } from "@/app/db/schema";
+import { AppShell } from "@/components/layout/AppShell";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { Button } from "@/components/ui/button";
+import { withBasePath } from "@/lib/basePath";
+import { appRedirect } from "@/lib/serverRedirect";
+import { getOrCreateUser } from "@/lib/getOrCreateUser";
 
 interface ResultsPageProps {
   params: Promise<{ quizId: string }>;
   searchParams: Promise<{ attemptId?: string }>;
 }
 
-export default async function ResultsPage({ params, searchParams }: ResultsPageProps) {
+export default async function ResultsPage({
+  params,
+  searchParams,
+}: ResultsPageProps) {
   const p = await params;
   const sp = await searchParams;
   const attemptId = sp.attemptId;
   const user = await getOrCreateUser();
-  if (!user) redirect('/login');
+  if (!user) appRedirect("/login");
 
   if (!attemptId) {
-    redirect('/dashboard/student');
+    appRedirect("/dashboard/student");
   }
 
-  // Fetch the attempt
   const attempt = await db.query.attempts.findFirst({
     where: eq(attempts.id, attemptId),
-    with: {
-      quiz: true,
-    },
+    with: { quiz: true },
   });
 
   if (!attempt || attempt.studentId !== user.id) {
-    redirect('/dashboard/student');
+    appRedirect("/dashboard/student");
   }
 
   const quiz = attempt.quiz;
+  const percentage =
+    attempt.percentage ??
+    (attempt.maxScore
+      ? Math.round(((attempt.score ?? 0) / attempt.maxScore) * 100)
+      : 0);
 
   return (
-    <SidebarProvider>
-      <div className="min-h-screen w-screen bg-[#030303] flex">
-        {/* Sidebar */}
-        <aside className="hidden md:flex sticky top-0 h-screen w-64 bg-white/5 border-r border-white/10 flex-col p-6">
-          <div className="mb-8">
-            <div className="text-lg font-bold text-white flex items-center gap-2"><FileText className="w-5 h-5" /> S-O-L</div>
-            <div className="text-xs text-white/40">Student Dashboard</div>
-          </div>
-          <nav className="flex flex-col gap-2">
-            <a href="/dashboard/student" className="flex items-center gap-2 text-white/90 hover:bg-white/10 rounded px-3 py-2 font-medium"><BarChart2 className="w-4 h-4" /> Dashboard</a>
-            <a href="/dashboard/student/grades" className="flex items-center gap-2 text-white/80 hover:bg-white/10 rounded px-3 py-2"><CheckCircle className="w-4 h-4" /> My Grades</a>
-            <SignOutButton redirectUrl="/">
-              <button className="flex items-center gap-2 text-red-400 hover:bg-red-400/10 rounded px-3 py-2 mt-8 w-full text-left">
-                <LogOut className="w-4 h-4" /> Logout
-              </button>
-            </SignOutButton>
-          </nav>
-          <div className="mt-auto pt-8 flex flex-col gap-2">
-            <div>
-              <Badge className={user.paid ? 'bg-green-600/20 text-green-400 border-green-600' : 'bg-red-600/20 text-red-400 border-red-600'}>
-                {user.paid ? 'Paid' : 'Unpaid'}
-              </Badge>
+    <AppShell
+      role="student"
+      active="quizzes"
+      topbarEyebrow="Submission"
+      topbarTitle={quiz.title}
+      maxWidth="narrow"
+      user={{
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        paid: user.paid,
+      }}
+    >
+      <PageHeader
+        breadcrumbs={[
+          { label: "Dashboard", href: withBasePath("/dashboard/student") },
+          {
+            label: "My quizzes",
+            href: withBasePath("/dashboard/student/quizzes"),
+          },
+          { label: "Submitted" },
+        ]}
+        eyebrow="Submitted"
+        title="Quiz received."
+        description={`Your response to ${quiz.title} has been recorded. A summary is below.`}
+      />
+
+      <section className="mt-12">
+        <div className="paper paper-shadow p-8 md:p-10">
+          <div className="flex flex-col items-center text-center gap-6">
+            <span className="eyebrow text-ink-faint">Result</span>
+            <div className="stat-numeral text-7xl text-ink leading-none">
+              {percentage}
+              <span className="text-4xl text-ink-muted">%</span>
             </div>
-            <div className="text-xs text-white/30">&copy; {new Date().getFullYear()} S-O-L</div>
+            <p className="text-ink-muted tnum">
+              {attempt.score} of {attempt.maxScore} points
+            </p>
+
+            <div className="hairline w-full max-w-xs my-2" />
+
+            <dl className="flex flex-col sm:flex-row gap-6 text-sm text-ink-muted">
+              <div className="flex flex-col items-center gap-1">
+                <dt className="eyebrow text-ink-faint">Submitted</dt>
+                <dd className="tnum text-ink">
+                  {new Date(attempt.submittedAt!).toLocaleString()}
+                </dd>
+              </div>
+              <div className="flex flex-col items-center gap-1">
+                <dt className="eyebrow text-ink-faint">Status</dt>
+                <dd className="text-ink">
+                  {attempt.passed ? "Passed" : "Submitted"}
+                </dd>
+              </div>
+            </dl>
           </div>
-        </aside>
-        {/* Main Content */}
-        <main className="flex-1 flex flex-col items-center justify-center py-10 px-2 md:px-8 bg-gradient-to-br from-[#18181b] to-[#030303] min-h-screen">
-          <Card className="max-w-xl mx-auto w-full shadow-2xl border-2 border-white/10 bg-[#18181b]/90">
-            <CardHeader className="text-center">
-              <div className="flex justify-center mb-4">
-                <Trophy className="w-20 h-20 text-yellow-400 drop-shadow-lg" />
-              </div>
-              <CardTitle className="text-3xl text-white font-bold">
-                Quiz Completed!
-              </CardTitle>
-              <p className="text-gray-300 mt-2 text-lg font-medium">{quiz.title}</p>
-            </CardHeader>
-            <CardContent className="space-y-8">
-              {/* Score Summary */}
-              <div className="grid grid-cols-2 gap-6 text-center">
-                <div className="p-6 bg-white/10 border border-white/10 rounded-xl shadow-md">
-                  <div className="text-3xl font-extrabold text-green-400 drop-shadow">{attempt.score}</div>
-                  <div className="text-base text-gray-200 font-medium">Points Earned</div>
-                </div>
-                <div className="p-6 bg-white/10 border border-white/10 rounded-xl shadow-md">
-                  <div className="text-3xl font-extrabold text-blue-400 drop-shadow">{attempt.maxScore}</div>
-                  <div className="text-base text-gray-200 font-medium">Total Points</div>
-                </div>
-              </div>
+        </div>
 
-              {/* Quiz Details */}
-              <div className="space-y-2 text-base text-gray-300 font-medium">
-                <div className="flex justify-between">
-                  <span>Submitted:</span>
-                  <span>{new Date(attempt.submittedAt!).toLocaleString()}</span>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex space-x-4 pt-6">
-                <Button asChild className="flex-1 text-lg font-semibold py-3">
-                  <a href="/dashboard/student">Back to Dashboard</a>
-                </Button>
-                <Button variant="outline" asChild className="flex-1 text-lg font-semibold py-3">
-                  <a href={`/quiz/${p.quizId}/review?attemptId=${attemptId}`}>
-                    Review Answers
-                  </a>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </main>
-      </div>
-    </SidebarProvider>
+        <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
+          <Button asChild>
+            <a
+              href={withBasePath(
+                `/quiz/${p.quizId}/review?attemptId=${attemptId}`,
+              )}
+            >
+              Review answers
+            </a>
+          </Button>
+          <Button asChild variant="outline">
+            <a href={withBasePath("/dashboard/student")}>
+              Back to dashboard
+            </a>
+          </Button>
+        </div>
+      </section>
+    </AppShell>
   );
-} 
+}

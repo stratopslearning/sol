@@ -5,6 +5,8 @@ import { z } from 'zod';
 import { auth } from '@clerk/nextjs/server';
 import { eq } from 'drizzle-orm';
 
+export const dynamic = 'force-dynamic';
+
 const createCourseSchema = z.object({
   title: z.string().min(1, 'Course title is required').max(100, 'Course title too long'),
   description: z.string().optional(),

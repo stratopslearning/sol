@@ -1,8 +1,9 @@
 "use client";
 
-import { motion } from 'framer-motion';
-import { Badge } from '@/components/ui/badge';
-import LeaveSectionButton from '@/components/LeaveSectionButton';
+import { motion, useReducedMotion } from "framer-motion";
+
+import LeaveSectionButton from "@/components/LeaveSectionButton";
+import { Badge } from "@/components/ui/badge";
 
 interface Enrollment {
   id: string;
@@ -17,45 +18,54 @@ interface EnrollmentListProps {
 }
 
 export function EnrollmentList({ enrollments }: EnrollmentListProps) {
+  const reduced = useReducedMotion();
+
   if (enrollments.length === 0) {
     return (
-      <div className="text-center py-8 text-white/60 animate-fade-in">
-        <div className="w-12 h-12 mx-auto mb-4 opacity-50 text-white/40">📚</div>
-        <p className="text-base font-medium text-white/80 mb-2">No sections enrolled yet</p>
-        <div className="text-white/50 text-sm">Join a section using the enrollment code from your dashboard.</div>
+      <div className="text-center py-10 px-4 flex flex-col gap-2 items-center">
+        <span className="eyebrow text-ink-faint">Empty</span>
+        <p
+          className="font-display text-ink"
+          style={{
+            fontSize: "1.25rem",
+            lineHeight: 1.25,
+            fontVariationSettings: '"opsz" 36',
+          }}
+        >
+          No sections yet.
+        </p>
+        <p className="text-sm text-ink-muted max-w-sm leading-relaxed">
+          Join a section using the enrollment code provided by your professor.
+        </p>
       </div>
     );
   }
 
   return (
-    <>
+    <ul className="divide-y divide-rule">
       {enrollments.map((enrollment, index) => (
-        <motion.div
+        <motion.li
           key={enrollment.id}
-          initial={{ opacity: 0, y: 10 }}
+          initial={reduced ? false : { opacity: 0, y: 4 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: index * 0.1 }}
-          className="flex items-center justify-between p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
+          transition={{ delay: reduced ? 0 : index * 0.04, duration: 0.25 }}
+          className="flex items-center justify-between gap-3 px-4 py-3.5"
         >
-          <div className="flex-1">
-            <div className="text-sm font-medium text-white">
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-medium text-ink truncate">
               {enrollment.section.name}
             </div>
-            <div className="text-xs text-white/60">
-              Section
-            </div>
+            <div className="text-xs text-ink-faint mt-0.5">Section</div>
           </div>
-          <div className="flex items-center gap-2">
-            <Badge className="bg-green-600/20 text-green-400 border-green-600">
-              Enrolled
-            </Badge>
-            <LeaveSectionButton 
-              sectionId={enrollment.section.id} 
+          <div className="flex items-center gap-2 shrink-0">
+            <Badge variant="success">Enrolled</Badge>
+            <LeaveSectionButton
+              sectionId={enrollment.section.id}
               sectionName={enrollment.section.name}
             />
           </div>
-        </motion.div>
+        </motion.li>
       ))}
-    </>
+    </ul>
   );
 }

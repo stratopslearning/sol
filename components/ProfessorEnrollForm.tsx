@@ -1,11 +1,18 @@
 "use client";
-import { useState } from "react";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 
-export default function ProfessorEnrollForm({ onEnrolled }: { onEnrolled?: (section: { id: string; name: string }) => void }) {
+import { useState } from "react";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { apiUrl } from "@/lib/basePath";
+
+export default function ProfessorEnrollForm({
+  onEnrolled,
+}: {
+  onEnrolled?: (section: { id: string; name: string }) => void;
+}) {
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
@@ -17,14 +24,14 @@ export default function ProfessorEnrollForm({ onEnrolled }: { onEnrolled?: (sect
     setSuccess(null);
     setError(null);
     try {
-      const res = await fetch("/api/professor/enroll", {
+      const res = await fetch(apiUrl("/api/professor/enroll"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enrollmentCode: code.trim() })
+        body: JSON.stringify({ enrollmentCode: code.trim() }),
       });
       const data = await res.json();
       if (res.ok) {
-        setSuccess(`Enrolled in: ${data.section.name}`);
+        setSuccess(`Joined ${data.section.name}`);
         setCode("");
         if (onEnrolled) onEnrolled(data.section);
       } else {
@@ -37,27 +44,38 @@ export default function ProfessorEnrollForm({ onEnrolled }: { onEnrolled?: (sect
   };
 
   return (
-    <Card className="mb-8 bg-white/10 border border-white/10">
-      <CardHeader>
-        <CardTitle className="text-lg text-white">Join a Section</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+    <section className="paper paper-shadow p-6 mb-8">
+      <header>
+        <span className="eyebrow text-ink-faint">Join</span>
+        <h2 className="font-display text-lg text-ink mt-1">Add a section</h2>
+      </header>
+      <form
+        onSubmit={handleSubmit}
+        className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end"
+      >
+        <div className="flex-1 flex flex-col gap-2">
+          <Label htmlFor="prof-code">Faculty enrolment code</Label>
           <Input
-            placeholder="Enter professor enrollment code"
+            id="prof-code"
+            placeholder="e.g. PROF-XXXX"
             value={code}
-            onChange={e => setCode(e.target.value)}
-            className="bg-white/5 border-white/20 text-white"
+            onChange={(e) => setCode(e.target.value)}
             required
             minLength={4}
           />
-          <Button type="submit" disabled={loading || !code.trim()} className="w-full">
-            {loading ? "Enrolling..." : "Join Section"}
-          </Button>
-          {success && <Badge className="bg-green-600/20 text-green-400 border-green-600">{success}</Badge>}
-          {error && <Badge className="bg-red-600/20 text-red-400 border-red-600">{error}</Badge>}
-        </form>
-      </CardContent>
-    </Card>
+        </div>
+        <Button
+          type="submit"
+          disabled={loading || !code.trim()}
+          loading={loading}
+        >
+          {loading ? "Joining…" : "Join section"}
+        </Button>
+      </form>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {success ? <Badge variant="success">{success}</Badge> : null}
+        {error ? <Badge variant="destructive">{error}</Badge> : null}
+      </div>
+    </section>
   );
-} 
+}

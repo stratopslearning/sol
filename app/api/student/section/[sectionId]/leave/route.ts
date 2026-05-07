@@ -4,6 +4,8 @@ import { db } from '@/app/db';
 import { studentSections } from '@/app/db/schema';
 import { eq, and } from 'drizzle-orm';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ sectionId: string }> }

@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
-import { getUser } from '@/lib/getOrCreateUser';
+import { getOrCreateUser } from '@/lib/getOrCreateUser';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const user = await getUser();
+    const user = await getOrCreateUser();
     
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });

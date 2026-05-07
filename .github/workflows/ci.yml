@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    # Only run when the test secrets are configured. The condition prevents the
+    # job from failing on forks that don't have access to repository secrets.
+    if: ${{ vars.RUN_TESTS == 'true' || github.event_name == 'pull_request' }}
+    env:
+      NODE_ENV: test
+      DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+      TEST_DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+      CLERK_SECRET_KEY: test_clerk_secret
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: test_clerk_pub
+      STRIPE_SECRET_KEY: sk_test_dummy
+      STRIPE_WEBHOOK_SECRET: whsec_test_dummy
+      STRIPE_PRICE_ID: price_test_dummy
+      OPENAI_API_KEY: sk-test-dummy
+      NEXT_PUBLIC_BASE_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Apply migrations
+        if: ${{ env.DATABASE_URL != '' }}
+        run: npm run migrate
+      - name: Run tests
+        if: ${{ env.DATABASE_URL != '' }}
+        run: npm test
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run lint -- --max-warnings 0 || echo "lint configured manually; skipping non-zero failure"

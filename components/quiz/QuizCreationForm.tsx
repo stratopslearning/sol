@@ -1,5 +1,6 @@
 "use client";
 
+import { apiUrl, withBasePath } from '@/lib/basePath';
 import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -58,6 +59,11 @@ const quizBasicSchema = z.object({
   description: z.string().optional(),
   maxAttempts: z.number().min(1, 'Max attempts must be at least 1').max(10, 'Max attempts cannot exceed 10'),
   timeLimit: z.number().min(1, 'Time limit must be at least 1 minute').max(180, 'Time limit cannot exceed 3 hours'),
+  passingScore: z
+    .number()
+    .int('Passing score must be a whole number')
+    .min(0, 'Passing score must be 0 or higher')
+    .max(100, 'Passing score cannot exceed 100'),
   startDate: z.date().optional(),
   endDate: z.date().optional(),
   hideFeedbackAfterDue: z.boolean(),
@@ -85,6 +91,11 @@ const quizSchema = z.object({
   description: z.string().optional(),
   maxAttempts: z.number().min(1, 'Max attempts must be at least 1').max(10, 'Max attempts cannot exceed 10'),
   timeLimit: z.number().min(1, 'Time limit must be at least 1 minute').max(180, 'Time limit cannot exceed 3 hours'),
+  passingScore: z
+    .number()
+    .int('Passing score must be a whole number')
+    .min(0, 'Passing score must be 0 or higher')
+    .max(100, 'Passing score cannot exceed 100'),
   startDate: z.date().optional(),
   endDate: z.date().optional(),
   hideFeedbackAfterDue: z.boolean(),
@@ -129,6 +140,7 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
       description: '',
       maxAttempts: 1,
       timeLimit: 30,
+      passingScore: 60,
       startDate: undefined,
       endDate: undefined,
       hideFeedbackAfterDue: false,
@@ -289,7 +301,7 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
     try {
       // Add 'order' to each question
       const questionsWithOrder = data.questions.map((q, idx) => ({ ...q, order: idx }));
-      const response = await fetch(apiEndpoint || '/api/professor/quiz/create', {
+      const response = await fetch(apiUrl(apiEndpoint || '/api/professor/quiz/create'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -307,9 +319,8 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
       if (response.ok) {
         toast.success('Quiz created successfully!');
         if (apiEndpoint && apiEndpoint.includes('/admin/quiz/create')) {
-          window.location.href = '/dashboard/admin/quizzes';
+          router.push('/dashboard/admin/quizzes');
         } else {
-          // fallback for professor
           router.push('/dashboard/professor/quizzes');
         }
       } else {
@@ -342,84 +353,76 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
   };
 
   return (
-    <div className="space-y-6">
-      {/* Step Indicator */}
-      <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10">
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between">
-            {[
-              { number: 1, title: 'Basic Info', icon: FileText },
-              { number: 2, title: 'Questions', icon: CheckCircle },
-              { number: 3, title: 'Review', icon: Eye },
-            ].map((step, index) => {
-              const Icon = step.icon;
-              const status = getStepStatus(step.number);
-              return (
-                <div key={step.number} className="flex items-center">
-                  <div className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${
-                    status === 'completed' 
-                      ? 'bg-green-600 border-green-600 text-white' 
-                      : status === 'current'
-                      ? 'bg-blue-600 border-blue-600 text-white'
-                      : 'bg-white/10 border-white/20 text-white/40'
-                  }`}>
-                    {status === 'completed' ? (
-                      <CheckCircle className="w-5 h-5" />
-                    ) : (
-                      <Icon className="w-5 h-5" />
-                    )}
-                  </div>
-                  <span className={`ml-2 text-sm font-medium ${
-                    status === 'completed' 
-                      ? 'text-green-400' 
-                      : status === 'current'
-                      ? 'text-blue-400'
-                      : 'text-white/40'
-                  }`}>
-                    {step.title}
-                  </span>
-                  {index < 2 && (
-                    <div className={`w-16 h-0.5 mx-4 ${
-                      status === 'completed' ? 'bg-green-600' : 'bg-white/20'
-                    }`} />
+    <div className="flex flex-col gap-8">
+      <nav aria-label="Progress" className="paper paper-shadow p-6">
+        <ol className="flex items-center justify-between gap-4">
+          {[
+            { number: 1, title: 'Basics', icon: FileText },
+            { number: 2, title: 'Questions', icon: CheckCircle },
+            { number: 3, title: 'Review', icon: Eye },
+          ].map((step, index) => {
+            const Icon = step.icon;
+            const status = getStepStatus(step.number);
+            const isCompleted = status === 'completed';
+            const isCurrent = status === 'current';
+            return (
+              <li key={step.number} className="flex items-center gap-3 flex-1">
+                <div
+                  className={cn(
+                    'flex h-9 w-9 items-center justify-center rounded-full border tnum text-xs font-medium',
+                    isCompleted && 'bg-brand text-paper border-brand',
+                    isCurrent && 'bg-paper text-brand border-brand shadow-[0_0_0_2px_var(--brand-soft)]',
+                    !isCompleted && !isCurrent && 'bg-surface text-ink-faint border-rule',
                   )}
+                >
+                  {isCompleted ? <CheckCircle className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
                 </div>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
+                <span
+                  className={cn(
+                    'eyebrow whitespace-nowrap',
+                    isCurrent ? 'text-ink' : 'text-ink-faint',
+                  )}
+                >
+                  {step.title}
+                </span>
+                {index < 2 ? (
+                  <div
+                    className={cn(
+                      'flex-1 h-px',
+                      isCompleted ? 'bg-brand' : 'bg-rule',
+                    )}
+                  />
+                ) : null}
+              </li>
+            );
+          })}
+        </ol>
+      </nav>
 
       <Form {...form}>
         <form 
           onSubmit={e => { 
-            console.log('Native form submit!'); 
             form.handleSubmit(onSubmit, (errors) => {
-              console.log('React Hook Form validation errors:', errors);
+              console.log('Validation errors:', errors);
             })(e); 
           }} 
-          className="space-y-6"
+          className="flex flex-col gap-6"
         >
           <button type="submit" style={{ display: 'none' }}>Test Submit</button>
-          {/* Step 1: Basic Info */}
           {currentStep === 1 && (
-            <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10">
-              <CardHeader>
-                <CardTitle className="text-xl text-white">Quiz Basic Information</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
+            <section className="paper paper-shadow p-6 md:p-8 flex flex-col gap-6">
+              <header>
+                <span className="eyebrow text-ink-faint">Step 1</span>
+                <h2 className="font-display text-2xl text-ink mt-1">Basic information</h2>
+              </header>
                 <FormField
                   control={form.control}
                   name="title"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-white">Quiz Title *</FormLabel>
+                      <FormLabel>Quiz title *</FormLabel>
                       <FormControl>
-                        <Input 
-                          placeholder="Enter quiz title..." 
-                          className="bg-white/5 border-white/20 text-white placeholder:text-white/40"
-                          {...field} 
-                        />
+                        <Input placeholder="e.g. Midterm — Topic 4" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -431,30 +434,28 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
                   name="description"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-white">Description</FormLabel>
+                      <FormLabel>Description</FormLabel>
                       <FormControl>
-                        <Textarea 
-                          placeholder="Enter quiz description..." 
-                          className="bg-white/5 border-white/20 text-white placeholder:text-white/40"
-                          {...field} 
-                        />
+                        <Textarea placeholder="A short summary of the topic, instructions, or expectations…" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
 
-                <div className="space-y-2">
-                  <Label htmlFor="sectionIds" className="text-white">Assign to Sections <span className="text-red-400">*</span></Label>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="sectionIds">
+                    Assign to sections <span className="text-danger">*</span>
+                  </Label>
                   {courses.length === 0 ? (
-                    <div className="p-4 border border-yellow-500/20 bg-yellow-500/10 rounded-lg">
-                      <div className="flex items-center gap-2 text-yellow-400">
-                        <AlertCircle className="w-4 h-4" />
+                    <div className="p-4 border border-warning/40 bg-warning-soft/40 rounded-md">
+                      <div className="flex items-center gap-2 text-warning-fg">
+                        <AlertCircle className="h-4 w-4" />
                         <span className="text-sm font-medium">No sections available</span>
                       </div>
-                      <p className="text-xs text-yellow-300 mt-1">
-                        You need to be enrolled in at least one section to create quizzes. 
-                        <a href="/dashboard/professor/sections" className="text-blue-400 hover:underline ml-1">
+                      <p className="text-xs text-ink-muted mt-1">
+                        You need to be enrolled in at least one section to create quizzes.{" "}
+                        <a href={withBasePath('/dashboard/professor/sections')} className="text-brand hover:underline">
                           Join a section
                         </a>
                       </p>
@@ -468,9 +469,9 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
                           setSectionIds(selected);
                           setSectionError(null);
                         }}
-                        placeholder="Select sections..."
+                        placeholder="Select sections…"
                       />
-                      {sectionError && <div className="text-xs text-red-400 mt-1">{sectionError}</div>}
+                      {sectionError && <div className="text-xs text-danger mt-1">{sectionError}</div>}
                     </>
                   )}
                 </div>
@@ -481,12 +482,11 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
                     name="maxAttempts"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-white">Max Attempts *</FormLabel>
+                        <FormLabel>Max attempts *</FormLabel>
                         <FormControl>
-                          <Input 
-                            type="number" 
-                            placeholder="1" 
-                            className="bg-white/5 border-white/20 text-white placeholder:text-white/40"
+                          <Input
+                            type="number"
+                            placeholder="1"
                             {...field}
                             onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
                           />
@@ -501,12 +501,11 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
                     name="timeLimit"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-white">Time Limit (minutes) *</FormLabel>
+                        <FormLabel>Time limit (minutes) *</FormLabel>
                         <FormControl>
-                          <Input 
-                            type="number" 
-                            placeholder="30" 
-                            className="bg-white/5 border-white/20 text-white placeholder:text-white/40"
+                          <Input
+                            type="number"
+                            placeholder="30"
                             {...field}
                             onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
                           />
@@ -518,22 +517,46 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
 
                   <FormField
                     control={form.control}
+                    name="passingScore"
+                    render={({ field }) => (
+                      <FormItem className="md:col-span-2">
+                        <FormLabel>Passing score (%) *</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min={0}
+                            max={100}
+                            placeholder="60"
+                            {...field}
+                            onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                          />
+                        </FormControl>
+                        <p className="text-xs text-ink-faint mt-1">
+                          Learners scoring at or above this percentage are marked
+                          passed. Default 60.
+                        </p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
                     name="hideFeedbackAfterDue"
                     render={({ field }) => (
-                      <FormItem className="flex flex-row items-center justify-between rounded-lg border border-white/20 p-4 bg-white/5">
-                        <div className="space-y-0.5">
-                          <FormLabel className="text-white text-base">
-                            Hide Feedback Until After Due Date
+                      <FormItem className="md:col-span-2 flex flex-row items-start justify-between rounded-md border border-rule p-4 bg-surface-sunken/40">
+                        <div className="space-y-0.5 max-w-prose">
+                          <FormLabel className="text-base">
+                            Hide feedback until after the due date
                           </FormLabel>
-                          <div className="text-sm text-white/60">
-                            Students will only see their score before the due date, but can see detailed feedback after
+                          <div className="text-sm text-ink-muted">
+                            Students see only their score before the due date; full feedback unlocks afterwards.
                           </div>
                         </div>
                         <FormControl>
                           <Switch
                             checked={field.value}
                             onCheckedChange={field.onChange}
-                            className="data-[state=checked]:bg-blue-600"
                           />
                         </FormControl>
                       </FormItem>
@@ -547,8 +570,8 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
                     name="startDate"
                     render={({ field }) => (
                       <FormItem className="flex flex-col">
-                        <FormLabel className="text-white">Start Date & Time</FormLabel>
-                        <p className="text-xs text-white/60 mb-2">Set when students can start taking this quiz</p>
+                        <FormLabel>Start date & time</FormLabel>
+                        <p className="text-xs text-ink-faint mb-2">When learners can begin taking this quiz</p>
                         <div className="space-y-2">
                           <Popover>
                             <PopoverTrigger asChild>
@@ -556,8 +579,8 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
                                 <Button
                                   variant="outline"
                                   className={cn(
-                                    "w-full pl-3 text-left font-normal bg-white/5 border-white/20 text-white hover:bg-white/10",
-                                    !field.value && "text-white/40"
+                                    "w-full pl-3 text-left font-normal",
+                                    !field.value && "text-ink-faint"
                                   )}
                                 >
                                   {field.value ? (
@@ -565,7 +588,7 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
                                   ) : (
                                     <span>Pick a start date</span>
                                   )}
-                                  <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                  <CalendarIcon className="ml-auto h-4 w-4 opacity-60" />
                                 </Button>
                               </FormControl>
                             </PopoverTrigger>
@@ -586,7 +609,6 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
                           <Input
                             type="time"
                             placeholder="00:00"
-                            className="bg-white/5 border-white/20 text-white"
                             onChange={(e) => {
                               if (field.value && e.target.value) {
                                 const [hours, minutes] = e.target.value.split(':');
@@ -609,8 +631,8 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
                     name="endDate"
                     render={({ field }) => (
                       <FormItem className="flex flex-col">
-                        <FormLabel className="text-white">End Date & Time (Due Date)</FormLabel>
-                        <p className="text-xs text-white/60 mb-2">Set the deadline for quiz submission</p>
+                        <FormLabel>End date & time (due date)</FormLabel>
+                        <p className="text-xs text-ink-faint mb-2">The submission deadline</p>
                         <div className="space-y-2">
                           <Popover>
                             <PopoverTrigger asChild>
@@ -618,8 +640,8 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
                                 <Button
                                   variant="outline"
                                   className={cn(
-                                    "w-full pl-3 text-left font-normal bg-white/5 border-white/20 text-white hover:bg-white/10",
-                                    !field.value && "text-white/40"
+                                    "w-full pl-3 text-left font-normal",
+                                    !field.value && "text-ink-faint"
                                   )}
                                 >
                                   {field.value ? (
@@ -627,7 +649,7 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
                                   ) : (
                                     <span>Pick an end date</span>
                                   )}
-                                  <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                  <CalendarIcon className="ml-auto h-4 w-4 opacity-60" />
                                 </Button>
                               </FormControl>
                             </PopoverTrigger>
@@ -641,8 +663,6 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
                                   today.setHours(0, 0, 0, 0);
                                   const startDate = form.getValues('startDate');
                                   if (startDate) {
-                                    // Allow end dates on or after start date (same day is allowed)
-                                    // Time validation will ensure end time is after start time
                                     const start = new Date(startDate);
                                     start.setHours(0, 0, 0, 0);
                                     return date < today || date < start;
@@ -656,7 +676,6 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
                           <Input
                             type="time"
                             placeholder="23:59"
-                            className="bg-white/5 border-white/20 text-white"
                             onChange={(e) => {
                               if (field.value && e.target.value) {
                                 const [hours, minutes] = e.target.value.split(':');
@@ -690,278 +709,260 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
                     )}
                   />
                 </div>
-              </CardContent>
-            </Card>
+            </section>
           )}
 
-          {/* Step 2: Questions */}
           {currentStep === 2 && (
-            <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-xl text-white">Quiz Questions</CardTitle>
-                  <div className="flex gap-3">
-                    <Button 
-                      type="button" 
-                      onClick={() => fileInputRef.current?.click()}
-                      variant="secondary"
-                      size="sm"
-                      className="shadow rounded-lg font-semibold focus:ring-2 focus:ring-blue-400 focus:outline-none transition-all"
-                    >
-                      <Upload className="w-4 h-4 mr-2" />
-                      Upload CSV
-                    </Button>
-                    <Button 
-                      type="button" 
-                      onClick={addQuestion}
-                      variant="secondary"
-                      size="sm"
-                      className="shadow rounded-lg font-semibold focus:ring-2 focus:ring-blue-400 focus:outline-none transition-all"
-                    >
-                      <Plus className="w-4 h-4 mr-2" />
-                      Add Question
-                    </Button>
-                  </div>
+            <section className="paper paper-shadow p-6 md:p-8 flex flex-col gap-6">
+              <header className="flex items-start justify-between gap-4 flex-wrap">
+                <div>
+                  <span className="eyebrow text-ink-faint">Step 2</span>
+                  <h2 className="font-display text-2xl text-ink mt-1">Questions</h2>
                 </div>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".csv"
-                  onChange={handleCsvUpload}
-                  className="hidden"
-                />
-                {csvError && (
-                  <div className="text-red-400 text-sm flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4" />
-                    {csvError}
-                  </div>
-                )}
-                <div className="text-sm text-white/60">
-                  CSV Format: question,type,options,correct_answer,points (points is optional, default 1)<br />
-                  Types: MULTIPLE_CHOICE, TRUE_FALSE, SHORT_ANSWER<br />
-                  Options: Use | to separate multiple choice options (e.g., "Option A|Option B|Option C")<br />
-                  Points: (Optional) Number of points for the question (e.g., 2, 5, etc.)
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    variant="outline"
+                    size="sm"
+                  >
+                    <Upload className="h-4 w-4" />
+                    Upload CSV
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={addQuestion}
+                    size="sm"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add question
+                  </Button>
                 </div>
-              </CardHeader>
-              <CardContent className="space-y-6">
+              </header>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv"
+                onChange={handleCsvUpload}
+                className="hidden"
+              />
+              {csvError && (
+                <div className="text-danger text-sm flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4" />
+                  {csvError}
+                </div>
+              )}
+              <p className="text-xs text-ink-faint max-w-prose">
+                CSV format: <code className="font-mono">question,type,options,correct_answer,points</code> · Types:
+                MULTIPLE_CHOICE, TRUE_FALSE, SHORT_ANSWER · Use{" "}
+                <code className="font-mono">|</code> to separate options.
+              </p>
+
+              <div className="hairline" />
+
+              <div className="flex flex-col gap-6">
                 {watchedQuestions.map((question: any, questionIndex: number) => (
-                  <Card key={questionIndex} className="bg-white/5 border border-white/10">
-                    <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-lg font-medium text-white">Question {questionIndex + 1}</h3>
-                        {watchedQuestions.length > 1 && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => removeQuestion(questionIndex)}
-                            className="text-red-400 hover:text-red-300 hover:bg-red-400/10"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        )}
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
+                  <article
+                    key={questionIndex}
+                    className="border border-rule rounded-md p-5 bg-surface flex flex-col gap-4"
+                  >
+                    <div className="flex items-center justify-between">
+                      <h3 className="eyebrow text-ink-faint">
+                        Question {questionIndex + 1}
+                      </h3>
+                      {watchedQuestions.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeQuestion(questionIndex)}
+                          aria-label="Remove question"
+                        >
+                          <Trash2 className="h-4 w-4 text-danger" />
+                        </Button>
+                      )}
+                    </div>
+                    <FormField
+                      control={form.control}
+                      name={`questions.${questionIndex}.question`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Question text *</FormLabel>
+                          <FormControl>
+                            <Textarea placeholder="Enter your question…" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <FormField
                         control={form.control}
-                        name={`questions.${questionIndex}.question`}
+                        name={`questions.${questionIndex}.type`}
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-white">Question Text *</FormLabel>
+                            <FormLabel>Question type *</FormLabel>
+                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="MULTIPLE_CHOICE">Multiple choice</SelectItem>
+                                <SelectItem value="TRUE_FALSE">True / false</SelectItem>
+                                <SelectItem value="SHORT_ANSWER">Short answer</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name={`questions.${questionIndex}.points`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Points *</FormLabel>
                             <FormControl>
-                              <Textarea 
-                                placeholder="Enter your question..." 
-                                className="bg-white/5 border-white/20 text-white placeholder:text-white/40"
-                                {...field} 
+                              <Input
+                                type="number"
+                                placeholder="1"
+                                {...field}
+                                onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
                               />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
+                    </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <FormField
-                          control={form.control}
-                          name={`questions.${questionIndex}.type`}
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="text-white">Question Type *</FormLabel>
-                              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                <FormControl>
-                                  <SelectTrigger className="bg-white/5 border-white/20 text-white">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent className="bg-white/10 border-white/20">
-                                  <SelectItem value="MULTIPLE_CHOICE" className="text-white">Multiple Choice</SelectItem>
-                                  <SelectItem value="TRUE_FALSE" className="text-white">True/False</SelectItem>
-                                  <SelectItem value="SHORT_ANSWER" className="text-white">Short Answer</SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={form.control}
-                          name={`questions.${questionIndex}.points`}
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="text-white">Points *</FormLabel>
-                              <FormControl>
-                                <Input 
-                                  type="number" 
-                                  placeholder="1" 
-                                  className="bg-white/5 border-white/20 text-white placeholder:text-white/40"
-                                  {...field}
-                                  onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
+                    {question.type === 'MULTIPLE_CHOICE' && (
+                      <div className="flex flex-col gap-3">
+                        <FormLabel>Options *</FormLabel>
+                        {question.options?.map((option: string, optionIndex: number) => (
+                          <div key={optionIndex} className="flex items-center gap-2">
+                            <Input
+                              placeholder={`Option ${optionIndex + 1}`}
+                              value={option}
+                              onChange={(e) => updateQuestionOptions(questionIndex, optionIndex, e.target.value)}
+                            />
+                            <FormField
+                              control={form.control}
+                              name={`questions.${questionIndex}.correctAnswer`}
+                              render={({ field }) => (
+                                <FormItem className="flex items-center gap-2 shrink-0">
+                                  <FormControl>
+                                    <input
+                                      type="radio"
+                                      name={`correct-${questionIndex}`}
+                                      value={option}
+                                      checked={field.value === option}
+                                      onChange={(e) => field.onChange(e.target.value)}
+                                      className="accent-brand"
+                                    />
+                                  </FormControl>
+                                  <span className="text-xs text-ink-muted eyebrow">Correct</span>
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+                        ))}
                       </div>
+                    )}
 
-                      {/* Question Type Specific Fields */}
-                      {question.type === 'MULTIPLE_CHOICE' && (
-                        <div className="space-y-4">
-                          <FormLabel className="text-white">Options *</FormLabel>
-                          {question.options?.map((option: string, optionIndex: number) => (
-                            <div key={optionIndex} className="flex items-center gap-2">
-                              <Input
-                                placeholder={`Option ${optionIndex + 1}`}
-                                value={option}
-                                onChange={(e) => updateQuestionOptions(questionIndex, optionIndex, e.target.value)}
-                                className="bg-white/5 border-white/20 text-white placeholder:text-white/40"
-                              />
-                              <FormField
-                                control={form.control}
-                                name={`questions.${questionIndex}.correctAnswer`}
-                                render={({ field }) => (
-                                  <FormItem className="flex items-center space-x-2">
-                                    <FormControl>
-                                      <input
-                                        type="radio"
-                                        name={`correct-${questionIndex}`}
-                                        value={option}
-                                        checked={field.value === option}
-                                        onChange={(e) => field.onChange(e.target.value)}
-                                        className="text-blue-600"
-                                      />
-                                    </FormControl>
-                                    <span className="text-white text-sm">Correct</span>
-                                  </FormItem>
-                                )}
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {question.type === 'TRUE_FALSE' && (
-                        <FormField
-                          control={form.control}
-                          name={`questions.${questionIndex}.correctAnswer`}
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="text-white">Correct Answer *</FormLabel>
-                              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                <FormControl>
-                                  <SelectTrigger className="bg-white/5 border-white/20 text-white">
-                                    <SelectValue placeholder="Select correct answer" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent className="bg-white/10 border-white/20">
-                                  <SelectItem value="true" className="text-white">True</SelectItem>
-                                  <SelectItem value="false" className="text-white">False</SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      )}
-
-                      {question.type === 'SHORT_ANSWER' && (
-                        <FormField
-                          control={form.control}
-                          name={`questions.${questionIndex}.correctAnswer`}
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="text-white">Sample Answer (Optional)</FormLabel>
+                    {question.type === 'TRUE_FALSE' && (
+                      <FormField
+                        control={form.control}
+                        name={`questions.${questionIndex}.correctAnswer`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Correct answer *</FormLabel>
+                            <Select onValueChange={field.onChange} defaultValue={field.value}>
                               <FormControl>
-                                <Textarea 
-                                  placeholder="Enter a sample correct answer..." 
-                                  className="bg-white/5 border-white/20 text-white placeholder:text-white/40"
-                                  {...field} 
-                                />
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select correct answer" />
+                                </SelectTrigger>
                               </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      )}
-                    </CardContent>
-                  </Card>
+                              <SelectContent>
+                                <SelectItem value="true">True</SelectItem>
+                                <SelectItem value="false">False</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
+
+                    {question.type === 'SHORT_ANSWER' && (
+                      <FormField
+                        control={form.control}
+                        name={`questions.${questionIndex}.correctAnswer`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Sample answer (optional)</FormLabel>
+                            <FormControl>
+                              <Textarea placeholder="Enter a sample correct answer…" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
+                  </article>
                 ))}
-              </CardContent>
-            </Card>
+              </div>
+            </section>
           )}
 
-          {/* Step 3: Review */}
           {currentStep === 3 && (
-            <Card className="rounded-xl shadow-lg bg-white/10 border border-white/10">
-              <CardHeader>
-                <CardTitle className="text-xl text-white">Review Quiz</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <h3 className="text-lg font-medium text-white mb-4">Basic Information</h3>
-                    <div className="space-y-2 text-white/80">
-                      <p><strong>Title:</strong> {form.getValues('title')}</p>
-                      <p><strong>Description:</strong> {form.getValues('description') || 'None'}</p>
-                      <p><strong>Sections:</strong> {sectionIds.length === 0 ? 'None' : sectionIds.map(id => courses.find(c => c.id === id)?.title || id).join(', ')}</p>
-                      <p><strong>Max Attempts:</strong> {form.getValues('maxAttempts')}</p>
-                      <p><strong>Time Limit:</strong> {form.getValues('timeLimit')} minutes</p>
-                      <p><strong>Start Date:</strong> {form.getValues('startDate') ? format(form.getValues('startDate')!, 'PPP') : 'None'}</p>
-                      <p><strong>End Date:</strong> {form.getValues('endDate') ? format(form.getValues('endDate')!, 'PPP') : 'None'}</p>
-                      <p><strong>Hide Feedback Until After Due Date:</strong> {form.getValues('hideFeedbackAfterDue') ? 'Yes' : 'No'}</p>
-                    </div>
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-medium text-white mb-4">Questions ({watchedQuestions.length})</h3>
-                    <div className="space-y-2">
-                      {watchedQuestions.map((question: any, index: number) => (
-                        <div key={index} className="text-white/80">
-                          <p><strong>Q{index + 1}:</strong> {question.question}</p>
-                          <p className="text-sm text-white/60">Type: {question.type} | Points: {question.points}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+            <section className="paper paper-shadow p-6 md:p-8 flex flex-col gap-6">
+              <header>
+                <span className="eyebrow text-ink-faint">Step 3</span>
+                <h2 className="font-display text-2xl text-ink mt-1">Review</h2>
+              </header>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div>
+                  <h3 className="eyebrow text-ink-faint mb-3">Basics</h3>
+                  <dl className="text-sm flex flex-col gap-2">
+                    <div className="flex gap-2"><dt className="text-ink-muted w-32 shrink-0">Title</dt><dd className="text-ink">{form.getValues('title')}</dd></div>
+                    <div className="flex gap-2"><dt className="text-ink-muted w-32 shrink-0">Description</dt><dd className="text-ink">{form.getValues('description') || '—'}</dd></div>
+                    <div className="flex gap-2"><dt className="text-ink-muted w-32 shrink-0">Sections</dt><dd className="text-ink">{sectionIds.length === 0 ? '—' : sectionIds.map(id => courses.find(c => c.id === id)?.title || id).join(', ')}</dd></div>
+                    <div className="flex gap-2"><dt className="text-ink-muted w-32 shrink-0">Max attempts</dt><dd className="text-ink tnum">{form.getValues('maxAttempts')}</dd></div>
+                    <div className="flex gap-2"><dt className="text-ink-muted w-32 shrink-0">Time limit</dt><dd className="text-ink tnum">{form.getValues('timeLimit')} min</dd></div>
+                    <div className="flex gap-2"><dt className="text-ink-muted w-32 shrink-0">Passing score</dt><dd className="text-ink tnum">{form.getValues('passingScore')}%</dd></div>
+                    <div className="flex gap-2"><dt className="text-ink-muted w-32 shrink-0">Start</dt><dd className="text-ink">{form.getValues('startDate') ? format(form.getValues('startDate')!, 'PPP') : '—'}</dd></div>
+                    <div className="flex gap-2"><dt className="text-ink-muted w-32 shrink-0">End</dt><dd className="text-ink">{form.getValues('endDate') ? format(form.getValues('endDate')!, 'PPP') : '—'}</dd></div>
+                    <div className="flex gap-2"><dt className="text-ink-muted w-32 shrink-0">Delay feedback</dt><dd className="text-ink">{form.getValues('hideFeedbackAfterDue') ? 'Yes' : 'No'}</dd></div>
+                  </dl>
                 </div>
-              </CardContent>
-            </Card>
+                <div>
+                  <h3 className="eyebrow text-ink-faint mb-3">Questions ({watchedQuestions.length})</h3>
+                  <ol className="flex flex-col gap-3 text-sm">
+                    {watchedQuestions.map((question: any, index: number) => (
+                      <li key={index} className="border-l-2 border-rule pl-3">
+                        <p className="text-ink"><span className="text-ink-faint tnum">Q{index + 1}.</span> {question.question || <em className="text-ink-faint">Untitled</em>}</p>
+                        <p className="text-xs text-ink-faint mt-1">{question.type.replace('_', ' ').toLowerCase()} · {question.points} {question.points === 1 ? 'pt' : 'pts'}</p>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              </div>
+            </section>
           )}
 
-          {/* Navigation Buttons */}
-          <div className="flex justify-between mt-8">
+          <div className="flex justify-between mt-2">
             <Button
               type="button"
               onClick={prevStep}
               disabled={currentStep === 1}
-              variant="secondary"
-              className={cn(
-                "font-semibold rounded-lg shadow min-w-[120px] h-12 transition-all border border-white/20",
-                currentStep === 1 ? "bg-gray-700 text-white/40 cursor-not-allowed opacity-60" : "bg-white/10 text-white hover:bg-white/20"
-              )}
+              variant="outline"
             >
-              <ArrowLeft className="w-4 h-4 mr-2" />
+              <ArrowLeft className="h-4 w-4" />
               Previous
             </Button>
 
@@ -970,38 +971,18 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
                 type="button"
                 onClick={nextStep}
                 disabled={courses.length === 0}
-                className={cn(
-                  "font-semibold rounded-lg shadow min-w-[120px] h-12 transition-all",
-                  courses.length === 0 
-                    ? "bg-gray-700 text-white/40 cursor-not-allowed opacity-60" 
-                    : "bg-blue-600 hover:bg-blue-700 text-white"
-                )}
               >
                 Next
-                <ArrowRight className="w-4 h-4 ml-2" />
+                <ArrowRight className="h-4 w-4" />
               </Button>
             ) : (
               <Button
                 type="submit"
                 disabled={isSubmitting || sectionIds.length === 0 || courses.length === 0}
-                className={cn(
-                  "font-semibold rounded-lg shadow min-w-[120px] h-12 transition-all",
-                  (isSubmitting || sectionIds.length === 0 || courses.length === 0)
-                    ? "bg-gray-700 text-white/40 cursor-not-allowed opacity-60"
-                    : "bg-green-600 hover:bg-green-700 text-white"
-                )}
+                loading={isSubmitting}
               >
-                {isSubmitting ? (
-                  <>
-                    <Save className="w-4 h-4 mr-2 animate-spin" />
-                    Creating...
-                  </>
-                ) : (
-                  <>
-                    <Save className="w-4 h-4 mr-2" />
-                    Create Quiz
-                  </>
-                )}
+                <Save className="h-4 w-4" />
+                {isSubmitting ? 'Creating…' : 'Create quiz'}
               </Button>
             )}
           </div>

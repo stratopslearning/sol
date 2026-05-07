@@ -1,5 +1,6 @@
 "use client";
 
+import { apiUrl } from '@/lib/basePath';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { 
@@ -28,7 +29,7 @@ export default function LeaveSectionButton({ sectionId, sectionName, onSuccess }
   const handleLeaveSection = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/student/section/${sectionId}/leave`, {
+      const response = await fetch(apiUrl(`/api/student/section/${sectionId}/leave`), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -59,32 +60,27 @@ export default function LeaveSectionButton({ sectionId, sectionName, onSuccess }
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
-        <Button variant="outline" size="sm" className="text-red-400 hover:text-red-300 hover:bg-red-400/10">
-          <LogOut className="w-4 h-4 mr-2" />
-          Leave Section
+        <Button variant="outline" size="sm">
+          <LogOut className="h-4 w-4" />
+          Leave section
         </Button>
       </AlertDialogTrigger>
-      <AlertDialogContent className="bg-[#18181b] border border-white/10">
+      <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle className="text-white">Leave Section</AlertDialogTitle>
-          <AlertDialogDescription className="text-white/60">
-            Are you sure you want to leave <strong>{sectionName}</strong>? 
-            You will lose access to all quizzes and materials for this section.
+          <span className="eyebrow text-ink-faint">Leave</span>
+          <AlertDialogTitle>Leave {sectionName}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            You will lose access to quizzes and materials for this section. You
+            can re-join later with a new code.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel className="bg-white/10 border-white/20 text-white hover:bg-white/20">
-            Cancel
-          </AlertDialogCancel>
-          <AlertDialogAction
-            onClick={handleLeaveSection}
-            disabled={isLoading}
-            className="bg-red-600 hover:bg-red-700 text-white"
-          >
-            {isLoading ? 'Leaving...' : 'Leave Section'}
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={handleLeaveSection} disabled={isLoading}>
+            {isLoading ? "Leaving…" : "Leave section"}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
   );
-} 
+}

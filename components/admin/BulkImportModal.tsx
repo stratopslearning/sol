@@ -1,8 +1,8 @@
 "use client";
+import { apiUrl } from '@/lib/basePath';
 import { useState, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -126,7 +126,7 @@ export default function BulkImportModal() {
     setImportResults([]);
 
     try {
-      const response = await fetch('/api/admin/users/bulk-import', {
+      const response = await fetch(apiUrl('/api/admin/users/bulk-import'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -192,195 +192,160 @@ export default function BulkImportModal() {
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <Button className="bg-blue-600 hover:bg-blue-700 text-white">
-          <Users className="w-4 h-4 mr-2" />
-          Bulk Import Users
+        <Button>
+          <Users className="h-4 w-4" />
+          Bulk import
         </Button>
       </DialogTrigger>
-      
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-bold">Bulk Import Users</DialogTitle>
+          <span className="eyebrow text-ink-faint">Onboarding</span>
+          <DialogTitle>Bulk import users</DialogTitle>
         </DialogHeader>
 
         {currentStep === 'upload' && (
-          <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Upload className="w-5 h-5" />
-                  Step 1: Upload CSV File
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
-                  <Upload className="w-12 h-12 mx-auto text-gray-400 mb-4" />
-                  <p className="text-lg font-medium mb-2">Upload your CSV file</p>
-                  <p className="text-gray-500 mb-4">
-                    Drag and drop a CSV file here, or click to browse
-                  </p>
-                  <Button onClick={() => fileInputRef.current?.click()}>
-                    Choose File
-                  </Button>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".csv"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                  />
-                </div>
-                
-                <div className="flex items-center justify-center">
-                  <Button variant="outline" onClick={downloadTemplate}>
-                    <Download className="w-4 h-4 mr-2" />
-                    Download Template
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+          <div className="flex flex-col gap-6">
+            <section className="border border-rule rounded-md p-8 text-center bg-surface-sunken/40">
+              <Upload className="h-8 w-8 mx-auto text-ink-faint mb-3" />
+              <p className="font-display text-lg text-ink mb-1">Upload a CSV</p>
+              <p className="text-sm text-ink-muted mb-5">
+                Drag and drop a CSV file here, or click to browse.
+              </p>
+              <div className="flex items-center justify-center gap-2">
+                <Button onClick={() => fileInputRef.current?.click()}>
+                  Choose file
+                </Button>
+                <Button variant="outline" onClick={downloadTemplate}>
+                  <Download className="h-4 w-4" />
+                  Template
+                </Button>
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+            </section>
           </div>
         )}
 
         {currentStep === 'preview' && (
-          <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <CheckCircle className="w-5 h-5 text-green-500" />
-                  Step 2: Preview Data
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="mb-4">
-                  <p className="text-sm text-gray-600">
-                    {csvData.length} users ready for import
-                  </p>
-                </div>
-                
-                <div className="max-h-64 overflow-y-auto border rounded-lg">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50 sticky top-0">
-                      <tr>
-                        <th className="px-3 py-2 text-left font-medium">Email</th>
-                        <th className="px-3 py-2 text-left font-medium">Name</th>
-                        <th className="px-3 py-2 text-left font-medium">Role</th>
-                        <th className="px-3 py-2 text-left font-medium">Paid</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200">
-                      {csvData.map((user, index) => (
-                        <tr key={index} className="hover:bg-gray-50">
-                          <td className="px-3 py-2">{user.email}</td>
-                          <td className="px-3 py-2">
-                            {user.firstName} {user.lastName}
-                          </td>
-                          <td className="px-3 py-2">
-                            <Badge variant={
-                              user.role === 'ADMIN' ? 'default' :
-                              user.role === 'PROFESSOR' ? 'secondary' : 'outline'
-                            }>
-                              {user.role}
-                            </Badge>
-                          </td>
-                          <td className="px-3 py-2">
-                            <Badge variant={user.paid ? 'default' : 'outline'}>
-                              {user.paid ? 'Yes' : 'No'}
-                            </Badge>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
+          <div className="flex flex-col gap-6">
+            <header className="flex items-center justify-between">
+              <span className="eyebrow text-ink-faint">
+                {csvData.length} users ready for import
+              </span>
+            </header>
+
+            <div className="paper border border-rule rounded-md overflow-hidden max-h-72 overflow-y-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-surface-sunken/40 border-b border-rule sticky top-0">
+                  <tr>
+                    <th className="px-4 py-2.5 text-left eyebrow text-ink-faint">Email</th>
+                    <th className="px-4 py-2.5 text-left eyebrow text-ink-faint">Name</th>
+                    <th className="px-4 py-2.5 text-left eyebrow text-ink-faint">Role</th>
+                    <th className="px-4 py-2.5 text-left eyebrow text-ink-faint">Paid</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-rule">
+                  {csvData.map((user, index) => (
+                    <tr key={index} className="hover:bg-surface-sunken/40">
+                      <td className="px-4 py-2.5 text-ink">{user.email}</td>
+                      <td className="px-4 py-2.5 text-ink-muted">
+                        {user.firstName} {user.lastName}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <Badge
+                          variant={
+                            user.role === 'ADMIN'
+                              ? 'default'
+                              : user.role === 'PROFESSOR'
+                                ? 'info'
+                                : 'outline'
+                          }
+                        >
+                          {user.role.toLowerCase()}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <Badge variant={user.paid ? 'success' : 'outline'}>
+                          {user.paid ? 'Yes' : 'No'}
+                        </Badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
             <div className="flex justify-between">
               <Button variant="outline" onClick={() => setCurrentStep('upload')}>
                 Back
               </Button>
-              <Button onClick={handleImport} disabled={isImporting}>
-                {isImporting ? 'Importing...' : 'Start Import'}
+              <Button onClick={handleImport} disabled={isImporting} loading={isImporting}>
+                {isImporting ? 'Importing…' : 'Start import'}
               </Button>
             </div>
           </div>
         )}
 
         {currentStep === 'importing' && (
-          <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Upload className="w-5 h-5 animate-spin" />
-                  Step 3: Importing Users
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span>Progress</span>
-                    <span>{Math.round(importProgress)}%</span>
-                  </div>
-                  <Progress value={importProgress} className="w-full" />
-                </div>
-                <p className="text-center text-gray-600">
-                  Please wait while we create users in Clerk and sync them to the database...
-                </p>
-              </CardContent>
-            </Card>
+          <div className="flex flex-col gap-4 paper border border-rule rounded-md p-6">
+            <div className="flex items-center gap-2">
+              <Upload className="h-4 w-4 animate-spin text-ink-faint" />
+              <span className="eyebrow text-ink-faint">Importing</span>
+            </div>
+            <div className="flex justify-between text-xs text-ink-faint tnum">
+              <span>Progress</span>
+              <span>{Math.round(importProgress)}%</span>
+            </div>
+            <Progress value={importProgress} />
+            <p className="text-sm text-ink-muted">
+              Creating users in Clerk and syncing to the database…
+            </p>
           </div>
         )}
 
         {currentStep === 'complete' && (
-          <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <CheckCircle className="w-5 h-5 text-green-500" />
-                  Import Complete
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {importResults.map((result, index) => (
-                    <Alert key={index} variant={result.success ? 'default' : 'destructive'}>
-                      {result.success ? (
-                        <CheckCircle className="w-4 h-4" />
-                      ) : (
-                        <XCircle className="w-4 h-4" />
-                      )}
-                      <AlertDescription>{result.message}</AlertDescription>
-                    </Alert>
-                  ))}
-                </div>
-                
-                <div className="mt-6 text-center">
-                  <p className="text-green-600 font-medium">
-                    Import process completed successfully!
-                  </p>
-                  <p className="text-sm text-gray-600 mt-2">
-                    The page will refresh automatically to show the new users.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
+          <div className="flex flex-col gap-6">
+            <div className="flex items-center gap-2 eyebrow text-success-fg">
+              <CheckCircle className="h-3.5 w-3.5" />
+              Import complete
+            </div>
+
+            <ul className="flex flex-col gap-2">
+              {importResults.map((result, index) => (
+                <Alert key={index} variant={result.success ? 'default' : 'destructive'}>
+                  {result.success ? (
+                    <CheckCircle className="h-4 w-4" />
+                  ) : (
+                    <XCircle className="h-4 w-4" />
+                  )}
+                  <AlertDescription>{result.message}</AlertDescription>
+                </Alert>
+              ))}
+            </ul>
+
+            <p className="text-sm text-ink-muted text-center">
+              Page will refresh automatically.
+            </p>
 
             <div className="flex justify-center">
-              <Button onClick={() => handleOpenChange(false)}>
-                Close
-              </Button>
+              <Button onClick={() => handleOpenChange(false)}>Close</Button>
             </div>
           </div>
         )}
 
         {validationErrors.length > 0 && (
           <Alert variant="destructive">
-            <AlertCircle className="w-4 h-4" />
+            <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              <div className="space-y-2">
-                <p className="font-medium">Validation Errors:</p>
-                <ul className="list-disc list-inside space-y-1">
+              <div className="flex flex-col gap-1">
+                <span className="font-medium">Validation errors</span>
+                <ul className="list-disc list-inside flex flex-col gap-0.5">
                   {validationErrors.map((error, index) => (
                     <li key={index} className="text-sm">{error}</li>
                   ))}

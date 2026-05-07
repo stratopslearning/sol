@@ -1,12 +1,22 @@
 "use client";
+
 import { useState } from "react";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 
-export default function StudentEnrollForm({ onEnrolled }: { onEnrolled?: (section: { id: string; name: string; course: { title: string } }) => void }) {
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { apiUrl } from "@/lib/basePath";
+
+export default function StudentEnrollForm({
+  onEnrolled,
+}: {
+  onEnrolled?: (section: {
+    id: string;
+    name: string;
+    course: { title: string };
+  }) => void;
+}) {
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -16,20 +26,19 @@ export default function StudentEnrollForm({ onEnrolled }: { onEnrolled?: (sectio
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/student/enroll", {
+      const res = await fetch(apiUrl("/api/student/enroll"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enrollmentCode: code.trim() })
+        body: JSON.stringify({ enrollmentCode: code.trim() }),
       });
       const data = await res.json();
       if (res.ok) {
-        toast.success(`Successfully enrolled in ${data.section.name}`, {
+        toast.success(`Joined ${data.section.name}`, {
           description: `Course: ${data.section.course.title}`,
         });
         setCode("");
         if (onEnrolled) onEnrolled(data.section);
-        // Refresh to show new enrollment
-        setTimeout(() => window.location.reload(), 1000);
+        setTimeout(() => window.location.reload(), 800);
       } else {
         const errorMsg = data.error || "Failed to enroll";
         setError(errorMsg);
@@ -44,46 +53,44 @@ export default function StudentEnrollForm({ onEnrolled }: { onEnrolled?: (sectio
   };
 
   return (
-    <Card className="mb-8 bg-white/10 border border-white/10 hover:shadow-lg transition-shadow animate-scale-in">
-      <CardHeader>
-        <CardTitle className="text-lg text-white">Join a Section</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="enrollment-code" className="text-white/80">Enrollment Code</Label>
-            <Input
-              id="enrollment-code"
-              placeholder="Enter enrollment code"
-              value={code}
-              onChange={e => {
-                setCode(e.target.value);
-                setError(null);
-              }}
-              className={`bg-white/5 border-white/20 text-white focus:ring-2 focus:ring-blue-500/50 ${
-                error ? 'border-red-500/50 focus:ring-red-500/50' : ''
-              }`}
-              required
-              minLength={4}
-              aria-invalid={!!error}
-              aria-describedby={error ? "enrollment-error" : undefined}
-            />
-            {error && (
-              <p id="enrollment-error" className="text-sm text-red-400 animate-slide-down" role="alert">
-                {error}
-              </p>
-            )}
-          </div>
-          <Button 
-            type="submit" 
-            disabled={loading || !code.trim()} 
-            className="w-full"
-            loading={loading}
-          >
-            {loading ? "Enrolling..." : "Join Section"}
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
+    <section className="paper paper-shadow p-6 mb-8">
+      <header>
+        <span className="eyebrow text-ink-faint">Join</span>
+        <h2 className="font-display text-lg text-ink mt-1">Add a section</h2>
+      </header>
+      <form
+        onSubmit={handleSubmit}
+        className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end"
+      >
+        <div className="flex-1 flex flex-col gap-2">
+          <Label htmlFor="enrollment-code">Enrolment code</Label>
+          <Input
+            id="enrollment-code"
+            placeholder="Enter the code your professor shared"
+            value={code}
+            onChange={(e) => {
+              setCode(e.target.value);
+              setError(null);
+            }}
+            aria-invalid={!!error}
+            aria-describedby={error ? "enrollment-error" : undefined}
+            required
+            minLength={4}
+          />
+          {error ? (
+            <p id="enrollment-error" className="text-sm text-danger" role="alert">
+              {error}
+            </p>
+          ) : null}
+        </div>
+        <Button
+          type="submit"
+          disabled={loading || !code.trim()}
+          loading={loading}
+        >
+          {loading ? "Joining…" : "Join section"}
+        </Button>
+      </form>
+    </section>
   );
-} 
+}

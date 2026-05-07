@@ -4,6 +4,8 @@ import { quizSections, professorSections, users } from '@/app/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { getAuth } from '@clerk/nextjs/server';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: NextRequest, context: { params: Promise<{ sectionId: string, quizId: string }> }) {
   const { userId } = getAuth(req);
   if (!userId) {

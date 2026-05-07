@@ -3,6 +3,10 @@ import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import { db } from '@/app/db';
 import { sections, professorSections } from '@/app/db/schema';
 import { eq, and } from 'drizzle-orm';
+import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
+import { activeOnly } from '@/lib/db/filters';
+
+export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
   try {
@@ -11,6 +15,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const limited = await enforceRateLimit({
+      key: `enroll-professor:${user.id}`,
+      limit: 10,
+      windowMs: 60_000,
+      prefix: 'rl',
+      message: 'Too many enrollment attempts. Please wait a moment.',
+    });
+    if (limited) return limited;
+
     const { enrollmentCode } = await req.json();
     if (!enrollmentCode) {
       return NextResponse.json({ error: 'Enrollment code is required' }, { status: 400 });
@@ -18,7 +31,10 @@ export async function POST(req: NextRequest) {
 
     // Find section by professor enrollment code
     const section = await db.query.sections.findFirst({
-      where: eq(sections.professorEnrollmentCode, enrollmentCode),
+      where: and(
+        eq(sections.professorEnrollmentCode, enrollmentCode),
+        activeOnly(sections.deletedAt),
+      ),
     });
 
     if (!section) {

@@ -6,27 +6,42 @@ import { Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all duration-200 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive active:scale-[0.98]",
+  [
+    "inline-flex items-center justify-center gap-2 whitespace-nowrap select-none",
+    "rounded-md text-sm font-medium font-sans",
+    "transition-all duration-150 ease-out",
+    "disabled:pointer-events-none disabled:opacity-50",
+    "[&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0",
+    "outline-none focus-visible:outline-2 focus-visible:outline-brand focus-visible:outline-offset-2",
+    "active:translate-y-px",
+  ].join(" "),
   {
     variants: {
       variant: {
         default:
-          "bg-primary text-primary-foreground shadow-xs hover:bg-primary/90 hover:shadow-sm",
+          "bg-brand text-brand-foreground hover:bg-brand-hover paper-shadow",
         destructive:
-          "bg-destructive text-white shadow-xs hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60 hover:shadow-sm",
+          "bg-danger text-paper hover:opacity-90 paper-shadow",
         outline:
-          "border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 hover:shadow-sm",
+          "border border-rule bg-surface text-ink hover:bg-surface-sunken hover:border-rule-strong",
         secondary:
-          "bg-secondary text-secondary-foreground shadow-xs hover:bg-secondary/80 hover:shadow-sm",
+          "bg-surface-sunken text-ink border border-rule hover:bg-surface hover:border-rule-strong",
         ghost:
-          "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
-        link: "text-primary underline-offset-4 hover:underline",
+          "text-ink-muted hover:text-ink hover:bg-surface-sunken",
+        link:
+          "text-brand underline underline-offset-4 decoration-brand-soft hover:decoration-brand p-0 h-auto",
+        editorial:
+          "bg-ink text-paper hover:bg-ink/90 paper-shadow font-medium uppercase tracking-[0.08em] text-xs",
+        accent:
+          "bg-accent text-accent-foreground hover:opacity-90 paper-shadow",
       },
       size: {
         default: "h-9 px-4 py-2 has-[>svg]:px-3",
-        sm: "h-8 rounded-md gap-1.5 px-3 has-[>svg]:px-2.5",
-        lg: "h-10 rounded-md px-6 has-[>svg]:px-4",
+        sm: "h-8 rounded-md gap-1.5 px-3 has-[>svg]:px-2.5 text-xs",
+        lg: "h-11 rounded-md px-6 text-base has-[>svg]:px-5",
+        xl: "h-12 rounded-md px-8 text-base has-[>svg]:px-6",
         icon: "size-9",
+        iconSm: "size-8",
       },
     },
     defaultVariants: {
@@ -53,12 +68,8 @@ function Button({
 }: ButtonProps) {
   const Comp = asChild ? Slot : "button"
 
-  // When using asChild, we can't add the loading spinner as a sibling
-  // because Slot expects exactly one child
   if (asChild && loading) {
-    // If asChild is true and loading is true, we need to wrap children
-    // But this breaks asChild pattern, so we'll just disable loading when asChild is true
-    console.warn('Button: loading prop is ignored when asChild is true');
+    console.warn('Button: loading prop is ignored when asChild is true')
   }
 
   return (

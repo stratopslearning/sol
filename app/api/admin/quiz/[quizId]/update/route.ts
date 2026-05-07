@@ -1,12 +1,48 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/app/db';
-import { quizzes, questions, quizSections, users } from '@/app/db/schema';
-import { eq } from 'drizzle-orm';
 import { auth } from '@clerk/nextjs/server';
+import { eq } from 'drizzle-orm';
+import { z } from 'zod';
+
+import { db } from '@/app/db';
+import { questions, quizSections, quizzes, users } from '@/app/db/schema';
+
+export const dynamic = 'force-dynamic';
+
+const isoDateString = z
+  .string()
+  .refine((v) => !Number.isNaN(new Date(v).getTime()), {
+    message: 'Invalid date string',
+  });
+
+const adminQuizUpdateSchema = z.object({
+  title: z.string().min(1).max(200),
+  description: z.string().max(4_000).optional().nullable(),
+  maxAttempts: z.number().int().min(1).max(20),
+  timeLimit: z.number().int().min(1).max(24 * 60).optional().nullable(),
+  passingScore: z.number().int().min(0).max(100).default(60),
+  startDate: isoDateString.optional().nullable(),
+  endDate: isoDateString.optional().nullable(),
+  isActive: z.boolean().default(true),
+  questions: z
+    .array(
+      z.object({
+        id: z.string().optional(),
+        type: z.enum(['MULTIPLE_CHOICE', 'TRUE_FALSE', 'SHORT_ANSWER']),
+        question: z.string().min(1).max(4_000),
+        options: z.array(z.string().max(2_000)).optional().nullable(),
+        correctAnswer: z.string().max(2_000).optional().nullable(),
+        points: z.number().int().min(1).max(100).default(1),
+      }),
+    )
+    .default([]),
+  sectionIds: z
+    .array(z.string().uuid())
+    .min(1, 'At least one section must be assigned to the quiz.'),
+});
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ quizId: string }> }
+  { params }: { params: Promise<{ quizId: string }> },
 ) {
   try {
     const { quizId } = await params;
@@ -14,80 +50,71 @@ export async function PUT(
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    
-    // Check if user is admin
-    const user = await db.query.users.findFirst({ where: eq(users.clerkId, userId) });
+
+    const user = await db.query.users.findFirst({
+      where: eq(users.clerkId, userId),
+    });
     if (!user || user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
+      return NextResponse.json(
+        { error: 'Forbidden - Admin access required' },
+        { status: 403 },
+      );
     }
 
     const body = await request.json();
-    const {
-      title,
-      description,
-      maxAttempts,
-      timeLimit,
-      startDate,
-      endDate,
-      isActive,
-      questions: quizQuestions,
-      sectionIds = []
-    } = body;
-
-    if (!sectionIds || sectionIds.length === 0) {
-      return NextResponse.json({ error: 'At least one section must be assigned to the quiz.' }, { status: 400 });
+    const parsed = adminQuizUpdateSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Validation error', details: parsed.error.errors },
+        { status: 400 },
+      );
     }
+    const data = parsed.data;
 
-    // Update quiz
-    // Note: startDate and endDate are already ISO strings in UTC from the client
-    // We just need to convert them to Date objects - no need for toUTC conversion
-    await db.update(quizzes)
-      .set({
-        title,
-        description,
-        maxAttempts,
-        timeLimit,
-        startDate: startDate ? new Date(startDate) : null,
-        endDate: endDate ? new Date(endDate) : null,
-        isActive,
-        updatedAt: new Date(),
-      })
-      .where(eq(quizzes.id, quizId));
+    await db.transaction(async (tx) => {
+      await tx
+        .update(quizzes)
+        .set({
+          title: data.title,
+          description: data.description ?? null,
+          maxAttempts: data.maxAttempts,
+          timeLimit: data.timeLimit ?? null,
+          passingScore: data.passingScore,
+          startDate: data.startDate ? new Date(data.startDate) : null,
+          endDate: data.endDate ? new Date(data.endDate) : null,
+          isActive: data.isActive,
+          updatedAt: new Date(),
+        })
+        .where(eq(quizzes.id, quizId));
 
-    // Delete existing questions
-    await db.delete(questions).where(eq(questions.quizId, quizId));
+      await tx.delete(questions).where(eq(questions.quizId, quizId));
 
-    // Insert new questions
-    if (quizQuestions && quizQuestions.length > 0) {
-      const questionsToInsert = quizQuestions.map((q: any, index: number) => ({
-        id: q.id.startsWith('temp-') ? undefined : q.id,
-        quizId: quizId,
-        type: q.type,
-        question: q.question,
-        options: q.options,
-        correctAnswer: q.correctAnswer,
-        points: q.points,
-        order: index + 1,
-      }));
+      if (data.questions.length > 0) {
+        const questionsToInsert = data.questions.map((q, index) => ({
+          quizId,
+          type: q.type,
+          question: q.question,
+          options: q.options ?? null,
+          correctAnswer: q.correctAnswer ?? null,
+          points: q.points,
+          order: index + 1,
+        }));
+        await tx.insert(questions).values(questionsToInsert);
+      }
 
-      await db.insert(questions).values(questionsToInsert);
-    }
-
-    // Update quiz-section assignments
-    await db.delete(quizSections).where(eq(quizSections.quizId, quizId));
-    
-    if (sectionIds && sectionIds.length > 0) {
-      const quizSectionAssignments = sectionIds.map((sectionId: string) => ({
-        quizId: quizId,
-        sectionId,
-        assignedBy: user.id,
-      }));
-      await db.insert(quizSections).values(quizSectionAssignments);
-    }
+      await tx.delete(quizSections).where(eq(quizSections.quizId, quizId));
+      await tx.insert(quizSections).values(
+        data.sectionIds.map((sectionId) => ({
+          quizId,
+          sectionId,
+          assignedBy: user.id,
+        })),
+      );
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error updating quiz:', error);
     return NextResponse.json({ error: 'Failed to update quiz' }, { status: 500 });
   }
-} 
+}

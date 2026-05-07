@@ -5,6 +5,8 @@ import { z } from 'zod';
 import { auth } from '@clerk/nextjs/server';
 import { eq } from 'drizzle-orm';
 
+export const dynamic = 'force-dynamic';
+
 function generateEnrollmentCode() {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 }

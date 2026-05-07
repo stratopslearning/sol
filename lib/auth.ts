@@ -1,4 +1,5 @@
-import { redirect } from 'next/navigation';
+import { paymentsEnabled } from './featureFlags';
+import { appRedirect } from './serverRedirect';
 import { getOrCreateUser, getUser, UserData } from './getOrCreateUser';
 
 /**
@@ -8,7 +9,7 @@ export async function requireAuth(): Promise<UserData> {
   const user = await getOrCreateUser();
   
   if (!user) {
-    redirect('/login');
+    appRedirect('/login');
   }
   
   return user;
@@ -21,20 +22,23 @@ export async function requireRole(requiredRole: UserData['role']): Promise<UserD
   const user = await requireAuth();
   
   if (user.role !== requiredRole && user.role !== 'ADMIN') {
-    redirect('/unauthorized');
+    appRedirect('/unauthorized');
   }
   
   return user;
 }
 
 /**
- * Middleware helper to check if student has paid
+ * Middleware helper to check if student has paid.
+ *
+ * No-op when the payments feature flag is disabled — all authenticated
+ * students are treated as entitled.
  */
 export async function requirePayment(): Promise<UserData> {
   const user = await requireAuth();
   
-  if (user.role === 'STUDENT' && !user.paid) {
-    redirect('/payment');
+  if (paymentsEnabled() && user.role === 'STUDENT' && !user.paid) {
+    appRedirect('/payment');
   }
   
   return user;

@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { auth, clerkClient } from '@clerk/nextjs/server';
+import { eq } from 'drizzle-orm';
+import { z } from 'zod';
+
 import { db } from '@/app/db';
 import { users } from '@/app/db/schema';
-import { z } from 'zod';
-import { auth } from '@clerk/nextjs/server';
-import { eq } from 'drizzle-orm';
-import { clerkClient } from '@clerk/express';
+import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
+
+export const dynamic = 'force-dynamic';
 
 // Validation schema for user import data
 const userImportSchema = z.object({
@@ -43,6 +46,18 @@ export async function POST(req: NextRequest) {
         error: 'Forbidden - Admin access required' 
       }, { status: 403 });
     }
+
+    // Bulk import is expensive (network round-trips to Clerk per user). Cap
+    // each admin to a low rate so a stuck loop or malicious admin can't
+    // hammer Clerk and trigger their abuse protection.
+    const limited = await enforceRateLimit({
+      key: `bulk-import:${admin.id}`,
+      limit: 5,
+      windowMs: 60 * 60_000,
+      prefix: 'rl',
+      message: 'Bulk import rate limit exceeded. Please try again later.',
+    });
+    if (limited) return limited;
 
     // Parse and validate request body
     const body = await req.json();
@@ -83,44 +98,71 @@ export async function POST(req: NextRequest) {
           continue;
         }
 
-        // Create user in Clerk
+        // Create user in Clerk first.
+        const clerk = await clerkClient();
         let clerkUser;
         try {
-          clerkUser = await clerkClient.users.createUser({
+          clerkUser = await clerk.users.createUser({
             emailAddress: [userData.email],
             firstName: userData.firstName || undefined,
             lastName: userData.lastName || undefined,
-            skipPasswordRequirement: true, // Users will set password via email verification
+            skipPasswordRequirement: true,
             skipPasswordChecks: true,
           });
         } catch (clerkError: any) {
-          // Handle Clerk-specific errors
           if (clerkError.errors?.[0]?.code === 'form_identifier_exists') {
             results.push({
               success: false,
               message: `User with email ${userData.email} already exists in Clerk`,
-              details: { email: userData.email, error: 'Email already exists in Clerk' }
+              details: { email: userData.email, error: 'Email already exists in Clerk' },
             });
           } else {
             results.push({
               success: false,
               message: `Failed to create user in Clerk: ${clerkError.message || 'Unknown error'}`,
-              details: { email: userData.email, error: clerkError.message }
+              details: { email: userData.email, error: clerkError.message },
             });
           }
           errorCount++;
           continue;
         }
 
-        // Create user in our database
-        const [dbUser] = await db.insert(users).values({
-          clerkId: clerkUser.id,
-          email: userData.email,
-          firstName: userData.firstName || null,
-          lastName: userData.lastName || null,
-          role: userData.role,
-          paid: userData.paid,
-        }).returning();
+        // Create user in our database. If this fails we MUST roll back the
+        // Clerk user we just created — otherwise we end up with a Clerk
+        // identity that has no row in our DB and the next admin re-import
+        // hits "form_identifier_exists" forever.
+        let dbUser;
+        try {
+          [dbUser] = await db
+            .insert(users)
+            .values({
+              clerkId: clerkUser.id,
+              email: userData.email,
+              firstName: userData.firstName || null,
+              lastName: userData.lastName || null,
+              role: userData.role,
+              paid: userData.paid,
+            })
+            .returning();
+        } catch (dbError: any) {
+          // Compensating action: best-effort delete in Clerk so the next
+          // import retry of the same email succeeds.
+          try {
+            await clerk.users.deleteUser(clerkUser.id);
+          } catch (compensateError) {
+            console.error(
+              'Bulk import compensation failed: created Clerk user could not be deleted after DB insert failed',
+              { email: userData.email, clerkId: clerkUser.id, compensateError },
+            );
+          }
+          results.push({
+            success: false,
+            message: `Failed to persist user ${userData.email}: ${dbError.message || 'Unknown error'}`,
+            details: { email: userData.email, error: dbError.message },
+          });
+          errorCount++;
+          continue;
+        }
 
         results.push({
           success: true,

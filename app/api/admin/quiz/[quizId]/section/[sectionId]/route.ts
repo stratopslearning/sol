@@ -4,6 +4,8 @@ import { quizSections, users } from '@/app/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { auth } from '@clerk/nextjs/server';
 
+export const dynamic = 'force-dynamic';
+
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ quizId: string; sectionId: string }> }

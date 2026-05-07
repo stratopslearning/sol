@@ -1,156 +1,205 @@
-import { redirect } from 'next/navigation';
-import { getOrCreateUser } from '@/lib/getOrCreateUser';
-import { db } from '@/app/db';
-import { attempts, quizzes } from '@/app/db/schema';
-import { eq } from 'drizzle-orm';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { CheckCircle, XCircle, FileText, LogOut, BarChart2 } from 'lucide-react';
-import { SidebarProvider } from '@/components/ui/sidebar';
-import { SignOutButton } from '@clerk/nextjs';
-import { questions } from '@/app/db/schema';
-import { GPTFeedbackDisplay } from '@/components/quiz/GPTFeedbackDisplay';
-import { shouldHideFeedbackForStudent, normalizeDatabaseDate } from '@/lib/utils';
+import { eq } from "drizzle-orm";
+
+import { db } from "@/app/db";
+import { attempts, questions } from "@/app/db/schema";
+import { AppShell } from "@/components/layout/AppShell";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { GPTFeedbackDisplay } from "@/components/quiz/GPTFeedbackDisplay";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { withBasePath } from "@/lib/basePath";
+import { appRedirect } from "@/lib/serverRedirect";
+import { getOrCreateUser } from "@/lib/getOrCreateUser";
+import {
+  normalizeDatabaseDate,
+  shouldHideFeedbackForStudent,
+} from "@/lib/utils";
 
 interface ReviewPageProps {
   params: Promise<{ quizId: string }>;
   searchParams: Promise<{ attemptId?: string }>;
 }
 
-export default async function ReviewPage({ params, searchParams }: ReviewPageProps) {
+export default async function ReviewPage({
+  params,
+  searchParams,
+}: ReviewPageProps) {
   const p = await params;
   const sp = await searchParams;
   const attemptId = sp.attemptId;
   const quizId = p.quizId;
   const user = await getOrCreateUser();
-  if (!user) redirect('/login');
+  if (!user) appRedirect("/login");
 
-  if (!attemptId) {
-    redirect('/dashboard/student');
-  }
+  if (!attemptId) appRedirect("/dashboard/student");
 
-  // Fetch the attempt
   const attempt = await db.query.attempts.findFirst({
     where: eq(attempts.id, attemptId),
-    with: {
-      quiz: true,
-    },
+    with: { quiz: true },
   });
 
   if (!attempt || attempt.studentId !== user.id) {
-    redirect('/dashboard/student');
+    appRedirect("/dashboard/student");
   }
 
   const quiz = attempt.quiz;
-  // Fetch questions for this quiz
   const quizQuestions = await db.query.questions.findMany({
     where: eq(questions.quizId, quizId),
     orderBy: (questions, { asc }) => asc(questions.order),
   });
-  const answers: Record<string, any> = attempt.answers || {};
+  const answers: Record<string, any> = (attempt.answers as any) || {};
   const gptFeedback: Record<string, any> = attempt.gptFeedback || {};
 
-  // Check if feedback should be hidden for this user
   const shouldHideFeedback = shouldHideFeedbackForStudent(
     { endDate: quiz.endDate, description: quiz.description },
-    user.role
+    user.role,
   );
 
   return (
-    <SidebarProvider>
-      <div className="min-h-screen w-screen bg-[#030303] flex">
-        {/* Sidebar */}
-        <aside className="hidden md:flex sticky top-0 h-screen w-64 bg-white/5 border-r border-white/10 flex-col p-6">
-          <div className="mb-8">
-            <div className="text-lg font-bold text-white flex items-center gap-2"><FileText className="w-5 h-5" /> S-O-L</div>
-            <div className="text-xs text-white/40">Student Dashboard</div>
-          </div>
-          <nav className="flex flex-col gap-2">
-            <a href="/dashboard/student" className="flex items-center gap-2 text-white/90 hover:bg-white/10 rounded px-3 py-2 font-medium"><BarChart2 className="w-4 h-4" /> Dashboard</a>
-            <a href="/dashboard/student/grades" className="flex items-center gap-2 text-white/80 hover:bg-white/10 rounded px-3 py-2"><CheckCircle className="w-4 h-4" /> My Grades</a>
-            <SignOutButton redirectUrl="/">
-              <button className="flex items-center gap-2 text-red-400 hover:bg-red-400/10 rounded px-3 py-2 mt-8 w-full text-left">
-                <LogOut className="w-4 h-4" /> Logout
-              </button>
-            </SignOutButton>
-          </nav>
-          <div className="mt-auto pt-8 flex flex-col gap-2">
-            <div>
-              <Badge className={user.paid ? 'bg-green-600/20 text-green-400 border-green-600' : 'bg-red-600/20 text-red-400 border-red-600'}>
-                {user.paid ? 'Paid' : 'Unpaid'}
-              </Badge>
-            </div>
-            <div className="text-xs text-white/30">&copy; {new Date().getFullYear()} S-O-L</div>
-          </div>
-        </aside>
-        {/* Main Content */}
-        <main className="flex-1 flex flex-col items-center py-10 px-2 md:px-8 bg-gradient-to-br from-[#18181b] to-[#030303] min-h-screen">
-          <Card className="max-w-2xl mx-auto w-full shadow-2xl border-2 border-white/10 bg-[#18181b]/90">
-            <CardHeader className="text-center">
-              <CardTitle className="text-2xl text-white">Review Answers</CardTitle>
-              <p className="text-gray-300 mt-2 font-medium">{quiz.title}</p>
-            </CardHeader>
-            <CardContent className="space-y-8">
-              {quizQuestions.map((q, idx) => (
-                <div key={q.id} className="space-y-4">
-                  <div className="bg-white/10 border border-white/10 rounded-xl p-6 shadow-md">
-                    <div className="font-semibold text-lg text-white mb-2">Q{idx + 1}: {q.question}</div>
-                    <div className="mb-2">
-                      <span className="text-gray-300 font-medium">Your Answer: </span>
-                      <span className="text-white">{answers[q.id] ?? <span className="italic text-gray-400">No answer</span>}</span>
-                    </div>
-                  </div>
-                  {/* Enhanced GPT Feedback Display */}
-                  {q.type === 'SHORT_ANSWER' && gptFeedback[q.id] && !shouldHideFeedback && (
-                    <GPTFeedbackDisplay
-                      feedback={gptFeedback[q.id]}
-                      questionText={q.question}
-                      studentAnswer={answers[q.id] || ''}
-                      className="mt-2"
-                    />
-                  )}
-                  {/* Simple feedback for MCQ/TF questions */}
-                  {q.type !== 'SHORT_ANSWER' && gptFeedback[q.id]?.feedback && !shouldHideFeedback && (
-                    <div className="bg-blue-900/30 border border-blue-500/30 rounded-xl p-6 shadow-md">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-sm font-semibold text-blue-300">Question Result</span>
-                      </div>
-                      <p className="text-base text-blue-100 font-medium">
-                        {gptFeedback[q.id].feedback}
-                      </p>
-                    </div>
-                  )}
-                  {/* Feedback hidden message */}
-                  {shouldHideFeedback && (
-                    <div className="bg-yellow-900/30 border border-yellow-500/30 rounded-xl p-6 shadow-md">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-sm font-semibold text-yellow-300">Feedback Status</span>
-                      </div>
-                      <p className="text-base text-yellow-100 font-medium italic">
-                        {quiz.endDate && (() => {
-                          const endDate = normalizeDatabaseDate(quiz.endDate);
-                          return endDate ? new Date() <= endDate : false;
-                        })() 
-                          ? "Feedback will be available after the due date" 
-                          : "Feedback is now available"}
-                      </p>
-                    </div>
+    <AppShell
+      role="student"
+      active="quizzes"
+      topbarEyebrow="Review"
+      topbarTitle={quiz.title}
+      maxWidth="narrow"
+      user={{
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        paid: user.paid,
+      }}
+    >
+      <PageHeader
+        breadcrumbs={[
+          { label: "Dashboard", href: withBasePath("/dashboard/student") },
+          {
+            label: "Quiz result",
+            href: withBasePath(
+              `/quiz/${quizId}/results?attemptId=${attemptId}`,
+            ),
+          },
+          { label: "Review" },
+        ]}
+        eyebrow="Review"
+        title={quiz.title}
+        description="A walk through your responses, with feedback where available."
+      />
+
+      <section className="mt-12 flex flex-col gap-4">
+        {quizQuestions.map((q, idx) => {
+          const studentAnswer = answers[q.id];
+          const noAnswer =
+            studentAnswer === undefined ||
+            studentAnswer === null ||
+            studentAnswer === "";
+          let isCorrect = false;
+          if (q.type === "SHORT_ANSWER") {
+            isCorrect = gptFeedback[q.id]?.score === q.points;
+          } else {
+            isCorrect = studentAnswer === q.correctAnswer;
+          }
+
+          return (
+            <article key={q.id} className="paper paper-shadow p-6 md:p-8">
+              <header className="flex items-start justify-between gap-4 flex-wrap">
+                <div className="flex flex-col gap-1">
+                  <span className="eyebrow text-ink-faint">
+                    Question {idx + 1}
+                  </span>
+                  <h2 className="font-display text-xl text-ink leading-snug">
+                    {q.question}
+                  </h2>
+                </div>
+                <div className="shrink-0">
+                  {noAnswer ? (
+                    <Badge variant="outline">Skipped</Badge>
+                  ) : isCorrect ? (
+                    <Badge variant="success">Correct</Badge>
+                  ) : (
+                    <Badge variant="destructive">Incorrect</Badge>
                   )}
                 </div>
-              ))}
-              <div className="flex space-x-4 pt-6">
-                <Button asChild className="flex-1 text-lg font-semibold py-3">
-                  <a href={`/quiz/${quizId}/results?attemptId=${attemptId}`}>Back to Results</a>
-                </Button>
-                <Button asChild variant="outline" className="flex-1 text-lg font-semibold py-3">
-                  <a href="/dashboard/student">Back to Dashboard</a>
-                </Button>
+              </header>
+
+              <div className="mt-5 hairline" />
+
+              <div className="mt-5 flex flex-col gap-3">
+                <span className="eyebrow text-ink-faint">Your answer</span>
+                <div className="text-ink">
+                  {noAnswer ? (
+                    <em className="text-ink-faint">No answer</em>
+                  ) : (
+                    String(studentAnswer)
+                  )}
+                </div>
+                {!shouldHideFeedback &&
+                q.type !== "SHORT_ANSWER" &&
+                q.correctAnswer ? (
+                  <p className="text-xs text-ink-faint">
+                    Expected:{" "}
+                    <span className="text-ink-muted">
+                      {String(q.correctAnswer)}
+                    </span>
+                  </p>
+                ) : null}
               </div>
-            </CardContent>
-          </Card>
-        </main>
+
+              {q.type === "SHORT_ANSWER" &&
+              gptFeedback[q.id] &&
+              !shouldHideFeedback ? (
+                <div className="mt-6">
+                  <GPTFeedbackDisplay
+                    feedback={gptFeedback[q.id]}
+                    questionText={q.question}
+                    studentAnswer={String(studentAnswer ?? "")}
+                  />
+                </div>
+              ) : null}
+
+              {q.type !== "SHORT_ANSWER" &&
+              gptFeedback[q.id]?.feedback &&
+              !shouldHideFeedback ? (
+                <div className="mt-6 border border-info/30 bg-info-soft/40 rounded-md p-4">
+                  <span className="eyebrow text-info-fg">Feedback</span>
+                  <p className="text-sm text-ink mt-2">
+                    {gptFeedback[q.id].feedback}
+                  </p>
+                </div>
+              ) : null}
+
+              {shouldHideFeedback ? (
+                <div className="mt-6 border border-warning/30 bg-warning-soft/40 rounded-md p-4">
+                  <span className="eyebrow text-warning-fg">Feedback</span>
+                  <p className="text-sm text-ink-muted italic mt-2">
+                    {quiz.endDate &&
+                    (() => {
+                      const endDate = normalizeDatabaseDate(quiz.endDate);
+                      return endDate ? new Date() <= endDate : false;
+                    })()
+                      ? "Feedback will be available after the due date."
+                      : "Feedback is now available."}
+                  </p>
+                </div>
+              ) : null}
+            </article>
+          );
+        })}
+      </section>
+
+      <div className="mt-12 flex flex-col sm:flex-row gap-3 justify-center">
+        <Button asChild>
+          <a
+            href={withBasePath(
+              `/quiz/${quizId}/results?attemptId=${attemptId}`,
+            )}
+          >
+            Back to result
+          </a>
+        </Button>
+        <Button asChild variant="outline">
+          <a href={withBasePath("/dashboard/student")}>Back to dashboard</a>
+        </Button>
       </div>
-    </SidebarProvider>
+    </AppShell>
   );
-} 
+}
