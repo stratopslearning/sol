@@ -4,6 +4,24 @@ import { eq } from 'drizzle-orm';
 import { db } from '@/app/db';
 import { users as dbUsers } from '@/app/db/schema';
 
+/**
+ * Next.js signals "this page must be dynamic" by throwing internal errors with
+ * a `digest` like `DYNAMIC_SERVER_USAGE` or `NEXT_REDIRECT` during static
+ * prerender. Those are control flow, not real failures, and the framework
+ * expects them to bubble. Catching/logging them pollutes build output and can
+ * also swallow `redirect()` from server helpers.
+ */
+function isNextInternalError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const digest = (error as { digest?: unknown }).digest;
+  if (typeof digest !== 'string') return false;
+  return (
+    digest === 'DYNAMIC_SERVER_USAGE' ||
+    digest === 'NEXT_NOT_FOUND' ||
+    digest.startsWith('NEXT_REDIRECT')
+  );
+}
+
 export interface UserData {
   id: string;
   clerkId: string;
@@ -81,6 +99,7 @@ export async function getOrCreateUser(): Promise<UserData | null> {
 
     return upserted as UserData;
   } catch (error) {
+    if (isNextInternalError(error)) throw error;
     console.error('Error in getOrCreateUser:', error);
     return null;
   }
@@ -98,6 +117,7 @@ export async function getUser(): Promise<UserData | null> {
     });
     return user as UserData | null;
   } catch (error) {
+    if (isNextInternalError(error)) throw error;
     console.error('Error in getUser:', error);
     return null;
   }
@@ -122,6 +142,7 @@ export async function updateUser(
       .returning();
     return updatedUser as UserData;
   } catch (error) {
+    if (isNextInternalError(error)) throw error;
     console.error('Error in updateUser:', error);
     return null;
   }
