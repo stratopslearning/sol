@@ -31,7 +31,12 @@ export default clerkMiddleware(async (auth, req) => {
     // Payment product details must be public so the payment page can render.
     appPath === '/api/stripe/product' ||
     appPath.startsWith('/api/stripe/product') ||
-    appPath.startsWith('/api/stripe/webhook');
+    appPath.startsWith('/api/stripe/webhook') ||
+    // Sentry tunnel route (configured via `tunnelRoute` in next.config.ts).
+    // The browser SDK POSTs error envelopes here; gating it behind auth would
+    // 302 the request and silently drop client-side error reports.
+    appPath === '/monitoring' ||
+    appPath.startsWith('/monitoring/');
 
   if (isPublic) {
     return;

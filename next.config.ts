@@ -28,9 +28,11 @@ export default withSentryConfig(nextConfig, {
 
   // Route browser requests to Sentry through a Next.js rewrite to circumvent ad-blockers.
   // This can increase your server load as well as your hosting bill.
-  // Note: Check that the configured route will not match with your Next.js middleware, otherwise reporting of client-
-  // side errors will fail.
-  tunnelRoute: `${BASE_PATH}/monitoring`,
+  // IMPORTANT: pass a path RELATIVE to basePath. The Sentry plugin / Next will
+  // prepend `basePath` automatically; including it here causes a doubled prefix
+  // (e.g. `/learning/learning/monitoring`) and 500s on Sentry envelope POSTs.
+  // Also: middleware must allow `/monitoring` as public — see middleware.ts.
+  tunnelRoute: "/monitoring",
 
   webpack: {
     // Enables automatic instrumentation of Vercel Cron Monitors. (Does not yet work with App Router route handlers.)
