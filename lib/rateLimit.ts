@@ -11,8 +11,6 @@
 import { Ratelimit } from '@upstash/ratelimit';
 import { Redis } from '@upstash/redis';
 
-import { env } from '@/lib/env';
-
 export interface RateLimitResult {
   success: boolean;
   limit: number;
@@ -55,14 +53,15 @@ function getUpstashLimiter(
   limit: number,
   windowMs: number,
 ): Ratelimit | null {
-  const e = env();
-  if (!e.UPSTASH_REDIS_REST_URL || !e.UPSTASH_REDIS_REST_TOKEN) {
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) {
     return null;
   }
   if (!redisClient) {
     redisClient = new Redis({
-      url: e.UPSTASH_REDIS_REST_URL,
-      token: e.UPSTASH_REDIS_REST_TOKEN,
+      url,
+      token,
     });
   }
   const cacheKey = `${prefix}:${limit}:${windowMs}`;
