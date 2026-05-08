@@ -16,15 +16,20 @@ export async function requireAuth(): Promise<UserData> {
 }
 
 /**
- * Middleware helper to check if user has required role
+ * Middleware helper to check if user has required role.
+ *
+ * On role mismatch we redirect users to their own role's dashboard rather than
+ * to `/unauthorized` (which doesn't exist). This mirrors the behavior the edge
+ * middleware used to provide before the DB-aware checks were moved here for
+ * edge-runtime compatibility.
  */
 export async function requireRole(requiredRole: UserData['role']): Promise<UserData> {
   const user = await requireAuth();
-  
+
   if (user.role !== requiredRole && user.role !== 'ADMIN') {
-    appRedirect('/unauthorized');
+    appRedirect(getDashboardUrl(user.role));
   }
-  
+
   return user;
 }
 
