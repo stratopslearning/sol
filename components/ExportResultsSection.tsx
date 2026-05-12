@@ -59,8 +59,8 @@ export default function ExportResultsSection({
           Download attempts as a CSV. Filter by quiz or date range.
         </p>
       </header>
-      <div className="mt-5 grid gap-4 sm:grid-cols-3">
-        <div className="flex flex-col gap-2 sm:col-span-3">
+      <div className="mt-5 grid gap-4 sm:grid-cols-2">
+        <div className="flex flex-col gap-2 sm:col-span-2">
           <Label htmlFor="export-quiz">Quiz</Label>
           <Select value={quizId || "all"} onValueChange={setQuizId}>
             <SelectTrigger id="export-quiz">
@@ -94,7 +94,7 @@ export default function ExportResultsSection({
             onChange={(e) => setDateTo(e.target.value)}
           />
         </div>
-        <div className="flex items-end">
+        <div className="sm:col-span-2">
           <Button
             onClick={handleExport}
             disabled={downloading}

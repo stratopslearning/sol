@@ -789,7 +789,11 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
                         <FormItem>
                           <FormLabel>Question text *</FormLabel>
                           <FormControl>
-                            <Textarea placeholder="Enter your question…" {...field} />
+                            <Textarea
+                              placeholder="Enter your question..."
+                              {...field}
+                              value={field.value ?? ''}
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -906,7 +910,11 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
                           <FormItem>
                             <FormLabel>Sample answer (optional)</FormLabel>
                             <FormControl>
-                              <Textarea placeholder="Enter a sample correct answer…" {...field} />
+                              <Textarea
+                                placeholder="Enter a sample correct answer..."
+                                {...field}
+                                value={field.value ?? ''}
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>

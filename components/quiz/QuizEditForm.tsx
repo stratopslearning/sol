@@ -23,7 +23,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { SectionMultiSelect } from '@/components/ui/SectionMultiSelect';
-import { formatDateTimeUTC, fromUTC, extractQuizMetadata } from '@/lib/utils';
+import { cleanQuizDescription, extractQuizMetadata } from '@/lib/utils';
 
 interface Question {
   id: string;
@@ -33,6 +33,20 @@ interface Question {
   correctAnswer?: string | null;
   points: number;
   order: number;
+}
+
+function normalizeQuestion(question: Question, index: number): Question {
+  return {
+    ...question,
+    id: question.id || `question-${index}`,
+    question: question.question || '',
+    options: Array.isArray(question.options) ? question.options : question.options ?? null,
+    correctAnswer: question.correctAnswer || '',
+    points:
+      typeof question.points === 'number' && !Number.isNaN(question.points)
+        ? question.points
+        : 1,
+  };
 }
 
 interface Quiz {
@@ -101,7 +115,7 @@ export function QuizEditForm({ quiz, courses, apiEndpoint = `/api/professor/quiz
   // Form state
   const [formData, setFormData] = useState({
     title: quiz.title,
-    description: quiz.description || '',
+    description: cleanQuizDescription(quiz.description),
     courseId: quiz.courseId || 'global',
     maxAttempts: quiz.maxAttempts,
     timeLimit: quiz.timeLimit || 30,
@@ -116,13 +130,15 @@ export function QuizEditForm({ quiz, courses, apiEndpoint = `/api/professor/quiz
   });
   const [passingScoreError, setPassingScoreError] = useState<string | null>(null);
 
-  const [questions, setQuestions] = useState<Question[]>(quiz.questions || []);
+  const [questions, setQuestions] = useState<Question[]>(
+    (quiz.questions || []).map(normalizeQuestion),
+  );
   const [sectionIds, setSectionIds] = useState<string[]>(assignedSectionIds);
   const [sectionError, setSectionError] = useState<string | null>(null);
 
   const addQuestion = () => {
     const newQuestion: Question = {
-      id: `temp-${Date.now()}`,
+      id: `temp-${Date.now()}-${questions.length}`,
       type: 'MULTIPLE_CHOICE',
       question: '',
       options: ['', '', '', ''],
@@ -130,25 +146,30 @@ export function QuizEditForm({ quiz, courses, apiEndpoint = `/api/professor/quiz
       points: 1,
       order: questions.length + 1,
     };
-    setQuestions([...questions, newQuestion]);
+    setQuestions((current) => [...current, newQuestion]);
   };
 
   const removeQuestion = (index: number) => {
-    setQuestions(questions.filter((_, i) => i !== index));
+    setQuestions((current) => current.filter((_, i) => i !== index));
   };
 
   const updateQuestion = (index: number, field: keyof Question, value: any) => {
-    const updatedQuestions = [...questions];
-    updatedQuestions[index] = { ...updatedQuestions[index], [field]: value };
-    setQuestions(updatedQuestions);
+    setQuestions((current) =>
+      current.map((question, i) =>
+        i === index ? { ...question, [field]: value } : question,
+      ),
+    );
   };
 
   const updateQuestionOption = (questionIndex: number, optionIndex: number, value: string) => {
-    const updatedQuestions = [...questions];
-    const options = [...(updatedQuestions[questionIndex].options || [])];
-    options[optionIndex] = value;
-    updatedQuestions[questionIndex] = { ...updatedQuestions[questionIndex], options };
-    setQuestions(updatedQuestions);
+    setQuestions((current) =>
+      current.map((question, i) => {
+        if (i !== questionIndex) return question;
+        const options = [...(question.options || [])];
+        options[optionIndex] = value;
+        return { ...question, options };
+      }),
+    );
   };
 
   const onSubmit = async () => {

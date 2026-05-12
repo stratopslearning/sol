@@ -35,11 +35,37 @@ import {
 import { withBasePath } from "@/lib/basePath";
 
 const ROWS_PER_PAGE = 15;
+type SortMode = "DEFAULT" | "DUE_ASC" | "DUE_DESC";
 
 function getStatusBadge(status: "Active" | "Draft" | "Closed") {
   if (status === "Active") return <Badge variant="success">Active</Badge>;
   if (status === "Draft") return <Badge variant="warning">Draft</Badge>;
   return <Badge variant="outline">Closed</Badge>;
+}
+
+function formatDate(value: string | Date | null | undefined) {
+  return value ? new Date(value).toLocaleDateString() : null;
+}
+
+function dueTime(value: string | Date | null | undefined) {
+  if (!value) return null;
+  const time = new Date(value).getTime();
+  return Number.isNaN(time) ? null : time;
+}
+
+function sortByDueDate<T extends { endDate?: string | Date | null }>(
+  quizzes: T[],
+  sortMode: SortMode,
+) {
+  if (sortMode === "DEFAULT") return quizzes;
+  return [...quizzes].sort((a, b) => {
+    const aDue = dueTime(a.endDate);
+    const bDue = dueTime(b.endDate);
+    if (aDue == null && bDue == null) return 0;
+    if (aDue == null) return 1;
+    if (bDue == null) return -1;
+    return sortMode === "DUE_ASC" ? aDue - bDue : bDue - aDue;
+  });
 }
 
 export default function ProfessorQuizzesTableClient({
@@ -51,10 +77,11 @@ export default function ProfessorQuizzesTableClient({
 }) {
   const [sectionFilter, setSectionFilter] = useState<string>("ALL");
   const [search, setSearch] = useState("");
+  const [sortMode, setSortMode] = useState<SortMode>("DEFAULT");
   const [page, setPage] = useState(1);
 
   const filteredQuizzes = useMemo(() => {
-    return quizzesWithStats.filter((quiz) => {
+    const filtered = quizzesWithStats.filter((quiz) => {
       const matchesSearch =
         !search || quiz.title.toLowerCase().includes(search.toLowerCase());
       const sectionIds =
@@ -65,7 +92,8 @@ export default function ProfessorQuizzesTableClient({
         sectionFilter === "ALL" || sectionIds.includes(sectionFilter);
       return matchesSearch && matchesSection;
     });
-  }, [quizzesWithStats, search, sectionFilter]);
+    return sortByDueDate(filtered, sortMode);
+  }, [quizzesWithStats, search, sectionFilter, sortMode]);
 
   const totalPages = Math.max(
     1,
@@ -79,7 +107,7 @@ export default function ProfessorQuizzesTableClient({
 
   useEffect(() => {
     setPage(1);
-  }, [search, sectionFilter]);
+  }, [search, sectionFilter, sortMode]);
 
   if (quizzesWithStats.length === 0) {
     return (
@@ -121,6 +149,21 @@ export default function ProfessorQuizzesTableClient({
             </SelectContent>
           </Select>
         </div>
+        <div className="md:w-52">
+          <Select
+            value={sortMode}
+            onValueChange={(value) => setSortMode(value as SortMode)}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Sort by due date" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="DEFAULT">Default order</SelectItem>
+              <SelectItem value="DUE_ASC">Due date: earliest</SelectItem>
+              <SelectItem value="DUE_DESC">Due date: latest</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         <Input
           type="search"
           placeholder="Search by quiz title…"
@@ -132,17 +175,17 @@ export default function ProfessorQuizzesTableClient({
 
       <div className="paper paper-shadow overflow-hidden">
         <div className="overflow-x-auto">
-          <Table className="table-fixed min-w-[1100px]">
+          <Table className="table-fixed min-w-[1270px]">
             <colgroup>
-              <col className="w-[20%]" />
-              <col className="w-[8%]" />
-              <col className="w-[18%]" />
-              <col className="w-[8%]" />
-              <col className="w-[9%]" />
-              <col className="w-[9%]" />
-              <col className="w-[9%]" />
-              <col className="w-[10%]" />
-              <col className="w-[9%]" />
+              <col className="w-[240px]" />
+              <col className="w-[110px]" />
+              <col className="w-[220px]" />
+              <col className="w-[100px]" />
+              <col className="w-[100px]" />
+              <col className="w-[100px]" />
+              <col className="w-[110px]" />
+              <col className="w-[170px]" />
+              <col className="w-[180px]" />
             </colgroup>
             <TableHeader>
               <TableRow>
@@ -153,8 +196,10 @@ export default function ProfessorQuizzesTableClient({
                 <TableHead className="tnum">Learners</TableHead>
                 <TableHead className="tnum">Attempts</TableHead>
                 <TableHead className="tnum">Average</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead>Dates</TableHead>
+                <TableHead className="sticky right-0 z-10 bg-surface-sunken/95 px-3 text-right">
+                  Actions
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -176,6 +221,8 @@ export default function ProfessorQuizzesTableClient({
                           .filter(Boolean)
                           .join(", ")
                       : "—";
+                  const dueDate = formatDate(quiz.endDate);
+                  const createdDate = formatDate(quiz.createdAt);
                   return (
                     <TableRow key={quiz.id}>
                       <TableCell className="align-top">
@@ -226,16 +273,22 @@ export default function ProfessorQuizzesTableClient({
                           {quiz.averageScore}%
                         </span>
                       </TableCell>
-                      <TableCell className="text-sm text-ink-muted tnum align-top">
-                        {quiz.createdAt
-                          ? new Date(quiz.createdAt).toLocaleDateString()
-                          : "—"}
+                      <TableCell className="text-sm align-top">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-ink tnum">
+                            {dueDate ? `Due ${dueDate}` : "No due date"}
+                          </span>
+                          <span className="text-xs text-ink-faint tnum">
+                            {createdDate ? `Created ${createdDate}` : "Created —"}
+                          </span>
+                        </div>
                       </TableCell>
-                      <TableCell className="text-right align-top">
-                        <div className="flex items-center justify-end">
+                      <TableCell className="sticky right-0 z-10 bg-paper px-3 text-right align-top">
+                        <div className="flex min-w-max items-center justify-end">
                           <QuizActions
                             quizId={quiz.id}
                             isActive={quiz.isActive}
+                            isCreatedByProfessor={quiz.isCreatedByProfessor}
                           />
                         </div>
                       </TableCell>

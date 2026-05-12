@@ -73,6 +73,13 @@ export default async function QuizResultsPage({
   if (!quizAssignment) notFound();
   const quiz = quizAssignment.quiz;
   if (!quiz) notFound();
+  const visibleSectionAssignments = quiz.sectionAssignments.filter((assignment) =>
+    enrolledSectionIds.includes(assignment.section.id),
+  );
+  const sectionSummary =
+    visibleSectionAssignments.length > 0
+      ? visibleSectionAssignments.map((sa) => sa.section.name).join(", ")
+      : "your assigned sections";
 
   // Scope attempts to sections the caller actually teaches. Without this,
   // a co-teaching professor could see attempts from another section even when
@@ -160,48 +167,65 @@ export default async function QuizResultsPage({
         ]}
         eyebrow="Results"
         title={quiz.title}
-        description={
-          quiz.sectionAssignments.length > 0
-            ? `Aggregated results across ${quiz.sectionAssignments
-                .map((sa) => sa.section.name)
-                .join(", ")}.`
-            : "Aggregated results across all assigned sections."
-        }
-        actions={
-          <ExportResultsWrapper
-            quizzes={[{ id: quiz.id, title: quiz.title }]}
-          />
-        }
+        description={`Aggregated results across ${sectionSummary}.`}
       />
 
-      <section className="mt-12 flex flex-col gap-6">
-        <SectionHeading eyebrow="Performance" title="Summary metrics" />
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard
-            label="Submissions"
-            value={totalAttempts}
-            icon={<FileText className="h-4 w-4" />}
-          />
-          <StatCard
-            label="Learners"
-            value={uniqueStudents}
-            icon={<Users className="h-4 w-4" />}
-          />
-          <StatCard
-            label="Average"
-            value={`${averageScore}%`}
-            icon={<TrendingUp className="h-4 w-4" />}
-            accent
-          />
-          <StatCard
-            label="Questions"
-            value={quiz.questions.length}
-            hint={`${quiz.maxAttempts} max attempts`}
-          />
+      <section className="mt-10 grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="paper paper-shadow p-6 lg:p-8">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+            <div className="max-w-2xl">
+              <span className="eyebrow text-ink-faint">Snapshot</span>
+              <h2 className="mt-2 font-display text-2xl text-ink">
+                Performance at a glance.
+              </h2>
+              <p className="mt-3 text-sm leading-6 text-ink-muted">
+                This view is scoped to sections you teach, so submissions and
+                learner counts do not include other sections using the same quiz.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2 lg:justify-end">
+              <Badge variant={quiz.isActive ? "success" : "outline"}>
+                {quiz.isActive ? "Active" : "Inactive"}
+              </Badge>
+              {visibleSectionAssignments.map((assignment) => (
+                <Badge key={assignment.section.id} variant="info">
+                  {assignment.section.name}
+                </Badge>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <StatCard
+              label="Submissions"
+              value={totalAttempts}
+              icon={<FileText className="h-4 w-4" />}
+            />
+            <StatCard
+              label="Learners"
+              value={uniqueStudents}
+              icon={<Users className="h-4 w-4" />}
+            />
+            <StatCard
+              label="Average"
+              value={`${averageScore}%`}
+              icon={<TrendingUp className="h-4 w-4" />}
+              accent
+            />
+            <StatCard
+              label="Questions"
+              value={quiz.questions.length}
+              hint={`${quiz.maxAttempts} max attempts`}
+            />
+          </div>
+        </div>
+
+        <div className="xl:self-start">
+          <ExportResultsWrapper quizzes={[{ id: quiz.id, title: quiz.title }]} />
         </div>
       </section>
 
-      <section className="mt-16">
+      <section className="mt-12">
         <SectionHeading eyebrow="Submissions" title="Per-attempt detail" />
         {quizAttempts.length === 0 ? (
           <div className="mt-6">
@@ -295,7 +319,7 @@ export default async function QuizResultsPage({
         )}
       </section>
 
-      <section className="mt-16">
+      <section className="mt-12">
         <SectionHeading
           eyebrow="Diagnostic"
           title="Question-by-question analysis"

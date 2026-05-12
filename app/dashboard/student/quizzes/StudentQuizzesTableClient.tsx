@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { FileText } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -34,6 +35,7 @@ import { EmptyState } from "@/components/patterns/EmptyState";
 import { formatDateTimeUTC, normalizeDatabaseDate } from "@/lib/utils";
 
 const ROWS_PER_PAGE = 15;
+type SortMode = "DEFAULT" | "DUE_ASC" | "DUE_DESC";
 
 type QuizRow = {
   id: string;
@@ -42,6 +44,24 @@ type QuizRow = {
   maxAttempts: number;
   sectionNames: string[];
 };
+
+function dueTime(value: Date | string | null | undefined) {
+  if (!value) return null;
+  const normalized = normalizeDatabaseDate(value);
+  return normalized ? normalized.getTime() : null;
+}
+
+function sortByDueDate(quizzes: QuizRow[], sortMode: SortMode) {
+  if (sortMode === "DEFAULT") return quizzes;
+  return [...quizzes].sort((a, b) => {
+    const aDue = dueTime(a.endDate);
+    const bDue = dueTime(b.endDate);
+    if (aDue == null && bDue == null) return 0;
+    if (aDue == null) return 1;
+    if (bDue == null) return -1;
+    return sortMode === "DUE_ASC" ? aDue - bDue : bDue - aDue;
+  });
+}
 
 export default function StudentQuizzesTableClient({
   quizzes,
@@ -56,6 +76,7 @@ export default function StudentQuizzesTableClient({
 }) {
   const [search, setSearch] = useState("");
   const [sectionFilter, setSectionFilter] = useState<string>("ALL");
+  const [sortMode, setSortMode] = useState<SortMode>("DEFAULT");
   const [page, setPage] = useState(1);
 
   const sections = useMemo(() => {
@@ -71,14 +92,15 @@ export default function StudentQuizzesTableClient({
   }, [quizzes]);
 
   const filteredQuizzes = useMemo(() => {
-    return quizzes.filter((quiz) => {
+    const filtered = quizzes.filter((quiz) => {
       const matchesSearch =
         !search || quiz.title.toLowerCase().includes(search.toLowerCase());
       const matchesSection =
         sectionFilter === "ALL" || quiz.sectionNames.includes(sectionFilter);
       return matchesSearch && matchesSection;
     });
-  }, [quizzes, search, sectionFilter]);
+    return sortByDueDate(filtered, sortMode);
+  }, [quizzes, search, sectionFilter, sortMode]);
 
   const totalPages = Math.max(
     1,
@@ -92,7 +114,7 @@ export default function StudentQuizzesTableClient({
 
   useEffect(() => {
     setPage(1);
-  }, [search, sectionFilter]);
+  }, [search, sectionFilter, sortMode]);
 
   if (quizzes.length === 0) {
     return (
@@ -120,6 +142,21 @@ export default function StudentQuizzesTableClient({
                   {name}
                 </SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="md:w-52">
+          <Select
+            value={sortMode}
+            onValueChange={(value) => setSortMode(value as SortMode)}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Sort by due date" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="DEFAULT">Default order</SelectItem>
+              <SelectItem value="DUE_ASC">Due date: earliest</SelectItem>
+              <SelectItem value="DUE_DESC">Due date: latest</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -167,7 +204,23 @@ export default function StudentQuizzesTableClient({
               }
 
               let actionButton: React.ReactNode;
-              if (!hasAttempted) {
+              if (isOverdue && (!hasAttempted || canRetake)) {
+                actionButton = (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      toast.error("Quiz due date has passed", {
+                        description:
+                          "This quiz is closed and can no longer be started or retaken.",
+                      })
+                    }
+                  >
+                    {hasAttempted ? "Retake" : "Start"}
+                  </Button>
+                );
+              } else if (!hasAttempted) {
                 actionButton = (
                   <Button asChild size="sm">
                     <Link href={`/quiz/${quiz.id}`}>Start</Link>
