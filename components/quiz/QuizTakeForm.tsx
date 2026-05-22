@@ -14,7 +14,8 @@ import { toast } from "sonner";
 import { QuizTimer } from "@/components/quiz/QuizTimer";
 import { Clock } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useCallback } from "react";
+import { getRemainingSeconds } from "@/lib/quizTimeLimit";
 import { formatDateTimeUTC, shouldHideFeedbackForStudent, cleanQuizDescription } from "@/lib/utils";
 import { apiUrl, withBasePath } from "@/lib/basePath";
 
@@ -57,11 +58,17 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
   const [gptFeedback, setGptFeedback] = useState<Record<string, string>>({});
   const [timeUp, setTimeUp] = useState(false);
   const [startedAt, setStartedAt] = useState<string | null>(null);
+  const [timerInitialSeconds, setTimerInitialSeconds] = useState<number | null>(null);
+  const [showResumeWarning, setShowResumeWarning] = useState(false);
   const [quizStarted, setQuizStarted] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
 
   const router = useRouter();
   const submittingRef = useRef(false);
   const autoSubmitTriggeredRef = useRef(false);
+  const answersRef = useRef<AnswerMap>({});
+  const saveDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const skipNextAutosaveRef = useRef(true);
 
   // Check if feedback should be hidden for this user
   const shouldHideFeedback = shouldHideFeedbackForStudent(
@@ -82,6 +89,35 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
         if (res.ok) {
           const data = await res.json();
           setStartedAt(data.startedAt);
+
+          const restored =
+            data.answers && typeof data.answers === "object"
+              ? (data.answers as AnswerMap)
+              : {};
+          if (Object.keys(restored).length > 0) {
+            setAnswers(restored);
+            answersRef.current = restored;
+          }
+          skipNextAutosaveRef.current = true;
+
+          let remaining: number | null = null;
+          if (typeof data.remainingSeconds === "number") {
+            remaining = data.remainingSeconds;
+          } else if (quiz.timeLimit && data.startedAt) {
+            remaining =
+              getRemainingSeconds(quiz.timeLimit, new Date(data.startedAt)) ?? null;
+          }
+
+          if (quiz.timeLimit && remaining != null) {
+            setTimerInitialSeconds(remaining);
+            if (data.resumed && remaining < 120) {
+              setShowResumeWarning(true);
+            }
+            if (remaining <= 0) {
+              setTimeUp(true);
+            }
+          }
+
           setQuizStarted(true);
         } else {
           const error = await res.json();
@@ -97,7 +133,48 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
       }
     };
     startQuiz();
-  }, [quiz.id, assignmentId, quizStarted, router]);
+  }, [quiz.id, assignmentId, quizStarted, router, quiz.timeLimit]);
+
+  const saveProgress = useCallback(async () => {
+    if (!quizStarted || submitting || !startedAt) return;
+    const payload = answersRef.current;
+    if (Object.keys(payload).length === 0) return;
+
+    setSaveStatus("saving");
+    try {
+      const res = await fetch(apiUrl(`/api/quiz/${quiz.id}/progress`), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ assignmentId, answers: payload }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to save progress");
+      }
+      setSaveStatus("saved");
+    } catch {
+      setSaveStatus("error");
+    }
+  }, [quiz.id, assignmentId, quizStarted, submitting, startedAt]);
+
+  useEffect(() => {
+    answersRef.current = answers;
+    if (!quizStarted || submitting) return;
+    if (skipNextAutosaveRef.current) {
+      skipNextAutosaveRef.current = false;
+      return;
+    }
+    if (Object.keys(answers).length === 0) return;
+
+    if (saveDebounceRef.current) clearTimeout(saveDebounceRef.current);
+    saveDebounceRef.current = setTimeout(() => {
+      saveProgress();
+    }, 800);
+
+    return () => {
+      if (saveDebounceRef.current) clearTimeout(saveDebounceRef.current);
+    };
+  }, [answers, quizStarted, submitting, saveProgress]);
 
   // 2. Auto-submit on exit if not all answered
   useEffect(() => {
@@ -115,7 +192,20 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
       }
     };
 
+    const flushSave = () => {
+      if (!quizStarted || submittingRef.current) return;
+      const payload = answersRef.current;
+      if (Object.keys(payload).length === 0) return;
+      fetch(apiUrl(`/api/quiz/${quiz.id}/progress`), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ assignmentId, answers: payload }),
+        keepalive: true,
+      }).catch(() => undefined);
+    };
+
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      flushSave();
       if (Object.keys(answers).length < questions.length) {
         e.preventDefault();
         e.returnValue = "";
@@ -192,6 +282,7 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ assignmentId, answers, startedAt }),
+        signal: AbortSignal.timeout(150_000),
       });
       if (!res.ok) {
         const error = await res.json();
@@ -203,7 +294,11 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
       router.push(`/quiz/${quiz.id}/results?attemptId=${data.attemptId}`);
     } catch (err) {
       console.error('Quiz submission error:', err);
-      toast.error("Submission failed", { description: (err as Error).message });
+      const message =
+        err instanceof Error && err.name === "TimeoutError"
+          ? "Grading took too long. Please try again — your answers may have been saved."
+          : (err as Error).message;
+      toast.error("Submission failed", { description: message });
     } finally {
       setSubmitting(false);
     }
@@ -297,7 +392,25 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
 
   return (
     <form onSubmit={handleSubmit} className="max-w-3xl mx-auto py-12 px-6">
-      {timeUp && (
+      {showResumeWarning && !timeUp && (
+        <Alert className="mb-6">
+          <Clock className="h-4 w-4" />
+          <AlertDescription>
+            Resuming a session that started earlier — the timer reflects your total
+            time allowed for this attempt.
+          </AlertDescription>
+        </Alert>
+      )}
+      {submitting && (
+        <Alert className="mb-6">
+          <Clock className="h-4 w-4" />
+          <AlertDescription>
+            Grading your answers — this may take 1–2 minutes for short-answer quizzes.
+            Please keep this tab open.
+          </AlertDescription>
+        </Alert>
+      )}
+      {timeUp && !submitting && (
         <Alert variant="destructive" className="mb-6">
           <Clock className="h-4 w-4" />
           <AlertDescription>
@@ -318,14 +431,20 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
               </p>
             ) : null}
           </div>
-          {quiz.timeLimit ? (
+          {quiz.timeLimit && timerInitialSeconds != null && startedAt ? (
             <div className="inline-flex items-center gap-2 paper border border-rule px-3 py-2 rounded">
               <Clock className="h-4 w-4 text-ink-faint" />
               <QuizTimer
-                timeLimit={quiz.timeLimit * 60}
+                key={startedAt}
+                initialSeconds={timerInitialSeconds}
                 onTimeUp={() => setTimeUp(true)}
                 paused={submitting}
               />
+            </div>
+          ) : quiz.timeLimit ? (
+            <div className="inline-flex items-center gap-2 paper border border-rule px-3 py-2 rounded text-sm text-ink-faint">
+              <Clock className="h-4 w-4" />
+              Starting timer…
             </div>
           ) : null}
         </div>
@@ -343,8 +462,19 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
         <div className="mt-4 hairline" />
         <div className="mt-4">
           <Progress value={progress} className="h-1.5" />
-          <div className="text-xs text-ink-faint mt-2 tnum">
-            {answeredCount} of {questions.length} answered
+          <div className="text-xs text-ink-faint mt-2 tnum flex flex-wrap items-center gap-2">
+            <span>
+              {answeredCount} of {questions.length} answered
+            </span>
+            {quizStarted && saveStatus === "saving" ? (
+              <span>· Saving…</span>
+            ) : null}
+            {quizStarted && saveStatus === "saved" ? (
+              <span>· Saved</span>
+            ) : null}
+            {quizStarted && saveStatus === "error" ? (
+              <span className="text-danger">· Save failed</span>
+            ) : null}
           </div>
         </div>
       </header>
@@ -447,7 +577,7 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
           {!quizStarted
             ? "Starting quiz…"
             : submitting
-              ? "Submitting…"
+              ? "Grading…"
               : "Submit quiz"}
         </Button>
       </div>

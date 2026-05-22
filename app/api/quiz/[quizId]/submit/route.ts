@@ -13,11 +13,16 @@ import {
 } from '@/app/db/schema';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
 import { activeOnly } from '@/lib/db/filters';
-import { gradeShortAnswer, type GradingRequest } from '@/lib/grading';
+import { gradeMultipleQuestions, type GradingRequest } from '@/lib/grading';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
+import {
+  getElapsedMinutes,
+  isTimeLimitExceeded,
+} from '@/lib/quizTimeLimit';
 import { normalizeDatabaseDate } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 120;
 
 // Hard input cap: each answer is a string (MCQ id, short-answer text, etc).
 // 10kB per answer is generous; reject anything larger so a malicious caller
@@ -173,14 +178,12 @@ export async function POST(
     const attemptStartTime: Date = inProgressAttempt
       ? inProgressAttempt.startedAt
       : submitTime;
-    const timeElapsedMinutes =
-      (submitTime.getTime() - attemptStartTime.getTime()) / (1000 * 60);
 
-    // Allow a short grace period (mirrors LMS conventions) so an auto-submit
-    // when the client timer hits 0 is accepted under clock skew / network lag.
-    const graceMinutes = Math.max(2, Math.min(5, Math.ceil((quiz.timeLimit ?? 0) * 0.15)));
-    const effectiveLimit = (quiz.timeLimit ?? 0) + graceMinutes;
-    if (quiz.timeLimit && timeElapsedMinutes > effectiveLimit) {
+    if (
+      quiz.timeLimit &&
+      isTimeLimitExceeded(quiz.timeLimit, attemptStartTime, submitTime)
+    ) {
+      const timeElapsedMinutes = getElapsedMinutes(attemptStartTime, submitTime);
       return NextResponse.json(
         {
           error: `Time limit exceeded. The quiz has a ${quiz.timeLimit} minute time limit, but ${Math.ceil(timeElapsedMinutes)} minutes have elapsed.`,
@@ -200,6 +203,10 @@ export async function POST(
     let totalScore = 0;
     let maxScore = 0;
     const gptFeedback: Record<string, any> = {};
+    const shortAnswerGradingRequests: Array<{
+      questionId: string;
+      request: GradingRequest;
+    }> = [];
 
     for (const question of quizQuestions) {
       maxScore += question.points;
@@ -222,33 +229,33 @@ export async function POST(
           totalScore += question.points;
         }
       } else if (question.type === 'SHORT_ANSWER') {
-        try {
-          const gradingRequest: GradingRequest = {
+        shortAnswerGradingRequests.push({
+          questionId: question.id,
+          request: {
             question: question.question,
             studentAnswer: userAnswer,
             correctAnswer: question.correctAnswer || undefined,
             maxPoints: question.points,
             questionType: 'SHORT_ANSWER',
-          };
-
-          const gradingResult = await gradeShortAnswer(gradingRequest);
-          totalScore += gradingResult.score;
-          gptFeedback[question.id] = {
-            score: gradingResult.score,
-            feedback: gradingResult.feedback,
-            confidence: gradingResult.confidence || 80,
-            maxPoints: question.points,
-          };
-        } catch (error) {
-          console.error('Error grading question:', error);
-          gptFeedback[question.id] = {
-            score: 0,
-            feedback: 'Grading temporarily unavailable. Please read the textbook and try again.',
-            confidence: 50,
-            maxPoints: question.points,
-          };
-        }
+          },
+        });
       }
+    }
+
+    if (shortAnswerGradingRequests.length > 0) {
+      const gradingResults = await gradeMultipleQuestions(
+        shortAnswerGradingRequests.map((item) => item.request),
+      );
+      shortAnswerGradingRequests.forEach((item, index) => {
+        const gradingResult = gradingResults[index];
+        totalScore += gradingResult.score;
+        gptFeedback[item.questionId] = {
+          score: gradingResult.score,
+          feedback: gradingResult.feedback,
+          confidence: gradingResult.confidence || 80,
+          maxPoints: item.request.maxPoints,
+        };
+      });
     }
 
     const percentage = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0;

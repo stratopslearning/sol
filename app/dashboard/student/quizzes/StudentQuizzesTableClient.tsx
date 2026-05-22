@@ -65,12 +65,14 @@ function sortByDueDate(quizzes: QuizRow[], sortMode: SortMode) {
 
 export default function StudentQuizzesTableClient({
   quizzes,
-  attemptCountByQuizId,
+  submittedCountByQuizId,
+  inProgressByQuizId,
   bestPercentageByQuizId,
   latestAttemptIdByQuizId,
 }: {
   quizzes: QuizRow[];
-  attemptCountByQuizId: Record<string, number>;
+  submittedCountByQuizId: Record<string, number>;
+  inProgressByQuizId: Record<string, boolean>;
   bestPercentageByQuizId: Record<string, number>;
   latestAttemptIdByQuizId: Record<string, string>;
 }) {
@@ -184,27 +186,29 @@ export default function StudentQuizzesTableClient({
           </TableHeader>
           <TableBody>
             {paginatedQuizzes.map((quiz) => {
-              const attemptCount = attemptCountByQuizId[quiz.id] ?? 0;
+              const submittedCount = submittedCountByQuizId[quiz.id] ?? 0;
+              const inProgress = inProgressByQuizId[quiz.id] ?? false;
               const bestPct = bestPercentageByQuizId[quiz.id] ?? null;
               const latestAttemptId = latestAttemptIdByQuizId[quiz.id] ?? null;
-              const hasAttempted = attemptCount > 0;
+              const hasSubmitted = submittedCount > 0;
               const maxAttempts = quiz.maxAttempts || 1;
-              const canRetake =
-                hasAttempted && maxAttempts > 1 && attemptCount < maxAttempts;
+              const canRetake = submittedCount < maxAttempts;
               const endDate = normalizeDatabaseDate(quiz.endDate);
               const isOverdue = endDate ? endDate < new Date() : false;
 
               let statusBadge: React.ReactNode;
               if (isOverdue) {
                 statusBadge = <Badge variant="destructive">Overdue</Badge>;
-              } else if (hasAttempted) {
+              } else if (hasSubmitted) {
                 statusBadge = <Badge variant="info">Attempted</Badge>;
+              } else if (inProgress) {
+                statusBadge = <Badge variant="warning">In progress</Badge>;
               } else {
                 statusBadge = <Badge variant="outline">Open</Badge>;
               }
 
               let actionButton: React.ReactNode;
-              if (isOverdue && (!hasAttempted || canRetake)) {
+              if (isOverdue && (!hasSubmitted && !inProgress || canRetake)) {
                 actionButton = (
                   <Button
                     type="button"
@@ -217,10 +221,16 @@ export default function StudentQuizzesTableClient({
                       })
                     }
                   >
-                    {hasAttempted ? "Retake" : "Start"}
+                    {hasSubmitted || inProgress ? "Retake" : "Start"}
                   </Button>
                 );
-              } else if (!hasAttempted) {
+              } else if (inProgress) {
+                actionButton = (
+                  <Button asChild size="sm">
+                    <Link href={`/quiz/${quiz.id}`}>Continue</Link>
+                  </Button>
+                );
+              } else if (!hasSubmitted && !inProgress) {
                 actionButton = (
                   <Button asChild size="sm">
                     <Link href={`/quiz/${quiz.id}`}>Start</Link>
@@ -256,7 +266,10 @@ export default function StudentQuizzesTableClient({
                     {bestPct != null ? `${bestPct}%` : "—"}
                   </TableCell>
                   <TableCell className="tnum text-ink-muted">
-                    {attemptCount}/{maxAttempts}
+                    {submittedCount}/{maxAttempts}
+                    {inProgress ? (
+                      <span className="text-ink-faint"> · In progress</span>
+                    ) : null}
                   </TableCell>
                   <TableCell
                     className={isOverdue ? "text-danger" : "text-ink-muted"}

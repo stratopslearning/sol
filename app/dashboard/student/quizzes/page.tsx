@@ -78,21 +78,25 @@ export default async function StudentQuizzesPage() {
       .filter((n): n is string => Boolean(n)),
   }));
 
-  const attemptCountByQuizId: Record<string, number> = {};
+  const submittedCountByQuizId: Record<string, number> = {};
+  const inProgressByQuizId: Record<string, boolean> = {};
   const bestPercentageByQuizId: Record<string, number> = {};
   const latestAttemptIdByQuizId: Record<string, string> = {};
   assignedQuizzes.forEach((quiz) => {
     const list = attemptsByQuiz[quiz.id] ?? [];
-    attemptCountByQuizId[quiz.id] = list.length;
+    const submitted = list.filter((a) => a.submittedAt != null);
+    submittedCountByQuizId[quiz.id] = submitted.length;
+    inProgressByQuizId[quiz.id] = list.some((a) => a.submittedAt == null);
     const best = bestAttemptByQuiz[quiz.id];
     if (best) {
       bestPercentageByQuizId[quiz.id] =
         best.percentage ??
         (best.maxScore ? Math.round(((best.score ?? 0) / best.maxScore) * 100) : 0);
     }
-    const submitted = list.filter((a) => a.submittedAt != null);
     if (submitted.length > 0) {
-      const latest = submitted[submitted.length - 1];
+      const latest = submitted.reduce((a, b) =>
+        new Date(a.submittedAt!).getTime() > new Date(b.submittedAt!).getTime() ? a : b,
+      );
       latestAttemptIdByQuizId[quiz.id] = latest.id;
     }
   });
@@ -111,7 +115,8 @@ export default async function StudentQuizzesPage() {
       <div className="mt-10">
         <StudentQuizzesTableClient
           quizzes={quizzesData}
-          attemptCountByQuizId={attemptCountByQuizId}
+          submittedCountByQuizId={submittedCountByQuizId}
+          inProgressByQuizId={inProgressByQuizId}
           bestPercentageByQuizId={bestPercentageByQuizId}
           latestAttemptIdByQuizId={latestAttemptIdByQuizId}
         />

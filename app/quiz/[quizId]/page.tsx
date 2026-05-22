@@ -47,20 +47,31 @@ export default async function QuizPage(props: QuizPageProps) {
     orderBy: questions.order,
   });
 
-  // Fetch assignment for this student
+  // Fetch or create assignment (upsert-safe for concurrent page loads in dev).
+  const assignmentWhere = and(
+    eq(assignments.quizId, quizId),
+    eq(assignments.studentId, user.id),
+  );
   let assignment = await db.query.assignments.findFirst({
-    where: and(
-      eq(assignments.quizId, quizId),
-      eq(assignments.studentId, user.id)
-    ),
+    where: assignmentWhere,
   });
   if (!assignment) {
-    const [newAssignment] = await db.insert(assignments).values({
-      quizId,
-      studentId: user.id,
-      dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-    }).returning();
-    assignment = newAssignment;
+    await db
+      .insert(assignments)
+      .values({
+        quizId,
+        studentId: user.id,
+        dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      })
+      .onConflictDoNothing({
+        target: [assignments.quizId, assignments.studentId],
+      });
+    assignment = await db.query.assignments.findFirst({
+      where: assignmentWhere,
+    });
+  }
+  if (!assignment) {
+    appRedirect('/dashboard/student');
   }
 
   return (

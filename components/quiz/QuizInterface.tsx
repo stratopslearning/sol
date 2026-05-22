@@ -115,7 +115,7 @@ export function QuizInterface({ quiz, questions, assignment }: QuizInterfaceProp
                 <div className="inline-flex items-center gap-2 paper border border-rule px-3 py-2 rounded">
                   <Clock className="h-4 w-4 text-ink-faint" />
                   <QuizTimer
-                    timeLimit={quiz.timeLimit * 60}
+                    initialSeconds={quiz.timeLimit * 60}
                     onTimeUp={() => setIsTimeUp(true)}
                     paused={isSubmitting}
                   />

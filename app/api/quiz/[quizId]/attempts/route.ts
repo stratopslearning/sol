@@ -53,30 +53,40 @@ export async function GET(
       orderBy: (attempts, { desc }) => [desc(attempts.submittedAt)],
     });
 
-    if (allAttempts.length === 0) {
-      return NextResponse.json({ attempts: [], bestScore: 0, bestPercentage: 0 });
+    const submittedAttempts = allAttempts.filter((a) => a.submittedAt != null);
+
+    const quiz = await db.query.quizzes.findFirst({
+      where: eq(quizzes.id, quizId),
+    });
+    const maxAttempts = quiz?.maxAttempts || 1;
+
+    if (submittedAttempts.length === 0) {
+      return NextResponse.json({
+        attempts: [],
+        bestScore: 0,
+        bestPercentage: 0,
+        totalAttempts: 0,
+        maxAttempts,
+        attemptsRemaining: maxAttempts,
+        inProgress: allAttempts.some((a) => a.submittedAt == null),
+      });
     }
 
-    // Calculate best score
-    const bestScore = Math.max(...allAttempts.map(a => a.score || 0));
-    const candidateMaxScore = allAttempts.find(a => a.maxScore)?.maxScore || 0;
+    // Calculate best score from submitted attempts only
+    const bestScore = Math.max(...submittedAttempts.map((a) => a.score || 0));
+    const candidateMaxScore = submittedAttempts.find((a) => a.maxScore)?.maxScore || 0;
     const bestPercentage = candidateMaxScore > 0
       ? Math.round((bestScore / candidateMaxScore) * 100)
       : 0;
 
-    // Get quiz details for max attempts
-    const quiz = await db.query.quizzes.findFirst({
-      where: eq(quizzes.id, quizId),
-    });
-
-    // Format attempts with attempt numbers
-    const formattedAttempts = allAttempts.map((attempt, index) => ({
+    // Format attempts with attempt numbers (submitted only)
+    const formattedAttempts = submittedAttempts.map((attempt, index) => ({
       id: attempt.id,
       score: attempt.score,
       maxScore: attempt.maxScore,
       percentage: attempt.percentage,
       submittedAt: attempt.submittedAt,
-      attemptNumber: allAttempts.length - index, // Reverse order: latest = highest number
+      attemptNumber: submittedAttempts.length - index,
       gptFeedback: attempt.gptFeedback,
     }));
 
@@ -84,9 +94,10 @@ export async function GET(
       attempts: formattedAttempts,
       bestScore,
       bestPercentage,
-      totalAttempts: allAttempts.length,
-      maxAttempts: quiz?.maxAttempts || 1,
-      attemptsRemaining: (quiz?.maxAttempts || 1) - allAttempts.length,
+      totalAttempts: submittedAttempts.length,
+      maxAttempts,
+      attemptsRemaining: maxAttempts - submittedAttempts.length,
+      inProgress: allAttempts.some((a) => a.submittedAt == null),
     });
 
   } catch (error) {

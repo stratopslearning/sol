@@ -13,6 +13,10 @@ import {
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
 import { activeOnly } from '@/lib/db/filters';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
+import {
+  getRemainingSeconds,
+  isTimeLimitExceeded,
+} from '@/lib/quizTimeLimit';
 import { normalizeDatabaseDate } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
@@ -136,7 +140,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
       ),
     });
     const submittedAttempts = existingAttempts.filter((a) => a.submittedAt != null);
-    const inProgressAttempt = existingAttempts.find((a) => !a.submittedAt);
+    let inProgressAttempt = existingAttempts.find((a) => !a.submittedAt);
 
     // If a resumable in-progress attempt exists, return it without resetting the
     // timer. Resetting would let a student bypass the server-side time limit by
@@ -155,24 +159,50 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
         );
       }
 
-      const startedAt = inProgressAttempt.startedAt;
       const timeLimitMinutes = quiz.timeLimit ?? null;
-      let timeLimitExceeded = false;
-      if (timeLimitMinutes != null) {
-        const elapsedMs = now.getTime() - inProgressAttempt.startedAt.getTime();
-        const elapsedMinutes = elapsedMs / (60 * 1000);
-        timeLimitExceeded = elapsedMinutes >= timeLimitMinutes;
-      }
+      const startedAtDate =
+        inProgressAttempt.startedAt instanceof Date
+          ? inProgressAttempt.startedAt
+          : new Date(inProgressAttempt.startedAt);
 
-      return NextResponse.json({
-        success: true,
-        attemptId: inProgressAttempt.id,
-        startedAt: startedAt instanceof Date ? startedAt.toISOString() : startedAt,
-        timeLimitExceeded,
-        message: timeLimitExceeded
-          ? 'Resuming attempt — time limit already exceeded; submit immediately.'
-          : 'Resuming existing attempt',
-      });
+      // Stale in-progress (past limit + grace): delete and start fresh so the
+      // student is not trapped by a misleading client timer on an old session.
+      if (
+        timeLimitMinutes != null &&
+        isTimeLimitExceeded(timeLimitMinutes, startedAtDate, now)
+      ) {
+        await db.delete(attempts).where(eq(attempts.id, inProgressAttempt.id));
+        inProgressAttempt = undefined;
+      } else {
+        const remainingSeconds = getRemainingSeconds(
+          timeLimitMinutes,
+          startedAtDate,
+          now,
+        );
+        const timeLimitExceeded =
+          timeLimitMinutes != null && (remainingSeconds ?? 1) <= 0;
+
+        const savedAnswers =
+          inProgressAttempt.answers &&
+          typeof inProgressAttempt.answers === 'object' &&
+          !Array.isArray(inProgressAttempt.answers)
+            ? (inProgressAttempt.answers as Record<string, string>)
+            : {};
+
+        return NextResponse.json({
+          success: true,
+          attemptId: inProgressAttempt.id,
+          startedAt: startedAtDate.toISOString(),
+          answers: savedAnswers,
+          timeLimitMinutes,
+          remainingSeconds,
+          timeLimitExceeded,
+          resumed: true,
+          message: timeLimitExceeded
+            ? 'Resuming attempt — time limit reached; submit immediately.'
+            : 'Resuming existing attempt',
+        });
+      }
     }
 
     // No resumable attempt: enforce the cap on the count of *submitted* attempts.
@@ -194,11 +224,23 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
       startedAt: now,
     }).returning();
 
+    const timeLimitMinutes = quiz.timeLimit ?? null;
+    const remainingSeconds = getRemainingSeconds(
+      timeLimitMinutes,
+      attempt.startedAt,
+      now,
+    );
+
     return NextResponse.json({
       success: true,
       attemptId: attempt.id,
       startedAt: attempt.startedAt.toISOString(),
-      message: 'Quiz started'
+      answers: {},
+      timeLimitMinutes,
+      remainingSeconds,
+      timeLimitExceeded: false,
+      resumed: false,
+      message: 'Quiz started',
     });
 
   } catch (error) {

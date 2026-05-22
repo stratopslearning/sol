@@ -1,22 +1,55 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
 
+const DEFAULT_MILESTONE_SECONDS = [300, 120, 60];
+
 interface QuizTimerProps {
-  timeLimit: number;
+  /** Initial seconds remaining (server-synced on resume). */
+  initialSeconds: number;
   onTimeUp: () => void;
   /** When true, the countdown stops (e.g. while submission is in progress). */
   paused?: boolean;
+  /** Remaining-time thresholds (seconds) for one-shot toasts, highest first. */
+  milestoneSeconds?: number[];
+}
+
+function milestoneLabel(seconds: number): string {
+  const minutes = Math.round(seconds / 60);
+  return minutes === 1 ? "1 minute left" : `${minutes} minutes left`;
+}
+
+function notifyMilestone(seconds: number) {
+  const message = milestoneLabel(seconds);
+  const description = "Time is running out on this quiz.";
+  if (seconds <= 120) {
+    toast.warning(message, { description });
+  } else {
+    toast.info(message, { description });
+  }
 }
 
 export function QuizTimer({
-  timeLimit,
+  initialSeconds,
   onTimeUp,
   paused = false,
+  milestoneSeconds = DEFAULT_MILESTONE_SECONDS,
 }: QuizTimerProps) {
-  const [timeRemaining, setTimeRemaining] = useState(timeLimit);
+  const [timeRemaining, setTimeRemaining] = useState(initialSeconds);
+  const firedMilestonesRef = useRef<Set<number>>(new Set());
+
+  const applicableMilestones = useMemo(() => {
+    const sorted = [...milestoneSeconds].sort((a, b) => b - a);
+    return sorted.filter((t) => t > 0 && t <= initialSeconds);
+  }, [milestoneSeconds, initialSeconds]);
+
+  useEffect(() => {
+    setTimeRemaining(initialSeconds);
+    firedMilestonesRef.current.clear();
+  }, [initialSeconds]);
 
   useEffect(() => {
     if (paused) return;
@@ -27,16 +60,31 @@ export function QuizTimer({
 
     const timer = setInterval(() => {
       setTimeRemaining((prev) => {
+        const next = prev <= 1 ? 0 : prev - 1;
+
+        if (!paused) {
+          for (const threshold of applicableMilestones) {
+            if (
+              prev > threshold &&
+              next <= threshold &&
+              !firedMilestonesRef.current.has(threshold)
+            ) {
+              firedMilestonesRef.current.add(threshold);
+              notifyMilestone(threshold);
+            }
+          }
+        }
+
         if (prev <= 1) {
           onTimeUp();
           return 0;
         }
-        return prev - 1;
+        return next;
       });
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [timeRemaining, onTimeUp, paused]);
+  }, [timeRemaining, onTimeUp, paused, applicableMilestones]);
 
   const formatTime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
