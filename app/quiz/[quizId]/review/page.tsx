@@ -14,6 +14,11 @@ import {
   normalizeDatabaseDate,
   shouldHideFeedbackForStudent,
 } from "@/lib/utils";
+import {
+  buildLegacyQuestionKeyMap,
+  resolveAttemptAnswer,
+  resolveAttemptFeedback,
+} from "@/lib/quizAttemptAnswers";
 
 interface ReviewPageProps {
   params: Promise<{ quizId: string }>;
@@ -49,6 +54,16 @@ export default async function ReviewPage({
   });
   const answers: Record<string, any> = (attempt.answers as any) || {};
   const gptFeedback: Record<string, any> = attempt.gptFeedback || {};
+  const questionKeyMap = buildLegacyQuestionKeyMap(
+    quizQuestions.map((question) => ({
+      id: question.id,
+      order: question.order,
+      question: question.question,
+      correctAnswer: question.correctAnswer,
+    })),
+    answers,
+    gptFeedback,
+  );
 
   const shouldHideFeedback = shouldHideFeedbackForStudent(
     { endDate: quiz.endDate, description: quiz.description },
@@ -87,14 +102,19 @@ export default async function ReviewPage({
 
       <section className="mt-12 flex flex-col gap-4">
         {quizQuestions.map((q, idx) => {
-          const studentAnswer = answers[q.id];
+          const studentAnswer = resolveAttemptAnswer(q.id, answers, questionKeyMap);
+          const questionFeedback = resolveAttemptFeedback(
+            q.id,
+            gptFeedback,
+            questionKeyMap,
+          );
           const noAnswer =
             studentAnswer === undefined ||
             studentAnswer === null ||
             studentAnswer === "";
           let isCorrect = false;
           if (q.type === "SHORT_ANSWER") {
-            isCorrect = gptFeedback[q.id]?.score === q.points;
+            isCorrect = questionFeedback?.score === q.points;
           } else {
             isCorrect = studentAnswer === q.correctAnswer;
           }
@@ -145,11 +165,11 @@ export default async function ReviewPage({
               </div>
 
               {q.type === "SHORT_ANSWER" &&
-              gptFeedback[q.id] &&
+              questionFeedback &&
               !shouldHideFeedback ? (
                 <div className="mt-6">
                   <GPTFeedbackDisplay
-                    feedback={gptFeedback[q.id]}
+                    feedback={questionFeedback}
                     questionText={q.question}
                     studentAnswer={String(studentAnswer ?? "")}
                   />
@@ -157,12 +177,12 @@ export default async function ReviewPage({
               ) : null}
 
               {q.type !== "SHORT_ANSWER" &&
-              gptFeedback[q.id]?.feedback &&
+              questionFeedback?.feedback &&
               !shouldHideFeedback ? (
                 <div className="mt-6 border border-info/30 bg-info-soft/40 rounded-md p-4">
                   <span className="eyebrow text-info-fg">Feedback</span>
                   <p className="text-sm text-ink mt-2">
-                    {gptFeedback[q.id].feedback}
+                    {questionFeedback.feedback}
                   </p>
                 </div>
               ) : null}

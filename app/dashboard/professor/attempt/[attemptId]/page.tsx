@@ -11,9 +11,16 @@ import { AppShell } from "@/components/layout/AppShell";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { SectionHeading } from "@/components/layout/SectionHeading";
 import { GPTFeedbackDisplay } from "@/components/quiz/GPTFeedbackDisplay";
+import { RegradeAttemptButton } from "@/components/quiz/RegradeAttemptButton";
 import { Badge } from "@/components/ui/badge";
 import { withBasePath } from "@/lib/basePath";
 import { getOrCreateUser } from "@/lib/getOrCreateUser";
+import {
+  buildLegacyQuestionKeyMap,
+  resolveAttemptAnswer,
+  resolveAttemptFeedback,
+} from "@/lib/quizAttemptAnswers";
+import { isFallbackGradingFeedback } from "@/lib/regradeAttempt";
 
 export default async function AttemptDetailPage({
   params,
@@ -47,12 +54,36 @@ export default async function AttemptDetailPage({
       ? JSON.parse(attempt.answers)
       : (attempt.answers as Record<string, unknown>) || {};
   const gptFeedback: Record<string, any> = attempt.gptFeedback || {};
+  const questionKeyMap = buildLegacyQuestionKeyMap(
+    attempt.quiz.questions.map((question) => ({
+      id: question.id,
+      order: question.order,
+      question: question.question,
+      correctAnswer: question.correctAnswer,
+    })),
+    studentAnswers,
+    gptFeedback,
+  );
 
   const percentage =
     attempt.percentage ??
     (attempt.maxScore
       ? Math.round(((attempt.score ?? 0) / attempt.maxScore) * 100)
       : 0);
+
+  const fallbackQuestionCount = attempt.quiz.questions.reduce((count, question) => {
+    if (question.type !== "SHORT_ANSWER") {
+      return count;
+    }
+
+    const questionFeedback = resolveAttemptFeedback(
+      question.id,
+      gptFeedback,
+      questionKeyMap,
+    );
+
+    return isFallbackGradingFeedback(questionFeedback) ? count + 1 : count;
+  }, 0);
 
   return (
     <AppShell
@@ -80,6 +111,14 @@ export default async function AttemptDetailPage({
         eyebrow="Submission"
         title={`${attempt.student.firstName} ${attempt.student.lastName}`}
         description={`${attempt.quiz.title} · ${attempt.section.name} · ${attempt.section.course.title}`}
+        actions={
+          attempt.submittedAt ? (
+            <RegradeAttemptButton
+              attemptId={attempt.id}
+              fallbackQuestionCount={fallbackQuestionCount}
+            />
+          ) : null
+        }
       />
 
       <section className="mt-12">
@@ -128,12 +167,19 @@ export default async function AttemptDetailPage({
         />
         <div className="mt-6 flex flex-col gap-4">
           {attempt.quiz.questions.map((question, index) => {
-            const answerValue = (studentAnswers as Record<string, unknown>)[
-              question.id
-            ];
+            const answerValue = resolveAttemptAnswer(
+              question.id,
+              studentAnswers as Record<string, unknown>,
+              questionKeyMap,
+            );
             let isCorrect = false;
+            const questionFeedback = resolveAttemptFeedback(
+              question.id,
+              gptFeedback,
+              questionKeyMap,
+            );
             if (question.type === "SHORT_ANSWER") {
-              isCorrect = gptFeedback[question.id]?.score === question.points;
+              isCorrect = questionFeedback?.score === question.points;
             } else {
               isCorrect = answerValue === question.correctAnswer;
             }
@@ -222,9 +268,9 @@ export default async function AttemptDetailPage({
                   ) : null}
                 </div>
 
-                {question.type === "SHORT_ANSWER" && gptFeedback[question.id] ? (
+                {question.type === "SHORT_ANSWER" && questionFeedback ? (
                   <GPTFeedbackDisplay
-                    feedback={gptFeedback[question.id]}
+                    feedback={questionFeedback}
                     questionText={question.question}
                     studentAnswer={String(answerValue ?? "")}
                   />

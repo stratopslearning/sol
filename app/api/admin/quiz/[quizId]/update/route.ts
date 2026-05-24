@@ -4,7 +4,8 @@ import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { db } from '@/app/db';
-import { questions, quizSections, quizzes, users } from '@/app/db/schema';
+import { quizSections, quizzes, users } from '@/app/db/schema';
+import { upsertQuizQuestions } from '@/lib/quizQuestionUpsert';
 
 export const dynamic = 'force-dynamic';
 
@@ -87,20 +88,7 @@ export async function PUT(
         })
         .where(eq(quizzes.id, quizId));
 
-      await tx.delete(questions).where(eq(questions.quizId, quizId));
-
-      if (data.questions.length > 0) {
-        const questionsToInsert = data.questions.map((q, index) => ({
-          quizId,
-          type: q.type,
-          question: q.question,
-          options: q.options ?? null,
-          correctAnswer: q.correctAnswer ?? null,
-          points: q.points,
-          order: index + 1,
-        }));
-        await tx.insert(questions).values(questionsToInsert);
-      }
+      await upsertQuizQuestions(tx, quizId, data.questions);
 
       await tx.delete(quizSections).where(eq(quizSections.quizId, quizId));
       await tx.insert(quizSections).values(

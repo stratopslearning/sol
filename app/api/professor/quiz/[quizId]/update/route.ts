@@ -5,12 +5,12 @@ import { z } from 'zod';
 import { db } from '@/app/db';
 import {
   professorSections,
-  questions,
   quizSections,
   quizzes,
 } from '@/app/db/schema';
 import { activeOnly } from '@/lib/db/filters';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
+import { upsertQuizQuestions } from '@/lib/quizQuestionUpsert';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,6 +25,7 @@ const updateQuizSchema = z.object({
   isActive: z.boolean().default(true),
   passingScore: z.number().int().min(0).max(100).default(60),
   questions: z.array(z.object({
+    id: z.string().optional(),
     type: z.enum(['MULTIPLE_CHOICE', 'TRUE_FALSE', 'SHORT_ANSWER']),
     question: z.string().min(1),
     options: z.array(z.string()).optional(),
@@ -132,20 +133,7 @@ export async function PUT(
         })
         .where(eq(quizzes.id, quizId));
 
-      await tx.delete(questions).where(eq(questions.quizId, quizId));
-      if (validatedData.questions.length > 0) {
-        await tx.insert(questions).values(
-          validatedData.questions.map((q) => ({
-            quizId,
-            type: q.type,
-            question: q.question,
-            options: q.options,
-            correctAnswer: q.correctAnswer,
-            points: q.points,
-            order: q.order,
-          })),
-        );
-      }
+      await upsertQuizQuestions(tx, quizId, validatedData.questions);
 
       await tx.delete(quizSections).where(eq(quizSections.quizId, quizId));
       await tx.insert(quizSections).values(
