@@ -242,7 +242,7 @@ type OpenAICallResult =
 
 async function callGradingModel(
   prompt: string,
-  options: { repair?: boolean } = {},
+  options: { repair?: boolean; maxCompletionTokens?: number } = {},
 ): Promise<OpenAICallResult> {
   try {
     const messages: Array<{ role: 'system' | 'user'; content: string }> = [
@@ -260,6 +260,12 @@ async function callGradingModel(
           'Your previous response was not valid JSON matching the schema. Return ONLY valid JSON matching the schema. No prose, no markdown, no code fences.',
       });
     }
+    // gpt-5-mini is a reasoning model: max_completion_tokens covers BOTH
+    // the internal chain-of-thought tokens AND the visible JSON output.
+    // A 5-criterion rubric on a long answer can easily burn 800+ tokens
+    // on reasoning before any JSON is emitted, which yields an empty
+    // response. We default high; the caller may request even higher on
+    // an empty_response retry.
     const completion = await openai.chat.completions.create({
       model: GRADING_MODEL_VERSION,
       messages,
@@ -272,7 +278,7 @@ async function callGradingModel(
         },
       },
       reasoning_effort: 'low',
-      max_completion_tokens: 600,
+      max_completion_tokens: options.maxCompletionTokens ?? 1500,
       seed: 42,
     } as never);
 
@@ -400,6 +406,17 @@ export async function gradeShortAnswer(
   const prompt = buildGradingPrompt({ ...request, studentAnswer }, rubric);
 
   let first = await callGradingModel(prompt);
+  // An empty response on the first call almost always means the reasoning
+  // tokens consumed the entire completion budget before any JSON was
+  // emitted. Retry once with a much larger budget before giving up.
+  if (first.kind === 'fail' && first.reason === 'empty_response') {
+    logGradingFailure(
+      request,
+      'empty_response',
+      'retrying with higher max_completion_tokens',
+    );
+    first = await callGradingModel(prompt, { maxCompletionTokens: 3000 });
+  }
   if (first.kind === 'fail') {
     logGradingFailure(request, first.reason, first.message);
     return {
