@@ -32,59 +32,133 @@ function notifyMilestone(seconds: number) {
   }
 }
 
+/**
+ * Wall-clock based quiz countdown.
+ *
+ * Why wall-clock and not a setInterval decrement?
+ *   Browsers throttle setInterval to ~1Hz/minute in background tabs (Chrome
+ *   especially). A decrementing counter therefore drifts arbitrarily far
+ *   behind real time when the tab is hidden — a 2-minute quiz can show 90
+ *   seconds remaining 6 wall-clock minutes after start. The server sees
+ *   the true elapsed time and rejects the submit.
+ *
+ * How this implementation stays honest:
+ *   - We compute a stable `deadlineMs` once from `initialSeconds`.
+ *   - The display ticks from `Date.now()`, so every render reflects real
+ *     time. The interval is purely cosmetic.
+ *   - A separate `setTimeout(onTimeUp, msUntilDeadline)` fires at the
+ *     actual deadline; browsers honor `setTimeout` schedules far more
+ *     reliably than throttled interval ticks.
+ *   - `visibilitychange` and window `focus` listeners force-resync the
+ *     instant the user returns to the tab, so we catch any throttling slack.
+ */
 export function QuizTimer({
   initialSeconds,
   onTimeUp,
   paused = false,
   milestoneSeconds = DEFAULT_MILESTONE_SECONDS,
 }: QuizTimerProps) {
-  const [timeRemaining, setTimeRemaining] = useState(initialSeconds);
+  // The deadline is captured once per `initialSeconds` change. Stored in
+  // state (not a ref) so React rerenders consumers when the parent resyncs.
+  const [deadlineMs, setDeadlineMs] = useState(
+    () => Date.now() + Math.max(0, initialSeconds) * 1000,
+  );
+  const [now, setNow] = useState(() => Date.now());
+  const onTimeUpRef = useRef(onTimeUp);
+  const firedTimeUpRef = useRef(false);
   const firedMilestonesRef = useRef<Set<number>>(new Set());
+
+  // Keep the latest onTimeUp without retriggering deadline effects.
+  useEffect(() => {
+    onTimeUpRef.current = onTimeUp;
+  }, [onTimeUp]);
+
+  // When the parent passes a new initialSeconds (e.g. after server resync
+  // on resume), reset the deadline and milestone state.
+  useEffect(() => {
+    setDeadlineMs(Date.now() + Math.max(0, initialSeconds) * 1000);
+    setNow(Date.now());
+    firedTimeUpRef.current = false;
+    firedMilestonesRef.current.clear();
+  }, [initialSeconds]);
 
   const applicableMilestones = useMemo(() => {
     const sorted = [...milestoneSeconds].sort((a, b) => b - a);
     return sorted.filter((t) => t > 0 && t <= initialSeconds);
   }, [milestoneSeconds, initialSeconds]);
 
-  useEffect(() => {
-    setTimeRemaining(initialSeconds);
-    firedMilestonesRef.current.clear();
-  }, [initialSeconds]);
+  const timeRemaining = Math.max(0, Math.ceil((deadlineMs - now) / 1000));
 
+  // Cosmetic 1Hz tick to keep the displayed value moving while the tab is
+  // visible. setInterval may be throttled in the background, but that's
+  // fine — the wall-clock setTimeout + visibility listeners catch up.
   useEffect(() => {
     if (paused) return;
-    if (timeRemaining <= 0) {
-      onTimeUp();
+    const interval = setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [paused]);
+
+  // The authoritative time-up trigger: a setTimeout that fires at the
+  // exact wall-clock deadline. Independent of interval throttling.
+  useEffect(() => {
+    if (paused) return;
+    if (firedTimeUpRef.current) return;
+    const msUntilDeadline = deadlineMs - Date.now();
+
+    if (msUntilDeadline <= 0) {
+      firedTimeUpRef.current = true;
+      onTimeUpRef.current();
       return;
     }
 
-    const timer = setInterval(() => {
-      setTimeRemaining((prev) => {
-        const next = prev <= 1 ? 0 : prev - 1;
+    const timeout = setTimeout(() => {
+      if (firedTimeUpRef.current) return;
+      firedTimeUpRef.current = true;
+      setNow(Date.now());
+      onTimeUpRef.current();
+    }, msUntilDeadline);
 
-        if (!paused) {
-          for (const threshold of applicableMilestones) {
-            if (
-              prev > threshold &&
-              next <= threshold &&
-              !firedMilestonesRef.current.has(threshold)
-            ) {
-              firedMilestonesRef.current.add(threshold);
-              notifyMilestone(threshold);
-            }
-          }
-        }
+    return () => clearTimeout(timeout);
+  }, [deadlineMs, paused]);
 
-        if (prev <= 1) {
-          onTimeUp();
-          return 0;
-        }
-        return next;
-      });
-    }, 1000);
+  // Re-sync immediately when the tab becomes visible or window regains
+  // focus. If real time has already passed the deadline while the tab was
+  // hidden, fire time-up right now.
+  useEffect(() => {
+    if (paused) return;
+    const resync = () => {
+      const current = Date.now();
+      setNow(current);
+      if (!firedTimeUpRef.current && current >= deadlineMs) {
+        firedTimeUpRef.current = true;
+        onTimeUpRef.current();
+      }
+    };
+    document.addEventListener("visibilitychange", resync);
+    window.addEventListener("focus", resync);
+    window.addEventListener("pageshow", resync);
+    return () => {
+      document.removeEventListener("visibilitychange", resync);
+      window.removeEventListener("focus", resync);
+      window.removeEventListener("pageshow", resync);
+    };
+  }, [deadlineMs, paused]);
 
-    return () => clearInterval(timer);
-  }, [timeRemaining, onTimeUp, paused, applicableMilestones]);
+  // Milestone toasts — fire each one exactly once per deadline reset.
+  useEffect(() => {
+    if (paused) return;
+    for (const threshold of applicableMilestones) {
+      if (
+        timeRemaining <= threshold &&
+        !firedMilestonesRef.current.has(threshold)
+      ) {
+        firedMilestonesRef.current.add(threshold);
+        notifyMilestone(threshold);
+      }
+    }
+  }, [timeRemaining, applicableMilestones, paused]);
 
   const formatTime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);

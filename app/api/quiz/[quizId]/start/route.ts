@@ -165,44 +165,41 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
           ? inProgressAttempt.startedAt
           : new Date(inProgressAttempt.startedAt);
 
-      // Stale in-progress (past limit + grace): delete and start fresh so the
-      // student is not trapped by a misleading client timer on an old session.
-      if (
+      // Resume the in-progress attempt even when elapsed time is past the
+      // grace window. We used to delete it in that case, which silently
+      // wiped the student's autosaved answers. The client receives
+      // remainingSeconds: 0 + timeLimitExceeded: true and immediately
+      // fires an auto-submit, which the /submit route accepts late.
+      const remainingSeconds = getRemainingSeconds(
+        timeLimitMinutes,
+        startedAtDate,
+        now,
+      );
+      const timeLimitExceeded =
         timeLimitMinutes != null &&
-        isTimeLimitExceeded(timeLimitMinutes, startedAtDate, now)
-      ) {
-        await db.delete(attempts).where(eq(attempts.id, inProgressAttempt.id));
-        inProgressAttempt = undefined;
-      } else {
-        const remainingSeconds = getRemainingSeconds(
-          timeLimitMinutes,
-          startedAtDate,
-          now,
-        );
-        const timeLimitExceeded =
-          timeLimitMinutes != null && (remainingSeconds ?? 1) <= 0;
+        (remainingSeconds === 0 ||
+          isTimeLimitExceeded(timeLimitMinutes, startedAtDate, now));
 
-        const savedAnswers =
-          inProgressAttempt.answers &&
-          typeof inProgressAttempt.answers === 'object' &&
-          !Array.isArray(inProgressAttempt.answers)
-            ? (inProgressAttempt.answers as Record<string, string>)
-            : {};
+      const savedAnswers =
+        inProgressAttempt.answers &&
+        typeof inProgressAttempt.answers === 'object' &&
+        !Array.isArray(inProgressAttempt.answers)
+          ? (inProgressAttempt.answers as Record<string, string>)
+          : {};
 
-        return NextResponse.json({
-          success: true,
-          attemptId: inProgressAttempt.id,
-          startedAt: startedAtDate.toISOString(),
-          answers: savedAnswers,
-          timeLimitMinutes,
-          remainingSeconds,
-          timeLimitExceeded,
-          resumed: true,
-          message: timeLimitExceeded
-            ? 'Resuming attempt — time limit reached; submit immediately.'
-            : 'Resuming existing attempt',
-        });
-      }
+      return NextResponse.json({
+        success: true,
+        attemptId: inProgressAttempt.id,
+        startedAt: startedAtDate.toISOString(),
+        answers: savedAnswers,
+        timeLimitMinutes,
+        remainingSeconds: remainingSeconds ?? null,
+        timeLimitExceeded,
+        resumed: true,
+        message: timeLimitExceeded
+          ? 'Time limit reached — submitting your saved answers now.'
+          : 'Resuming existing attempt',
+      });
     }
 
     // No resumable attempt: enforce the cap on the count of *submitted* attempts.

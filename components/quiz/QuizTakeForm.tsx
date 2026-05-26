@@ -185,10 +185,17 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
         await fetch(apiUrl(`/api/quiz/${quiz.id}/submit`), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ assignmentId, answers, startedAt }),
+          body: JSON.stringify({
+            assignmentId,
+            answers,
+            startedAt,
+            autoSubmitted: true,
+          }),
+          keepalive: true,
         });
-      } catch (err) {
-        // Optionally handle error
+      } catch {
+        // beforeunload path is best-effort; the server-side time-up
+        // sweep will pick it up if this fetch was killed mid-flight.
       }
     };
 
@@ -238,11 +245,19 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
   const answeredCount = Object.keys(answers).length;
   const progress = Math.round((answeredCount / questions.length) * 100);
 
-  // Auto-submit when time is up (only once)
+  // Auto-submit when time is up (only once). We flag the submission as
+  // auto-submitted so the server accepts it even past the grace period —
+  // the alternative is locking the student out of submitting at all.
   React.useEffect(() => {
     if (!timeUp || submitting || autoSubmitTriggeredRef.current) return;
     autoSubmitTriggeredRef.current = true;
-    handleSubmit(new Event('submit') as unknown as React.FormEvent<HTMLFormElement>);
+    toast.warning("Time's up", {
+      description: "Submitting your answers now…",
+    });
+    handleSubmit(
+      new Event('submit') as unknown as React.FormEvent<HTMLFormElement>,
+      { autoSubmitted: true },
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeUp, submitting]);
 
@@ -270,7 +285,10 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
     e.preventDefault();
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (
+    e: React.FormEvent,
+    options: { autoSubmitted?: boolean } = {},
+  ) => {
     e.preventDefault();
     if (!startedAt) {
       toast.error("Quiz not started", { description: "Please wait for the quiz to initialize." });
@@ -281,7 +299,12 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
       const res = await fetch(apiUrl(`/api/quiz/${quiz.id}/submit`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ assignmentId, answers, startedAt }),
+        body: JSON.stringify({
+          assignmentId,
+          answers,
+          startedAt,
+          autoSubmitted: options.autoSubmitted ?? false,
+        }),
         signal: AbortSignal.timeout(150_000),
       });
       if (!res.ok) {

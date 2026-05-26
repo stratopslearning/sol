@@ -37,6 +37,11 @@ const MAX_ANSWER_LENGTH = 10_000;
 const submitBodySchema = z.object({
   assignmentId: z.string().uuid(),
   answers: z.record(z.string().max(MAX_ANSWER_LENGTH)),
+  // The client sets this when the submit was triggered by the countdown
+  // (or by an unload handler after time was up). When true we accept the
+  // submission even if elapsed time is past the grace window — locking
+  // the student out at that point would lose their autosaved answers.
+  autoSubmitted: z.boolean().optional().default(false),
 });
 
 class MaxAttemptsExceededError extends Error {
@@ -81,7 +86,7 @@ export async function POST(
         { status: 400 },
       );
     }
-    const { assignmentId, answers } = parseResult.data;
+    const { assignmentId, answers, autoSubmitted } = parseResult.data;
 
     // Verify the assignment belongs to the user
     const assignment = await db.query.assignments.findFirst({
@@ -190,15 +195,32 @@ export async function POST(
       isTimeLimitExceeded(quiz.timeLimit, attemptStartTime, submitTime)
     ) {
       const timeElapsedMinutes = getElapsedMinutes(attemptStartTime, submitTime);
-      return NextResponse.json(
-        {
-          error: `Time limit exceeded. The quiz has a ${quiz.timeLimit} minute time limit, but ${Math.ceil(timeElapsedMinutes)} minutes have elapsed.`,
-          timeLimitExceeded: true,
-          timeElapsed: Math.ceil(timeElapsedMinutes),
-          timeLimit: quiz.timeLimit,
-        },
-        { status: 400 },
-      );
+
+      // Manual submit attempts past grace are rejected — that's intentional,
+      // it prevents a student from idling and then submitting a polished
+      // answer hours later. But an auto-submit means the client (or the
+      // unload handler) recognized time was up and is racing to flush the
+      // student's autosaved answers. Rejecting at that point throws away
+      // their work, which is strictly worse than accepting late.
+      if (!autoSubmitted) {
+        return NextResponse.json(
+          {
+            error: `Time limit exceeded. The quiz has a ${quiz.timeLimit} minute time limit, but ${Math.ceil(timeElapsedMinutes)} minutes have elapsed.`,
+            timeLimitExceeded: true,
+            timeElapsed: Math.ceil(timeElapsedMinutes),
+            timeLimit: quiz.timeLimit,
+          },
+          { status: 400 },
+        );
+      }
+
+      console.warn('[quiz/submit] accepting auto-submit past grace', {
+        quizId,
+        assignmentId,
+        userId: user.id,
+        elapsedMinutes: Math.ceil(timeElapsedMinutes),
+        timeLimit: quiz.timeLimit,
+      });
     }
 
     // Now safe to load questions and run grading.
