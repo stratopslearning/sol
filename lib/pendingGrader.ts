@@ -1,0 +1,243 @@
+/**
+ * Re-grade short-answer questions that the auto-grader left as `pending` or
+ * `manual_review` on a single attempt.
+ *
+ * Used by:
+ *   - The daily Vercel cron at /api/cron/grade-pending (long-tail safety net)
+ *   - The background-retry hook fired from the submit handler and the
+ *     student / professor view pages (the "self-healing on view / on
+ *     submit" mechanism that lets us avoid a per-minute cron entirely).
+ *
+ * Idempotent: questions that are already `graded` are preserved verbatim.
+ * Questions still pending after MAX_GRADING_ATTEMPTS retries are promoted to
+ * `manual_review` so the worker stops retrying and the professor sees a
+ * flag in the attention queue.
+ */
+import { and, eq } from 'drizzle-orm';
+
+import { db } from '@/app/db';
+import {
+  attempts,
+  questions as questionsTable,
+  quizzes as quizzesTable,
+} from '@/app/db/schema';
+import { activeOnly } from '@/lib/db/filters';
+import {
+  gradeMultipleQuestions,
+  outcomeToFeedback,
+  type GradingRequest,
+} from '@/lib/grading';
+import { getOrDeriveRubric } from '@/lib/gradingRubric';
+import {
+  buildLegacyQuestionKeyMap,
+  resolveAttemptAnswer,
+  resolveAttemptFeedback,
+} from '@/lib/quizAttemptAnswers';
+import { isPendingStatus, type StoredFeedback } from '@/lib/gradingTypes';
+
+export const MAX_GRADING_ATTEMPTS = 3;
+
+type AttemptRow = typeof attempts.$inferSelect;
+
+export type GradePendingResult = {
+  attemptId: string;
+  regraded: number;
+  stillPending: number;
+  promoted: number;
+};
+
+export async function gradePendingForAttempt(
+  attempt: AttemptRow,
+): Promise<GradePendingResult> {
+  const quiz = await db.query.quizzes.findFirst({
+    where: and(
+      eq(quizzesTable.id, attempt.quizId),
+      activeOnly(quizzesTable.deletedAt),
+    ),
+  });
+  if (!quiz) {
+    return { attemptId: attempt.id, regraded: 0, stillPending: 0, promoted: 0 };
+  }
+
+  const quizQuestions = await db.query.questions.findMany({
+    where: eq(questionsTable.quizId, attempt.quizId),
+  });
+
+  const studentAnswers =
+    attempt.answers && typeof attempt.answers === 'object'
+      ? (attempt.answers as Record<string, unknown>)
+      : {};
+  const existingFeedback =
+    attempt.gptFeedback && typeof attempt.gptFeedback === 'object'
+      ? (attempt.gptFeedback as Record<string, unknown>)
+      : {};
+
+  const keyMap = buildLegacyQuestionKeyMap(
+    quizQuestions.map((q) => ({
+      id: q.id,
+      order: q.order,
+      question: q.question,
+      correctAnswer: q.correctAnswer,
+    })),
+    studentAnswers,
+    existingFeedback,
+  );
+
+  const nextFeedback: Record<string, unknown> = { ...existingFeedback };
+  let totalScore = 0;
+  let maxScore = 0;
+  const requests: Array<{
+    questionId: string;
+    maxPoints: number;
+    previousAttempts: number;
+    request: GradingRequest;
+  }> = [];
+
+  for (const question of quizQuestions) {
+    const answerValue = resolveAttemptAnswer(question.id, studentAnswers, keyMap);
+    const answerText =
+      answerValue === undefined || answerValue === null
+        ? ''
+        : String(answerValue).trim();
+
+    if (question.type === 'MULTIPLE_CHOICE' || question.type === 'TRUE_FALSE') {
+      maxScore += question.points;
+      if (answerText && answerText === question.correctAnswer) {
+        totalScore += question.points;
+      }
+      continue;
+    }
+
+    if (question.type !== 'SHORT_ANSWER') continue;
+
+    const current = resolveAttemptFeedback(
+      question.id,
+      existingFeedback,
+      keyMap,
+    ) as StoredFeedback | undefined;
+
+    if (!answerText) {
+      maxScore += question.points;
+      nextFeedback[question.id] = {
+        score: 0,
+        feedback: 'Please read the textbook and try again.',
+        confidence: 100,
+        maxPoints: question.points,
+        status: 'graded',
+      } satisfies StoredFeedback;
+      continue;
+    }
+
+    if (!isPendingStatus(current?.status)) {
+      const priorScore =
+        current && typeof current.score === 'number' ? current.score : 0;
+      maxScore += question.points;
+      totalScore += priorScore;
+      if (current) nextFeedback[question.id] = current;
+      continue;
+    }
+
+    const { rubric, rubricVersion } = await getOrDeriveRubric({
+      id: question.id,
+      question: question.question,
+      correctAnswer: question.correctAnswer,
+      rubric: question.rubric,
+      rubricVersion: question.rubricVersion ?? 1,
+    });
+
+    requests.push({
+      questionId: question.id,
+      maxPoints: question.points,
+      previousAttempts: current?.attempts ?? 0,
+      request: {
+        question: question.question,
+        studentAnswer: answerText,
+        correctAnswer: question.correctAnswer || undefined,
+        maxPoints: question.points,
+        questionType: 'SHORT_ANSWER',
+        questionId: question.id,
+        rubric,
+        rubricVersion,
+      },
+    });
+  }
+
+  let regraded = 0;
+  let stillPending = 0;
+  let promoted = 0;
+
+  if (requests.length > 0) {
+    const outcomes = await gradeMultipleQuestions(
+      requests.map((r) => r.request),
+      { concurrency: 3, perQuestionTimeoutMs: 40_000 },
+    );
+
+    requests.forEach((item, index) => {
+      const outcome = outcomes[index]!;
+      const stored = outcomeToFeedback(outcome, {
+        previousAttempts: item.previousAttempts,
+      });
+
+      if (
+        stored.status === 'pending' &&
+        (stored.attempts ?? 0) >= MAX_GRADING_ATTEMPTS
+      ) {
+        stored.status = 'manual_review';
+        promoted += 1;
+      }
+
+      nextFeedback[item.questionId] = stored;
+
+      if (stored.status === 'graded') {
+        maxScore += item.maxPoints;
+        totalScore += stored.score ?? 0;
+        regraded += 1;
+      } else {
+        stillPending += 1;
+      }
+    });
+  }
+
+  const percentage = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0;
+  const passingScore = quiz.passingScore ?? 60;
+  const passed = maxScore > 0 ? percentage >= passingScore : false;
+  const gradingStatus: 'complete' | 'partial' | 'failed' =
+    stillPending === 0
+      ? 'complete'
+      : promoted > 0 ||
+          Object.values(nextFeedback).some(
+            (entry) =>
+              entry &&
+              typeof entry === 'object' &&
+              (entry as StoredFeedback).status === 'manual_review',
+          )
+        ? 'failed'
+        : 'partial';
+
+  await db
+    .update(attempts)
+    .set({
+      score: totalScore,
+      maxScore,
+      percentage,
+      passed,
+      gptFeedback: nextFeedback,
+      gradingStatus,
+    })
+    .where(eq(attempts.id, attempt.id));
+
+  return { attemptId: attempt.id, regraded, stillPending, promoted };
+}
+
+/** Convenience overload that loads the attempt row by id. */
+export async function gradePendingForAttemptId(
+  attemptId: string,
+): Promise<GradePendingResult> {
+  const attempt = await db.query.attempts.findFirst({
+    where: eq(attempts.id, attemptId),
+  });
+  if (!attempt) {
+    return { attemptId, regraded: 0, stillPending: 0, promoted: 0 };
+  }
+  return gradePendingForAttempt(attempt);
+}

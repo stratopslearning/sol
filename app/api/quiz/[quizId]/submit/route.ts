@@ -12,6 +12,7 @@ import {
   studentSections,
 } from '@/app/db/schema';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
+import { scheduleAttemptRetry } from '@/lib/backgroundRetry';
 import { activeOnly } from '@/lib/db/filters';
 import {
   gradeMultipleQuestions,
@@ -380,6 +381,15 @@ export async function POST(
 
     const bestScore = Math.max(...allAttempts.map((a) => a.score || 0));
     const bestPercentage = maxScore > 0 ? Math.round((bestScore / maxScore) * 100) : 0;
+
+    // Hobby-plan cron only fires once per day, so we self-heal via Next's
+    // after(): the response is sent first, then we retry the pending
+    // questions on this same attempt in the function's leftover budget.
+    // By the time the student lands on /review (a couple seconds later)
+    // the pending question is usually already graded.
+    if (pendingQuestionIds.length > 0) {
+      scheduleAttemptRetry(attempt.id);
+    }
 
     return NextResponse.json({
       success: true,

@@ -20,6 +20,10 @@ import {
   resolveAttemptFeedback,
 } from "@/lib/quizAttemptAnswers";
 import { isPendingStatus } from "@/lib/gradingTypes";
+import {
+  attemptNeedsBackgroundRetry,
+  scheduleAttemptRetry,
+} from "@/lib/backgroundRetry";
 
 interface ReviewPageProps {
   params: Promise<{ quizId: string }>;
@@ -70,6 +74,13 @@ export default async function ReviewPage({
     { endDate: quiz.endDate, description: quiz.description },
     user.role,
   );
+
+  // Self-heal: if any question on this attempt is still pending or in
+  // manual_review, kick off a background re-grade so the next refresh
+  // most likely shows a finalized score. Cheap; runs after the response.
+  if (attemptNeedsBackgroundRetry(gptFeedback)) {
+    scheduleAttemptRetry(attempt.id);
+  }
 
   return (
     <AppShell

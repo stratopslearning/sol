@@ -22,6 +22,10 @@ import {
 } from "@/lib/quizAttemptAnswers";
 import { isFallbackGradingFeedback, isPendingFeedback } from "@/lib/regradeAttempt";
 import { isPendingStatus } from "@/lib/gradingTypes";
+import {
+  attemptNeedsBackgroundRetry,
+  scheduleAttemptRetry,
+} from "@/lib/backgroundRetry";
 
 export default async function AttemptDetailPage({
   params,
@@ -95,6 +99,13 @@ export default async function AttemptDetailPage({
     );
     return isPendingFeedback(questionFeedback) ? count + 1 : count;
   }, 0);
+
+  // Self-heal: nudge the worker every time a professor opens an attempt
+  // that still has pending/manual_review entries. On Hobby we can't run a
+  // per-minute cron, so we lean on real user activity to drive retries.
+  if (attemptNeedsBackgroundRetry(gptFeedback)) {
+    scheduleAttemptRetry(attempt.id);
+  }
 
   return (
     <AppShell
