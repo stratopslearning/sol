@@ -6,6 +6,7 @@ import { SectionHeading } from "@/components/layout/SectionHeading";
 import { EmptyState } from "@/components/patterns/EmptyState";
 import { StatCard } from "@/components/patterns/StatCard";
 import { QuickRegradeButton } from "@/components/quiz/QuickRegradeButton";
+import { RegradeAllButton } from "@/components/quiz/RegradeAllButton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -62,6 +63,7 @@ export default async function AttentionPage() {
         eyebrow="Grading"
         title="Responses that need your attention"
         description="Submissions where at least one short-answer question is still pending, awaiting manual review, or used the legacy fallback grader. Re-grade in place, or open the attempt to review and override scores."
+        actions={<RegradeAllButton count={totalAttempts} />}
       />
 
       <section className="mt-12 flex flex-col gap-6">
@@ -104,6 +106,11 @@ export default async function AttentionPage() {
           eyebrow="Queue"
           title="By most recent submission"
           description="One row per attempt. The badge shows why it needs attention."
+          actions={
+            totalAttempts > 0 ? (
+              <RegradeAllButton count={totalAttempts} />
+            ) : null
+          }
         />
 
         {items.length === 0 ? (

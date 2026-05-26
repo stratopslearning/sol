@@ -27,9 +27,14 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Individual re-grades are a professor action with a built-in cost ceiling
+    // (each call hits OpenAI). 60 per 5 minutes is plenty for clearing a
+    // backlog one-at-a-time while still preventing accidental loops. Bulk
+    // re-grades go through /api/professor/attention/regrade-all which has its
+    // own (lower) bucket.
     const limited = await enforceRateLimit({
       key: `regrade:${user.id}`,
-      limit: 20,
+      limit: 60,
       windowMs: 5 * 60_000,
       prefix: 'rl',
       message: 'Too many re-grade requests. Please wait a moment and try again.',
