@@ -25,14 +25,19 @@ export async function upsertQuizQuestions(
 ) {
   const existingQuestions = await tx.query.questions.findMany({
     where: eq(questions.quizId, quizId),
-    columns: { id: true },
+    columns: {
+      id: true,
+      question: true,
+      correctAnswer: true,
+      rubricVersion: true,
+    },
   });
-  const existingIds = new Set(existingQuestions.map((q) => q.id));
+  const existingById = new Map(existingQuestions.map((q) => [q.id, q]));
   const retainedIds = new Set<string>();
 
   for (const [index, question] of incomingQuestions.entries()) {
     const order = question.order ?? index + 1;
-    const payload = {
+    const basePayload = {
       type: question.type,
       question: question.question,
       options: question.options ?? null,
@@ -44,9 +49,26 @@ export async function upsertQuizQuestions(
     const hasPersistedId =
       typeof question.id === 'string' &&
       UUID_RE.test(question.id) &&
-      existingIds.has(question.id);
+      existingById.has(question.id);
 
     if (hasPersistedId) {
+      const existing = existingById.get(question.id!)!;
+      const referenceChanged =
+        existing.question !== question.question ||
+        (existing.correctAnswer ?? null) !== (question.correctAnswer ?? null);
+
+      // When the question prompt or reference answer changes, the cached
+      // rubric is no longer authoritative. Clear it and bump the version so
+      // any cached grades in `grading_cache` are auto-invalidated and the
+      // next grade derives a fresh rubric.
+      const payload = referenceChanged
+        ? {
+            ...basePayload,
+            rubric: null,
+            rubricVersion: (existing.rubricVersion ?? 1) + 1,
+          }
+        : basePayload;
+
       retainedIds.add(question.id!);
       await tx
         .update(questions)
@@ -57,11 +79,11 @@ export async function upsertQuizQuestions(
 
     await tx.insert(questions).values({
       quizId,
-      ...payload,
+      ...basePayload,
     });
   }
 
-  const idsToDelete = [...existingIds].filter((id) => !retainedIds.has(id));
+  const idsToDelete = [...existingById.keys()].filter((id) => !retainedIds.has(id));
   if (idsToDelete.length > 0) {
     await tx.delete(questions).where(inArray(questions.id, idsToDelete));
   }

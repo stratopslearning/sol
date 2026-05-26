@@ -13,7 +13,12 @@ import {
 } from '@/app/db/schema';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
 import { activeOnly } from '@/lib/db/filters';
-import { gradeMultipleQuestions, type GradingRequest } from '@/lib/grading';
+import {
+  gradeMultipleQuestions,
+  outcomeToFeedback,
+  type GradingRequest,
+} from '@/lib/grading';
+import { getOrDeriveRubric } from '@/lib/gradingRubric';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import {
   getElapsedMinutes,
@@ -203,58 +208,84 @@ export async function POST(
     let totalScore = 0;
     let maxScore = 0;
     const gptFeedback: Record<string, any> = {};
+    const pendingQuestionIds: string[] = [];
     const shortAnswerGradingRequests: Array<{
       questionId: string;
+      maxPoints: number;
       request: GradingRequest;
     }> = [];
 
     for (const question of quizQuestions) {
-      maxScore += question.points;
       const userAnswer = answers[question.id];
 
       if (!userAnswer || userAnswer.trim?.() === '') {
+        // Skipped questions still count toward maxScore (the student forfeits
+        // those points). Short-answer skip gets explicit feedback.
+        maxScore += question.points;
         if (question.type === 'SHORT_ANSWER') {
           gptFeedback[question.id] = {
             score: 0,
             feedback: 'Please read the textbook and try again.',
             confidence: 100,
             maxPoints: question.points,
+            status: 'graded',
           };
         }
         continue;
       }
 
       if (question.type === 'MULTIPLE_CHOICE' || question.type === 'TRUE_FALSE') {
+        maxScore += question.points;
         if (userAnswer === question.correctAnswer) {
           totalScore += question.points;
         }
       } else if (question.type === 'SHORT_ANSWER') {
+        // Resolve rubric (derives + caches on first encounter).
+        const { rubric, rubricVersion } = await getOrDeriveRubric({
+          id: question.id,
+          question: question.question,
+          correctAnswer: question.correctAnswer,
+          rubric: question.rubric,
+          rubricVersion: question.rubricVersion ?? 1,
+        });
         shortAnswerGradingRequests.push({
           questionId: question.id,
+          maxPoints: question.points,
           request: {
             question: question.question,
             studentAnswer: userAnswer,
             correctAnswer: question.correctAnswer || undefined,
             maxPoints: question.points,
             questionType: 'SHORT_ANSWER',
+            questionId: question.id,
+            rubric,
+            rubricVersion,
           },
         });
       }
     }
 
     if (shortAnswerGradingRequests.length > 0) {
+      // Hybrid budget: each question gets up to 25s; the whole batch is
+      // bounded by the route's `maxDuration` (120s) - the rest of the work.
+      // Anything still incomplete after the batch returns as `pending` and
+      // is picked up by the /api/cron/grade-pending worker.
       const gradingResults = await gradeMultipleQuestions(
         shortAnswerGradingRequests.map((item) => item.request),
+        { concurrency: 5, perQuestionTimeoutMs: 25_000 },
       );
       shortAnswerGradingRequests.forEach((item, index) => {
-        const gradingResult = gradingResults[index];
-        totalScore += gradingResult.score;
-        gptFeedback[item.questionId] = {
-          score: gradingResult.score,
-          feedback: gradingResult.feedback,
-          confidence: gradingResult.confidence || 80,
-          maxPoints: item.request.maxPoints,
-        };
+        const outcome = gradingResults[index]!;
+        const stored = outcomeToFeedback(outcome);
+        gptFeedback[item.questionId] = stored;
+        if (outcome.status === 'graded') {
+          totalScore += outcome.score;
+          maxScore += item.maxPoints;
+        } else {
+          // Pending: do NOT add to totalScore or maxScore. The cron worker
+          // will resolve it and recompute attempts.score / percentage.
+          pendingQuestionIds.push(item.questionId);
+        }
       });
     }
 
@@ -264,6 +295,8 @@ export async function POST(
     // there's no meaningful pass/fail, so we record `false`.
     const passingScore = quiz.passingScore ?? 60;
     const passed = maxScore > 0 ? percentage >= passingScore : false;
+    const attemptGradingStatus: 'complete' | 'partial' =
+      pendingQuestionIds.length > 0 ? 'partial' : 'complete';
 
     const currentAttemptNumber = attemptCount + 1;
 
@@ -302,6 +335,7 @@ export async function POST(
               totalAttempts: attemptCount + 1,
               maxAttempts: quiz.maxAttempts,
             },
+            gradingStatus: attemptGradingStatus,
             submittedAt: submitTime,
           })
           .where(eq(attempts.id, txInProgress.id))
@@ -325,6 +359,7 @@ export async function POST(
               totalAttempts: attemptCount + 1,
               maxAttempts: quiz.maxAttempts,
             },
+            gradingStatus: attemptGradingStatus,
             startedAt: attemptStartTime,
             submittedAt: submitTime,
           })
@@ -359,6 +394,8 @@ export async function POST(
       bestScore,
       bestPercentage,
       attemptsRemaining: quiz.maxAttempts - (attemptCount + 1),
+      gradingStatus: attemptGradingStatus,
+      pendingQuestionCount: pendingQuestionIds.length,
     });
   } catch (error) {
     if (error instanceof MaxAttemptsExceededError) {

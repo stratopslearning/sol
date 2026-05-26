@@ -1,4 +1,5 @@
 import {
+  AlertTriangle,
   BarChart2,
   FileText,
   Layers,
@@ -98,6 +99,12 @@ export const ROLE_CONFIG: Record<AppRole, RoleConfig> = {
         label: "All Results",
         icon: TrendingUp,
         key: "quiz-results",
+      },
+      {
+        href: withBasePath("/dashboard/professor/attention"),
+        label: "Attention",
+        icon: AlertTriangle,
+        key: "attention",
       },
     ],
   },

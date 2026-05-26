@@ -180,6 +180,12 @@ export const questions = pgTable(
     correctAnswer: text('correct_answer'), // For MCQ/TF: "option1" or "true"
     points: integer('points').default(1).notNull(),
     order: integer('order').notNull(),
+    // Auto-derived rubric used to deterministically grade SHORT_ANSWER. Stored as
+    // `RubricCriterion[]` from `lib/gradingTypes`. Null until first grade.
+    rubric: jsonb('rubric'),
+    // Bumped whenever the question text or reference answer changes; used as a
+    // cache-invalidation token for `grading_cache` lookups.
+    rubricVersion: integer('rubric_version').default(1).notNull(),
     createdAt: ts('created_at').defaultNow().notNull(),
   },
   (table) => ({
@@ -237,6 +243,13 @@ export const attempts = pgTable(
     percentage: integer('percentage'), // score as percentage
     passed: boolean('passed'), // based on passing score
     gptFeedback: jsonb('gpt_feedback'), // AI feedback for short answers
+    // 'complete' = everything graded. 'partial' = at least one short-answer
+    // question is still `pending` inside gpt_feedback; the background cron
+    // worker will retry it. 'failed' = grading is stuck after retries and
+    // requires professor manual_review.
+    gradingStatus: text('grading_status', {
+      enum: ['complete', 'partial', 'failed'],
+    }),
     startedAt: ts('started_at').defaultNow().notNull(),
     submittedAt: ts('submitted_at'),
   },
@@ -245,6 +258,32 @@ export const attempts = pgTable(
     studentIdx: index('attempts_student_idx').on(table.studentId),
     quizIdx: index('attempts_quiz_idx').on(table.quizId),
     sectionIdx: index('attempts_section_idx').on(table.sectionId),
+    // Partial index: fast lookup for the cron worker, which only ever cares
+    // about attempts that still have pending grading work to do.
+    gradingStatusIdx: index('attempts_grading_status_idx').on(
+      table.gradingStatus,
+    ),
+  }),
+);
+
+// Deterministic answer cache. SHA-256 hash of
+// (questionId + normalized answer + rubricVersion + modelVersion) → previously
+// computed grading payload. Lets "same answer same grade" hold even across
+// resubmissions, and short-circuits OpenAI for re-grades.
+export const gradingCache = pgTable(
+  'grading_cache',
+  {
+    key: text('key').primaryKey(),
+    questionId: uuid('question_id')
+      .references(() => questions.id, { onDelete: 'cascade' })
+      .notNull(),
+    rubricVersion: integer('rubric_version').notNull(),
+    modelVersion: text('model_version').notNull(),
+    payload: jsonb('payload').notNull(),
+    createdAt: ts('created_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    questionIdx: index('grading_cache_question_idx').on(table.questionId),
   }),
 );
 

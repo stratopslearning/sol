@@ -9,22 +9,30 @@ import { apiUrl } from '@/lib/basePath';
 
 type RegradeAttemptButtonProps = {
   attemptId: string;
+  /** Legacy fallback-graded questions ("Grading system temporarily unavailable"). */
   fallbackQuestionCount: number;
+  /** Questions still marked pending or manual_review by the new pipeline. */
+  pendingQuestionCount?: number;
+  gradingStatus?: 'complete' | 'partial' | 'failed' | null;
 };
 
 export function RegradeAttemptButton({
   attemptId,
   fallbackQuestionCount,
+  pendingQuestionCount = 0,
+  gradingStatus = null,
 }: RegradeAttemptButtonProps) {
   const [isLoading, setIsLoading] = useState(false);
 
+  const totalNeedsAttention = fallbackQuestionCount + pendingQuestionCount;
+
   async function handleRegrade() {
-    const label =
-      fallbackQuestionCount > 0
-        ? `Re-grade ${fallbackQuestionCount} response${fallbackQuestionCount === 1 ? '' : 's'} with AI? This may take up to a minute.`
+    const target =
+      totalNeedsAttention > 0
+        ? `Re-grade ${totalNeedsAttention} response${totalNeedsAttention === 1 ? '' : 's'} with AI? This may take up to a minute.`
         : 'Re-grade all short-answer responses with AI? This may take up to a minute.';
 
-    if (!confirm(label)) {
+    if (!confirm(target)) {
       return;
     }
 
@@ -36,7 +44,11 @@ export function RegradeAttemptButton({
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fallbackOnly: true }),
+          body: JSON.stringify({
+            // When pending/fallback items exist, target only those. Otherwise
+            // regrade everything.
+            fallbackOnly: totalNeedsAttention > 0,
+          }),
         },
       );
 
@@ -47,13 +59,22 @@ export function RegradeAttemptButton({
         return;
       }
 
-      toast.success(
-        data.regradedQuestionCount > 0
-          ? `Re-graded ${data.regradedQuestionCount} response${data.regradedQuestionCount === 1 ? '' : 's'}. New score: ${data.percentage}%.`
-          : 'No fallback-graded responses needed re-grading.',
-      );
+      const stillPending = data?.pendingQuestionCount ?? 0;
+      if (stillPending > 0) {
+        toast.warning(
+          `Re-graded ${data.regradedQuestionCount}. ${stillPending} question${
+            stillPending === 1 ? '' : 's'
+          } still pending — the background worker will retry shortly.`,
+        );
+      } else if (data.regradedQuestionCount > 0) {
+        toast.success(
+          `Re-graded ${data.regradedQuestionCount} response${data.regradedQuestionCount === 1 ? '' : 's'}. New score: ${data.percentage}%.`,
+        );
+      } else {
+        toast.success('No responses needed re-grading.');
+      }
 
-      if (data.regradedQuestionCount > 0) {
+      if (data.regradedQuestionCount > 0 || stillPending > 0) {
         window.location.reload();
       }
     } catch (error) {
@@ -64,13 +85,27 @@ export function RegradeAttemptButton({
     }
   }
 
+  const banner = pendingQuestionCount > 0 ? (
+    <p className="text-xs text-warning-fg max-w-sm text-right">
+      {pendingQuestionCount} response
+      {pendingQuestionCount === 1 ? '' : 's'} still pending — queued for the
+      background grader.
+    </p>
+  ) : fallbackQuestionCount > 0 ? (
+    <p className="text-xs text-warning-fg max-w-sm text-right">
+      {fallbackQuestionCount} response
+      {fallbackQuestionCount === 1 ? '' : 's'} used legacy fallback grading and
+      may need a fresh AI review.
+    </p>
+  ) : null;
+
   return (
     <div className="flex flex-col gap-2 sm:items-end">
-      {fallbackQuestionCount > 0 ? (
-        <p className="text-xs text-warning-fg max-w-sm text-right">
-          {fallbackQuestionCount} response
-          {fallbackQuestionCount === 1 ? '' : 's'} used fallback grading and
-          may need a fresh AI review.
+      {banner}
+      {gradingStatus === 'failed' ? (
+        <p className="text-xs text-danger-fg max-w-sm text-right">
+          Grading hit the retry limit. Use re-grade to attempt again or assign
+          a manual score.
         </p>
       ) : null}
       <Button

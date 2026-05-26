@@ -20,7 +20,8 @@ import {
   resolveAttemptAnswer,
   resolveAttemptFeedback,
 } from "@/lib/quizAttemptAnswers";
-import { isFallbackGradingFeedback } from "@/lib/regradeAttempt";
+import { isFallbackGradingFeedback, isPendingFeedback } from "@/lib/regradeAttempt";
+import { isPendingStatus } from "@/lib/gradingTypes";
 
 export default async function AttemptDetailPage({
   params,
@@ -85,6 +86,16 @@ export default async function AttemptDetailPage({
     return isFallbackGradingFeedback(questionFeedback) ? count + 1 : count;
   }, 0);
 
+  const pendingQuestionCount = attempt.quiz.questions.reduce((count, question) => {
+    if (question.type !== "SHORT_ANSWER") return count;
+    const questionFeedback = resolveAttemptFeedback(
+      question.id,
+      gptFeedback,
+      questionKeyMap,
+    );
+    return isPendingFeedback(questionFeedback) ? count + 1 : count;
+  }, 0);
+
   return (
     <AppShell
       role="professor"
@@ -116,6 +127,8 @@ export default async function AttemptDetailPage({
             <RegradeAttemptButton
               attemptId={attempt.id}
               fallbackQuestionCount={fallbackQuestionCount}
+              pendingQuestionCount={pendingQuestionCount}
+              gradingStatus={attempt.gradingStatus}
             />
           ) : null
         }
@@ -178,6 +191,9 @@ export default async function AttemptDetailPage({
               gptFeedback,
               questionKeyMap,
             );
+            const isPending =
+              question.type === "SHORT_ANSWER" &&
+              isPendingStatus(questionFeedback?.status);
             if (question.type === "SHORT_ANSWER") {
               isCorrect = questionFeedback?.score === question.points;
             } else {
@@ -207,14 +223,14 @@ export default async function AttemptDetailPage({
                     <span className="text-xs text-ink-faint tnum">
                       {question.points} pts
                     </span>
-                    {!noAnswer ? (
-                      isCorrect ? (
-                        <Badge variant="success">Correct</Badge>
-                      ) : (
-                        <Badge variant="destructive">Incorrect</Badge>
-                      )
-                    ) : (
+                    {noAnswer ? (
                       <Badge variant="outline">Skipped</Badge>
+                    ) : isPending ? (
+                      <Badge variant="outline">Grading in progress</Badge>
+                    ) : isCorrect ? (
+                      <Badge variant="success">Correct</Badge>
+                    ) : (
+                      <Badge variant="destructive">Incorrect</Badge>
                     )}
                   </div>
                 </header>

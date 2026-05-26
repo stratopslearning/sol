@@ -19,6 +19,7 @@ import {
   resolveAttemptAnswer,
   resolveAttemptFeedback,
 } from "@/lib/quizAttemptAnswers";
+import { isPendingStatus } from "@/lib/gradingTypes";
 
 interface ReviewPageProps {
   params: Promise<{ quizId: string }>;
@@ -112,6 +113,9 @@ export default async function ReviewPage({
             studentAnswer === undefined ||
             studentAnswer === null ||
             studentAnswer === "";
+          const isPending =
+            q.type === "SHORT_ANSWER" &&
+            isPendingStatus(questionFeedback?.status);
           let isCorrect = false;
           if (q.type === "SHORT_ANSWER") {
             isCorrect = questionFeedback?.score === q.points;
@@ -133,6 +137,8 @@ export default async function ReviewPage({
                 <div className="shrink-0">
                   {noAnswer ? (
                     <Badge variant="outline">Skipped</Badge>
+                  ) : isPending ? (
+                    <Badge variant="outline">Grading in progress</Badge>
                   ) : isCorrect ? (
                     <Badge variant="success">Correct</Badge>
                   ) : (

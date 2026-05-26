@@ -39,10 +39,14 @@ export async function testDynamicGrading() {
     
     try {
       const result = await gradeShortAnswer(testCase);
-      console.log(`🎯 Score: ${result.score}/${testCase.maxPoints}`);
-      console.log(`💬 Feedback: ${result.feedback}`);
-      console.log(`🎲 Confidence: ${result.confidence}%`);
-      console.log(`📈 Percentage: ${Math.round((result.score / testCase.maxPoints) * 100)}%`);
+      if (result.status === 'graded') {
+        console.log(`🎯 Score: ${result.score}/${testCase.maxPoints}`);
+        console.log(`💬 Feedback: ${result.feedback}`);
+        console.log(`🎲 Confidence: ${result.confidence}%`);
+        console.log(`📈 Percentage: ${Math.round((result.score / testCase.maxPoints) * 100)}%`);
+      } else {
+        console.log(`⏳ Pending (${result.failureReason}): ${result.feedback}`);
+      }
     } catch (error) {
       console.error(`❌ Error: ${error}`);
     }

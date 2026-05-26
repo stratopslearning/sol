@@ -1,5 +1,7 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import {
+  AlertTriangle,
+  ArrowRight,
   CheckCircle,
   Download,
   FileText,
@@ -23,11 +25,13 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { SectionHeading } from '@/components/layout/SectionHeading';
 import { EmptyState } from '@/components/patterns/EmptyState';
 import { StatCard } from '@/components/patterns/StatCard';
+import { QuickRegradeButton } from '@/components/quiz/QuickRegradeButton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { activeOnly } from '@/lib/db/filters';
 import { withBasePath } from '@/lib/basePath';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
+import { getAttentionItemsForProfessor } from '@/lib/professorAttention';
 
 export default async function ProfessorDashboard() {
   const user = await getOrCreateUser();
@@ -67,6 +71,14 @@ export default async function ProfessorDashboard() {
           },
         })
       : [];
+
+  const attentionItems = await getAttentionItemsForProfessor(user.id, {
+    limit: 5,
+  });
+  const attentionTotalPreview = attentionItems.reduce(
+    (s, i) => s + i.needsAttentionCount,
+    0,
+  );
 
   const recentAttempts =
     professorQuizzes.length > 0
@@ -198,6 +210,89 @@ export default async function ProfessorDashboard() {
           />
         </div>
       </section>
+
+      {attentionItems.length > 0 ? (
+        <section className="mt-16 flex flex-col gap-6">
+          <SectionHeading
+            eyebrow="Needs your attention"
+            title={
+              attentionTotalPreview === 1
+                ? '1 response is waiting on you'
+                : `${attentionTotalPreview} responses are waiting on you`
+            }
+            description="Submissions where at least one short-answer question is still pending, awaiting manual review, or graded by the legacy fallback."
+            actions={
+              <Button asChild variant="ghost" size="sm">
+                <a href={withBasePath('/dashboard/professor/attention')}>
+                  Open queue
+                  <ArrowRight className="h-4 w-4 ml-1" />
+                </a>
+              </Button>
+            }
+          />
+          <ul className="paper paper-shadow divide-y divide-rule">
+            {attentionItems.map((item) => {
+              const fullName =
+                `${item.student.firstName ?? ''} ${item.student.lastName ?? ''}`.trim() ||
+                item.student.email ||
+                'Unknown';
+              return (
+                <li
+                  key={item.attemptId}
+                  className="flex items-center justify-between gap-4 px-5 py-4"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="h-3.5 w-3.5 text-warning-fg shrink-0" />
+                      <span className="text-sm font-medium text-ink truncate">
+                        {fullName}
+                      </span>
+                      <span className="text-xs text-ink-faint truncate">
+                        · {item.quiz.title}
+                      </span>
+                    </div>
+                    <div className="text-xs text-ink-muted truncate mt-0.5 ml-5">
+                      {item.section.name}
+                      {item.section.course
+                        ? ` · ${item.section.course.title}`
+                        : ''}
+                      {' · '}
+                      {item.manualReviewCount > 0
+                        ? `${item.manualReviewCount} manual review`
+                        : null}
+                      {item.manualReviewCount > 0 && item.pendingCount > 0
+                        ? ', '
+                        : ''}
+                      {item.pendingCount > 0
+                        ? `${item.pendingCount} pending`
+                        : null}
+                      {(item.manualReviewCount > 0 || item.pendingCount > 0) &&
+                      item.legacyFallbackCount > 0
+                        ? ', '
+                        : ''}
+                      {item.legacyFallbackCount > 0
+                        ? `${item.legacyFallbackCount} legacy fallback`
+                        : null}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button asChild variant="ghost" size="sm">
+                      <a
+                        href={withBasePath(
+                          `/dashboard/professor/attempt/${item.attemptId}`,
+                        )}
+                      >
+                        View
+                      </a>
+                    </Button>
+                    <QuickRegradeButton attemptId={item.attemptId} />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ) : null}
 
       <section className="mt-16 grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-7 flex flex-col gap-6">
