@@ -34,6 +34,17 @@ export function getRemainingSeconds(
   return Math.max(0, limitSeconds - elapsed);
 }
 
+/** True when the nominal per-attempt timer has reached zero (ignores grace). */
+export function isNominalTimeLimitReached(
+  timeLimitMinutes: number | null | undefined,
+  startedAt: Date,
+  now: Date = new Date(),
+): boolean {
+  if (!timeLimitMinutes) return false;
+  const remaining = getRemainingSeconds(timeLimitMinutes, startedAt, now);
+  return remaining === 0;
+}
+
 /** True when elapsed time exceeds limit + grace (matches submit rejection). */
 export function isTimeLimitExceeded(
   timeLimitMinutes: number | null | undefined,

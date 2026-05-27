@@ -25,7 +25,7 @@ interface QuizTakeFormProps {
     title: string;
     description?: string;
     timeLimit?: number;
-    dueDate?: string | null;
+    endDate?: string | null;
     totalQuestions: number;
   };
   questions: Array<{
@@ -72,8 +72,11 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
 
   // Check if feedback should be hidden for this user
   const shouldHideFeedback = shouldHideFeedbackForStudent(
-    { endDate: quiz.dueDate ? new Date(quiz.dueDate) : null, description: quiz.description || null },
-    userRole
+    {
+      endDate: quiz.endDate ? new Date(quiz.endDate) : null,
+      description: quiz.description || null,
+    },
+    userRole,
   );
 
   // Start quiz when component mounts
@@ -88,6 +91,14 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
         });
         if (res.ok) {
           const data = await res.json();
+
+          if (data.serverAutoSubmitted && data.attemptId) {
+            router.push(
+              `/quiz/${quiz.id}/results?attemptId=${data.attemptId}`,
+            );
+            return;
+          }
+
           setStartedAt(data.startedAt);
 
           const restored =
@@ -113,9 +124,11 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
             if (data.resumed && remaining < 120) {
               setShowResumeWarning(true);
             }
-            if (remaining <= 0) {
+            if (remaining <= 0 || data.forceAutoSubmit) {
               setTimeUp(true);
             }
+          } else if (data.forceAutoSubmit) {
+            setTimeUp(true);
           }
 
           setQuizStarted(true);
@@ -134,6 +147,20 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
     };
     startQuiz();
   }, [quiz.id, assignmentId, quizStarted, router, quiz.timeLimit]);
+
+  // Auto-submit when the quiz due date passes while the tab is open.
+  useEffect(() => {
+    if (!quiz.endDate || !quizStarted) return;
+    const endMs = new Date(quiz.endDate).getTime();
+    const triggerDueSubmit = () => setTimeUp(true);
+    const msUntilDue = endMs - Date.now();
+    if (msUntilDue <= 0) {
+      triggerDueSubmit();
+      return;
+    }
+    const timeout = setTimeout(triggerDueSubmit, msUntilDue);
+    return () => clearTimeout(timeout);
+  }, [quiz.endDate, quizStarted]);
 
   const saveProgress = useCallback(async () => {
     if (!quizStarted || submitting || !startedAt) return;
@@ -187,8 +214,7 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             assignmentId,
-            answers,
-            startedAt,
+            answers: answersRef.current,
             autoSubmitted: true,
           }),
           keepalive: true,
@@ -213,10 +239,12 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
 
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       flushSave();
-      if (Object.keys(answers).length < questions.length) {
+      if (timeUp || Object.keys(answersRef.current).length > 0) {
+        handleAutoSubmit();
+      }
+      if (Object.keys(answers).length < questions.length && !timeUp) {
         e.preventDefault();
         e.returnValue = "";
-        handleAutoSubmit();
       }
     };
 
@@ -240,7 +268,7 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
       // @ts-ignore
       router.events?.off("routeChangeStart", handleRouteChange);
     };
-  }, [answers, questions.length, assignmentId, quiz.id, router, startedAt]);
+  }, [answers, questions.length, assignmentId, quiz.id, router, startedAt, timeUp]);
 
   const answeredCount = Object.keys(answers).length;
   const progress = Math.round((answeredCount / questions.length) * 100);
@@ -254,9 +282,9 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
     toast.warning("Time's up", {
       description: "Submitting your answers now…",
     });
-    handleSubmit(
+    void handleSubmit(
       new Event('submit') as unknown as React.FormEvent<HTMLFormElement>,
-      { autoSubmitted: true },
+      { autoSubmitted: true, answersOverride: answersRef.current },
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeUp, submitting]);
@@ -287,22 +315,27 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
 
   const handleSubmit = async (
     e: React.FormEvent,
-    options: { autoSubmitted?: boolean } = {},
+    options: {
+      autoSubmitted?: boolean;
+      answersOverride?: AnswerMap;
+    } = {},
   ) => {
     e.preventDefault();
     if (!startedAt) {
       toast.error("Quiz not started", { description: "Please wait for the quiz to initialize." });
       return;
     }
+    if (submittingRef.current && !options.autoSubmitted) return;
+    submittingRef.current = true;
     setSubmitting(true);
+    const payload = options.answersOverride ?? answersRef.current;
     try {
       const res = await fetch(apiUrl(`/api/quiz/${quiz.id}/submit`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           assignmentId,
-          answers,
-          startedAt,
+          answers: payload,
           autoSubmitted: options.autoSubmitted ?? false,
         }),
         signal: AbortSignal.timeout(150_000),
@@ -323,6 +356,7 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
           : (err as Error).message;
       toast.error("Submission failed", { description: message });
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
@@ -398,7 +432,7 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
                     )}
                     {shouldHideFeedback && (
                       <span className="text-sm italic text-ink-faint">
-                        {quiz.dueDate && new Date() <= new Date(quiz.dueDate)
+                        {quiz.endDate && new Date() <= new Date(quiz.endDate)
                           ? "Feedback will be available after the due date."
                           : "Feedback is now available."}
                       </span>
@@ -474,8 +508,8 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
 
         <div className="mt-6 flex flex-wrap gap-2">
           <Badge variant="outline">{questions.length} questions</Badge>
-          {quiz.dueDate ? (
-            <Badge variant="outline">Due {formatDateTimeUTC(quiz.dueDate)}</Badge>
+          {quiz.endDate ? (
+            <Badge variant="outline">Due {formatDateTimeUTC(quiz.endDate)}</Badge>
           ) : null}
           {quiz.timeLimit ? (
             <Badge variant="outline">{quiz.timeLimit} min</Badge>

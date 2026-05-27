@@ -19,6 +19,7 @@ import { inArray } from 'drizzle-orm';
 
 import { db } from '@/app/db';
 import { attempts } from '@/app/db/schema';
+import { sweepStaleInProgressAttempts } from '@/lib/autoSubmitInProgressAttempt';
 import {
   gradePendingForAttempt,
   type GradePendingResult,
@@ -42,6 +43,8 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    const autoSubmitSweep = await sweepStaleInProgressAttempts();
+
     const pendingAttempts = await db.query.attempts.findMany({
       where: inArray(attempts.gradingStatus, ['partial', 'failed']),
       limit: BATCH_LIMIT,
@@ -49,7 +52,11 @@ export async function GET(req: NextRequest) {
     });
 
     if (pendingAttempts.length === 0) {
-      return NextResponse.json({ processed: 0, attempts: [] });
+      return NextResponse.json({
+        processed: 0,
+        attempts: [],
+        autoSubmitSweep,
+      });
     }
 
     const results: GradePendingResult[] = [];
@@ -64,6 +71,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       processed: results.length,
       attempts: results,
+      autoSubmitSweep,
     });
   } catch (error) {
     console.error('cron grade-pending error', error);

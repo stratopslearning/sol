@@ -133,12 +133,11 @@ export async function getAttentionItemsForProfessor(
   // Two paths combined with OR (executed as a single query):
   //   1. New pipeline: gradingStatus IN ('partial', 'failed')
   //   2. Legacy:       gpt_feedback contains the fallback message string
-  // Both restricted to (sectionId IN professor's sections) and (submittedAt IS NOT NULL).
   const fallbackMatch = sql<boolean>`${attempts.gptFeedback}::text LIKE ${'%' + FALLBACK_SNIPPET + '%'}`;
   const rows = await db.query.attempts.findMany({
     where: and(
-      inArray(attempts.sectionId, sectionIds),
       isNotNull(attempts.submittedAt),
+      inArray(attempts.sectionId, sectionIds),
       or(
         inArray(attempts.gradingStatus, ['partial', 'failed']),
         fallbackMatch,

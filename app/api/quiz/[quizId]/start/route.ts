@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { eq, and, inArray } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { db } from '@/app/db';
@@ -8,18 +8,21 @@ import {
   attempts,
   quizSections,
   quizzes,
-  studentSections,
 } from '@/app/db/schema';
+import { autoSubmitInProgressAttempt } from '@/lib/autoSubmitInProgressAttempt';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
 import { activeOnly } from '@/lib/db/filters';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
+import { getQuizAvailability } from '@/lib/quizAvailability';
+import { resolveAttemptSectionId } from '@/lib/resolveAttemptSection';
+import { shouldForceAutoSubmitInProgress } from '@/lib/shouldForceAutoSubmit';
 import {
   getRemainingSeconds,
   isTimeLimitExceeded,
 } from '@/lib/quizTimeLimit';
-import { normalizeDatabaseDate } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 120;
 
 const startBodySchema = z.object({
   assignmentId: z.string().uuid(),
@@ -34,8 +37,6 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Cheap call but it does write to attempts; rate-limit per user to stop a
-    // hot loop from spamming attempt rows.
     const limited = await enforceRateLimit({
       key: `start:${user.id}`,
       limit: 60,
@@ -55,20 +56,17 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
     }
     const { assignmentId } = parseResult.data;
 
-    // Verify the assignment belongs to the user
     const assignment = await db.query.assignments.findFirst({
       where: and(
         eq(assignments.id, assignmentId),
         eq(assignments.quizId, quizId),
-        eq(assignments.studentId, user.id)
+        eq(assignments.studentId, user.id),
       ),
     });
-
     if (!assignment) {
       return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
     }
 
-    // Get quiz details. Soft-deleted quizzes are presented as not-found.
     const quiz = await db.query.quizzes.findFirst({
       where: and(eq(quizzes.id, quizId), activeOnly(quizzes.deletedAt)),
     });
@@ -82,74 +80,87 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
       );
     }
 
-    // Validate quiz availability dates
-    // Quiz endDate is the primary control - if professor extends it, quiz becomes available
-    // Normalize dates to ensure correct UTC comparison
     const now = new Date();
-    const startDate = normalizeDatabaseDate(quiz.startDate);
-    const endDate = normalizeDatabaseDate(quiz.endDate);
-    const assignmentDueDate = normalizeDatabaseDate(assignment.dueDate);
-    
-    if (startDate && now < startDate) {
-      return NextResponse.json({ 
-        error: 'This quiz has not started yet.',
-        quizNotStarted: true 
-      }, { status: 400 });
-    }
-    if (endDate && now > endDate) {
-      return NextResponse.json({ 
-        error: 'This quiz has ended.',
-        quizEnded: true 
-      }, { status: 400 });
-    }
-
-    // Assignment dueDate is secondary - only check if quiz endDate is not set
-    // If quiz endDate is extended by professor, it overrides assignment dueDate
-    if (!endDate && assignmentDueDate && now > assignmentDueDate) {
-      return NextResponse.json({ 
-        error: 'The due date for this assignment has passed.',
-        dueDatePassed: true 
-      }, { status: 400 });
-    }
-
-    // Find all sections this quiz is assigned to
-    const quizSectionLinks = await db.query.quizSections.findMany({
-      where: eq(quizSections.quizId, quizId)
-    });
-    const quizSectionIds = quizSectionLinks.map(qs => qs.sectionId);
-
-    // Find the student's active section enrollment that matches one of these sections
-    const studentSection = await db.query.studentSections.findFirst({
-      where: and(
-        eq(studentSections.studentId, user.id),
-        eq(studentSections.status, 'ACTIVE'),
-        inArray(studentSections.sectionId, quizSectionIds)
-      )
-    });
-    const sectionId = studentSection ? studentSection.sectionId : null;
-    if (!sectionId) {
-      return NextResponse.json({ error: 'No valid section found for this quiz/assignment' }, { status: 400 });
-    }
-
-    // Load every attempt for this assignment so we can separate submitted (count
-    // toward the cap) from in-progress (resumable but never counted twice).
     const existingAttempts = await db.query.attempts.findMany({
       where: and(
         eq(attempts.assignmentId, assignmentId),
-        eq(attempts.studentId, user.id)
+        eq(attempts.studentId, user.id),
       ),
     });
     const submittedAttempts = existingAttempts.filter((a) => a.submittedAt != null);
-    let inProgressAttempt = existingAttempts.find((a) => !a.submittedAt);
+    const inProgressAttempt = existingAttempts.find((a) => !a.submittedAt);
 
-    // If a resumable in-progress attempt exists, return it without resetting the
-    // timer. Resetting would let a student bypass the server-side time limit by
-    // simply restarting the quiz after the original window expired.
     if (inProgressAttempt) {
-      // Edge case: max submitted attempts already reached but there is still
-      // an in-progress row. Submitting it would be rejected by the submit
-      // route, so refuse to resume instead of misleading the student.
+      const startedAtDate =
+        inProgressAttempt.startedAt instanceof Date
+          ? inProgressAttempt.startedAt
+          : new Date(inProgressAttempt.startedAt);
+
+      const { force } = shouldForceAutoSubmitInProgress({
+        quiz,
+        assignment,
+        startedAt: startedAtDate,
+        now,
+      });
+
+      if (force) {
+        const autoResult = await autoSubmitInProgressAttempt(
+          inProgressAttempt.id,
+          now,
+        );
+        if (autoResult.submitted) {
+          return NextResponse.json({
+            success: true,
+            serverAutoSubmitted: true,
+            attemptId: autoResult.attemptId,
+            message: 'Your saved answers were submitted automatically.',
+          });
+        }
+      }
+    }
+
+    const availability = getQuizAvailability(quiz, assignment, now);
+    if (!availability.allowed) {
+      const messages = {
+        quizNotStarted: 'This quiz has not started yet.',
+        quizEnded: 'This quiz has ended.',
+        dueDatePassed: 'The due date for this assignment has passed.',
+      } as const;
+      return NextResponse.json(
+        {
+          error: messages[availability.reason],
+          [availability.reason]: true,
+        },
+        { status: 400 },
+      );
+    }
+
+    const quizSectionLinks = await db.query.quizSections.findMany({
+      where: eq(quizSections.quizId, quizId),
+    });
+    const quizSectionIds = quizSectionLinks.map((qs) => qs.sectionId);
+    const sectionId = await resolveAttemptSectionId(user.id, quizSectionIds);
+    if (!sectionId) {
+      return NextResponse.json(
+        { error: 'No valid section found for this quiz/assignment' },
+        { status: 400 },
+      );
+    }
+
+    if (inProgressAttempt) {
       if (submittedAttempts.length >= quiz.maxAttempts) {
+        const autoResult = await autoSubmitInProgressAttempt(
+          inProgressAttempt.id,
+          now,
+        );
+        if (autoResult.submitted) {
+          return NextResponse.json({
+            success: true,
+            serverAutoSubmitted: true,
+            attemptId: autoResult.attemptId,
+            message: 'Your in-progress attempt was submitted.',
+          });
+        }
         return NextResponse.json(
           {
             error: `Maximum attempts (${quiz.maxAttempts}) reached for this quiz. You cannot retake this quiz.`,
@@ -165,11 +176,6 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
           ? inProgressAttempt.startedAt
           : new Date(inProgressAttempt.startedAt);
 
-      // Resume the in-progress attempt even when elapsed time is past the
-      // grace window. We used to delete it in that case, which silently
-      // wiped the student's autosaved answers. The client receives
-      // remainingSeconds: 0 + timeLimitExceeded: true and immediately
-      // fires an auto-submit, which the /submit route accepts late.
       const remainingSeconds = getRemainingSeconds(
         timeLimitMinutes,
         startedAtDate,
@@ -177,8 +183,13 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
       );
       const timeLimitExceeded =
         timeLimitMinutes != null &&
-        (remainingSeconds === 0 ||
-          isTimeLimitExceeded(timeLimitMinutes, startedAtDate, now));
+        isTimeLimitExceeded(timeLimitMinutes, startedAtDate, now);
+      const forceAutoSubmit = shouldForceAutoSubmitInProgress({
+        quiz,
+        assignment,
+        startedAt: startedAtDate,
+        now,
+      }).force;
 
       const savedAnswers =
         inProgressAttempt.answers &&
@@ -195,31 +206,36 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
         timeLimitMinutes,
         remainingSeconds: remainingSeconds ?? null,
         timeLimitExceeded,
+        forceAutoSubmit,
         resumed: true,
-        message: timeLimitExceeded
+        message: forceAutoSubmit
           ? 'Time limit reached — submitting your saved answers now.'
           : 'Resuming existing attempt',
       });
     }
 
-    // No resumable attempt: enforce the cap on the count of *submitted* attempts.
     if (submittedAttempts.length >= quiz.maxAttempts) {
-      return NextResponse.json({
-        error: `Maximum attempts (${quiz.maxAttempts}) reached for this quiz. You cannot retake this quiz.`,
-        maxAttemptsReached: true
-      }, { status: 400 });
+      return NextResponse.json(
+        {
+          error: `Maximum attempts (${quiz.maxAttempts}) reached for this quiz. You cannot retake this quiz.`,
+          maxAttemptsReached: true,
+        },
+        { status: 400 },
+      );
     }
 
-    // Create a new attempt record to track the start time
-    const [attempt] = await db.insert(attempts).values({
-      assignmentId,
-      studentId: user.id,
-      quizId: quizId,
-      sectionId,
-      answers: {}, // Empty answers initially
-      maxScore: 0, // Will be calculated on submit
-      startedAt: now,
-    }).returning();
+    const [attempt] = await db
+      .insert(attempts)
+      .values({
+        assignmentId,
+        studentId: user.id,
+        quizId,
+        sectionId,
+        answers: {},
+        maxScore: 0,
+        startedAt: now,
+      })
+      .returning();
 
     const timeLimitMinutes = quiz.timeLimit ?? null;
     const remainingSeconds = getRemainingSeconds(
@@ -236,15 +252,12 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
       timeLimitMinutes,
       remainingSeconds,
       timeLimitExceeded: false,
+      forceAutoSubmit: false,
       resumed: false,
       message: 'Quiz started',
     });
-
   } catch (error) {
     console.error('Error starting quiz:', error);
-    return NextResponse.json(
-      { error: 'Failed to start quiz' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to start quiz' }, { status: 500 });
   }
 }

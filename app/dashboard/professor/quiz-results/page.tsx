@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/table";
 import { withBasePath } from "@/lib/basePath";
 import { getOrCreateUser } from "@/lib/getOrCreateUser";
+import { fetchSubmittedAttemptsForProfessorSections } from "@/lib/professorVisibleAttempts";
 import { cleanQuizDescription } from "@/lib/utils";
 
 export default async function QuizResultsPage() {
@@ -88,10 +89,14 @@ export default async function QuizResultsPage() {
     orderBy: (quizSections, { desc }) => desc(quizSections.assignedAt),
   });
 
-  const quizStats = quizAssignments.map((qa) => {
+  const quizStats = await Promise.all(
+    quizAssignments.map(async (qa) => {
     const quiz = qa.quiz;
-    const raw = quiz.attempts.filter((a) => a.sectionId === qa.section.id);
-    const attempts = raw.filter((a) => a.submittedAt != null);
+    const attempts = await fetchSubmittedAttemptsForProfessorSections({
+      quizId: quiz.id,
+      professorSectionIds: enrolledSectionIds,
+      restrictToSectionId: qa.section.id,
+    });
 
     const totalAttempts = attempts.length;
     const uniqueStudents = new Set(attempts.map((a) => a.studentId)).size;
@@ -133,7 +138,8 @@ export default async function QuizResultsPage() {
             )
           : null,
     };
-  });
+  }),
+  );
 
   const totalAttempts = quizStats.reduce((s, q) => s + q.totalAttempts, 0);
   const totalLearners = new Set(

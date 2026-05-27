@@ -1,11 +1,12 @@
 import { appRedirect } from '@/lib/serverRedirect';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import { db } from '@/app/db';
-import { quizzes, questions, assignments } from '@/app/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { assignments, attempts, questions, quizzes } from '@/app/db/schema';
+import { and, eq, isNull } from 'drizzle-orm';
 import { QuizTakeForm } from '@/components/quiz/QuizTakeForm';
 import { activeOnly } from '@/lib/db/filters';
 import { isStudentEntitled } from '@/lib/featureFlags';
+import { getQuizAvailability } from '@/lib/quizAvailability';
 import { cleanQuizDescription, normalizeDatabaseDate } from '@/lib/utils';
 
 interface QuizPageProps {
@@ -74,6 +75,34 @@ export default async function QuizPage(props: QuizPageProps) {
     appRedirect('/dashboard/student');
   }
 
+  const inProgressAttempt = await db.query.attempts.findFirst({
+    where: and(
+      eq(attempts.quizId, quizId),
+      eq(attempts.studentId, user.id),
+      isNull(attempts.submittedAt),
+    ),
+  });
+
+  const availability = getQuizAvailability(quiz, assignment, now);
+  if (!availability.allowed && !inProgressAttempt) {
+    const messages = {
+      quizNotStarted: 'This quiz has not started yet.',
+      quizEnded: 'This quiz has ended.',
+      dueDatePassed: 'The due date for this assignment has passed.',
+    } as const;
+    const errorParam =
+      availability.reason === 'quizNotStarted'
+        ? 'quiz_not_started'
+        : availability.reason === 'quizEnded'
+          ? 'quiz_ended'
+          : 'due_date_passed';
+    appRedirect(
+      `/dashboard/student?error=${errorParam}&quizId=${quizId}&message=${encodeURIComponent(messages[availability.reason])}`,
+    );
+  }
+
+  const quizEndDate = normalizeDatabaseDate(quiz.endDate);
+
   return (
     <div className="bg-paper text-ink min-h-screen">
       <QuizTakeForm
@@ -82,7 +111,7 @@ export default async function QuizPage(props: QuizPageProps) {
         title: quiz.title,
         description: quiz.description ? cleanQuizDescription(quiz.description) : undefined,
         timeLimit: quiz.timeLimit || undefined,
-        dueDate: assignment.dueDate ? assignment.dueDate.toISOString() : null,
+        endDate: quizEndDate ? quizEndDate.toISOString() : null,
         totalQuestions: quizQuestions.length,
       }}
       questions={quizQuestions.map(q => ({

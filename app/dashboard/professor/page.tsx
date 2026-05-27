@@ -1,4 +1,4 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull } from 'drizzle-orm';
 import {
   AlertTriangle,
   ArrowRight,
@@ -81,11 +81,15 @@ export default async function ProfessorDashboard() {
   );
 
   const recentAttempts =
-    professorQuizzes.length > 0
+    professorQuizzes.length > 0 && sectionIds.length > 0
       ? await db.query.attempts.findMany({
-          where: inArray(
-            attempts.quizId,
-            professorQuizzes.map((q) => q.id),
+          where: and(
+            inArray(
+              attempts.quizId,
+              professorQuizzes.map((q) => q.id),
+            ),
+            isNotNull(attempts.submittedAt),
+            inArray(attempts.sectionId, sectionIds),
           ),
           with: {
             student: true,

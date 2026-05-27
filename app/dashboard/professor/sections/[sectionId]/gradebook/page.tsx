@@ -5,7 +5,6 @@ import { appRedirect } from "@/lib/serverRedirect";
 
 import { db } from "@/app/db";
 import {
-  attempts,
   professorSections,
   quizSections,
   sections,
@@ -19,6 +18,7 @@ import { EmptyState } from "@/components/patterns/EmptyState";
 import { requireAuth } from "@/lib/auth";
 import { withBasePath } from "@/lib/basePath";
 import { activeOnly } from "@/lib/db/filters";
+import { buildGradebookScoresForSection } from "@/lib/professorVisibleAttempts";
 
 export default async function SectionGradebookPage({ params }: any) {
   const { sectionId } = await params;
@@ -45,61 +45,32 @@ export default async function SectionGradebookPage({ params }: any) {
   }
 
   const studentEnrollments = await db.query.studentSections.findMany({
-    where: eq(studentSections.sectionId, sectionId),
+    where: and(
+      eq(studentSections.sectionId, sectionId),
+      eq(studentSections.status, "ACTIVE"),
+    ),
     with: { student: true },
   });
   const students = studentEnrollments.map((e) => e.student);
+  const enrolledStudentIds = students.map((s) => s.id);
 
   const quizSectionAssignments = await db.query.quizSections.findMany({
     where: eq(quizSections.sectionId, sectionId),
-    with: { quiz: true },
+    with: {
+      quiz: true,
+    },
   });
-  const sectionQuizzes = quizSectionAssignments.map((qs) => qs.quiz);
+  const sectionQuizzes = quizSectionAssignments
+    .map((qs) => qs.quiz)
+    .filter((q): q is NonNullable<(typeof quizSectionAssignments)[0]["quiz"]> =>
+      q != null && q.deletedAt == null,
+    );
   const quizIds = sectionQuizzes.map((q) => q.id);
 
-  const studentIds = students.map((s) => s.id);
-  let allAttempts: any[] = [];
-  if (studentIds.length && quizIds.length) {
-    const raw = await db.query.attempts.findMany({
-      where: and(
-        inArray(attempts.studentId, studentIds),
-        inArray(attempts.quizId, quizIds),
-      ),
-      with: { student: true, quiz: true },
-    });
-    allAttempts = raw.filter((a) => a.submittedAt != null);
-  }
-
-  const studentQuizScores: Record<
-    string,
-    Record<
-      string,
-      { score: number; percentage: number; attemptId: string; maxScore: number }
-    >
-  > = {};
-  allAttempts.forEach((attempt) => {
-    const pct =
-      attempt.percentage ??
-      (attempt.maxScore
-        ? Math.round(((attempt.score ?? 0) / attempt.maxScore) * 100)
-        : 0);
-    const score = attempt.score ?? 0;
-    if (!studentQuizScores[attempt.studentId]) {
-      studentQuizScores[attempt.studentId] = {};
-    }
-    const existing = studentQuizScores[attempt.studentId][attempt.quizId];
-    if (
-      !existing ||
-      pct > (existing.percentage ?? 0) ||
-      (pct === (existing.percentage ?? 0) && score > existing.score)
-    ) {
-      studentQuizScores[attempt.studentId][attempt.quizId] = {
-        score: attempt.score ?? 0,
-        percentage: pct,
-        attemptId: attempt.id,
-        maxScore: attempt.maxScore ?? 0,
-      };
-    }
+  const studentQuizScores = await buildGradebookScoresForSection({
+    sectionId,
+    quizIds,
+    enrolledStudentIds,
   });
 
   const quizAverages = sectionQuizzes.map((quiz) => {

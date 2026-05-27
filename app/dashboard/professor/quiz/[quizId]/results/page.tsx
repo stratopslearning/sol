@@ -11,7 +11,6 @@ import { notFound } from "next/navigation";
 
 import { db } from "@/app/db";
 import {
-  attempts,
   professorSections,
   questions,
   quizSections,
@@ -34,6 +33,7 @@ import {
 } from "@/components/ui/table";
 import { withBasePath } from "@/lib/basePath";
 import { getOrCreateUser } from "@/lib/getOrCreateUser";
+import { fetchSubmittedAttemptsForProfessorSections } from "@/lib/professorVisibleAttempts";
 
 export default async function QuizResultsPage({
   params,
@@ -81,21 +81,10 @@ export default async function QuizResultsPage({
       ? visibleSectionAssignments.map((sa) => sa.section.name).join(", ")
       : "your assigned sections";
 
-  // Scope attempts to sections the caller actually teaches. Without this,
-  // a co-teaching professor could see attempts from another section even when
-  // they are only enrolled in one of the quiz's assigned sections.
-  const allQuizAttempts = await db.query.attempts.findMany({
-    where: and(
-      eq(attempts.quizId, quizId),
-      inArray(attempts.sectionId, enrolledSectionIds),
-    ),
-    with: {
-      student: true,
-      section: { with: { course: true } },
-    },
-    orderBy: (attempts, { desc }) => desc(attempts.submittedAt),
+  const quizAttempts = await fetchSubmittedAttemptsForProfessorSections({
+    quizId,
+    professorSectionIds: enrolledSectionIds,
   });
-  const quizAttempts = allQuizAttempts.filter((a) => a.submittedAt != null);
 
   const bestPerStudent: Record<string, number> = {};
   quizAttempts.forEach((a) => {
@@ -179,8 +168,8 @@ export default async function QuizResultsPage({
                 Performance at a glance.
               </h2>
               <p className="mt-3 text-sm leading-6 text-ink-muted">
-                This view is scoped to sections you teach, so submissions and
-                learner counts do not include other sections using the same quiz.
+                Only submissions recorded under sections you teach are shown.
+                The same quiz assigned elsewhere does not appear here.
               </p>
             </div>
             <div className="flex flex-wrap gap-2 lg:justify-end">
