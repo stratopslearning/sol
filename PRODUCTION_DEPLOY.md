@@ -123,8 +123,9 @@ Against the production URL:
 3. **Enrol** in a section using a known student code → expect 200.
 4. **Hammer** `/api/quiz/<id>/submit` 30+ times in a minute → expect a 429
    response with `Retry-After` and `RateLimit-*` headers.
-5. **Trigger** Sentry error: visit `/sentry-example-page` and click the
-   button → expect an event in the Sentry dashboard.
+5. **Verify Sentry**: in the Sentry project, use **Issues → Create alert** or
+   send a test event from **Settings → Client Keys (DSN) → Send test event**.
+   After deploy, confirm new production errors appear (not only local dev).
 
 ---
 
