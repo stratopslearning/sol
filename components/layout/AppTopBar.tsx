@@ -16,6 +16,15 @@ interface AppTopBarProps {
 }
 
 export function AppTopBar({ eyebrow, title, actions }: AppTopBarProps) {
+  // Clerk's <UserButton> renders different markup during SSR vs after the
+  // client-side ClerkJS script hydrates, which trips React #418 hydration
+  // mismatches. Render a size-matched placeholder until mount, then swap in
+  // the real button on the client. Same pattern as ThemeToggle.
+  const [mounted, setMounted] = React.useState(false);
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
+
   return (
     <header
       data-app-topbar
@@ -43,13 +52,20 @@ export function AppTopBar({ eyebrow, title, actions }: AppTopBarProps) {
           {actions}
           <ThemeToggle />
           <div className="ml-1 flex items-center">
-            <UserButton
-              appearance={{
-                elements: {
-                  avatarBox: "h-8 w-8 border border-rule",
-                },
-              }}
-            />
+            {mounted ? (
+              <UserButton
+                appearance={{
+                  elements: {
+                    avatarBox: "h-8 w-8 border border-rule",
+                  },
+                }}
+              />
+            ) : (
+              <div
+                aria-hidden
+                className="h-8 w-8 rounded-full border border-rule bg-surface-sunken"
+              />
+            )}
           </div>
         </div>
       </div>
