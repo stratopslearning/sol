@@ -44,14 +44,21 @@ export default async function QuizResultsPage({
 }) {
   const { quizId } = await params;
   const user = await getOrCreateUser();
-  if (!user || user.role !== "PROFESSOR") return null;
+  if (!user || (user.role !== "PROFESSOR" && user.role !== "ADMIN")) return null;
 
-  const professorSectionsList = await db.query.professorSections.findMany({
-    where: eq(professorSections.professorId, user.id),
-    with: { section: { with: { course: true } } },
-  });
-
-  const enrolledSectionIds = professorSectionsList.map((ps) => ps.section.id);
+  let enrolledSectionIds: string[];
+  if (user.role === "ADMIN") {
+    const assignments = await db.query.quizSections.findMany({
+      where: eq(quizSections.quizId, quizId),
+    });
+    enrolledSectionIds = assignments.map((a) => a.sectionId);
+  } else {
+    const professorSectionsList = await db.query.professorSections.findMany({
+      where: eq(professorSections.professorId, user.id),
+      with: { section: { with: { course: true } } },
+    });
+    enrolledSectionIds = professorSectionsList.map((ps) => ps.section.id);
+  }
   if (enrolledSectionIds.length === 0) notFound();
 
   const quizAssignment = await db.query.quizSections.findFirst({

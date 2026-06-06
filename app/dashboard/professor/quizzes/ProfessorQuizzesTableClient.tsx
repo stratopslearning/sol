@@ -32,7 +32,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { withBasePath } from "@/lib/basePath";
 
 const ROWS_PER_PAGE = 15;
 type SortMode = "DEFAULT" | "DUE_ASC" | "DUE_DESC";

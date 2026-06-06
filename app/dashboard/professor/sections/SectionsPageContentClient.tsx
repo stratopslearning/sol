@@ -32,7 +32,6 @@ import {
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/patterns/EmptyState";
 import { useFilteredSortedPage } from "@/hooks/useFilteredSortedPage";
-import { withBasePath } from "@/lib/basePath";
 import { compareStringsIgnoreCase } from "@/lib/listSort";
 
 const ROWS_PER_PAGE = 10;
@@ -221,18 +220,14 @@ export default function ProfessorSectionsPageContentClient({
                     <div className="flex justify-end gap-2">
                       <Button asChild size="sm" variant="outline">
                         <Link
-                          href={withBasePath(
-                            `/dashboard/professor/sections/${section.id}/gradebook`,
-                          )}
+                          href={`/dashboard/professor/sections/${section.id}/gradebook`}
                         >
                           Gradebook
                         </Link>
                       </Button>
                       <Button asChild size="sm" variant="outline">
                         <Link
-                          href={withBasePath(
-                            `/dashboard/professor/sections/${section.id}`,
-                          )}
+                          href={`/dashboard/professor/sections/${section.id}`}
                         >
                           Details
                         </Link>

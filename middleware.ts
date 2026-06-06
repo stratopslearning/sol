@@ -19,6 +19,15 @@ function redirectWithinApp(path: string, req: Request) {
 
 export default clerkMiddleware(async (auth, req) => {
   const { pathname } = req.nextUrl;
+
+  // Recover from accidental double basePath (Link href passed through withBasePath).
+  const doubleBase = `${BASE_PATH}${BASE_PATH}`;
+  if (pathname.startsWith(doubleBase)) {
+    const url = req.nextUrl.clone();
+    url.pathname = pathname.slice(BASE_PATH.length);
+    return NextResponse.redirect(url);
+  }
+
   const appPath = pathname.startsWith(BASE_PATH)
     ? pathname.slice(BASE_PATH.length) || '/'
     : pathname;

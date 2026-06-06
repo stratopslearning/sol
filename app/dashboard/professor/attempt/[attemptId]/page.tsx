@@ -35,7 +35,7 @@ export default async function AttemptDetailPage({
 }) {
   const { attemptId } = await params;
   const user = await getOrCreateUser();
-  if (!user || user.role !== "PROFESSOR") return null;
+  if (!user || (user.role !== "PROFESSOR" && user.role !== "ADMIN")) return null;
 
   const attempt = await db.query.attempts.findFirst({
     where: eq(attempts.id, attemptId),
@@ -48,12 +48,13 @@ export default async function AttemptDetailPage({
 
   if (!attempt) notFound();
 
-  const professorSectionsList = await db.query.professorSections.findMany({
-    where: eq(professorSections.professorId, user.id),
-  });
-  const enrolledSectionIds = professorSectionsList.map((ps) => ps.sectionId);
-
-  if (!enrolledSectionIds.includes(attempt.sectionId)) notFound();
+  if (user.role !== "ADMIN") {
+    const professorSectionsList = await db.query.professorSections.findMany({
+      where: eq(professorSections.professorId, user.id),
+    });
+    const enrolledSectionIds = professorSectionsList.map((ps) => ps.sectionId);
+    if (!enrolledSectionIds.includes(attempt.sectionId)) notFound();
+  }
 
   const studentAnswers =
     attempt.answers && typeof attempt.answers === "string"
@@ -110,9 +111,9 @@ export default async function AttemptDetailPage({
 
   return (
     <AppShell
-      role="professor"
-      active="quizzes"
-      topbarEyebrow="Faculty"
+      role={user.role === "ADMIN" ? "admin" : "professor"}
+      active={user.role === "ADMIN" ? "sections" : "quizzes"}
+      topbarEyebrow={user.role === "ADMIN" ? "Administration" : "Faculty"}
       topbarTitle="Submission detail"
       maxWidth="wide"
     >
