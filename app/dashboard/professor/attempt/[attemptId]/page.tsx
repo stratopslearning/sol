@@ -14,6 +14,7 @@ import { GPTFeedbackDisplay } from "@/components/quiz/GPTFeedbackDisplay";
 import { RegradeAttemptButton } from "@/components/quiz/RegradeAttemptButton";
 import { Badge } from "@/components/ui/badge";
 import { withBasePath } from "@/lib/basePath";
+import { formatPersonName } from "@/lib/personName";
 import { getOrCreateUser } from "@/lib/getOrCreateUser";
 import {
   buildLegacyQuestionKeyMap,
@@ -131,7 +132,7 @@ export default async function AttemptDetailPage({
           { label: "Submission" },
         ]}
         eyebrow="Submission"
-        title={`${attempt.student.firstName} ${attempt.student.lastName}`}
+        title={formatPersonName(attempt.student)}
         description={`${attempt.quiz.title} · ${attempt.section.name} · ${attempt.section.course.title}`}
         actions={
           attempt.submittedAt ? (
@@ -151,7 +152,7 @@ export default async function AttemptDetailPage({
           <div>
             <dt className="eyebrow text-ink-faint">Learner</dt>
             <dd className="mt-2 text-ink">
-              {attempt.student.firstName} {attempt.student.lastName}
+              {formatPersonName(attempt.student)}
             </dd>
             <dd className="text-xs text-ink-faint">
               {attempt.student.email}

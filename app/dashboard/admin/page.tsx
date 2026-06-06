@@ -150,7 +150,8 @@ export default async function AdminDashboardPage() {
                       {course.description}
                     </p>
                   ) : null}
-                  <div className="mt-auto pt-3">
+                  <div className="mt-auto pt-3 flex gap-2">
+                    <CourseFormModal mode="edit" course={safeCourse} />
                     <CourseFormModal mode="delete" course={safeCourse} />
                   </div>
                 </article>

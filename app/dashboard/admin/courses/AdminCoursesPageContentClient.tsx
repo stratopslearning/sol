@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useState } from "react";
 import { BookOpen } from "lucide-react";
 
 import { CourseFormModal } from "@/components/admin/CourseFormModal";
@@ -14,6 +14,13 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -22,6 +29,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/patterns/EmptyState";
+import { useFilteredSortedPage } from "@/hooks/useFilteredSortedPage";
+import { compareStringsIgnoreCase } from "@/lib/listSort";
 
 const ROWS_PER_PAGE = 15;
 
@@ -30,7 +39,30 @@ type CourseRow = {
   title: string;
   description: string | null;
   sectionCount: number;
+  createdAt?: string | Date | null;
 };
+
+type CourseSortMode = "TITLE" | "SECTIONS" | "CREATED_DESC" | "CREATED_ASC";
+
+function courseCompare(a: CourseRow, b: CourseRow, mode: CourseSortMode) {
+  switch (mode) {
+    case "SECTIONS":
+      return a.sectionCount - b.sectionCount;
+    case "CREATED_DESC":
+      return (
+        new Date(b.createdAt ?? 0).getTime() -
+        new Date(a.createdAt ?? 0).getTime()
+      );
+    case "CREATED_ASC":
+      return (
+        new Date(a.createdAt ?? 0).getTime() -
+        new Date(b.createdAt ?? 0).getTime()
+      );
+    case "TITLE":
+    default:
+      return compareStringsIgnoreCase(a.title, b.title);
+  }
+}
 
 export default function AdminCoursesPageContentClient({
   courses,
@@ -38,31 +70,30 @@ export default function AdminCoursesPageContentClient({
   courses: CourseRow[];
 }) {
   const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
+  const [sortMode, setSortMode] = useState<CourseSortMode>("TITLE");
 
-  const filteredCourses = useMemo(() => {
-    if (!search.trim()) return courses;
-    const q = search.toLowerCase();
-    return courses.filter(
-      (c) =>
-        c.title.toLowerCase().includes(q) ||
-        (c.description?.toLowerCase() || "").includes(q),
-    );
-  }, [courses, search]);
-
-  const totalPages = Math.max(
-    1,
-    Math.ceil(filteredCourses.length / ROWS_PER_PAGE),
-  );
-  const currentPage = Math.min(page, totalPages);
-  const paginatedCourses = useMemo(() => {
-    const start = (currentPage - 1) * ROWS_PER_PAGE;
-    return filteredCourses.slice(start, start + ROWS_PER_PAGE);
-  }, [filteredCourses, currentPage]);
-
-  useEffect(() => {
-    setPage(1);
-  }, [search]);
+  const {
+    page,
+    setPage,
+    totalPages,
+    paginated: paginatedCourses,
+  } = useFilteredSortedPage({
+    rows: courses,
+    search,
+    filterFn: useCallback((c: CourseRow, q: string) => {
+      if (!q.trim()) return true;
+      const lower = q.toLowerCase();
+      return (
+        c.title.toLowerCase().includes(lower) ||
+        (c.description?.toLowerCase() || "").includes(lower)
+      );
+    }, []),
+    compareFn: useCallback(
+      (a: CourseRow, b: CourseRow) => courseCompare(a, b, sortMode),
+      [sortMode],
+    ),
+    rowsPerPage: ROWS_PER_PAGE,
+  });
 
   if (courses.length === 0) {
     return (
@@ -78,12 +109,29 @@ export default function AdminCoursesPageContentClient({
 
   return (
     <div className="flex flex-col gap-4">
-      <Input
-        type="search"
-        placeholder="Search by title or description…"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-      />
+      <div className="flex flex-col md:flex-row gap-3">
+        <Select
+          value={sortMode}
+          onValueChange={(v) => setSortMode(v as CourseSortMode)}
+        >
+          <SelectTrigger className="md:w-48">
+            <SelectValue placeholder="Sort by" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="TITLE">Title A–Z</SelectItem>
+            <SelectItem value="SECTIONS">Section count</SelectItem>
+            <SelectItem value="CREATED_DESC">Created (newest)</SelectItem>
+            <SelectItem value="CREATED_ASC">Created (oldest)</SelectItem>
+          </SelectContent>
+        </Select>
+        <Input
+          type="search"
+          placeholder="Search by title or description…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="flex-1"
+        />
+      </div>
 
       <div className="paper paper-shadow overflow-hidden">
         <Table>
@@ -114,14 +162,24 @@ export default function AdminCoursesPageContentClient({
                   </TableCell>
                   <TableCell className="tnum">{course.sectionCount}</TableCell>
                   <TableCell className="text-right">
-                    <CourseFormModal
-                      mode="delete"
-                      course={{
-                        id: course.id,
-                        title: course.title,
-                        description: course.description ?? undefined,
-                      }}
-                    />
+                    <div className="inline-flex gap-1">
+                      <CourseFormModal
+                        mode="edit"
+                        course={{
+                          id: course.id,
+                          title: course.title,
+                          description: course.description ?? undefined,
+                        }}
+                      />
+                      <CourseFormModal
+                        mode="delete"
+                        course={{
+                          id: course.id,
+                          title: course.title,
+                          description: course.description ?? undefined,
+                        }}
+                      />
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
@@ -138,12 +196,10 @@ export default function AdminCoursesPageContentClient({
                 href="#"
                 onClick={(e) => {
                   e.preventDefault();
-                  if (currentPage > 1) setPage(currentPage - 1);
+                  if (page > 1) setPage(page - 1);
                 }}
                 className={
-                  currentPage <= 1
-                    ? "pointer-events-none opacity-50"
-                    : "cursor-pointer"
+                  page <= 1 ? "pointer-events-none opacity-50" : "cursor-pointer"
                 }
               />
             </PaginationItem>
@@ -155,7 +211,7 @@ export default function AdminCoursesPageContentClient({
                     e.preventDefault();
                     setPage(p);
                   }}
-                  isActive={p === currentPage}
+                  isActive={p === page}
                   className="cursor-pointer"
                 >
                   {p}
@@ -167,10 +223,10 @@ export default function AdminCoursesPageContentClient({
                 href="#"
                 onClick={(e) => {
                   e.preventDefault();
-                  if (currentPage < totalPages) setPage(currentPage + 1);
+                  if (page < totalPages) setPage(page + 1);
                 }}
                 className={
-                  currentPage >= totalPages
+                  page >= totalPages
                     ? "pointer-events-none opacity-50"
                     : "cursor-pointer"
                 }

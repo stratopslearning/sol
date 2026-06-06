@@ -16,11 +16,20 @@ export default async function ProfessorSectionsPage() {
   const enrollments = await db.query.professorSections.findMany({
     where: eq(professorSections.professorId, user.id),
     with: {
-      section: { with: { course: true } },
+      section: {
+        with: {
+          course: true,
+          studentSections: true,
+        },
+      },
     },
   });
 
-  const sectionsList = enrollments.map((e) => e.section);
+  const sectionsList = enrollments.map((e) => ({
+    ...e.section,
+    learnerCount: e.section.studentSections.filter((s) => s.status === "ACTIVE")
+      .length,
+  }));
 
   return (
     <AppShell

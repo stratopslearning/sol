@@ -27,6 +27,7 @@ export default async function AdminCoursesPage() {
     id: c.id,
     title: c.title,
     description: c.description,
+    createdAt: c.createdAt,
     sectionCount: sectionCountByCourse[c.id] || 0,
   }));
 

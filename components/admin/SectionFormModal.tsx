@@ -2,6 +2,8 @@
 
 import React, { useState } from "react";
 import { Edit, Plus, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -48,10 +50,12 @@ export function SectionFormModal({
   bulk?: boolean;
   allCourses?: { id: string; title: string }[];
 }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(section?.name || "");
   const [bulkNames, setBulkNames] = useState("");
   const [loading, setLoading] = useState(false);
+  const [createdSectionId, setCreatedSectionId] = useState<string | null>(null);
   const [courseId, setCourseId] = useState(
     initialCourseId || (allCourses && allCourses[0]?.id) || "",
   );
@@ -59,6 +63,11 @@ export function SectionFormModal({
   const isDelete = mode === "delete";
   const isCreate = mode === "create";
   const isBulk = !!bulk;
+
+  const handleOpenChange = (next: boolean) => {
+    setOpen(next);
+    if (!next) setCreatedSectionId(null);
+  };
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -82,35 +91,49 @@ export function SectionFormModal({
         if (res.ok) {
           toast.success(`Created ${names.length} sections`);
           setOpen(false);
-          setTimeout(() => window.location.reload(), 600);
+          router.refresh();
         } else {
           toast.error("Failed to create sections");
         }
       } else if (isCreate) {
-        await fetch(apiUrl(`/api/admin/section`), {
+        const res = await fetch(apiUrl(`/api/admin/section`), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ name, courseId }),
         });
+        if (!res.ok) {
+          toast.error("Failed to create section");
+          return;
+        }
+        const data = (await res.json()) as { section?: { id: string } };
+        setCreatedSectionId(data.section?.id ?? null);
         toast.success("Section created");
-        setOpen(false);
-        window.location.reload();
+        router.refresh();
+        if (!data.section?.id) setOpen(false);
       } else if (isEdit && section) {
-        await fetch(apiUrl(`/api/admin/section/${section.id}`), {
+        const res = await fetch(apiUrl(`/api/admin/section/${section.id}`), {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ name }),
         });
+        if (!res.ok) {
+          toast.error("Failed to update section");
+          return;
+        }
         toast.success("Section updated");
         setOpen(false);
-        window.location.reload();
+        router.refresh();
       } else if (isDelete && section) {
-        await fetch(apiUrl(`/api/admin/section/${section.id}`), {
+        const res = await fetch(apiUrl(`/api/admin/section/${section.id}`), {
           method: "DELETE",
         });
+        if (!res.ok) {
+          toast.error("Failed to delete section");
+          return;
+        }
         toast.success("Section deleted");
         setOpen(false);
-        window.location.reload();
+        router.refresh();
       }
     } finally {
       setLoading(false);
@@ -145,7 +168,7 @@ export function SectionFormModal({
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent>
         <DialogHeader>
@@ -164,10 +187,20 @@ export function SectionFormModal({
               <span className="text-ink font-medium">{section.name}</span>? This
               cannot be undone.
             </DialogDescription>
+          ) : createdSectionId ? (
+            <DialogDescription>
+              Section created.{" "}
+              <Link
+                href={`/dashboard/admin/sections/${createdSectionId}`}
+                className="text-brand underline underline-offset-4"
+              >
+                View section details
+              </Link>
+            </DialogDescription>
           ) : null}
         </DialogHeader>
 
-        {!isDelete ? (
+        {!isDelete && !createdSectionId ? (
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             {isCreate && allCourses && allCourses.length > 0 ? (
               <div className="flex flex-col gap-2">
@@ -233,6 +266,19 @@ export function SectionFormModal({
               </Button>
             </DialogFooter>
           </form>
+        ) : createdSectionId ? (
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)}>
+              Close
+            </Button>
+            <Button asChild>
+              <Link
+                href={`/dashboard/admin/sections/${createdSectionId}`}
+              >
+                View section
+              </Link>
+            </Button>
+          </DialogFooter>
         ) : (
           <DialogFooter>
             <Button

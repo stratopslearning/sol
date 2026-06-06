@@ -1,8 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import { notFound } from 'next/navigation';
 
-import { appRedirect } from '@/lib/serverRedirect';
-
 import { db } from '@/app/db';
 import {
   professorSections,
@@ -17,39 +15,25 @@ import { AppShell } from '@/components/layout/AppShell';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { SectionHeading } from '@/components/layout/SectionHeading';
 import { EmptyState } from '@/components/patterns/EmptyState';
-import { requireAuth } from '@/lib/auth';
+import { requireAdmin } from '@/lib/auth';
 import { withBasePath } from '@/lib/basePath';
 import { activeOnly } from '@/lib/db/filters';
 import { comparePersonsByLastName } from '@/lib/personName';
 import { buildGradebookScoresForSection } from '@/lib/professorVisibleAttempts';
 
-export default async function SectionGradebookPage({
+export default async function AdminSectionGradebookPage({
   params,
 }: {
   params: Promise<{ sectionId: string }>;
 }) {
+  await requireAdmin();
   const { sectionId } = await params;
-
-  const me = await requireAuth();
-  if (me.role !== 'PROFESSOR' && me.role !== 'ADMIN') {
-    appRedirect('/unauthorized');
-  }
 
   const section = await db.query.sections.findFirst({
     where: and(eq(sections.id, sectionId), activeOnly(sections.deletedAt)),
     with: { course: true },
   });
   if (!section) return notFound();
-
-  if (me.role !== 'ADMIN') {
-    const enrollment = await db.query.professorSections.findFirst({
-      where: and(
-        eq(professorSections.sectionId, sectionId),
-        eq(professorSections.professorId, me.id),
-      ),
-    });
-    if (!enrollment) return notFound();
-  }
 
   const studentEnrollments = await db.query.studentSections.findMany({
     where: and(
@@ -111,24 +95,22 @@ export default async function SectionGradebookPage({
 
   return (
     <AppShell
-      role="professor"
+      role="admin"
       active="sections"
-      topbarEyebrow="Faculty"
+      topbarEyebrow="Administration"
       topbarTitle="Gradebook"
       maxWidth="wide"
     >
       <PageHeader
         breadcrumbs={[
-          { label: 'Dashboard', href: withBasePath('/dashboard/professor') },
+          { label: 'Overview', href: withBasePath('/dashboard/admin') },
           {
-            label: 'My sections',
-            href: withBasePath('/dashboard/professor/sections'),
+            label: 'Sections',
+            href: withBasePath('/dashboard/admin/sections'),
           },
           {
             label: section.name,
-            href: withBasePath(
-              `/dashboard/professor/sections/${section.id}`,
-            ),
+            href: withBasePath(`/dashboard/admin/sections/${section.id}`),
           },
           { label: 'Gradebook' },
         ]}

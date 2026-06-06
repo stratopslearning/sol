@@ -26,6 +26,8 @@ export default async function StudentGradesPage() {
   const attemptRows = allAttempts.map((a) => ({
     id: a.id,
     quizId: a.quizId,
+    sectionId: a.sectionId,
+    sectionName: a.section?.name ?? "Section",
     quizTitle: a.quiz?.title ?? "Quiz",
     courseTitle: a.section?.course?.title ?? null,
     submittedAt: a.submittedAt
@@ -49,7 +51,7 @@ export default async function StudentGradesPage() {
         ]}
         eyebrow="Record"
         title="Your gradebook."
-        description="Every attempt you've submitted, with the score, the date, and a path back to the original work."
+        description="Your attempts grouped by section and quiz — best scores, submission dates, and quick access to review each one."
       />
       <div className="mt-10">
         <StudentGradesTableClient attempts={attemptRows} />

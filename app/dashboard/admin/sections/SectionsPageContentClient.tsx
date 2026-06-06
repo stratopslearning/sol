@@ -1,9 +1,12 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import React, { useCallback, useEffect, useState } from "react";
+import { Eye, GraduationCap } from "lucide-react";
 
 import CopyEnrollmentButton from "@/components/CopyEnrollmentButton";
 import { SectionFormModal } from "@/components/admin/SectionFormModal";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Pagination,
@@ -29,53 +32,97 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { useFilteredSortedPage } from "@/hooks/useFilteredSortedPage";
 import { withBasePath } from "@/lib/basePath";
+import { compareDates, compareStringsIgnoreCase } from "@/lib/listSort";
 
 const ROWS_PER_PAGE = 15;
+
+type SectionRow = {
+  id: string;
+  name: string;
+  courseId: string;
+  professorEnrollmentCode: string;
+  studentEnrollmentCode: string;
+  createdAt: string | Date;
+  learnerCount: number;
+  facultyCount: number;
+  course?: { id: string; title: string } | null;
+};
+
+type SectionSortMode =
+  | "NAME"
+  | "COURSE"
+  | "LEARNERS"
+  | "FACULTY"
+  | "CREATED_DESC"
+  | "CREATED_ASC";
+
+function sectionCompare(a: SectionRow, b: SectionRow, mode: SectionSortMode) {
+  switch (mode) {
+    case "COURSE":
+      return compareStringsIgnoreCase(
+        a.course?.title ?? "",
+        b.course?.title ?? "",
+      );
+    case "LEARNERS":
+      return a.learnerCount - b.learnerCount;
+    case "FACULTY":
+      return a.facultyCount - b.facultyCount;
+    case "CREATED_DESC":
+      return compareDates(b.createdAt, a.createdAt);
+    case "CREATED_ASC":
+      return compareDates(a.createdAt, b.createdAt);
+    case "NAME":
+    default:
+      return compareStringsIgnoreCase(a.name, b.name);
+  }
+}
 
 export default function SectionsPageContentClient({
   allSections,
   allCourses,
 }: {
-  allSections: any[];
-  allCourses: any[];
+  allSections: SectionRow[];
+  allCourses: { id: string; title: string }[];
 }) {
   const [filter, setFilter] = useState("");
   const [courseId, setCourseId] = useState<string>("ALL");
-  const [page, setPage] = useState(1);
+  const [sortMode, setSortMode] = useState<SectionSortMode>("NAME");
 
-  const filteredSections = useMemo(() => {
-    return allSections.filter((section) => {
+  const {
+    page,
+    setPage,
+    totalPages,
+    paginated: paginatedSections,
+  } = useFilteredSortedPage({
+    rows: allSections,
+    search: filter,
+    filterFn: useCallback((section: SectionRow, q: string) => {
       const matchesSearch =
-        section.name.toLowerCase().includes(filter.toLowerCase()) ||
+        !q.trim() ||
+        section.name.toLowerCase().includes(q.toLowerCase()) ||
         section.professorEnrollmentCode
           .toLowerCase()
-          .includes(filter.toLowerCase()) ||
+          .includes(q.toLowerCase()) ||
         section.studentEnrollmentCode
           .toLowerCase()
-          .includes(filter.toLowerCase()) ||
-        (section.course?.title?.toLowerCase() || "").includes(
-          filter.toLowerCase(),
-        );
+          .includes(q.toLowerCase()) ||
+        (section.course?.title?.toLowerCase() || "").includes(q.toLowerCase());
       const matchesCourse =
         courseId === "ALL" || section.courseId === courseId;
       return matchesSearch && matchesCourse;
-    });
-  }, [allSections, filter, courseId]);
-
-  const totalPages = Math.max(
-    1,
-    Math.ceil(filteredSections.length / ROWS_PER_PAGE),
-  );
-  const currentPage = Math.min(page, totalPages);
-  const paginatedSections = useMemo(() => {
-    const start = (currentPage - 1) * ROWS_PER_PAGE;
-    return filteredSections.slice(start, start + ROWS_PER_PAGE);
-  }, [filteredSections, currentPage]);
+    }, [courseId]),
+    compareFn: useCallback(
+      (a: SectionRow, b: SectionRow) => sectionCompare(a, b, sortMode),
+      [sortMode],
+    ),
+    rowsPerPage: ROWS_PER_PAGE,
+  });
 
   useEffect(() => {
     setPage(1);
-  }, [filter, courseId]);
+  }, [courseId, sortMode, setPage]);
 
   return (
     <>
@@ -112,6 +159,22 @@ export default function SectionsPageContentClient({
               </SelectContent>
             </Select>
           </div>
+          <Select
+            value={sortMode}
+            onValueChange={(v) => setSortMode(v as SectionSortMode)}
+          >
+            <SelectTrigger className="md:w-48">
+              <SelectValue placeholder="Sort by" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="NAME">Section name A–Z</SelectItem>
+              <SelectItem value="COURSE">Course A–Z</SelectItem>
+              <SelectItem value="LEARNERS">Learners</SelectItem>
+              <SelectItem value="FACULTY">Faculty</SelectItem>
+              <SelectItem value="CREATED_DESC">Created (newest)</SelectItem>
+              <SelectItem value="CREATED_ASC">Created (oldest)</SelectItem>
+            </SelectContent>
+          </Select>
           <Input
             type="search"
             placeholder="Search by section, course, or code…"
@@ -127,6 +190,8 @@ export default function SectionsPageContentClient({
               <TableRow>
                 <TableHead>Section</TableHead>
                 <TableHead>Course</TableHead>
+                <TableHead className="tnum">Learners</TableHead>
+                <TableHead className="tnum">Faculty</TableHead>
                 <TableHead>Faculty code</TableHead>
                 <TableHead>Learner code</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -136,7 +201,7 @@ export default function SectionsPageContentClient({
               {paginatedSections.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={5}
+                    colSpan={7}
                     className="text-center text-ink-muted py-8"
                   >
                     No sections found.
@@ -151,6 +216,8 @@ export default function SectionsPageContentClient({
                     <TableCell className="text-ink-muted">
                       {section.course?.title || "Unknown"}
                     </TableCell>
+                    <TableCell className="tnum">{section.learnerCount}</TableCell>
+                    <TableCell className="tnum">{section.facultyCount}</TableCell>
                     <TableCell>
                       <div className="inline-flex items-center gap-2">
                         <code className="font-mono text-xs bg-surface-sunken text-ink px-2 py-1 rounded border border-rule">
@@ -172,7 +239,30 @@ export default function SectionsPageContentClient({
                       </div>
                     </TableCell>
                     <TableCell className="text-right">
-                      <SectionFormModal mode="delete" section={section} />
+                      <div className="inline-flex items-center gap-1">
+                        <Button asChild variant="ghost" size="sm">
+                          <Link
+                            href={`/dashboard/admin/sections/${section.id}`}
+                          >
+                            <Eye className="h-4 w-4" />
+                            Details
+                          </Link>
+                        </Button>
+                        <Button asChild variant="ghost" size="sm">
+                          <Link
+                            href={`/dashboard/admin/sections/${section.id}/gradebook`}
+                          >
+                            <GraduationCap className="h-4 w-4" />
+                            Gradebook
+                          </Link>
+                        </Button>
+                        <SectionFormModal
+                          mode="edit"
+                          section={section}
+                          allCourses={allCourses}
+                        />
+                        <SectionFormModal mode="delete" section={section} />
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))
@@ -189,10 +279,10 @@ export default function SectionsPageContentClient({
                   href="#"
                   onClick={(e) => {
                     e.preventDefault();
-                    if (currentPage > 1) setPage(currentPage - 1);
+                    if (page > 1) setPage(page - 1);
                   }}
                   className={
-                    currentPage <= 1
+                    page <= 1
                       ? "pointer-events-none opacity-50"
                       : "cursor-pointer"
                   }
@@ -206,7 +296,7 @@ export default function SectionsPageContentClient({
                       e.preventDefault();
                       setPage(p);
                     }}
-                    isActive={p === currentPage}
+                    isActive={p === page}
                     className="cursor-pointer"
                   >
                     {p}
@@ -218,10 +308,10 @@ export default function SectionsPageContentClient({
                   href="#"
                   onClick={(e) => {
                     e.preventDefault();
-                    if (currentPage < totalPages) setPage(currentPage + 1);
+                    if (page < totalPages) setPage(page + 1);
                   }}
                   className={
-                    currentPage >= totalPages
+                    page >= totalPages
                       ? "pointer-events-none opacity-50"
                       : "cursor-pointer"
                   }

@@ -176,20 +176,32 @@ export default function StudentQuizzesTableClient({
       </div>
 
       <div className="paper paper-shadow overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Quiz title</TableHead>
-              <TableHead>Section</TableHead>
-              <TableHead>Best</TableHead>
-              <TableHead>Attempts</TableHead>
-              <TableHead>Due</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Action</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {paginatedQuizzes.map((quiz) => {
+        <div className="overflow-x-auto">
+          <Table className="table-fixed min-w-[1020px]">
+            <colgroup>
+              <col className="w-[220px]" />
+              <col className="w-[280px]" />
+              <col className="w-[80px]" />
+              <col className="w-[120px]" />
+              <col className="w-[160px]" />
+              <col className="w-[100px]" />
+              <col className="w-[120px]" />
+            </colgroup>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Quiz title</TableHead>
+                <TableHead>Section</TableHead>
+                <TableHead>Best</TableHead>
+                <TableHead>Attempts</TableHead>
+                <TableHead>Due</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="sticky right-0 z-10 bg-surface-sunken/95 px-3 text-right">
+                  Action
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {paginatedQuizzes.map((quiz) => {
               const submittedCount = submittedCountByQuizId[quiz.id] ?? 0;
               const inProgress = inProgressByQuizId[quiz.id] ?? false;
               const bestPct = bestPercentageByQuizId[quiz.id] ?? null;
@@ -259,33 +271,51 @@ export default function StudentQuizzesTableClient({
 
               return (
                 <TableRow key={quiz.id}>
-                  <TableCell className="font-medium">{quiz.title}</TableCell>
-                  <TableCell className="text-ink-muted">
-                    {quiz.sectionNames.length
-                      ? quiz.sectionNames.join(", ")
-                      : "—"}
+                  <TableCell className="font-medium align-top">
+                    <span className="block truncate" title={quiz.title}>
+                      {quiz.title}
+                    </span>
                   </TableCell>
-                  <TableCell className="tnum">
+                  <TableCell className="text-ink-muted align-top">
+                    <span
+                      className="block truncate"
+                      title={
+                        quiz.sectionNames.length
+                          ? quiz.sectionNames.join(", ")
+                          : undefined
+                      }
+                    >
+                      {quiz.sectionNames.length
+                        ? quiz.sectionNames.join(", ")
+                        : "—"}
+                    </span>
+                  </TableCell>
+                  <TableCell className="tnum align-top">
                     {bestPct != null ? `${bestPct}%` : "—"}
                   </TableCell>
-                  <TableCell className="tnum text-ink-muted">
+                  <TableCell className="tnum text-ink-muted align-top">
                     {submittedCount}/{maxAttempts}
                     {inProgress ? (
                       <span className="text-ink-faint"> · In progress</span>
                     ) : null}
                   </TableCell>
                   <TableCell
-                    className={isOverdue ? "text-danger" : "text-ink-muted"}
+                    className={`align-top ${isOverdue ? "text-danger" : "text-ink-muted"}`}
                   >
                     {dueDateLabelByQuizId[quiz.id] ?? "—"}
                   </TableCell>
-                  <TableCell>{statusBadge}</TableCell>
-                  <TableCell className="text-right">{actionButton}</TableCell>
+                  <TableCell className="align-top">{statusBadge}</TableCell>
+                  <TableCell className="sticky right-0 z-10 bg-paper px-3 text-right align-top">
+                    <div className="flex min-w-max items-center justify-end">
+                      {actionButton}
+                    </div>
+                  </TableCell>
                 </TableRow>
               );
             })}
-          </TableBody>
-        </Table>
+            </TableBody>
+          </Table>
+        </div>
       </div>
 
       {totalPages > 1 ? (

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Layers } from "lucide-react";
 
 import CopyEnrollmentButton from "@/components/CopyEnrollmentButton";
@@ -31,16 +31,47 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/patterns/EmptyState";
+import { useFilteredSortedPage } from "@/hooks/useFilteredSortedPage";
+import { withBasePath } from "@/lib/basePath";
+import { compareStringsIgnoreCase } from "@/lib/listSort";
+
 const ROWS_PER_PAGE = 10;
+
+type SectionRow = {
+  id: string;
+  name: string;
+  courseId: string;
+  professorEnrollmentCode: string;
+  studentEnrollmentCode: string;
+  learnerCount: number;
+  course?: { id: string; title: string } | null;
+};
+
+type SectionSortMode = "NAME" | "COURSE" | "LEARNERS";
+
+function sectionCompare(a: SectionRow, b: SectionRow, mode: SectionSortMode) {
+  switch (mode) {
+    case "COURSE":
+      return compareStringsIgnoreCase(
+        a.course?.title ?? "",
+        b.course?.title ?? "",
+      );
+    case "LEARNERS":
+      return a.learnerCount - b.learnerCount;
+    case "NAME":
+    default:
+      return compareStringsIgnoreCase(a.name, b.name);
+  }
+}
 
 export default function ProfessorSectionsPageContentClient({
   sectionsList,
 }: {
-  sectionsList: any[];
+  sectionsList: SectionRow[];
 }) {
   const [search, setSearch] = useState("");
   const [courseFilter, setCourseFilter] = useState<string>("ALL");
-  const [page, setPage] = useState(1);
+  const [sortMode, setSortMode] = useState<SectionSortMode>("NAME");
 
   const courses = useMemo(() => {
     const seen = new Set<string>();
@@ -54,33 +85,36 @@ export default function ProfessorSectionsPageContentClient({
       });
   }, [sectionsList]);
 
-  const filteredSections = useMemo(() => {
-    return sectionsList.filter((section) => {
-      const matchesSearch =
-        !search ||
-        section.name.toLowerCase().includes(search.toLowerCase()) ||
-        (section.course?.title?.toLowerCase() || "").includes(
-          search.toLowerCase(),
-        );
-      const matchesCourse =
-        courseFilter === "ALL" || section.courseId === courseFilter;
-      return matchesSearch && matchesCourse;
-    });
-  }, [sectionsList, search, courseFilter]);
-
-  const totalPages = Math.max(
-    1,
-    Math.ceil(filteredSections.length / ROWS_PER_PAGE),
-  );
-  const currentPage = Math.min(page, totalPages);
-  const paginatedSections = useMemo(() => {
-    const start = (currentPage - 1) * ROWS_PER_PAGE;
-    return filteredSections.slice(start, start + ROWS_PER_PAGE);
-  }, [filteredSections, currentPage]);
+  const {
+    page,
+    setPage,
+    totalPages,
+    paginated: paginatedSections,
+  } = useFilteredSortedPage({
+    rows: sectionsList,
+    search,
+    filterFn: useCallback(
+      (section: SectionRow, q: string) => {
+        const matchesSearch =
+          !q.trim() ||
+          section.name.toLowerCase().includes(q.toLowerCase()) ||
+          (section.course?.title?.toLowerCase() || "").includes(q.toLowerCase());
+        const matchesCourse =
+          courseFilter === "ALL" || section.courseId === courseFilter;
+        return matchesSearch && matchesCourse;
+      },
+      [courseFilter],
+    ),
+    compareFn: useCallback(
+      (a: SectionRow, b: SectionRow) => sectionCompare(a, b, sortMode),
+      [sortMode],
+    ),
+    rowsPerPage: ROWS_PER_PAGE,
+  });
 
   useEffect(() => {
     setPage(1);
-  }, [search, courseFilter]);
+  }, [search, courseFilter, sortMode, setPage]);
 
   if (sectionsList.length === 0) {
     return (
@@ -111,6 +145,19 @@ export default function ProfessorSectionsPageContentClient({
             </SelectContent>
           </Select>
         </div>
+        <Select
+          value={sortMode}
+          onValueChange={(v) => setSortMode(v as SectionSortMode)}
+        >
+          <SelectTrigger className="md:w-48">
+            <SelectValue placeholder="Sort by" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="NAME">Section name A–Z</SelectItem>
+            <SelectItem value="COURSE">Course A–Z</SelectItem>
+            <SelectItem value="LEARNERS">Learners</SelectItem>
+          </SelectContent>
+        </Select>
         <Input
           type="search"
           placeholder="Search sections or courses…"
@@ -126,58 +173,75 @@ export default function ProfessorSectionsPageContentClient({
             <TableRow>
               <TableHead>Section</TableHead>
               <TableHead>Course</TableHead>
+              <TableHead className="tnum">Learners</TableHead>
               <TableHead>Faculty code</TableHead>
               <TableHead>Learner code</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {paginatedSections.map((section) => (
-              <TableRow key={section.id}>
-                <TableCell className="font-medium">{section.name}</TableCell>
-                <TableCell className="text-ink-muted">
-                  {section.course?.title || "Unknown"}
-                </TableCell>
-                <TableCell>
-                  <div className="inline-flex items-center gap-2">
-                    <code className="font-mono text-xs bg-surface-sunken text-ink px-2 py-1 rounded border border-rule">
-                      {section.professorEnrollmentCode}
-                    </code>
-                    <CopyEnrollmentButton
-                      code={section.professorEnrollmentCode}
-                    />
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div className="inline-flex items-center gap-2">
-                    <code className="font-mono text-xs bg-surface-sunken text-ink px-2 py-1 rounded border border-rule">
-                      {section.studentEnrollmentCode}
-                    </code>
-                    <CopyEnrollmentButton
-                      code={section.studentEnrollmentCode}
-                    />
-                  </div>
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex justify-end gap-2">
-                    <Button asChild size="sm" variant="outline">
-                      <Link
-                        href={`/dashboard/professor/sections/${section.id}/gradebook`}
-                      >
-                        Gradebook
-                      </Link>
-                    </Button>
-                    <Button asChild size="sm" variant="outline">
-                      <Link
-                        href={`/dashboard/professor/sections/${section.id}`}
-                      >
-                        Details
-                      </Link>
-                    </Button>
-                  </div>
+            {paginatedSections.length === 0 ? (
+              <TableRow>
+                <TableCell
+                  colSpan={6}
+                  className="text-center text-ink-muted py-8"
+                >
+                  No sections found.
                 </TableCell>
               </TableRow>
-            ))}
+            ) : (
+              paginatedSections.map((section) => (
+                <TableRow key={section.id}>
+                  <TableCell className="font-medium">{section.name}</TableCell>
+                  <TableCell className="text-ink-muted">
+                    {section.course?.title || "Unknown"}
+                  </TableCell>
+                  <TableCell className="tnum">{section.learnerCount}</TableCell>
+                  <TableCell>
+                    <div className="inline-flex items-center gap-2">
+                      <code className="font-mono text-xs bg-surface-sunken text-ink px-2 py-1 rounded border border-rule">
+                        {section.professorEnrollmentCode}
+                      </code>
+                      <CopyEnrollmentButton
+                        code={section.professorEnrollmentCode}
+                      />
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="inline-flex items-center gap-2">
+                      <code className="font-mono text-xs bg-surface-sunken text-ink px-2 py-1 rounded border border-rule">
+                        {section.studentEnrollmentCode}
+                      </code>
+                      <CopyEnrollmentButton
+                        code={section.studentEnrollmentCode}
+                      />
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-2">
+                      <Button asChild size="sm" variant="outline">
+                        <Link
+                          href={withBasePath(
+                            `/dashboard/professor/sections/${section.id}/gradebook`,
+                          )}
+                        >
+                          Gradebook
+                        </Link>
+                      </Button>
+                      <Button asChild size="sm" variant="outline">
+                        <Link
+                          href={withBasePath(
+                            `/dashboard/professor/sections/${section.id}`,
+                          )}
+                        >
+                          Details
+                        </Link>
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </div>
@@ -190,12 +254,10 @@ export default function ProfessorSectionsPageContentClient({
                 href="#"
                 onClick={(e) => {
                   e.preventDefault();
-                  if (currentPage > 1) setPage(currentPage - 1);
+                  if (page > 1) setPage(page - 1);
                 }}
                 className={
-                  currentPage <= 1
-                    ? "pointer-events-none opacity-50"
-                    : "cursor-pointer"
+                  page <= 1 ? "pointer-events-none opacity-50" : "cursor-pointer"
                 }
               />
             </PaginationItem>
@@ -207,7 +269,7 @@ export default function ProfessorSectionsPageContentClient({
                     e.preventDefault();
                     setPage(p);
                   }}
-                  isActive={p === currentPage}
+                  isActive={p === page}
                   className="cursor-pointer"
                 >
                   {p}
@@ -219,10 +281,10 @@ export default function ProfessorSectionsPageContentClient({
                 href="#"
                 onClick={(e) => {
                   e.preventDefault();
-                  if (currentPage < totalPages) setPage(currentPage + 1);
+                  if (page < totalPages) setPage(page + 1);
                 }}
                 className={
-                  currentPage >= totalPages
+                  page >= totalPages
                     ? "pointer-events-none opacity-50"
                     : "cursor-pointer"
                 }

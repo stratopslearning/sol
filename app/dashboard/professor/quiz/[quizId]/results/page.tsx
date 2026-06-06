@@ -31,6 +31,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { formatPersonName } from "@/lib/personName";
 import { withBasePath } from "@/lib/basePath";
 import { getOrCreateUser } from "@/lib/getOrCreateUser";
 import { fetchSubmittedAttemptsForProfessorSections } from "@/lib/professorVisibleAttempts";
@@ -223,7 +224,7 @@ export default async function QuizResultsPage({
                     <TableCell>
                       <div className="flex flex-col">
                         <span className="font-medium text-ink">
-                          {attempt.student.firstName} {attempt.student.lastName}
+                          {formatPersonName(attempt.student)}
                         </span>
                         <span className="text-xs text-ink-faint">
                           {attempt.student.email}
