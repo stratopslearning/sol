@@ -83,6 +83,11 @@ describe('computeCacheKey', () => {
     expect(a).not.toBe(b);
   });
 
+  it('invalidates when SCORING_VERSION changes', async () => {
+    const { SCORING_VERSION } = await import('@/lib/gradingCache');
+    expect(SCORING_VERSION).toBeGreaterThan(1);
+  });
+
   it('invalidates when questionId changes (no cross-question collisions)', () => {
     const a = computeCacheKey(base);
     const b = computeCacheKey({

@@ -15,6 +15,7 @@ import { z } from 'zod';
 
 import { db } from '@/app/db';
 import { questions } from '@/app/db/schema';
+import { detectRequiredMatchCount } from '@/lib/gradingQuestionIntent';
 import { GRADING_MODEL_VERSION, type RubricCriterion } from '@/lib/gradingTypes';
 
 const RUBRIC_DERIVATION_TIMEOUT_MS = 20_000;
@@ -58,6 +59,19 @@ const rubricJsonSchema = {
 };
 
 function rubricPrompt(question: string, correctAnswer: string): string {
+  const requiredCount = detectRequiredMatchCount(question);
+  const anyNSection =
+    requiredCount != null
+      ? `
+IMPORTANT: The question asks for ANY ${requiredCount} valid answer point(s). Produce one criterion per distinct valid answer point from the reference answer (an option pool). The student only needs to satisfy ${requiredCount} of these for full credit — they do NOT need every criterion. Use weight 1 for every criterion.
+`
+      : '';
+
+  const taskLine =
+    requiredCount != null
+      ? `TASK: Produce one grading criterion per distinct valid answer point from the reference answer (typically ${requiredCount} or more options). These are alternatives — the student only needs ANY ${requiredCount} for full credit.`
+      : 'TASK: Produce 3-6 grading criteria that a student answer MUST satisfy to earn full credit on this question.';
+
   return `You are a strict business professor designing a grading rubric for a short-answer exam question.
 
 QUESTION:
@@ -65,8 +79,8 @@ ${question}
 
 REFERENCE ANSWER (the only acceptable standard):
 ${correctAnswer}
-
-TASK: Produce 3-6 grading criteria that a student answer MUST satisfy to earn full credit on this question.
+${anyNSection}
+${taskLine}
 
 Each criterion must be:
 - Specific and verifiable (e.g. "Mentions that quality assurance is process-oriented" rather than "Good answer")
@@ -77,6 +91,7 @@ Each criterion must be:
 Weights:
 - Use weight 1 for primary / required criteria.
 - Use weight 0.5 only for clearly secondary or optional details that are minor compared to the main concepts.
+${requiredCount != null ? '- For any-N questions, use weight 1 for every criterion (all options are equal alternatives).' : ''}
 
 Return JSON matching the provided schema. Do not include any other text.`;
 }
@@ -105,6 +120,10 @@ export function readRubricFromColumn(value: unknown): RubricCriterion[] | null {
  * to [0, maxPoints]. `matched` contributes 1.0 × weight; `partial && !matched`
  * contributes 0.5 × weight.
  *
+ * When `requiredMatchCount` is set and less than the rubric length, criteria
+ * are treated as an option pool: only the top N achieved values count toward
+ * the score (any-N / "list any two" questions).
+ *
  * Empty rubric or zero weights ⇒ 0. Out-of-rubric `criterionId` values from
  * the model are silently ignored (we score only criteria we control).
  */
@@ -112,19 +131,52 @@ export function computeScoreFromRubric(
   rubric: RubricCriterion[],
   matches: { criterionId: string; matched: boolean; partial?: boolean }[],
   maxPoints: number,
+  options?: { requiredMatchCount?: number | null },
 ): number {
   if (rubric.length === 0 || maxPoints <= 0) return 0;
+
+  const matchById = new Map<string, { matched: boolean; partial?: boolean }>();
+  for (const match of matches) {
+    matchById.set(match.criterionId, match);
+  }
+
+  const requiredMatchCount = options?.requiredMatchCount ?? null;
+  const useTopN =
+    requiredMatchCount != null &&
+    requiredMatchCount > 0 &&
+    requiredMatchCount < rubric.length;
+
+  if (useTopN) {
+    const achieved = rubric.map((criterion) => {
+      const weight = Math.max(criterion.weight, 0);
+      const match = matchById.get(criterion.id);
+      let value = 0;
+      if (match?.matched) {
+        value = weight;
+      } else if (match?.partial) {
+        value = weight * 0.5;
+      }
+      return { weight, value };
+    });
+
+    const topN = [...achieved]
+      .sort((a, b) => b.value - a.value)
+      .slice(0, requiredMatchCount);
+
+    const topWeight = topN.reduce((sum, row) => sum + row.weight, 0);
+    if (topWeight <= 0) return 0;
+
+    const topValue = topN.reduce((sum, row) => sum + row.value, 0);
+    const raw = (topValue / topWeight) * maxPoints;
+    const rounded = Math.round(raw);
+    return Math.min(Math.max(rounded, 0), maxPoints);
+  }
 
   const totalWeight = rubric.reduce(
     (sum, c) => sum + Math.max(c.weight, 0),
     0,
   );
   if (totalWeight <= 0) return 0;
-
-  const matchById = new Map<string, { matched: boolean; partial?: boolean }>();
-  for (const match of matches) {
-    matchById.set(match.criterionId, match);
-  }
 
   let weighted = 0;
   for (const criterion of rubric) {

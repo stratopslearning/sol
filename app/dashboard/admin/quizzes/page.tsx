@@ -3,6 +3,7 @@ import { quizzes, sections } from "@/app/db/schema";
 import { AppShell } from "@/components/layout/AppShell";
 import { activeOnly } from "@/lib/db/filters";
 import { requireAdmin } from "@/lib/auth";
+import { formatDateStable } from "@/lib/utils";
 
 import AdminQuizzesPageClient from "./AdminQuizzesPageClient";
 
@@ -12,9 +13,13 @@ export default async function AdminQuizzesPage() {
     where: activeOnly(sections.deletedAt),
     with: { course: true },
   });
-  const allQuizzes = await db.query.quizzes.findMany({
+  const allQuizzesRaw = await db.query.quizzes.findMany({
     where: activeOnly(quizzes.deletedAt),
   });
+  const allQuizzes = allQuizzesRaw.map((quiz) => ({
+    ...quiz,
+    dueDateLabel: formatDateStable(quiz.endDate),
+  }));
   const allQuizSections = await db.query.quizSections.findMany();
 
   return (

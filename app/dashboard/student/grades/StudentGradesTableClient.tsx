@@ -33,6 +33,7 @@ type AttemptRow = {
   quizTitle: string;
   courseTitle: string | null;
   submittedAt: string | null;
+  submittedAtLabel: string | null;
   score: number | null;
   maxScore: number | null;
   percentage: number | null;
@@ -111,12 +112,7 @@ export default function StudentGradesTableClient({
                   {a.courseTitle || "—"}
                 </TableCell>
                 <TableCell className="text-ink-muted text-sm">
-                  {a.submittedAt
-                    ? new Date(a.submittedAt).toLocaleString(undefined, {
-                        dateStyle: "medium",
-                        timeStyle: "short",
-                      })
-                    : "—"}
+                  {a.submittedAtLabel ?? "—"}
                 </TableCell>
                 <TableCell className="tnum">
                   {a.maxScore != null

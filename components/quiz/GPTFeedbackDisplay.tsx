@@ -2,12 +2,14 @@ import React from "react";
 import {
   AlertTriangle,
   Check,
+  Circle,
   CircleDashed,
   Hourglass,
   Sparkles,
   X,
 } from "lucide-react";
 
+import { detectRequiredMatchCount } from "@/lib/gradingQuestionIntent";
 import type {
   GradingStatus,
   RubricCriterion,
@@ -23,6 +25,7 @@ interface GPTFeedbackData {
   confidence?: number;
   rubric?: RubricCriterion[];
   rubricMatches?: RubricMatch[];
+  requiredMatchCount?: number | null;
 }
 
 interface GPTFeedbackDisplayProps {
@@ -45,9 +48,13 @@ function resolveStatus(
 type CriterionRow = {
   description: string;
   weight: number;
-  state: "matched" | "partial" | "missed";
+  state: "matched" | "partial" | "missed" | "optional";
   evidence?: string;
 };
+
+function countMatchedCriteria(matches: RubricMatch[] | undefined): number {
+  return (matches ?? []).filter((m) => m.matched).length;
+}
 
 /**
  * Join the rubric (criterion definitions) with rubricMatches (model's verdicts)
@@ -59,16 +66,25 @@ type CriterionRow = {
 function buildRubricRows(
   rubric: RubricCriterion[] | undefined,
   matches: RubricMatch[] | undefined,
+  requiredMatchCount: number | null,
 ): CriterionRow[] {
   if (!rubric || rubric.length === 0) return [];
   const byId = new Map<string, RubricMatch>();
   for (const m of matches ?? []) byId.set(m.criterionId, m);
+
+  const useAnyN =
+    requiredMatchCount != null &&
+    requiredMatchCount > 0 &&
+    requiredMatchCount < rubric.length;
+  const requirementMet =
+    useAnyN && countMatchedCriteria(matches) >= requiredMatchCount;
 
   return rubric.map<CriterionRow>((criterion) => {
     const match = byId.get(criterion.id);
     let state: CriterionRow["state"];
     if (match?.matched) state = "matched";
     else if (match?.partial) state = "partial";
+    else if (requirementMet) state = "optional";
     else state = "missed";
 
     return {
@@ -83,16 +99,31 @@ function buildRubricRows(
 function RubricBreakdown({
   rubric,
   matches,
+  requiredMatchCount,
 }: {
   rubric?: RubricCriterion[];
   matches?: RubricMatch[];
+  requiredMatchCount: number | null;
 }) {
-  const rows = buildRubricRows(rubric, matches);
+  const rows = buildRubricRows(rubric, matches, requiredMatchCount);
   if (rows.length === 0) return null;
+
+  const useAnyN =
+    requiredMatchCount != null &&
+    requiredMatchCount > 0 &&
+    rubric != null &&
+    requiredMatchCount < rubric.length;
 
   return (
     <div className="mt-4">
       <div className="eyebrow text-ink-faint mb-2">Rubric breakdown</div>
+      {useAnyN ? (
+        <p className="text-xs text-ink-muted mb-3 leading-relaxed">
+          This question required any {requiredMatchCount} — only{" "}
+          {requiredMatchCount} correct point
+          {requiredMatchCount === 1 ? "" : "s"} were needed for full credit.
+        </p>
+      ) : null}
       <ul className="flex flex-col gap-2">
         {rows.map((row, idx) => {
           const icon =
@@ -100,6 +131,8 @@ function RubricBreakdown({
               <Check className="h-4 w-4 text-success shrink-0 mt-0.5" />
             ) : row.state === "partial" ? (
               <CircleDashed className="h-4 w-4 text-warning-fg shrink-0 mt-0.5" />
+            ) : row.state === "optional" ? (
+              <Circle className="h-4 w-4 text-ink-faint shrink-0 mt-0.5" />
             ) : (
               <X className="h-4 w-4 text-danger shrink-0 mt-0.5" />
             );
@@ -108,13 +141,17 @@ function RubricBreakdown({
               ? "Met"
               : row.state === "partial"
                 ? "Partially met"
-                : "Missing";
+                : row.state === "optional"
+                  ? "Optional"
+                  : "Missing";
           const stateColor =
             row.state === "matched"
               ? "text-success"
               : row.state === "partial"
                 ? "text-warning-fg"
-                : "text-danger";
+                : row.state === "optional"
+                  ? "text-ink-muted"
+                  : "text-danger";
           return (
             <li
               key={idx}
@@ -147,6 +184,7 @@ function RubricBreakdown({
 
 export function GPTFeedbackDisplay({
   feedback,
+  questionText,
   className = "",
 }: GPTFeedbackDisplayProps) {
   const status = resolveStatus(feedback);
@@ -156,6 +194,12 @@ export function GPTFeedbackDisplay({
     "rubricMatches" in feedback
       ? (feedback.rubricMatches as RubricMatch[] | undefined)
       : undefined;
+  const storedRequired =
+    "requiredMatchCount" in feedback
+      ? (feedback.requiredMatchCount as number | null | undefined)
+      : undefined;
+  const requiredMatchCount =
+    storedRequired ?? detectRequiredMatchCount(questionText);
 
   if (status === "pending") {
     return (
@@ -217,7 +261,11 @@ export function GPTFeedbackDisplay({
         {feedback.feedback}
       </p>
 
-      <RubricBreakdown rubric={rubric} matches={matches} />
+      <RubricBreakdown
+        rubric={rubric}
+        matches={matches}
+        requiredMatchCount={requiredMatchCount}
+      />
 
       <div className="mt-4 hairline" />
       <div className="mt-3 flex items-baseline gap-2">

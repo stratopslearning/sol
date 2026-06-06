@@ -1,11 +1,12 @@
 /**
  * SHA-256 keyed answer cache for the grading pipeline.
  *
- * Cache key = sha256(questionId | rubricVersion | modelVersion | normalize(answer))
+ * Cache key = sha256(questionId | rubricVersion | modelVersion | scoringVersion | normalize(answer))
  *
  * Auto-invalidates when:
  * - the question text or reference answer changes (caller bumps `rubricVersion`)
  * - we upgrade the grading model (caller bumps `GRADING_MODEL_VERSION`)
+ * - we change deterministic scoring logic (caller bumps `SCORING_VERSION`)
  *
  * Normalization strips trivial differences (case, whitespace, trailing
  * punctuation) so "Quality assurance is a process." and "quality assurance
@@ -21,6 +22,9 @@ import type {
   RubricMatch,
   StoredFeedback,
 } from '@/lib/gradingTypes';
+
+/** Bump when deterministic score computation changes (e.g. any-N top-N scoring). */
+export const SCORING_VERSION = 2;
 
 /**
  * Lowercase, collapse whitespace, drop trailing punctuation. Intentionally
@@ -45,7 +49,7 @@ export function computeCacheKey(args: {
   const normalized = normalizeAnswerForCache(args.studentAnswer);
   return createHash('sha256')
     .update(
-      `${args.questionId}|${args.rubricVersion}|${args.modelVersion}|${normalized}`,
+      `${args.questionId}|${args.rubricVersion}|${args.modelVersion}|${SCORING_VERSION}|${normalized}`,
     )
     .digest('hex');
 }
@@ -59,6 +63,7 @@ export type CachedGradingPayload = {
   rubricMatches: RubricMatch[];
   modelVersion: string;
   rubricVersion: number;
+  requiredMatchCount?: number | null;
 };
 
 export async function lookupCachedGrading(args: {
@@ -129,6 +134,7 @@ export function cachedPayloadToFeedback(
     rubricMatches: payload.rubricMatches,
     modelVersion: payload.modelVersion,
     rubricVersion: payload.rubricVersion,
+    requiredMatchCount: payload.requiredMatchCount ?? undefined,
     gradedAt: new Date().toISOString(),
     cached: true,
   };

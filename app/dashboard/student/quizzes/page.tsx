@@ -7,6 +7,10 @@ import { AppShell } from '@/components/layout/AppShell';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { withBasePath } from '@/lib/basePath';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
+import {
+  formatDateTimeStable,
+  normalizeDatabaseDate,
+} from '@/lib/utils';
 
 export default async function StudentQuizzesPage() {
   const user = await getOrCreateUser();
@@ -82,6 +86,9 @@ export default async function StudentQuizzesPage() {
   const inProgressByQuizId: Record<string, boolean> = {};
   const bestPercentageByQuizId: Record<string, number> = {};
   const latestAttemptIdByQuizId: Record<string, string> = {};
+  const isOverdueByQuizId: Record<string, boolean> = {};
+  const dueDateLabelByQuizId: Record<string, string> = {};
+  const now = new Date();
   assignedQuizzes.forEach((quiz) => {
     const list = attemptsByQuiz[quiz.id] ?? [];
     const submitted = list.filter((a) => a.submittedAt != null);
@@ -98,6 +105,11 @@ export default async function StudentQuizzesPage() {
         new Date(a.submittedAt!).getTime() > new Date(b.submittedAt!).getTime() ? a : b,
       );
       latestAttemptIdByQuizId[quiz.id] = latest.id;
+    }
+    const endDate = normalizeDatabaseDate(quiz.endDate);
+    isOverdueByQuizId[quiz.id] = endDate ? endDate < now : false;
+    if (quiz.endDate) {
+      dueDateLabelByQuizId[quiz.id] = formatDateTimeStable(quiz.endDate);
     }
   });
 
@@ -119,6 +131,8 @@ export default async function StudentQuizzesPage() {
           inProgressByQuizId={inProgressByQuizId}
           bestPercentageByQuizId={bestPercentageByQuizId}
           latestAttemptIdByQuizId={latestAttemptIdByQuizId}
+          isOverdueByQuizId={isOverdueByQuizId}
+          dueDateLabelByQuizId={dueDateLabelByQuizId}
         />
       </div>
     </AppShell>

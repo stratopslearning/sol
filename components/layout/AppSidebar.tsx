@@ -295,12 +295,19 @@ function SidebarFooter(props: {
 }) {
   const { clerkImage, firstName, email, initials, badge, showPaid, paid } =
     props;
+  const [mounted, setMounted] = React.useState(false);
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
+
   return (
     <div className="mt-auto pt-6">
       <div className="hairline mb-5" />
       <div className="flex items-center gap-3">
         <Avatar className="h-9 w-9 border border-rule">
-          <AvatarImage src={clerkImage ?? undefined} alt={firstName || "User"} />
+          {mounted && clerkImage ? (
+            <AvatarImage src={clerkImage} alt={firstName || "User"} />
+          ) : null}
           <AvatarFallback className="bg-brand-soft text-brand text-xs font-semibold">
             {initials}
           </AvatarFallback>

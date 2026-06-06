@@ -45,10 +45,6 @@ import { cleanQuizDescription } from "@/lib/utils";
 const ROWS_PER_PAGE = 15;
 type SortMode = "DEFAULT" | "DUE_ASC" | "DUE_DESC";
 
-function formatDate(value: string | Date | null | undefined) {
-  return value ? new Date(value).toLocaleDateString() : null;
-}
-
 function dueTime(value: string | Date | null | undefined) {
   if (!value) return null;
   const time = new Date(value).getTime();
@@ -309,7 +305,7 @@ export default function AdminQuizzesPageClient({
                         quiz.assignedSectionNames.length > 0
                           ? quiz.assignedSectionNames.join(", ")
                           : "Unassigned";
-                      const dueDate = formatDate(quiz.endDate);
+                      const dueDate = quiz.dueDateLabel as string | null;
                       return (
                         <TableRow key={quiz.id}>
                           <TableCell className="font-medium align-top">

@@ -1,6 +1,6 @@
 import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
-import { fromZonedTime, toZonedTime, format as formatTz } from 'date-fns-tz'
+import { fromZonedTime, toZonedTime, formatInTimeZone } from 'date-fns-tz'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -128,6 +128,40 @@ export function formatDateTimeUTC(date: Date | string | null | undefined): strin
 }
 
 /**
+ * SSR-safe date/time formatting with an explicit IANA timezone.
+ * Produces identical output in Node (SSR) and the browser — use for props
+ * passed into client components to avoid hydration mismatches.
+ */
+export function formatDateTimeStable(
+  date: Date | string | null | undefined,
+  timeZone = 'UTC',
+): string {
+  const dateObj = normalizeDatabaseDate(date);
+  if (!dateObj || isNaN(dateObj.getTime())) return 'Invalid date';
+
+  const hasTime =
+    dateObj.getUTCHours() !== 0 ||
+    dateObj.getUTCMinutes() !== 0 ||
+    dateObj.getUTCSeconds() !== 0 ||
+    dateObj.getUTCMilliseconds() !== 0;
+
+  if (hasTime) {
+    return formatInTimeZone(dateObj, timeZone, 'MMM d, yyyy, h:mm aa');
+  }
+  return formatInTimeZone(dateObj, timeZone, 'MMM d, yyyy');
+}
+
+/** SSR-safe date-only formatting (explicit timezone). */
+export function formatDateStable(
+  date: Date | string | null | undefined,
+  timeZone = 'UTC',
+): string | null {
+  const dateObj = normalizeDatabaseDate(date);
+  if (!dateObj || isNaN(dateObj.getTime())) return null;
+  return formatInTimeZone(dateObj, timeZone, 'MMM d, yyyy');
+}
+
+/**
  * Format a date to show only the time
  */
 export function formatTime(date: Date | string | null | undefined): string {
@@ -198,7 +232,7 @@ export function formatUTCToLocal(utcDate: Date | string | null | undefined, form
   if (isNaN(dateObj.getTime())) return 'Invalid date';
   
   const tz = timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
-  return formatTz(toZonedTime(dateObj, tz), format, { timeZone: tz });
+  return formatInTimeZone(dateObj, tz, format);
 }
 
 /**

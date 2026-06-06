@@ -154,6 +154,67 @@ describe('computeScoreFromRubric', () => {
       computeScoreFromRubric(rubric, [{ criterionId: 'c1', matched: false }], 2),
     ).toBe(0);
   });
+
+  describe('any-N (top-N of M) scoring', () => {
+    const lotSizeRubric = [
+      { id: 'c1', description: 'Full load preference', weight: 1 },
+      { id: 'c2', description: 'Bulk purchase discounts', weight: 1 },
+      { id: 'c3', description: 'EOQ model', weight: 1 },
+    ];
+
+    it('awards full credit when any 2 of 3 criteria match', () => {
+      const matches = [
+        { criterionId: 'c1', matched: true },
+        { criterionId: 'c2', matched: true },
+        { criterionId: 'c3', matched: false },
+      ];
+      expect(
+        computeScoreFromRubric(lotSizeRubric, matches, 2, {
+          requiredMatchCount: 2,
+        }),
+      ).toBe(2);
+    });
+
+    it('awards partial credit when only 1 of required 2 matches', () => {
+      const matches = [
+        { criterionId: 'c1', matched: true },
+        { criterionId: 'c2', matched: false },
+        { criterionId: 'c3', matched: false },
+      ];
+      expect(
+        computeScoreFromRubric(lotSizeRubric, matches, 2, {
+          requiredMatchCount: 2,
+        }),
+      ).toBe(1);
+    });
+
+    it('counts partial toward any-N top slots', () => {
+      const matches = [
+        { criterionId: 'c1', matched: true },
+        { criterionId: 'c2', matched: false, partial: true },
+        { criterionId: 'c3', matched: false },
+      ];
+      // top 2 slots: 1.0 + 0.5 = 1.5 / 2 → round(1.5/2 * 2) = 2
+      expect(
+        computeScoreFromRubric(lotSizeRubric, matches, 2, {
+          requiredMatchCount: 2,
+        }),
+      ).toBe(2);
+    });
+
+    it('falls back to all-required when requiredMatchCount >= rubric length', () => {
+      const matches = [
+        { criterionId: 'c1', matched: true },
+        { criterionId: 'c2', matched: true },
+        { criterionId: 'c3', matched: false },
+      ];
+      expect(
+        computeScoreFromRubric(lotSizeRubric, matches, 2, {
+          requiredMatchCount: 3,
+        }),
+      ).toBe(1);
+    });
+  });
 });
 
 describe('readRubricFromColumn', () => {

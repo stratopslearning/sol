@@ -43,10 +43,6 @@ function getStatusBadge(status: "Active" | "Draft" | "Closed") {
   return <Badge variant="outline">Closed</Badge>;
 }
 
-function formatDate(value: string | Date | null | undefined) {
-  return value ? new Date(value).toLocaleDateString() : null;
-}
-
 function dueTime(value: string | Date | null | undefined) {
   if (!value) return null;
   const time = new Date(value).getTime();
@@ -221,8 +217,8 @@ export default function ProfessorQuizzesTableClient({
                           .filter(Boolean)
                           .join(", ")
                       : "—";
-                  const dueDate = formatDate(quiz.endDate);
-                  const createdDate = formatDate(quiz.createdAt);
+                  const dueDate = quiz.dueDateLabel as string | null;
+                  const createdDate = quiz.createdDateLabel as string | null;
                   return (
                     <TableRow key={quiz.id}>
                       <TableCell className="align-top">

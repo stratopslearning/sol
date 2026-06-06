@@ -34,6 +34,7 @@ import {
 import { withBasePath } from "@/lib/basePath";
 import { getOrCreateUser } from "@/lib/getOrCreateUser";
 import { fetchSubmittedAttemptsForProfessorSections } from "@/lib/professorVisibleAttempts";
+import { computeQuestionStatsForAttempts } from "@/lib/quizQuestionStats";
 
 export default async function QuizResultsPage({
   params,
@@ -110,32 +111,10 @@ export default async function QuizResultsPage({
         )
       : 0;
 
-  const questionStats = quiz.questions.map((question) => {
-    const questionAttempts = quizAttempts.filter(
-      (a) =>
-        a.answers &&
-        typeof a.answers === "string" &&
-        JSON.parse(a.answers).some((ans: any) => ans.questionId === question.id),
-    );
-
-    const correctAnswers = questionAttempts.filter((a) => {
-      const answers = JSON.parse(a.answers as string);
-      const answer = answers.find((ans: any) => ans.questionId === question.id);
-      return answer && answer.isCorrect;
-    }).length;
-
-    const questionSuccessRate =
-      questionAttempts.length > 0
-        ? Math.round((correctAnswers / questionAttempts.length) * 100)
-        : 0;
-
-    return {
-      ...question,
-      attempts: questionAttempts.length,
-      correctAnswers,
-      successRate: questionSuccessRate,
-    };
-  });
+  const questionStats = computeQuestionStatsForAttempts(
+    quiz.questions,
+    quizAttempts,
+  );
 
   return (
     <AppShell

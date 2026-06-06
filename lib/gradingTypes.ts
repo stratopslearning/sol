@@ -69,6 +69,8 @@ export type StoredFeedback = {
   failureReason?: FailureReason;
   /** True when the result was served from `grading_cache`. */
   cached?: boolean;
+  /** When set, student only needs this many rubric matches for full credit (any-N questions). */
+  requiredMatchCount?: number | null;
 };
 
 /** Coarse top-level grading state stored on `attempts.grading_status`. */

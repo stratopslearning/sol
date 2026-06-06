@@ -32,7 +32,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/patterns/EmptyState";
-import { formatDateTimeUTC, normalizeDatabaseDate } from "@/lib/utils";
+import { normalizeDatabaseDate } from "@/lib/utils";
 
 const ROWS_PER_PAGE = 15;
 type SortMode = "DEFAULT" | "DUE_ASC" | "DUE_DESC";
@@ -69,12 +69,16 @@ export default function StudentQuizzesTableClient({
   inProgressByQuizId,
   bestPercentageByQuizId,
   latestAttemptIdByQuizId,
+  isOverdueByQuizId,
+  dueDateLabelByQuizId,
 }: {
   quizzes: QuizRow[];
   submittedCountByQuizId: Record<string, number>;
   inProgressByQuizId: Record<string, boolean>;
   bestPercentageByQuizId: Record<string, number>;
   latestAttemptIdByQuizId: Record<string, string>;
+  isOverdueByQuizId: Record<string, boolean>;
+  dueDateLabelByQuizId: Record<string, string>;
 }) {
   const [search, setSearch] = useState("");
   const [sectionFilter, setSectionFilter] = useState<string>("ALL");
@@ -193,8 +197,7 @@ export default function StudentQuizzesTableClient({
               const hasSubmitted = submittedCount > 0;
               const maxAttempts = quiz.maxAttempts || 1;
               const canRetake = submittedCount < maxAttempts;
-              const endDate = normalizeDatabaseDate(quiz.endDate);
-              const isOverdue = endDate ? endDate < new Date() : false;
+              const isOverdue = isOverdueByQuizId[quiz.id] ?? false;
 
               let statusBadge: React.ReactNode;
               if (isOverdue) {
@@ -274,7 +277,7 @@ export default function StudentQuizzesTableClient({
                   <TableCell
                     className={isOverdue ? "text-danger" : "text-ink-muted"}
                   >
-                    {quiz.endDate ? formatDateTimeUTC(quiz.endDate) : "—"}
+                    {dueDateLabelByQuizId[quiz.id] ?? "—"}
                   </TableCell>
                   <TableCell>{statusBadge}</TableCell>
                   <TableCell className="text-right">{actionButton}</TableCell>
