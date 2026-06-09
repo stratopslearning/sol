@@ -3,10 +3,13 @@ import { and, eq, inArray } from 'drizzle-orm';
 
 import { db } from '@/app/db';
 import {
+  assignments,
+  attempts,
   professorSections,
   questions,
   quizSections,
   quizzes,
+  studentSections,
 } from '@/app/db/schema';
 import { activeOnly } from '@/lib/db/filters';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
@@ -103,6 +106,39 @@ export async function POST(
           assignedBy: user.id,
         })),
       );
+
+      await tx
+        .update(attempts)
+        .set({ quizId: created.id })
+        .where(
+          and(
+            eq(attempts.quizId, originalQuiz.id),
+            inArray(attempts.sectionId, sectionIdsToMove),
+          ),
+        );
+
+      const enrolledStudents = await tx.query.studentSections.findMany({
+        where: and(
+          inArray(studentSections.sectionId, sectionIdsToMove),
+          eq(studentSections.status, 'ACTIVE'),
+        ),
+        columns: { studentId: true },
+      });
+      const enrolledStudentIds = [
+        ...new Set(enrolledStudents.map((e) => e.studentId)),
+      ];
+
+      if (enrolledStudentIds.length > 0) {
+        await tx
+          .update(assignments)
+          .set({ quizId: created.id })
+          .where(
+            and(
+              eq(assignments.quizId, originalQuiz.id),
+              inArray(assignments.studentId, enrolledStudentIds),
+            ),
+          );
+      }
 
       await tx
         .delete(quizSections)
