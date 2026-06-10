@@ -9,7 +9,7 @@ import { withBasePath } from "@/lib/basePath";
 export default function SignUpPage() {
   return (
     <AuthShell
-      eyebrow="Request access"
+      eyebrow="Sign Up"
       title={
         <>
           Begin your study at{" "}

@@ -19,33 +19,25 @@ export function Footer() {
               </span>
             </a>
             <p className="text-sm text-ink-muted leading-relaxed max-w-[44ch]">
-              An academic learning management system for institutions that
-              take pedagogy seriously. Designed and built with faculty.
+              A quiz and grading platform for professors who are tired of
+              scoring short answers by hand. Built with faculty, not around
+              them.
             </p>
           </div>
 
-          <div className="md:col-span-7 grid grid-cols-2 sm:grid-cols-3 gap-8">
+          <div className="md:col-span-7 grid grid-cols-2 gap-8 max-w-md">
             <FooterColumn
               title="Platform"
               links={[
                 { label: "Capabilities", href: "#capabilities" },
                 { label: "Approach", href: "#approach" },
-                { label: "Pricing", href: withBasePath("/payment") },
               ]}
             />
             <FooterColumn
               title="Account"
               links={[
                 { label: "Sign in", href: withBasePath("/login") },
-                { label: "Request access", href: withBasePath("/signup") },
-              ]}
-            />
-            <FooterColumn
-              title="Institution"
-              links={[
-                { label: "Privacy", href: "#" },
-                { label: "Terms", href: "#" },
-                { label: "Accessibility", href: "#" },
+                { label: "Sign Up", href: withBasePath("/signup") },
               ]}
             />
           </div>

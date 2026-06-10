@@ -6,21 +6,21 @@ import { withBasePath } from "@/lib/basePath";
 const TENETS = [
   {
     n: "I",
-    title: "Reading is the work.",
+    title: "Subjective questions matter.",
     body:
-      "Most LMSs make reading feel incidental — buried under modules, points, and progress bars. SOL treats long-form text as the centre of learning, not the leftover.",
+      "Short and long answers are where students actually show what they know. SOL does not punt on them. We built the product around grading the responses professors care about most.",
   },
   {
     n: "II",
-    title: "Grading is a stance.",
+    title: "AI assists. You decide.",
     body:
-      "Auto-graded MCQs are easy. We took the harder problem: graded free response with auditable reasoning, so faculty can verify what a model actually concluded.",
+      "The model proposes a score and shows its work. You review, adjust, and own the final grade. Speed without handing over your judgment.",
   },
   {
     n: "III",
-    title: "Quiet beats clever.",
+    title: "Your quiz, your rules.",
     body:
-      "We refuse confetti, streaks, and gamified nudges. Learners deserve a calm room. Faculty deserve interfaces they don't have to apologise for.",
+      "No template soup. You write the questions, set the rubric, and run the quiz your way. SOL speeds up grading. It does not rewrite your course.",
   },
 ] as const;
 
@@ -39,13 +39,13 @@ export function Approach() {
                 fontVariationSettings: '"opsz" 96, "SOFT" 30',
               }}
             >
-              Three tenets,
+              Three beliefs,
               <br />
-              <em className="text-brand">held seriously.</em>
+              <em className="text-brand">held stubbornly.</em>
             </h2>
             <p className="text-sm text-ink-muted max-w-[40ch] leading-relaxed">
-              The shortest version of why SOL looks and behaves the way it
-              does. We chose every constraint on purpose.
+              Why we built a quiz platform instead of another LMS. Three
+              ideas we will not compromise on.
             </p>
           </div>
 
@@ -80,7 +80,7 @@ export function Approach() {
                     <div className="pt-3">
                       <Button asChild size="default" variant="outline">
                         <a href={withBasePath("/signup")}>
-                          See it for yourself
+                          Try it yourself
                           <ArrowRight className="h-4 w-4" />
                         </a>
                       </Button>

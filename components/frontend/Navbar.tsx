@@ -65,7 +65,7 @@ export function Navbar() {
           <div className="flex h-16 items-center justify-between">
             <a
               href={withBasePath("/")}
-              className="flex items-baseline gap-1 text-ink hover:text-brand transition-colors"
+              className="nav-beam flex items-baseline gap-1 text-ink"
             >
               <span
                 className="font-display text-xl tracking-tight"
@@ -76,22 +76,13 @@ export function Navbar() {
             </a>
 
             <nav className="hidden md:flex items-center gap-8 text-sm">
-              <a
-                href="#capabilities"
-                className="text-ink-muted hover:text-ink transition-colors"
-              >
+              <a href="#capabilities" className="nav-beam text-ink-muted">
                 Capabilities
               </a>
-              <a
-                href="#approach"
-                className="text-ink-muted hover:text-ink transition-colors"
-              >
+              <a href="#approach" className="nav-beam text-ink-muted">
                 Approach
               </a>
-              <a
-                href="#access"
-                className="text-ink-muted hover:text-ink transition-colors"
-              >
+              <a href="#access" className="nav-beam text-ink-muted">
                 Access
               </a>
             </nav>
@@ -102,7 +93,7 @@ export function Navbar() {
                 <>
                   {dashboardHref ? (
                     <Button asChild size="sm" variant="outline">
-                      <a href={dashboardHref}>
+                      <a href={dashboardHref} className="nav-beam nav-beam-btn">
                         {dbUser.role === "STUDENT" && !studentEntitled
                           ? "Complete payment"
                           : "Open dashboard"}
@@ -120,10 +111,12 @@ export function Navbar() {
               ) : (
                 <>
                   <Button asChild size="sm" variant="ghost">
-                    <a href={withBasePath("/login")}>Sign in</a>
+                    <a href={withBasePath("/login")} className="nav-beam nav-beam-btn">
+                      Sign in
+                    </a>
                   </Button>
                   <Button asChild size="sm" variant="default">
-                    <a href={withBasePath("/signup")}>Request access</a>
+                    <a href={withBasePath("/signup")}>Sign Up</a>
                   </Button>
                 </>
               )}
@@ -135,7 +128,7 @@ export function Navbar() {
                 type="button"
                 onClick={() => setIsMobileMenuOpen((v) => !v)}
                 aria-label="Toggle menu"
-                className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-rule text-ink"
+                className="nav-beam nav-beam-btn inline-flex h-10 w-10 items-center justify-center rounded-md border border-rule text-ink"
               >
                 {isMobileMenuOpen ? (
                   <X className="h-5 w-5" />
@@ -160,21 +153,21 @@ export function Navbar() {
             <div className="px-4 py-5 flex flex-col gap-4">
               <a
                 href="#capabilities"
-                className="text-ink py-2 text-sm"
+                className="nav-beam text-ink py-2 text-sm"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
                 Capabilities
               </a>
               <a
                 href="#approach"
-                className="text-ink py-2 text-sm"
+                className="nav-beam text-ink py-2 text-sm"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
                 Approach
               </a>
               <a
                 href="#access"
-                className="text-ink py-2 text-sm"
+                className="nav-beam text-ink py-2 text-sm"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
                 Access
@@ -194,7 +187,7 @@ export function Navbar() {
                     <a href={withBasePath("/login")}>Sign in</a>
                   </Button>
                   <Button asChild variant="default" className="w-full">
-                    <a href={withBasePath("/signup")}>Request access</a>
+                    <a href={withBasePath("/signup")}>Sign Up</a>
                   </Button>
                 </>
               )}

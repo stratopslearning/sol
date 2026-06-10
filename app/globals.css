@@ -349,6 +349,50 @@
   font-feature-settings: "ss01", "tnum";
 }
 
+/* Navbar — brand beam underline on hovered links / buttons */
+.nav-beam {
+  position: relative;
+  transition: color 200ms ease;
+}
+
+.nav-beam::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -3px;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--brand) 20%,
+    var(--brand) 80%,
+    transparent 100%
+  );
+  opacity: 0;
+  transform: scaleX(0.55);
+  transition:
+    opacity 220ms ease,
+    transform 220ms ease;
+  box-shadow: 0 0 10px color-mix(in oklch, var(--brand) 35%, transparent);
+}
+
+.nav-beam:hover::after {
+  opacity: 0.9;
+  transform: scaleX(1);
+}
+
+.nav-beam:hover {
+  color: var(--brand);
+}
+
+.nav-beam-btn::after {
+  bottom: 3px;
+  left: 12%;
+  right: 12%;
+}
+
 /* Hairline — full-width 1px rule used between sections */
 .hairline {
   height: 1px;
@@ -455,6 +499,35 @@
   animation: scale-in 240ms cubic-bezier(0.4, 0, 0.2, 1) both;
 }
 
+/* Infinite horizontal marquee — landing stats ticker */
+@keyframes marquee-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee-scroll 48s linear infinite;
+}
+
+.marquee-fade {
+  mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    black 8%,
+    black 92%,
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    black 8%,
+    black 92%,
+    transparent 100%
+  );
+}
+
 /* ----- Reduced motion ----- */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -464,6 +537,14 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+
+  .marquee-track {
+    animation: none;
+    flex-wrap: wrap;
+    justify-content: center;
+    width: 100%;
+    gap: 0;
   }
 }
 

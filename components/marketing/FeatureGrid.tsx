@@ -1,54 +1,54 @@
 import {
-  BookOpen,
   CheckSquare,
   Sparkles,
   ClipboardList,
   Users,
   ScrollText,
+  MessageSquareText,
 } from "lucide-react";
 
 const CAPABILITIES = [
   {
     n: "01",
-    icon: BookOpen,
-    title: "From textbook to course",
+    icon: ClipboardList,
+    title: "Quizzes you design",
     body:
-      "Drop in any open textbook PDF or chapter set. SOL drafts a structured course outline, learning objectives, and a quiz bank in minutes.",
+      "Write multiple choice, short answer, and long answer questions the way you would on paper. Your rubric, your wording, your standards.",
   },
   {
     n: "02",
-    icon: ClipboardList,
-    title: "Authoring without friction",
+    icon: MessageSquareText,
+    title: "Subjective answers, graded",
     body:
-      "A focused editor for multiple choice, free response, and code. Versioned drafts. Revision marks visible to graders. No clutter.",
+      "The questions that usually eat your weekend get scored automatically. Short responses and essays are handled by AI tuned for academic answers.",
   },
   {
     n: "03",
     icon: Sparkles,
-    title: "AI grading you can audit",
+    title: "See why it scored that way",
     body:
-      "Free-response answers are graded with rubric-aligned reasoning. Every score includes the model's working — citations, not vibes.",
+      "Every subjective grade comes with reasoning you can read, challenge, and override. You stay the grader of record. The model just does the first pass.",
   },
   {
     n: "04",
     icon: Users,
-    title: "Sections, cohorts, roles",
+    title: "Sections and rosters",
     body:
-      "Run small seminars or 800-student lectures. Assign quizzes by section, manage TAs, and copy a course at the start of a new term.",
+      "Assign quizzes by section, run a seminar or a lecture hall, and keep student work scoped to the right cohort.",
   },
   {
     n: "05",
     icon: CheckSquare,
-    title: "Honest analytics",
+    title: "Gradebook in one place",
     body:
-      "See what learners struggle with — by question, by topic, by section — without dark-pattern dashboards designed to flatter.",
+      "Best scores per student, per quiz, per section. Spot who is struggling before the midterm tells you.",
   },
   {
     n: "06",
     icon: ScrollText,
-    title: "Exportable, archival",
+    title: "Export when you need it",
     body:
-      "Every attempt is exportable as CSV or print-ready PDF. Records belong to the institution, not the platform.",
+      "Pull attempts as CSV or print ready PDF for accreditation, appeals, or your own records.",
   },
 ] as const;
 
@@ -70,18 +70,19 @@ export function FeatureGrid() {
                 fontVariationSettings: '"opsz" 96, "SOFT" 30',
               }}
             >
-              Everything a course needs.
+              Less time grading.
               <br />
               <em className="text-brand" style={{ fontVariationSettings: '"opsz" 96, "WONK" 1' }}>
-                Nothing it doesn&apos;t.
+                More time teaching.
               </em>
             </h2>
           </div>
           <div className="md:col-span-7 md:pt-2">
             <p className="text-base md:text-lg text-ink-muted leading-relaxed max-w-[60ch]">
-              SOL is built for institutions that want their learning
-              technology to disappear behind the work — not become the work.
-              Every screen is shaped by faculty who teach for a living.
+              SOL is built for the part of teaching nobody puts on the syllabus:
+              grading subjective work at scale. Professors create quizzes,
+              students submit, AI handles the answers that used to take hours
+              by hand.
             </p>
           </div>
         </div>

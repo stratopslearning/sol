@@ -27,11 +27,11 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "SOL — Adaptive Learning, Considered.",
+    default: "SOL. AI grading for the quizzes you write.",
     template: "%s · SOL",
   },
   description:
-    "An academic-grade learning management system. Author quizzes, run sections, and grade with AI-assisted rigor.",
+    "Create quizzes, assign them to sections, and let AI grade short and long answers with reasoning you can review. Built for professors.",
 };
 
 export default async function RootLayout({
