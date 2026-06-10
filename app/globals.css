@@ -549,6 +549,204 @@
 }
 
 /* ============================================================================
+   Auth — centered card + flush Clerk embed
+============================================================================ */
+.auth-page {
+  background:
+    radial-gradient(ellipse 80% 60% at 50% -10%, oklch(0.94 0.02 162 / 0.35), transparent),
+    var(--surface-sunken);
+}
+
+.dark .auth-page {
+  background:
+    radial-gradient(ellipse 80% 60% at 50% -10%, oklch(0.28 0.04 162 / 0.4), transparent),
+    var(--surface-sunken);
+}
+
+.auth-card {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 1.25rem;
+  box-shadow:
+    0 0 0 1px oklch(0 0 0 / 0.02),
+    0 1px 2px oklch(0 0 0 / 0.04),
+    0 16px 48px -20px oklch(0 0 0 / 0.14);
+  overflow: hidden;
+}
+
+.dark .auth-card {
+  box-shadow:
+    0 0 0 1px oklch(1 0 0 / 0.04),
+    0 1px 2px oklch(0 0 0 / 0.2),
+    0 16px 48px -20px oklch(0 0 0 / 0.45);
+}
+
+.auth-card-header {
+  padding: 2.25rem 2rem 1.75rem;
+  text-align: center;
+}
+
+@media (min-width: 480px) {
+  .auth-card-header {
+    padding: 2.5rem 2.25rem 1.875rem;
+  }
+}
+
+.auth-card-body {
+  padding: 0 2rem 2rem;
+}
+
+@media (min-width: 480px) {
+  .auth-card-body {
+    padding: 0 2.25rem 2.25rem;
+  }
+}
+
+.auth-clerk-host {
+  width: 100%;
+  min-width: 0;
+}
+
+.auth-clerk-host .cl-rootBox,
+.auth-clerk-host .cl-card,
+.auth-clerk-host .cl-cardBox,
+.auth-clerk-host .cl-scrollBox,
+.auth-clerk-host .cl-main {
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+.auth-clerk-host .cl-card,
+.auth-clerk-host .cl-cardBox,
+.auth-clerk-host .cl-scrollBox {
+  padding: 0 !important;
+}
+
+.auth-clerk-host .cl-footerPages,
+.auth-clerk-host .cl-developmentMode,
+.auth-clerk-host .cl-developmentModeWarning,
+.auth-clerk-host [class*="footerPages"]:not(.cl-footerAction),
+.auth-clerk-host [class*="developmentMode"] {
+  display: none !important;
+}
+
+.auth-clerk-host .cl-formFieldInput,
+.auth-clerk-host .cl-socialButtonsBlockButton,
+.auth-clerk-host .cl-socialButtonsIconButton,
+.auth-clerk-host .cl-formButtonPrimary {
+  box-shadow: none !important;
+}
+
+/* Clerk injects light-theme text colors — force theme tokens (especially dark mode) */
+.auth-clerk-host .cl-socialButtonsBlockButton,
+.auth-clerk-host .cl-socialButtonsIconButton {
+  background-color: var(--surface) !important;
+  border-color: var(--rule) !important;
+  color: var(--ink) !important;
+}
+
+.auth-clerk-host .cl-socialButtonsBlockButton:hover,
+.auth-clerk-host .cl-socialButtonsIconButton:hover {
+  background-color: var(--surface-elevated) !important;
+  border-color: var(--rule-strong) !important;
+}
+
+.auth-clerk-host .cl-socialButtonsBlockButtonText,
+.auth-clerk-host .cl-socialButtonsBlockButton span,
+.auth-clerk-host .cl-socialButtonsIconButton span {
+  color: var(--ink) !important;
+}
+
+.auth-clerk-host .cl-formFieldLabel {
+  color: var(--ink-muted) !important;
+}
+
+.auth-clerk-host .cl-formFieldInput {
+  background-color: var(--surface-sunken) !important;
+  color: var(--ink) !important;
+}
+
+.auth-clerk-host .cl-formFieldInput::placeholder {
+  color: var(--ink-faint) !important;
+  opacity: 1 !important;
+}
+
+.auth-clerk-host .cl-dividerText,
+.auth-clerk-host .cl-dividerLine {
+  color: var(--ink-faint) !important;
+}
+
+.auth-clerk-host .cl-dividerLine {
+  background-color: var(--rule) !important;
+}
+
+.auth-clerk-host .cl-footerActionText {
+  color: var(--ink-muted) !important;
+}
+
+.auth-clerk-host .cl-footerActionLink {
+  color: var(--brand) !important;
+}
+
+.auth-clerk-host .cl-formButtonPrimary {
+  background-color: var(--brand) !important;
+  color: var(--brand-fg) !important;
+}
+
+.auth-clerk-host .cl-formButtonPrimary:hover {
+  background-color: var(--brand-hover) !important;
+}
+
+.auth-clerk-host .cl-footer {
+  background: transparent !important;
+  border-top: 1px solid var(--rule) !important;
+  padding-top: 1.25rem !important;
+  margin-top: 0.25rem !important;
+}
+
+.auth-clerk-host .cl-rootBox {
+  animation: auth-clerk-in 240ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+@keyframes auth-clerk-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes auth-skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.auth-skeleton-pulse {
+  animation: auth-skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-clerk-host .cl-rootBox {
+    animation: none;
+  }
+
+  .auth-skeleton-pulse {
+    animation: none;
+    opacity: 0.7;
+  }
+}
+
+/* ============================================================================
    Print — light, paper-friendly, no chrome (for quiz exports/results)
 ============================================================================ */
 @media print {

@@ -1,130 +1,75 @@
 import * as React from "react";
+import { Shield } from "lucide-react";
 
+import { AuthClerkHost } from "@/components/auth/AuthClerkHost";
 import { Navbar } from "@/components/frontend/Navbar";
 import { cn } from "@/lib/utils";
 
 interface AuthShellProps {
-  /** Small caps eyebrow (e.g. "Sign in"). */
-  eyebrow?: string;
-  /** Serif page heading. */
+  /** Card heading. */
   title: React.ReactNode;
-  /** Short paragraph beneath the title. */
+  /** Short line beneath the title. */
   description?: React.ReactNode;
-  /** Right-side decorative panel. Hidden < md. */
-  side?: React.ReactNode;
-  /** Footnote at the bottom of the form column. */
+  /** Trust note below the card. */
   footnote?: React.ReactNode;
   className?: string;
   children: React.ReactNode;
 }
 
 export function AuthShell({
-  eyebrow,
   title,
   description,
-  side,
   footnote,
   className,
   children,
 }: AuthShellProps) {
   return (
-    <div className="min-h-screen bg-paper text-ink flex flex-col">
+    <div className="auth-page min-h-screen text-ink flex flex-col">
       <Navbar />
       <main
         id="main"
         className={cn(
-          "flex-1 pt-24 md:pt-32 pb-16 md:pb-20 paper-grain",
+          "flex-1 flex flex-col items-center justify-center px-4 pt-24 pb-12 md:pt-28 md:pb-16",
           className,
         )}
       >
-        <div className="mx-auto max-w-[1200px] px-4 md:px-8 grid md:grid-cols-12 gap-10 lg:gap-16 items-start">
-          <div className="md:col-span-7 flex flex-col gap-8">
-            <div className="flex flex-col gap-3 max-w-[52ch]">
-              {eyebrow ? <span className="eyebrow">{eyebrow}</span> : null}
+        <div className="w-full max-w-[440px] flex flex-col items-center gap-7 animate-rise">
+          <article className="auth-card w-full">
+            <header className="auth-card-header">
               <h1
-                className="font-display text-ink"
+                className="font-display text-ink text-balance"
                 style={{
-                  fontSize: "clamp(2.25rem, 4vw, 3.25rem)",
-                  lineHeight: 1.05,
-                  letterSpacing: "-0.025em",
-                  fontVariationSettings: '"opsz" 96, "SOFT" 30',
+                  fontSize: "1.625rem",
+                  lineHeight: 1.15,
+                  letterSpacing: "-0.02em",
+                  fontVariationSettings: '"opsz" 48, "SOFT" 30',
                 }}
               >
                 {title}
               </h1>
               {description ? (
-                <p className="text-base text-ink-muted leading-relaxed">
+                <p className="text-sm text-ink-muted leading-relaxed text-balance mt-2">
                   {description}
                 </p>
               ) : null}
+            </header>
+
+            <div className="auth-card-body">
+              <AuthClerkHost>{children}</AuthClerkHost>
             </div>
+          </article>
 
-            <div className="hairline" />
-
-            <div className="paper paper-shadow p-6 md:p-8">{children}</div>
-
-            {footnote ? (
-              <p className="text-xs text-ink-faint leading-relaxed max-w-[60ch]">
-                {footnote}
-              </p>
-            ) : null}
-          </div>
-
-          <aside className="md:col-span-5 hidden md:block self-stretch">
-            {side ?? <DefaultSidePanel />}
-          </aside>
+          {footnote ? (
+            <div className="flex items-start justify-center gap-2 text-center max-w-[360px]">
+              <Shield
+                className="h-3.5 w-3.5 shrink-0 text-ink-faint mt-0.5"
+                aria-hidden
+              />
+              <p className="text-xs text-ink-faint leading-relaxed">{footnote}</p>
+            </div>
+          ) : null}
         </div>
       </main>
-    </div>
-  );
-}
-
-function DefaultSidePanel() {
-  return (
-    <div className="paper p-8 lg:p-10 sticky top-28 flex flex-col gap-8 paper-grain">
-      <div className="flex flex-col gap-3">
-        <span className="eyebrow">Manifesto</span>
-        <p
-          className="font-display text-ink dropcap leading-tight"
-          style={{
-            fontSize: "1.625rem",
-            fontVariationSettings: '"opsz" 60, "SOFT" 30',
-            lineHeight: 1.25,
-          }}
-        >
-          A learning environment is the architecture of attention. We design
-          ours like a reading room, not a casino — quiet surfaces, clear
-          hierarchy, and the trust that learners do not need to be tricked into
-          showing up.
-        </p>
-      </div>
-
-      <div className="hairline" />
-
-      <dl className="grid grid-cols-3 gap-6">
-        <Stat label="Institutions" value="34" />
-        <Stat label="Courses" value="412" />
-        <Stat label="Attempts" value="1.8M" />
-      </dl>
-
-      <p className="text-xs text-ink-faint leading-relaxed">
-        SOL Learning is a closed beta. Onboarding is by department, not by
-        seat. Faculty leads receive a dedicated specialist for the first term.
-      </p>
-    </div>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex flex-col gap-1">
-      <span
-        className="stat-numeral tnum text-ink"
-        style={{ fontSize: "2rem" }}
-      >
-        {value}
-      </span>
-      <span className="eyebrow text-ink-faint">{label}</span>
     </div>
   );
 }

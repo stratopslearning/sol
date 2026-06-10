@@ -4,6 +4,7 @@ import "./globals.css";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme/theme-provider";
+import { authLocalization } from "@/components/auth/auth-localization";
 import { withBasePath } from "@/lib/basePath";
 
 const fraunces = Fraunces({
@@ -43,6 +44,7 @@ export default async function RootLayout({
     <ClerkProvider
       signInUrl={withBasePath("/login")}
       signUpUrl={withBasePath("/signup")}
+      localization={authLocalization}
     >
       <html
         lang="en"

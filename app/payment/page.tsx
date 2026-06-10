@@ -41,18 +41,7 @@ export default async function PaymentPage() {
   if (user.paid) {
     return (
       <AuthShell
-        eyebrow="Enrolment complete"
-        title={
-          <>
-            You&apos;re in.{' '}
-            <em
-              className="text-brand"
-              style={{ fontVariationSettings: '"opsz" 96, "WONK" 1' }}
-            >
-              Welcome.
-            </em>
-          </>
-        }
+        title="You're in. Welcome."
         description="Your enrolment is on file. Every course, every quiz, every attempt is now available to you."
         footnote="If you ever need a receipt or refund, write to enrolment@sol.example — institutional billing teams respond within one business day."
       >
@@ -90,19 +79,8 @@ export default async function PaymentPage() {
 
   return (
     <AuthShell
-      eyebrow="Final step"
-      title={
-        <>
-          Complete your{' '}
-          <em
-            className="text-brand"
-            style={{ fontVariationSettings: '"opsz" 96, "WONK" 1' }}
-          >
-            enrolment.
-          </em>
-        </>
-      }
-      description="One quiet payment unlocks the term — no recurring charges, no surprise upgrades, no add-ons hidden behind a paywall."
+      title="Complete your enrolment"
+      description="One payment unlocks the term. No recurring charges, no surprise upgrades."
       footnote="Payments are processed by Stripe. SOL never stores your card details. Institutional billing is available — ask your faculty lead."
     >
       <div className="flex flex-col gap-6">

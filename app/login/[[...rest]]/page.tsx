@@ -1,8 +1,5 @@
-import { SignIn } from "@clerk/nextjs";
-
 import { AuthShell } from "@/components/auth/AuthShell";
-import { clerkAppearance } from "@/components/auth/clerk-appearance";
-import { withBasePath } from "@/lib/basePath";
+import { AuthSignIn } from "@/components/auth/AuthSignIn";
 
 export const metadata = {
   title: "Sign in",
@@ -11,28 +8,11 @@ export const metadata = {
 export default function LoginPage() {
   return (
     <AuthShell
-      eyebrow="Members area"
-      title={
-        <>
-          Welcome back to{" "}
-          <em
-            className="text-brand"
-            style={{ fontVariationSettings: '"opsz" 96, "WONK" 1' }}
-          >
-            SOL.
-          </em>
-        </>
-      }
-      description="Sign in to continue your courses, review attempts, and grade outstanding submissions."
-      footnote="By signing in you agree to SOL's institutional terms of use. Sessions are scoped to a single device; close the browser to end yours."
+      title="Back to your quizzes"
+      description="Sign in to review attempts, publish quizzes, and clear the grading queue."
+      footnote="Sessions are scoped to one device. Sign out by closing your browser when you are done."
     >
-      <SignIn
-        path={withBasePath("/login")}
-        routing="path"
-        signUpUrl={withBasePath("/signup")}
-        forceRedirectUrl={withBasePath("/")}
-        appearance={clerkAppearance}
-      />
+      <AuthSignIn />
     </AuthShell>
   );
 }
