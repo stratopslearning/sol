@@ -28,7 +28,7 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "SOL. AI grading for the quizzes you write.",
+    default: "SOL",
     template: "%s · SOL",
   },
   description:

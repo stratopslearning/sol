@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight } from "lucide-react";
 import { useUser } from "@clerk/nextjs";
 import { useTheme } from "next-themes";
+import gsap from "gsap";
+import { useGSAP } from "@gsap/react";
+import { SplitText } from "gsap/SplitText";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -19,6 +22,8 @@ import { apiUrl, withBasePath } from "@/lib/basePath";
 import { paymentsEnabled } from "@/lib/featureFlags";
 import { getSolShaderProps } from "@/lib/heroShaderColors";
 
+gsap.registerPlugin(useGSAP, SplitText);
+
 interface DbUser {
   role?: "STUDENT" | "PROFESSOR" | "ADMIN";
   paid?: boolean;
@@ -29,6 +34,7 @@ export function Hero() {
   const [dbUser, setDbUser] = useState<DbUser | null>(null);
   const { resolvedTheme } = useTheme();
   const [reducedMotion, setReducedMotion] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!isSignedIn) return;
@@ -72,8 +78,42 @@ export function Hero() {
     [reducedMotion, resolvedTheme],
   );
 
+  // Word-by-word SplitText reveal on the hero headline. Gated on prefers-reduced-motion
+  // (no animation is created when the user asks for reduced motion — the text stays static
+  // and fully visible). useGSAP handles cleanup; autoSplit re-splits on font load / resize.
+  useGSAP(
+    () => {
+      const headline = rootRef.current?.querySelector<HTMLElement>(
+        '[data-hero="headline"]',
+      );
+      if (!headline) return;
+
+      const mm = gsap.matchMedia();
+      mm.add("(prefers-reduced-motion: no-preference)", () => {
+        const split = SplitText.create(headline, {
+          type: "words",
+          autoSplit: true,
+          wordsClass: "hero-word",
+          onSplit(self) {
+            return gsap.from(self.words, {
+              opacity: 0,
+              yPercent: 30,
+              stagger: 0.08,
+              duration: 0.6,
+              ease: "power3.out",
+            });
+          },
+        });
+        return () => split.revert();
+      });
+
+      return () => mm.revert();
+    },
+    { scope: rootRef },
+  );
+
   return (
-    <>
+    <div ref={rootRef} className="contents">
       <HeroColorPanelsRoot
         className="bg-paper pt-28 md:pt-32"
         srTitle="SOL. Quiz platform with AI grading for subjective answers."
@@ -86,7 +126,8 @@ export function Hero() {
           <HeroColorPanelsContent className="px-0 md:px-0 lg:pl-0">
             <HeroColorPanelsHeading className="pt-0 text-left lg:text-left">
               <h1
-                className="font-display text-ink text-balance"
+                data-hero="headline"
+                className="font-display text-ink"
                 style={{
                   fontSize: "clamp(2.75rem, 7vw, 5.5rem)",
                   lineHeight: 1.0,
@@ -94,7 +135,7 @@ export function Hero() {
                   fontVariationSettings: '"opsz" 144, "SOFT" 40',
                 }}
               >
-                Build the quizzes.
+                Less time grading,
                 <br />
                 <span
                   className="text-brand"
@@ -102,7 +143,7 @@ export function Hero() {
                     fontVariationSettings: '"opsz" 144, "SOFT" 60',
                   }}
                 >
-                  Let AI grade the hard ones.
+                  more time teaching.
                 </span>
               </h1>
             </HeroColorPanelsHeading>
@@ -110,7 +151,7 @@ export function Hero() {
             <HeroColorPanelsDescription
               className="mx-0 max-w-none text-left lg:text-left"
               descriptionClassName="text-ink-muted text-base md:text-lg leading-relaxed max-w-[56ch]"
-              description="SOL is where professors write quizzes they actually want to run, then hand off the grading. Multiple choice is instant. Short and long answers get scored by AI with reasoning you can review. Less time at the kitchen table with a red pen."
+              description="The quiz is yours. The grading isn't."
             />
 
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 pt-1">
@@ -145,6 +186,6 @@ export function Hero() {
       </HeroColorPanelsRoot>
 
       <div className="hairline" />
-    </>
+    </div>
   );
 }

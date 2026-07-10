@@ -34,6 +34,12 @@ export default clerkMiddleware(async (auth, req) => {
 
   const isPublic =
     appPath === '/' ||
+    // File-based metadata icon routes (extensionless dynamic ones like
+    // /apple-icon aren't excluded by the static-asset matcher below).
+    appPath === '/apple-icon' ||
+    appPath.startsWith('/apple-icon/') ||
+    appPath === '/icon' ||
+    appPath.startsWith('/icon/') ||
     appPath === '/login' ||
     appPath.startsWith('/login/') ||
     appPath === '/signup' ||
