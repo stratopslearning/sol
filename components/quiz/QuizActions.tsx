@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Archive, Copy, Edit, Eye } from "lucide-react";
+import { Archive, Copy, Edit, Eye, MessagesSquare } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -135,6 +135,21 @@ export function QuizActions({
           <TooltipContent side="top">Create editable copy</TooltipContent>
         </Tooltip>
       )}
+
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <a
+            href={withBasePath(
+              `/dashboard/professor/discussions/new?quizId=${quizId}`,
+            )}
+            className={buttonVariants({ size: "iconSm", variant: "ghost" })}
+            aria-label="Create discussion from quiz"
+          >
+            <MessagesSquare className="h-4 w-4" />
+          </a>
+        </TooltipTrigger>
+        <TooltipContent side="top">Create discussion</TooltipContent>
+      </Tooltip>
 
       <Tooltip>
         <TooltipTrigger asChild>

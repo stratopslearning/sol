@@ -323,6 +323,123 @@ export const auditLog = pgTable(
   }),
 );
 
+// Socratic discussion chatbots — professor-authored (or seeded templates).
+export const chatbots = pgTable(
+  'chatbots',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    // Nullable for system templates (`isTemplate = true`) that any professor
+    // can duplicate into an owned copy before assigning.
+    professorId: uuid('professor_id').references(() => users.id, {
+      onDelete: 'restrict',
+    }),
+    title: text('title').notNull(),
+    description: text('description'),
+    personaName: text('persona_name').notNull().default('Professor Emma'),
+    instructions: text('instructions').notNull(),
+    systemPrompt: text('system_prompt').notNull(),
+    relatedQuizId: uuid('related_quiz_id').references(() => quizzes.id, {
+      onDelete: 'set null',
+    }),
+    isTemplate: boolean('is_template').default(false).notNull(),
+    model: text('model').notNull().default('gpt-4.1-mini'),
+    isActive: boolean('is_active').default(true).notNull(),
+    deletedAt: ts('deleted_at'),
+    createdAt: ts('created_at').defaultNow().notNull(),
+    updatedAt: ts('updated_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    professorIdx: index('chatbots_professor_idx').on(table.professorId),
+    relatedQuizIdx: index('chatbots_related_quiz_idx').on(table.relatedQuizId),
+  }),
+);
+
+export const chatbotSections = pgTable(
+  'chatbot_sections',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    chatbotId: uuid('chatbot_id')
+      .references(() => chatbots.id, { onDelete: 'cascade' })
+      .notNull(),
+    sectionId: uuid('section_id')
+      .references(() => sections.id, { onDelete: 'cascade' })
+      .notNull(),
+    assignedBy: uuid('assigned_by')
+      .references(() => users.id, { onDelete: 'restrict' })
+      .notNull(),
+    assignedAt: ts('assigned_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    chatbotSectionUnique: uniqueIndex('chatbot_sections_unique').on(
+      table.chatbotId,
+      table.sectionId,
+    ),
+    sectionIdx: index('chatbot_sections_section_idx').on(table.sectionId),
+  }),
+);
+
+export const chatbotAssignments = pgTable(
+  'chatbot_assignments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    chatbotId: uuid('chatbot_id')
+      .references(() => chatbots.id, { onDelete: 'cascade' })
+      .notNull(),
+    studentId: uuid('student_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    isCompleted: boolean('is_completed').default(false).notNull(),
+    assignedAt: ts('assigned_at').defaultNow().notNull(),
+    completedAt: ts('completed_at'),
+  },
+  (table) => ({
+    chatbotStudentUnique: uniqueIndex('chatbot_assignments_unique').on(
+      table.chatbotId,
+      table.studentId,
+    ),
+    studentIdx: index('chatbot_assignments_student_idx').on(table.studentId),
+  }),
+);
+
+export type ChatbotMessage = {
+  role: 'user' | 'assistant';
+  content: string;
+  at: string;
+};
+
+export const chatbotSessions = pgTable(
+  'chatbot_sessions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    assignmentId: uuid('assignment_id')
+      .references(() => chatbotAssignments.id, { onDelete: 'cascade' })
+      .notNull(),
+    studentId: uuid('student_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    chatbotId: uuid('chatbot_id')
+      .references(() => chatbots.id, { onDelete: 'cascade' })
+      .notNull(),
+    sectionId: uuid('section_id')
+      .references(() => sections.id, { onDelete: 'cascade' })
+      .notNull(),
+    messages: jsonb('messages').$type<ChatbotMessage[]>().notNull().default([]),
+    status: text('status', {
+      enum: ['in_progress', 'completed'],
+    })
+      .default('in_progress')
+      .notNull(),
+    startedAt: ts('started_at').defaultNow().notNull(),
+    completedAt: ts('completed_at'),
+  },
+  (table) => ({
+    assignmentIdx: index('chatbot_sessions_assignment_idx').on(table.assignmentId),
+    studentIdx: index('chatbot_sessions_student_idx').on(table.studentId),
+    chatbotIdx: index('chatbot_sessions_chatbot_idx').on(table.chatbotId),
+    sectionIdx: index('chatbot_sessions_section_idx').on(table.sectionId),
+  }),
+);
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   professorSections: many(professorSections),
@@ -331,6 +448,9 @@ export const usersRelations = relations(users, ({ many }) => ({
   attempts: many(attempts),
   quizAssignments: many(quizSections), // quizzes assigned by this user
   quizzes: many(quizzes), // quizzes created by this user
+  chatbots: many(chatbots),
+  chatbotAssignments: many(chatbotAssignments),
+  chatbotSessions: many(chatbotSessions),
 }));
 
 export const coursesRelations = relations(courses, ({ many }) => ({
@@ -345,7 +465,9 @@ export const sectionsRelations = relations(sections, ({ one, many }) => ({
   professorSections: many(professorSections),
   studentSections: many(studentSections),
   quizSections: many(quizSections),
+  chatbotSections: many(chatbotSections),
   attempts: many(attempts),
+  chatbotSessions: many(chatbotSessions),
 }));
 
 export const professorSectionsRelations = relations(professorSections, ({ one }) => ({
@@ -379,6 +501,7 @@ export const quizzesRelations = relations(quizzes, ({ one, many }) => ({
   assignments: many(assignments),
   attempts: many(attempts),
   sectionAssignments: many(quizSections), // sections this quiz is assigned to
+  relatedChatbots: many(chatbots),
 }));
 
 export const quizSectionsRelations = relations(quizSections, ({ one }) => ({
@@ -432,4 +555,67 @@ export const attemptsRelations = relations(attempts, ({ one }) => ({
     fields: [attempts.sectionId],
     references: [sections.id],
   }),
-})); 
+}));
+
+export const chatbotsRelations = relations(chatbots, ({ one, many }) => ({
+  professor: one(users, {
+    fields: [chatbots.professorId],
+    references: [users.id],
+  }),
+  relatedQuiz: one(quizzes, {
+    fields: [chatbots.relatedQuizId],
+    references: [quizzes.id],
+  }),
+  sectionAssignments: many(chatbotSections),
+  assignments: many(chatbotAssignments),
+  sessions: many(chatbotSessions),
+}));
+
+export const chatbotSectionsRelations = relations(chatbotSections, ({ one }) => ({
+  chatbot: one(chatbots, {
+    fields: [chatbotSections.chatbotId],
+    references: [chatbots.id],
+  }),
+  section: one(sections, {
+    fields: [chatbotSections.sectionId],
+    references: [sections.id],
+  }),
+  assignedBy: one(users, {
+    fields: [chatbotSections.assignedBy],
+    references: [users.id],
+  }),
+}));
+
+export const chatbotAssignmentsRelations = relations(
+  chatbotAssignments,
+  ({ one, many }) => ({
+    chatbot: one(chatbots, {
+      fields: [chatbotAssignments.chatbotId],
+      references: [chatbots.id],
+    }),
+    student: one(users, {
+      fields: [chatbotAssignments.studentId],
+      references: [users.id],
+    }),
+    sessions: many(chatbotSessions),
+  }),
+);
+
+export const chatbotSessionsRelations = relations(chatbotSessions, ({ one }) => ({
+  assignment: one(chatbotAssignments, {
+    fields: [chatbotSessions.assignmentId],
+    references: [chatbotAssignments.id],
+  }),
+  student: one(users, {
+    fields: [chatbotSessions.studentId],
+    references: [users.id],
+  }),
+  chatbot: one(chatbots, {
+    fields: [chatbotSessions.chatbotId],
+    references: [chatbots.id],
+  }),
+  section: one(sections, {
+    fields: [chatbotSessions.sectionId],
+    references: [sections.id],
+  }),
+}));

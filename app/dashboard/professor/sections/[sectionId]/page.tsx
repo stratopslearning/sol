@@ -15,6 +15,7 @@ import { loadSectionDetailData } from '@/lib/sectionDetailData';
 
 import LeaveSectionButton from './LeaveSectionButton';
 import UnassignQuizButton from './UnassignQuizButton';
+import UnassignDiscussionButton from './UnassignDiscussionButton';
 
 export default async function SectionDetailsPage({
   params,
@@ -88,6 +89,12 @@ export default async function SectionDetailsPage({
         enrollmentActions={<LeaveSectionButton sectionId={data.section.id} />}
         quizRowActions={(quizId) => (
           <UnassignQuizButton quizId={quizId} sectionId={sectionId} />
+        )}
+        discussionRowActions={(chatbotId) => (
+          <UnassignDiscussionButton
+            chatbotId={chatbotId}
+            sectionId={sectionId}
+          />
         )}
       />
     </AppShell>

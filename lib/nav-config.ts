@@ -6,6 +6,7 @@ import {
   Users,
   TrendingUp,
   CheckCircle,
+  MessagesSquare,
   type LucideIcon,
 } from "lucide-react";
 
@@ -95,6 +96,12 @@ export const ROLE_CONFIG: Record<AppRole, RoleConfig> = {
         key: "quizzes",
       },
       {
+        href: withBasePath("/dashboard/professor/discussions"),
+        label: "Discussions",
+        icon: MessagesSquare,
+        key: "discussions",
+      },
+      {
         href: withBasePath("/dashboard/professor/quiz-results"),
         label: "All Results",
         icon: TrendingUp,
@@ -130,6 +137,12 @@ export const ROLE_CONFIG: Record<AppRole, RoleConfig> = {
         label: "My Quizzes",
         icon: FileText,
         key: "quizzes",
+      },
+      {
+        href: withBasePath("/dashboard/student/discussions"),
+        label: "My Discussions",
+        icon: MessagesSquare,
+        key: "discussions",
       },
       {
         href: withBasePath("/dashboard/student/grades"),
