@@ -1,12 +1,59 @@
+"use client";
+
+import type { ComponentProps, ReactNode } from "react";
+import { motion, useReducedMotion } from "framer-motion";
+
 import { withBasePath } from "@/lib/basePath";
+import { cn } from "@/lib/utils";
+
+interface FooterLink {
+  title: string;
+  href: string;
+}
+
+interface FooterSection {
+  label: string;
+  links: FooterLink[];
+}
+
+const footerLinks: FooterSection[] = [
+  {
+    label: "Platform",
+    links: [
+      { title: "Capabilities", href: "#capabilities" },
+      { title: "Approach", href: "#approach" },
+      { title: "Access", href: "#access" },
+    ],
+  },
+  {
+    label: "Account",
+    links: [
+      { title: "Sign in", href: withBasePath("/login") },
+      { title: "Sign up", href: withBasePath("/signup") },
+    ],
+  },
+];
 
 export function Footer() {
   const year = new Date().getFullYear();
+
   return (
-    <footer id="access" className="bg-paper border-t border-rule">
-      <div className="mx-auto max-w-[1200px] px-4 md:px-8 py-16">
-        <div className="grid md:grid-cols-12 gap-10">
-          <div className="md:col-span-5 flex flex-col gap-4">
+    <footer
+      id="access"
+      className="relative w-full overflow-hidden border-t border-rule bg-paper"
+    >
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-[radial-gradient(35%_128px_at_50%_0%,color-mix(in_oklch,var(--brand)_18%,transparent),transparent)]"
+      />
+      <div
+        aria-hidden
+        className="absolute top-0 right-1/2 left-1/2 h-px w-1/3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand/40 blur-[2px]"
+      />
+
+      <div className="relative mx-auto max-w-[1200px] px-4 py-14 md:px-8 md:py-16 lg:py-20">
+        <div className="grid w-full gap-10 xl:grid-cols-3 xl:gap-12">
+          <AnimatedContainer className="space-y-4 xl:col-span-1">
             <a
               href={withBasePath("/")}
               className="inline-flex items-baseline gap-1 text-ink"
@@ -18,66 +65,79 @@ export function Footer() {
                 SOL
               </span>
             </a>
-            <p className="text-sm text-ink-muted leading-relaxed max-w-[44ch]">
+            <p className="max-w-[44ch] text-sm leading-relaxed text-ink-muted">
               A quiz and grading platform for professors who are tired of
               scoring short answers by hand. Built with faculty, not around
               them.
             </p>
-          </div>
+            <p className="pt-2 text-sm text-ink-faint md:pt-4">
+              © {year} SOL Learning. All rights reserved.
+            </p>
+          </AnimatedContainer>
 
-          <div className="md:col-span-7 grid grid-cols-2 gap-8 max-w-md">
-            <FooterColumn
-              title="Platform"
-              links={[
-                { label: "Capabilities", href: "#capabilities" },
-                { label: "Approach", href: "#approach" },
-              ]}
-            />
-            <FooterColumn
-              title="Account"
-              links={[
-                { label: "Sign in", href: withBasePath("/login") },
-                { label: "Sign Up", href: withBasePath("/signup") },
-              ]}
-            />
+          <div className="grid grid-cols-2 gap-8 sm:gap-10 xl:col-span-2 xl:mt-0">
+            {footerLinks.map((section, index) => (
+              <AnimatedContainer
+                key={section.label}
+                delay={0.1 + index * 0.1}
+              >
+                <div>
+                  <h3 className="eyebrow">{section.label}</h3>
+                  <ul className="mt-4 space-y-2.5 text-sm text-ink-muted">
+                    {section.links.map((link) => (
+                      <li key={link.title}>
+                        <a
+                          href={link.href}
+                          className="inline-flex items-center transition-colors duration-300 hover:text-ink"
+                        >
+                          {link.title}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </AnimatedContainer>
+            ))}
           </div>
         </div>
 
-        <div className="hairline mt-14 mb-6" />
-
-        <div className="flex flex-col md:flex-row items-start md:items-center md:justify-between gap-3 text-xs text-ink-faint">
-          <span>&copy; {year} SOL Learning. All rights reserved.</span>
-          <span className="font-mono tnum">
-            v3 · {year} edition
-          </span>
-        </div>
+        <AnimatedContainer delay={0.35} className="mt-14">
+          <div className="hairline mb-6" />
+          <div className="flex justify-end text-xs text-ink-faint">
+            <span className="font-mono tnum">v3 · {year} edition</span>
+          </div>
+        </AnimatedContainer>
       </div>
     </footer>
   );
 }
 
-function FooterColumn({
-  title,
-  links,
-}: {
-  title: string;
-  links: { label: string; href: string }[];
-}) {
+type ViewAnimationProps = {
+  delay?: number;
+  className?: ComponentProps<typeof motion.div>["className"];
+  children: ReactNode;
+};
+
+function AnimatedContainer({
+  className,
+  delay = 0.1,
+  children,
+}: ViewAnimationProps) {
+  const shouldReduceMotion = useReducedMotion();
+
+  if (shouldReduceMotion) {
+    return <div className={className}>{children}</div>;
+  }
+
   return (
-    <div className="flex flex-col gap-3">
-      <span className="eyebrow">{title}</span>
-      <ul className="flex flex-col gap-2 text-sm">
-        {links.map((link) => (
-          <li key={link.label}>
-            <a
-              href={link.href}
-              className="text-ink-muted hover:text-ink transition-colors"
-            >
-              {link.label}
-            </a>
-          </li>
-        ))}
-      </ul>
-    </div>
+    <motion.div
+      initial={{ filter: "blur(4px)", translateY: -8, opacity: 0 }}
+      whileInView={{ filter: "blur(0px)", translateY: 0, opacity: 1 }}
+      viewport={{ once: true }}
+      transition={{ delay, duration: 0.8 }}
+      className={cn(className)}
+    >
+      {children}
+    </motion.div>
   );
 }
