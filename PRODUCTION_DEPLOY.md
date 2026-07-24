@@ -89,10 +89,14 @@ npm run db:preflight
 #    seed them so drizzle-kit doesn't try to re-apply old migrations:
 npm run db:reconcile-history
 
-# 4. Apply pending migrations (currently 0004_phase6_destructive):
-npm run migrate
-#    Or, if drizzle-kit silently fails on macOS:
-npx tsx scripts/apply-migration.ts drizzle/0004_phase6_destructive.sql
+# 4. Apply pending migrations. Prefer apply-migration.ts until Drizzle
+#    journal history is fully reconciled (missing 0000 makes `npm run migrate`
+#    unreliable). Newest additive migration:
+npx tsx scripts/apply-migration.ts drizzle/0007_attempts_one_open.sql
+#    Earlier examples:
+# npx tsx scripts/apply-migration.ts drizzle/0006_chatbots.sql
+# npx tsx scripts/apply-migration.ts drizzle/0004_phase6_destructive.sql
+#    Do not regenerate historical 0003–0006 kit snapshots casually.
 
 # 5. Backfill stripe_customer_id for users who paid before we started
 #    storing it:

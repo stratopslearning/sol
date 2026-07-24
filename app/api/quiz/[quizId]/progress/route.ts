@@ -4,9 +4,11 @@ import { z } from 'zod';
 
 import { db } from '@/app/db';
 import { assignments, attempts, quizzes } from '@/app/db/schema';
+import { ApiError, apiErrorResponse } from '@/lib/api/errors';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
 import { activeOnly } from '@/lib/db/filters';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
+import { isStudentEntitled } from '@/lib/featureFlags';
 import { isTimeLimitExceeded } from '@/lib/quizTimeLimit';
 
 export const dynamic = 'force-dynamic';
@@ -27,8 +29,9 @@ export async function PATCH(
 
   try {
     const user = await getOrCreateUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!user) throw ApiError.unauthorized();
+    if (user.role === 'STUDENT' && !isStudentEntitled(user)) {
+      throw ApiError.paymentRequired();
     }
 
     const limited = await enforceRateLimit({
@@ -43,10 +46,7 @@ export async function PATCH(
     const rawBody = await req.json().catch(() => null);
     const parseResult = progressBodySchema.safeParse(rawBody);
     if (!parseResult.success) {
-      return NextResponse.json(
-        { error: 'Invalid request body', details: parseResult.error.errors },
-        { status: 400 },
-      );
+      throw ApiError.badRequest('Invalid request body', parseResult.error.errors);
     }
     const { assignmentId, answers } = parseResult.data;
 
@@ -57,16 +57,12 @@ export async function PATCH(
         eq(assignments.studentId, user.id),
       ),
     });
-    if (!assignment) {
-      return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
-    }
+    if (!assignment) throw ApiError.notFound('Assignment not found');
 
     const quiz = await db.query.quizzes.findFirst({
       where: and(eq(quizzes.id, quizId), activeOnly(quizzes.deletedAt)),
     });
-    if (!quiz) {
-      return NextResponse.json({ error: 'Quiz not found' }, { status: 404 });
-    }
+    if (!quiz) throw ApiError.notFound('Quiz not found');
 
     const existingAttempts = await db.query.attempts.findMany({
       where: and(
@@ -78,9 +74,8 @@ export async function PATCH(
     const inProgressAttempt = existingAttempts.find((a) => !a.submittedAt);
 
     if (!inProgressAttempt) {
-      return NextResponse.json(
-        { error: 'No in-progress attempt found. Please start the quiz first.' },
-        { status: 404 },
+      throw ApiError.notFound(
+        'No in-progress attempt found. Please start the quiz first.',
       );
     }
 
@@ -91,13 +86,12 @@ export async function PATCH(
         : new Date(inProgressAttempt.startedAt);
 
     if (quiz.timeLimit && isTimeLimitExceeded(quiz.timeLimit, startedAtDate, now)) {
-      return NextResponse.json(
-        {
-          error: 'Time limit exceeded for this attempt. Please refresh to start a new session.',
-          timeLimitExceeded: true,
-        },
-        { status: 400 },
-      );
+      throw new ApiError({
+        status: 400,
+        message:
+          'Time limit exceeded for this attempt. Please refresh to start a new session.',
+        extras: { timeLimitExceeded: true },
+      });
     }
 
     await db
@@ -107,7 +101,6 @@ export async function PATCH(
 
     return NextResponse.json({ success: true, savedAt: now.toISOString() });
   } catch (error) {
-    console.error('Error saving quiz progress:', error);
-    return NextResponse.json({ error: 'Failed to save progress' }, { status: 500 });
+    return apiErrorResponse(error);
   }
 }

@@ -1,15 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/app/db';
-import { sections, users } from '@/app/db/schema';
-import { z } from 'zod';
 import { auth } from '@clerk/nextjs/server';
 import { eq } from 'drizzle-orm';
+import { z } from 'zod';
+
+import { db } from '@/app/db';
+import { sections, users } from '@/app/db/schema';
+import { generateEnrollmentCode } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
-
-function generateEnrollmentCode() {
-  return Math.random().toString(36).substring(2, 8).toUpperCase();
-}
 
 const bulkSectionSchema = z.object({
   names: z.array(z.string().min(1)),
@@ -28,8 +26,6 @@ export async function POST(req: NextRequest) {
     }
     const body = await req.json();
     const validatedData = bulkSectionSchema.parse(body);
-    // All-or-nothing creation: if one of the inserts fails (e.g. enrollment
-    // code collision) we don't want to leave a partial set.
     const newSections = await db.transaction(async (tx) => {
       const created = [];
       for (const name of validatedData.names) {
@@ -55,4 +51,4 @@ export async function POST(req: NextRequest) {
     }
     return NextResponse.json({ error: 'Failed to create sections' }, { status: 500 });
   }
-} 
+}

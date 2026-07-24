@@ -5,6 +5,7 @@ import { auth } from '@clerk/nextjs/server';
 import { db } from '@/app/db';
 import { quizzes, users } from '@/app/db/schema';
 import { activeOnly } from '@/lib/db/filters';
+import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,6 +28,15 @@ export async function POST(
     if (!user || (user.role !== 'PROFESSOR' && user.role !== 'ADMIN')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+
+    const limited = await enforceRateLimit({
+      key: `quiz-archive:${user.id}`,
+      limit: 30,
+      windowMs: 60_000,
+      prefix: 'rl',
+      message: 'Too many archive requests. Please wait a moment.',
+    });
+    if (limited) return limited;
 
     const existingQuiz = await db.query.quizzes.findFirst({
       where: and(eq(quizzes.id, quizId), activeOnly(quizzes.deletedAt)),

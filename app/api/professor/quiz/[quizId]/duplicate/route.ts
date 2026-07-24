@@ -5,6 +5,7 @@ import { db } from '@/app/db';
 import { professorSections, questions, quizSections, quizzes } from '@/app/db/schema';
 import { activeOnly } from '@/lib/db/filters';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
+import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,6 +19,15 @@ export async function POST(
     if (!user || (user.role !== 'PROFESSOR' && user.role !== 'ADMIN')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const limited = await enforceRateLimit({
+      key: `quiz-dup:${user.id}`,
+      limit: 20,
+      windowMs: 60_000,
+      prefix: 'rl',
+      message: 'Too many duplicate requests. Please wait a moment.',
+    });
+    if (limited) return limited;
 
     // Get the original quiz with questions and section assignments. Cannot
     // duplicate a soft-deleted quiz.

@@ -178,12 +178,14 @@ export function formatTime(date: Date | string | null | undefined): string {
   });
 }
 
-// Generate unique 6-character enrollment code
+// Generate unique 6-character enrollment code (cryptographically random).
 export function generateEnrollmentCode(): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  const bytes = new Uint8Array(6);
+  crypto.getRandomValues(bytes);
   let result = '';
   for (let i = 0; i < 6; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
+    result += chars.charAt(bytes[i]! % chars.length);
   }
   return result;
 }

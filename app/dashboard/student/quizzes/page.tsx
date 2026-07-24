@@ -6,15 +6,14 @@ import StudentQuizzesTableClient from './StudentQuizzesTableClient';
 import { AppShell } from '@/components/layout/AppShell';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { withBasePath } from '@/lib/basePath';
-import { getOrCreateUser } from '@/lib/getOrCreateUser';
+import { requireStudent } from '@/lib/auth';
 import {
   formatDateTimeStable,
   normalizeDatabaseDate,
 } from '@/lib/utils';
 
 export default async function StudentQuizzesPage() {
-  const user = await getOrCreateUser();
-  if (!user || user.role !== 'STUDENT') return null;
+  const user = await requireStudent();
 
   const enrollments = await db.query.studentSections.findMany({
     where: eq(studentSections.studentId, user.id),

@@ -11,6 +11,7 @@ import {
 import { activeOnly } from '@/lib/db/filters';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import { upsertQuizQuestions } from '@/lib/quizQuestionUpsert';
+import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,6 +46,15 @@ export async function PUT(
     if (!user || (user.role !== 'PROFESSOR' && user.role !== 'ADMIN')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const limited = await enforceRateLimit({
+      key: `quiz-update:${user.id}`,
+      limit: 60,
+      windowMs: 60_000,
+      prefix: 'rl',
+      message: 'Too many quiz update requests. Please wait a moment.',
+    });
+    if (limited) return limited;
     const body = await req.json();
     const validatedData = updateQuizSchema.parse(body);
 

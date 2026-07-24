@@ -258,11 +258,9 @@ export const attempts = pgTable(
     studentIdx: index('attempts_student_idx').on(table.studentId),
     quizIdx: index('attempts_quiz_idx').on(table.quizId),
     sectionIdx: index('attempts_section_idx').on(table.sectionId),
-    // Partial index: fast lookup for the cron worker, which only ever cares
-    // about attempts that still have pending grading work to do.
-    gradingStatusIdx: index('attempts_grading_status_idx').on(
-      table.gradingStatus,
-    ),
+    // Partial indexes live in SQL migrations (Drizzle cannot express predicates):
+    // - attempts_grading_status_idx (0005): WHERE grading_status IS NOT NULL AND <> 'complete'
+    // - attempts_one_open_per_assignment_idx (0007): UNIQUE(assignment_id) WHERE submitted_at IS NULL
   }),
 );
 

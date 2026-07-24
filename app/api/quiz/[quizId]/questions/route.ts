@@ -9,6 +9,7 @@ import {
   studentSections,
 } from '@/app/db/schema';
 import { activeOnly } from '@/lib/db/filters';
+import { isStudentEntitled } from '@/lib/featureFlags';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
 
 export const dynamic = 'force-dynamic';
@@ -23,6 +24,9 @@ export async function GET(
     const user = await getOrCreateUser();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (user.role === 'STUDENT' && !isStudentEntitled(user)) {
+      return NextResponse.json({ error: 'Payment required' }, { status: 402 });
     }
 
     const isAdmin = user.role === 'ADMIN';
@@ -86,14 +90,16 @@ export async function GET(
       orderBy: (questions, { asc }) => [asc(questions.order)],
     });
 
-    // Strip the correct answer for callers who must not see it. Admins and the
-    // quiz's own author keep the full row (used by the editor / reports).
+    // Strip answer key + rubric for callers who must not see them. Admins and
+    // the quiz's own author keep the full row (editor / reports).
     const includeAnswerKey = isAdmin || isOwnerProfessor;
     const responseQuestions = includeAnswerKey
       ? quizQuestions
       : quizQuestions.map((q) => ({
           ...q,
           correctAnswer: null,
+          rubric: null,
+          rubricVersion: null,
         }));
 
     return NextResponse.json({ questions: responseQuestions });

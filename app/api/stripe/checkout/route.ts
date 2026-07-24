@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 
+import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
 import { withBasePath } from '@/lib/basePath';
+import { paymentsEnabled } from '@/lib/featureFlags';
 import {
   getRequiredBaseUrl,
   resolveCheckoutPrice,
@@ -12,10 +14,23 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
+  if (!paymentsEnabled()) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
+
   const { userId } = await auth();
   if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  const limited = await enforceRateLimit({
+    key: `stripe-checkout:${userId}`,
+    limit: 10,
+    windowMs: 60_000,
+    prefix: 'rl',
+    message: 'Too many checkout attempts. Please wait a moment.',
+  });
+  if (limited) return limited;
 
   let baseUrl: string;
   try {
