@@ -16,11 +16,10 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { SectionHeading } from '@/components/layout/SectionHeading';
 import { StatCard } from '@/components/patterns/StatCard';
 import { activeOnly } from '@/lib/db/filters';
-import { getOrCreateUser } from '@/lib/getOrCreateUser';
+import { requireStudent } from '@/lib/auth';
 
 export default async function StudentDashboard() {
-  const user = await getOrCreateUser();
-  if (!user || user.role !== 'STUDENT') return null;
+  const user = await requireStudent();
 
   const enrollments = await db.query.studentSections.findMany({
     where: eq(studentSections.studentId, user.id),

@@ -34,6 +34,47 @@ export interface UserData {
   updatedAt: Date;
 }
 
+/** Public client payload — never includes stripeCustomerId / lastSyncedAt. */
+export type PublicUserDto = Pick<
+  UserData,
+  'id' | 'role' | 'paid' | 'firstName' | 'lastName' | 'email'
+>;
+
+export function toUserData(row: {
+  id: string;
+  clerkId: string;
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+  role: 'STUDENT' | 'PROFESSOR' | 'ADMIN';
+  paid: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}): UserData {
+  return {
+    id: row.id,
+    clerkId: row.clerkId,
+    email: row.email,
+    firstName: row.firstName,
+    lastName: row.lastName,
+    role: row.role,
+    paid: row.paid,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+export function toPublicUserDto(user: UserData): PublicUserDto {
+  return {
+    id: user.id,
+    role: user.role,
+    paid: user.paid,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    email: user.email,
+  };
+}
+
 /**
  * Gets or creates a user in the database based on Clerk authentication.
  * Syncs the Clerk userId / profile fields into our database for business logic.
@@ -57,7 +98,7 @@ export async function getOrCreateUser(): Promise<UserData | null> {
     const existingUser = await db.query.users.findFirst({
       where: eq(dbUsers.clerkId, userId),
     });
-    if (existingUser) return existingUser as UserData;
+    if (existingUser) return toUserData(existingUser);
 
     // Slow path: fetch profile from Clerk and upsert. We tolerate Clerk failures
     // by falling back to placeholder values, but we still create the row so the
@@ -97,7 +138,7 @@ export async function getOrCreateUser(): Promise<UserData | null> {
       })
       .returning();
 
-    return upserted as UserData;
+    return toUserData(upserted);
   } catch (error) {
     if (isNextInternalError(error)) throw error;
     console.error('Error in getOrCreateUser:', error);
@@ -115,7 +156,7 @@ export async function getUser(): Promise<UserData | null> {
     const user = await db.query.users.findFirst({
       where: eq(dbUsers.clerkId, userId),
     });
-    return user as UserData | null;
+    return user ? toUserData(user) : null;
   } catch (error) {
     if (isNextInternalError(error)) throw error;
     console.error('Error in getUser:', error);
@@ -140,7 +181,7 @@ export async function updateUser(
       })
       .where(eq(dbUsers.clerkId, userId))
       .returning();
-    return updatedUser as UserData;
+    return updatedUser ? toUserData(updatedUser) : null;
   } catch (error) {
     if (isNextInternalError(error)) throw error;
     console.error('Error in updateUser:', error);

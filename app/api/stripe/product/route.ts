@@ -1,11 +1,16 @@
 import { NextResponse } from 'next/server';
 
+import { paymentsEnabled } from '@/lib/featureFlags';
 import { resolveCheckoutPrice, stripe } from '@/lib/stripe';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
+  if (!paymentsEnabled()) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
+
   try {
     const price = await resolveCheckoutPrice();
 

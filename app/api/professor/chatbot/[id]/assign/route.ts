@@ -8,6 +8,7 @@ import {
   professorEnrolledInSections,
 } from '@/lib/chatbot/access';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
+import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,6 +25,15 @@ export async function POST(
     if (!user || (user.role !== 'PROFESSOR' && user.role !== 'ADMIN')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const limited = await enforceRateLimit({
+      key: `chatbot-assign:${user.id}`,
+      limit: 40,
+      windowMs: 60_000,
+      prefix: 'rl',
+      message: 'Too many assign requests. Please wait a moment.',
+    });
+    if (limited) return limited;
 
     const { id } = await context.params;
     const bot = await getActiveChatbot(id);

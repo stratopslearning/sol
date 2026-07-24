@@ -4,6 +4,8 @@ import { getAuth } from '@clerk/nextjs/server';
 
 import { db } from '@/app/db';
 import { professorSections, users } from '@/app/db/schema';
+import { ApiError, apiErrorResponse } from '@/lib/api/errors';
+import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,46 +13,50 @@ export async function POST(
   req: NextRequest,
   context: { params: Promise<{ sectionId: string }> },
 ) {
-  const { userId } = getAuth(req);
-  if (!userId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-  const { sectionId } = await context.params;
+  try {
+    const { userId } = getAuth(req);
+    if (!userId) throw ApiError.unauthorized();
+    const { sectionId } = await context.params;
 
-  const user = await db.query.users.findFirst({
-    where: eq(users.clerkId, userId),
-  });
-  if (!user) {
-    return NextResponse.json({ error: 'User not found' }, { status: 401 });
-  }
+    const user = await db.query.users.findFirst({
+      where: eq(users.clerkId, userId),
+    });
+    if (!user) throw ApiError.unauthorized('User not found');
 
-  // Only allow professors (or admins) to use this endpoint.
-  if (user.role !== 'PROFESSOR' && user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+    if (user.role !== 'PROFESSOR' && user.role !== 'ADMIN') {
+      throw ApiError.forbidden();
+    }
 
-  // Look up the *caller's* enrollment in this section. The previous version
-  // searched for any professor enrolled in the section and then compared the
-  // first match to the caller — which silently returned 400 when multiple
-  // professors co-taught the section, even though the caller was enrolled.
-  const enrollment = await db.query.professorSections.findFirst({
-    where: and(
-      eq(professorSections.sectionId, sectionId),
-      eq(professorSections.professorId, user.id),
-    ),
-  });
-  if (!enrollment) {
-    return NextResponse.json({ error: 'Not enrolled in this section' }, { status: 400 });
-  }
+    const limited = await enforceRateLimit({
+      key: `professor-leave:${user.id}`,
+      limit: 20,
+      windowMs: 60_000,
+      prefix: 'rl',
+      message: 'Too many leave requests. Please wait a moment.',
+    });
+    if (limited) return limited;
 
-  await db
-    .delete(professorSections)
-    .where(
-      and(
+    const enrollment = await db.query.professorSections.findFirst({
+      where: and(
         eq(professorSections.sectionId, sectionId),
         eq(professorSections.professorId, user.id),
       ),
-    );
+    });
+    if (!enrollment) {
+      throw ApiError.badRequest('Not enrolled in this section');
+    }
 
-  return NextResponse.json({ success: true });
+    await db
+      .delete(professorSections)
+      .where(
+        and(
+          eq(professorSections.sectionId, sectionId),
+          eq(professorSections.professorId, user.id),
+        ),
+      );
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    return apiErrorResponse(error);
+  }
 }

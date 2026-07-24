@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { db } from '@/app/db';
@@ -10,9 +10,11 @@ import {
   quizzes,
 } from '@/app/db/schema';
 import { autoSubmitInProgressAttempt } from '@/lib/autoSubmitInProgressAttempt';
+import { ApiError, apiErrorResponse } from '@/lib/api/errors';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
 import { activeOnly } from '@/lib/db/filters';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
+import { isStudentEntitled } from '@/lib/featureFlags';
 import { getQuizAvailability } from '@/lib/quizAvailability';
 import { resolveAttemptSectionId } from '@/lib/resolveAttemptSection';
 import { shouldForceAutoSubmitInProgress } from '@/lib/shouldForceAutoSubmit';
@@ -33,8 +35,9 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
   const quizId = params.quizId;
   try {
     const user = await getOrCreateUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!user) throw ApiError.unauthorized();
+    if (user.role === 'STUDENT' && !isStudentEntitled(user)) {
+      throw ApiError.paymentRequired();
     }
 
     const limited = await enforceRateLimit({
@@ -49,10 +52,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
     const rawBody = await req.json().catch(() => null);
     const parseResult = startBodySchema.safeParse(rawBody);
     if (!parseResult.success) {
-      return NextResponse.json(
-        { error: 'Invalid request body', details: parseResult.error.errors },
-        { status: 400 },
-      );
+      throw ApiError.badRequest('Invalid request body', parseResult.error.errors);
     }
     const { assignmentId } = parseResult.data;
 
@@ -63,21 +63,18 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
         eq(assignments.studentId, user.id),
       ),
     });
-    if (!assignment) {
-      return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
-    }
+    if (!assignment) throw ApiError.notFound('Assignment not found');
 
     const quiz = await db.query.quizzes.findFirst({
       where: and(eq(quizzes.id, quizId), activeOnly(quizzes.deletedAt)),
     });
-    if (!quiz) {
-      return NextResponse.json({ error: 'Quiz not found' }, { status: 404 });
-    }
+    if (!quiz) throw ApiError.notFound('Quiz not found');
     if (!quiz.isActive) {
-      return NextResponse.json(
-        { error: 'This quiz is no longer available.', quizArchived: true },
-        { status: 400 },
-      );
+      throw new ApiError({
+        status: 400,
+        message: 'This quiz is no longer available.',
+        extras: { quizArchived: true },
+      });
     }
 
     const now = new Date();
@@ -126,13 +123,11 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
         quizEnded: 'This quiz has ended.',
         dueDatePassed: 'The due date for this assignment has passed.',
       } as const;
-      return NextResponse.json(
-        {
-          error: messages[availability.reason],
-          [availability.reason]: true,
-        },
-        { status: 400 },
-      );
+      throw new ApiError({
+        status: 400,
+        message: messages[availability.reason],
+        extras: { [availability.reason]: true },
+      });
     }
 
     const quizSectionLinks = await db.query.quizSections.findMany({
@@ -141,10 +136,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
     const quizSectionIds = quizSectionLinks.map((qs) => qs.sectionId);
     const sectionId = await resolveAttemptSectionId(user.id, quizSectionIds);
     if (!sectionId) {
-      return NextResponse.json(
-        { error: 'No valid section found for this quiz/assignment' },
-        { status: 400 },
-      );
+      throw ApiError.badRequest('No valid section found for this quiz/assignment');
     }
 
     if (inProgressAttempt) {
@@ -161,13 +153,11 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
             message: 'Your in-progress attempt was submitted.',
           });
         }
-        return NextResponse.json(
-          {
-            error: `Maximum attempts (${quiz.maxAttempts}) reached for this quiz. You cannot retake this quiz.`,
-            maxAttemptsReached: true,
-          },
-          { status: 400 },
-        );
+        throw new ApiError({
+          status: 400,
+          message: `Maximum attempts (${quiz.maxAttempts}) reached for this quiz. You cannot retake this quiz.`,
+          extras: { maxAttemptsReached: true },
+        });
       }
 
       const timeLimitMinutes = quiz.timeLimit ?? null;
@@ -215,27 +205,76 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
     }
 
     if (submittedAttempts.length >= quiz.maxAttempts) {
-      return NextResponse.json(
-        {
-          error: `Maximum attempts (${quiz.maxAttempts}) reached for this quiz. You cannot retake this quiz.`,
-          maxAttemptsReached: true,
-        },
-        { status: 400 },
-      );
+      throw new ApiError({
+        status: 400,
+        message: `Maximum attempts (${quiz.maxAttempts}) reached for this quiz. You cannot retake this quiz.`,
+        extras: { maxAttemptsReached: true },
+      });
     }
 
-    const [attempt] = await db
-      .insert(attempts)
-      .values({
-        assignmentId,
-        studentId: user.id,
-        quizId,
-        sectionId,
-        answers: {},
-        maxScore: 0,
-        startedAt: now,
-      })
-      .returning();
+    let attempt;
+    try {
+      [attempt] = await db
+        .insert(attempts)
+        .values({
+          assignmentId,
+          studentId: user.id,
+          quizId,
+          sectionId,
+          answers: {},
+          maxScore: 0,
+          startedAt: now,
+        })
+        .returning();
+    } catch (insertError) {
+      // Unique open-attempt index (0007): a concurrent start won — resume it.
+      const open = await db.query.attempts.findFirst({
+        where: and(
+          eq(attempts.assignmentId, assignmentId),
+          eq(attempts.studentId, user.id),
+          isNull(attempts.submittedAt),
+        ),
+      });
+      if (!open) {
+        console.error('Error starting quiz (insert):', insertError);
+        throw ApiError.internal('Failed to start quiz');
+      }
+
+      const startedAtDate =
+        open.startedAt instanceof Date ? open.startedAt : new Date(open.startedAt);
+      const timeLimitMinutes = quiz.timeLimit ?? null;
+      const remainingSeconds = getRemainingSeconds(
+        timeLimitMinutes,
+        startedAtDate,
+        now,
+      );
+      const savedAnswers =
+        open.answers &&
+        typeof open.answers === 'object' &&
+        !Array.isArray(open.answers)
+          ? (open.answers as Record<string, string>)
+          : {};
+
+      return NextResponse.json({
+        success: true,
+        attemptId: open.id,
+        startedAt: startedAtDate.toISOString(),
+        answers: savedAnswers,
+        timeLimitMinutes,
+        remainingSeconds: remainingSeconds ?? null,
+        timeLimitExceeded:
+          timeLimitMinutes != null &&
+          isTimeLimitExceeded(timeLimitMinutes, startedAtDate, now),
+        forceAutoSubmit: shouldForceAutoSubmitInProgress({
+          quiz,
+          assignment,
+          startedAt: startedAtDate,
+          now,
+        }).force,
+        resumed: true,
+        message: 'Resuming existing attempt',
+      });
+    }
 
     const timeLimitMinutes = quiz.timeLimit ?? null;
     const remainingSeconds = getRemainingSeconds(
@@ -257,7 +296,6 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
       message: 'Quiz started',
     });
   } catch (error) {
-    console.error('Error starting quiz:', error);
-    return NextResponse.json({ error: 'Failed to start quiz' }, { status: 500 });
+    return apiErrorResponse(error);
   }
 }

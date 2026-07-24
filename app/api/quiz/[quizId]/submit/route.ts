@@ -4,12 +4,14 @@ import { z } from 'zod';
 
 import { db } from '@/app/db';
 import { assignments } from '@/app/db/schema';
+import { ApiError, apiErrorResponse } from '@/lib/api/errors';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
 import {
   executeQuizSubmit,
   MaxAttemptsExceededError,
 } from '@/lib/executeQuizSubmit';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
+import { isStudentEntitled } from '@/lib/featureFlags';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
@@ -30,8 +32,9 @@ export async function POST(
 
   try {
     const user = await getOrCreateUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!user) throw ApiError.unauthorized();
+    if (user.role === 'STUDENT' && !isStudentEntitled(user)) {
+      throw ApiError.paymentRequired();
     }
 
     const limited = await enforceRateLimit({
@@ -46,10 +49,7 @@ export async function POST(
     const rawBody = await req.json().catch(() => null);
     const parseResult = submitBodySchema.safeParse(rawBody);
     if (!parseResult.success) {
-      return NextResponse.json(
-        { error: 'Invalid request body', details: parseResult.error.errors },
-        { status: 400 },
-      );
+      throw ApiError.badRequest('Invalid request body', parseResult.error.errors);
     }
     const { assignmentId, answers, autoSubmitted } = parseResult.data;
 
@@ -60,60 +60,71 @@ export async function POST(
         eq(assignments.studentId, user.id),
       ),
     });
-    if (!assignment) {
-      return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
-    }
+    if (!assignment) throw ApiError.notFound('Assignment not found');
 
+    // autoSubmitted is client telemetry only — never grants availability/timer bypass.
     const result = await executeQuizSubmit({
       quizId,
       assignmentId,
       studentId: user.id,
       answers,
       autoSubmitted,
-      bypassAvailability: autoSubmitted,
+      bypassAvailability: false,
     });
 
     return NextResponse.json({ success: true, ...result });
   } catch (error) {
     if (error instanceof MaxAttemptsExceededError) {
-      return NextResponse.json(
-        {
-          error: `Maximum attempts (${error.maxAttempts}) reached for this quiz. You cannot retake this quiz.`,
-          maxAttemptsReached: true,
-        },
-        { status: 400 },
+      return apiErrorResponse(
+        new ApiError({
+          status: 400,
+          message: `Maximum attempts (${error.maxAttempts}) reached for this quiz. You cannot retake this quiz.`,
+          code: 'bad_request',
+          extras: { maxAttemptsReached: true },
+        }),
       );
     }
-    if (error instanceof Error) {
+    if (error instanceof Error && !(error instanceof ApiError)) {
       if (error.message.includes('not started')) {
-        return NextResponse.json(
-          { error: error.message, quizNotStarted: true },
-          { status: 400 },
+        return apiErrorResponse(
+          new ApiError({
+            status: 400,
+            message: error.message,
+            extras: { quizNotStarted: true },
+          }),
         );
       }
       if (error.message.includes('has ended')) {
-        return NextResponse.json(
-          { error: error.message, quizEnded: true },
-          { status: 400 },
+        return apiErrorResponse(
+          new ApiError({
+            status: 400,
+            message: error.message,
+            extras: { quizEnded: true },
+          }),
         );
       }
       if (error.message.includes('due date')) {
-        return NextResponse.json(
-          { error: error.message, dueDatePassed: true },
-          { status: 400 },
+        return apiErrorResponse(
+          new ApiError({
+            status: 400,
+            message: error.message,
+            extras: { dueDatePassed: true },
+          }),
         );
       }
       if (error.message.includes('Time limit exceeded')) {
-        return NextResponse.json(
-          { error: error.message, timeLimitExceeded: true },
-          { status: 400 },
+        return apiErrorResponse(
+          new ApiError({
+            status: 400,
+            message: error.message,
+            extras: { timeLimitExceeded: true },
+          }),
         );
       }
       if (error.message === 'Quiz not found') {
-        return NextResponse.json({ error: error.message }, { status: 404 });
+        return apiErrorResponse(ApiError.notFound(error.message));
       }
     }
-    console.error('Error submitting quiz:', error);
-    return NextResponse.json({ error: 'Failed to submit quiz' }, { status: 500 });
+    return apiErrorResponse(error);
   }
 }

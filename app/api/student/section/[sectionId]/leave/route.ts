@@ -1,50 +1,58 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getOrCreateUser } from '@/lib/getOrCreateUser';
+import { and, eq } from 'drizzle-orm';
+
 import { db } from '@/app/db';
 import { studentSections } from '@/app/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { ApiError, apiErrorResponse } from '@/lib/api/errors';
+import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
+import { getOrCreateUser } from '@/lib/getOrCreateUser';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ sectionId: string }> }
+  _req: NextRequest,
+  { params }: { params: Promise<{ sectionId: string }> },
 ) {
   try {
     const { sectionId } = await params;
     const user = await getOrCreateUser();
-    
+
     if (!user || user.role !== 'STUDENT') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      throw ApiError.unauthorized();
     }
 
-    // Check if student is enrolled in this section
+    const limited = await enforceRateLimit({
+      key: `student-leave:${user.id}`,
+      limit: 20,
+      windowMs: 60_000,
+      prefix: 'rl',
+      message: 'Too many leave requests. Please wait a moment.',
+    });
+    if (limited) return limited;
+
     const enrollment = await db.query.studentSections.findFirst({
       where: and(
         eq(studentSections.sectionId, sectionId),
-        eq(studentSections.studentId, user.id)
-      )
+        eq(studentSections.studentId, user.id),
+      ),
     });
 
     if (!enrollment) {
-      return NextResponse.json({ error: 'Not enrolled in this section' }, { status: 404 });
+      throw ApiError.notFound('Not enrolled in this section');
     }
 
-    // Remove the enrollment
     await db.delete(studentSections).where(
       and(
         eq(studentSections.sectionId, sectionId),
-        eq(studentSections.studentId, user.id)
-      )
+        eq(studentSections.studentId, user.id),
+      ),
     );
 
-    return NextResponse.json({ 
-      success: true, 
-      message: 'Successfully left section'
+    return NextResponse.json({
+      success: true,
+      message: 'Successfully left section',
     });
-
   } catch (error) {
-    console.error('Leave section error:', error);
-    return NextResponse.json({ error: 'Failed to leave section' }, { status: 500 });
+    return apiErrorResponse(error);
   }
-} 
+}

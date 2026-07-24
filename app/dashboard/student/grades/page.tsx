@@ -5,14 +5,13 @@ import { attempts } from "@/app/db/schema";
 import { AppShell } from "@/components/layout/AppShell";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { withBasePath } from "@/lib/basePath";
-import { getOrCreateUser } from "@/lib/getOrCreateUser";
+import { requireStudent } from "@/lib/auth";
 import { formatDateTimeStable } from "@/lib/utils";
 
 import StudentGradesTableClient from "./StudentGradesTableClient";
 
 export default async function StudentGradesPage() {
-  const user = await getOrCreateUser();
-  if (!user) return null;
+  const user = await requireStudent();
 
   const allAttempts = await db.query.attempts.findMany({
     where: eq(attempts.studentId, user.id),

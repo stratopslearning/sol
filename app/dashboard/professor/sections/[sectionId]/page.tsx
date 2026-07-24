@@ -9,7 +9,7 @@ import { SectionDetailView } from '@/components/sections/SectionDetailView';
 import { AppShell } from '@/components/layout/AppShell';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
-import { requireAuth } from '@/lib/auth';
+import { requireAuth, getDashboardUrl } from '@/lib/auth';
 import { withBasePath } from '@/lib/basePath';
 import { loadSectionDetailData } from '@/lib/sectionDetailData';
 
@@ -26,7 +26,7 @@ export default async function SectionDetailsPage({
 
   const me = await requireAuth();
   if (me.role !== 'PROFESSOR' && me.role !== 'ADMIN') {
-    appRedirect('/unauthorized');
+    appRedirect(getDashboardUrl(me.role));
   }
 
   if (me.role !== 'ADMIN') {

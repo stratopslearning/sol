@@ -6,13 +6,12 @@ import StudentEnrollFormWrapper from "@/components/StudentEnrollFormWrapper";
 import { AppShell } from "@/components/layout/AppShell";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { withBasePath } from "@/lib/basePath";
-import { getOrCreateUser } from "@/lib/getOrCreateUser";
+import { requireStudent } from "@/lib/auth";
 
 import StudentSectionsPageContentClient from "./StudentSectionsPageContentClient";
 
 export default async function StudentSectionsPage() {
-  const user = await getOrCreateUser();
-  if (!user || user.role !== "STUDENT") return null;
+  const user = await requireStudent();
 
   const enrollments = await db.query.studentSections.findMany({
     where: eq(studentSections.studentId, user.id),

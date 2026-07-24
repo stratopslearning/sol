@@ -50,6 +50,13 @@
       "when": 1778197400000,
       "tag": "0006_chatbots",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1778197500000,
+      "tag": "0007_attempts_one_open",
+      "breakpoints": true
     }
   ]
 }

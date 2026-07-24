@@ -16,13 +16,9 @@ import {
   type GradingRequest,
 } from '@/lib/grading';
 import { getOrDeriveRubric } from '@/lib/gradingRubric';
-import { getQuizAvailability } from '@/lib/quizAvailability';
-import {
-  getElapsedMinutes,
-  isTimeLimitExceeded,
-} from '@/lib/quizTimeLimit';
 import { mergeAttemptAnswers } from '@/lib/shouldForceAutoSubmit';
 import { resolveAttemptSectionId } from '@/lib/resolveAttemptSection';
+import { assertQuizSubmitWindow } from '@/lib/quizSubmitPolicy';
 
 export class MaxAttemptsExceededError extends Error {
   constructor(public readonly maxAttempts: number) {
@@ -88,18 +84,6 @@ export async function executeQuizSubmit(
   }
 
   const now = new Date();
-  if (!bypassAvailability && !autoSubmitted) {
-    const availability = getQuizAvailability(quiz, assignment, now);
-    if (!availability.allowed) {
-      throw new Error(
-        availability.reason === 'quizNotStarted'
-          ? 'This quiz has not started yet.'
-          : availability.reason === 'quizEnded'
-            ? 'This quiz has ended. Submissions are no longer accepted.'
-            : 'The due date for this assignment has passed. Submissions are no longer accepted.',
-      );
-    }
-  }
 
   const quizSectionLinks = await db.query.quizSections.findMany({
     where: eq(quizSections.quizId, quizId),
@@ -124,41 +108,25 @@ export async function executeQuizSubmit(
     throw new MaxAttemptsExceededError(quiz.maxAttempts);
   }
 
-  const submitTime = new Date();
+  const submitTime = now;
   const attemptStartTime: Date = inProgressAttempt
     ? inProgressAttempt.startedAt instanceof Date
       ? inProgressAttempt.startedAt
       : new Date(inProgressAttempt.startedAt)
     : submitTime;
 
+  // Only server-trusted bypassAvailability may skip due/end/timer windows.
+  // Client autoSubmitted is telemetry only and must never unlock late submits.
+  assertQuizSubmitWindow({
+    bypassAvailability,
+    quiz,
+    assignment,
+    attemptStartTime,
+    submitTime,
+  });
+
   const savedAnswers = inProgressAttempt?.answers ?? {};
   const answers = mergeAttemptAnswers(savedAnswers, incomingAnswers);
-
-  if (
-    quiz.timeLimit &&
-    isTimeLimitExceeded(quiz.timeLimit, attemptStartTime, submitTime) &&
-    !autoSubmitted &&
-    !bypassAvailability
-  ) {
-    const timeElapsedMinutes = getElapsedMinutes(attemptStartTime, submitTime);
-    throw new Error(
-      `Time limit exceeded. The quiz has a ${quiz.timeLimit} minute time limit, but ${Math.ceil(timeElapsedMinutes)} minutes have elapsed.`,
-    );
-  }
-
-  if (
-    quiz.timeLimit &&
-    isTimeLimitExceeded(quiz.timeLimit, attemptStartTime, submitTime) &&
-    (autoSubmitted || bypassAvailability)
-  ) {
-    console.warn('[executeQuizSubmit] accepting auto-submit past grace', {
-      quizId,
-      assignmentId,
-      studentId,
-      autoSubmitted,
-      bypassAvailability,
-    });
-  }
 
   const quizQuestions = await db.query.questions.findMany({
     where: eq(questions.quizId, quizId),

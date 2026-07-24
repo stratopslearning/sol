@@ -1,19 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { and, eq } from 'drizzle-orm';
+
 import { db } from '@/app/db';
 import { attempts, assignments, quizzes } from '@/app/db/schema';
-import { eq, and } from 'drizzle-orm';
+import {
+  professorCanAccessQuiz,
+  redactAttemptFeedbackForViewer,
+} from '@/lib/quizAccess';
+import { isStudentEntitled } from '@/lib/featureFlags';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
+import { shouldHideFeedbackForStudent } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(
   req: NextRequest,
-  context: { params: Promise<{ quizId: string }> }
+  context: { params: Promise<{ quizId: string }> },
 ) {
   try {
     const user = await getOrCreateUser();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (user.role === 'STUDENT' && !isStudentEntitled(user)) {
+      return NextResponse.json({ error: 'Payment required' }, { status: 402 });
     }
 
     const params = await context.params;
@@ -25,8 +35,6 @@ export async function GET(
       return NextResponse.json({ error: 'Assignment ID is required' }, { status: 400 });
     }
 
-    // Authorization: the assignment must belong to the caller (or caller must be
-    // a privileged role). This prevents IDOR where one student reads another's attempts.
     const assignment = await db.query.assignments.findFirst({
       where: and(
         eq(assignments.id, assignmentId),
@@ -38,17 +46,23 @@ export async function GET(
     }
 
     const isOwner = assignment.studentId === user.id;
-    const isPrivileged = user.role === 'ADMIN' || user.role === 'PROFESSOR';
-    if (!isOwner && !isPrivileged) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!isOwner) {
+      if (user.role === 'ADMIN') {
+        // ok
+      } else if (user.role === 'PROFESSOR') {
+        const allowed = await professorCanAccessQuiz(user, quizId);
+        if (!allowed) {
+          return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
+      } else {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
     }
 
-    // Get all attempts for this assignment (already scoped by assignmentId, which
-    // we've verified above).
     const allAttempts = await db.query.attempts.findMany({
       where: and(
         eq(attempts.assignmentId, assignmentId),
-        eq(attempts.quizId, quizId)
+        eq(attempts.quizId, quizId),
       ),
       orderBy: (attempts, { desc }) => [desc(attempts.submittedAt)],
     });
@@ -72,39 +86,49 @@ export async function GET(
       });
     }
 
-    // Calculate best score from submitted attempts only
-    const bestScore = Math.max(...submittedAttempts.map((a) => a.score || 0));
-    const candidateMaxScore = submittedAttempts.find((a) => a.maxScore)?.maxScore || 0;
-    const bestPercentage = candidateMaxScore > 0
-      ? Math.round((bestScore / candidateMaxScore) * 100)
-      : 0;
+    const quizForHide = quiz
+      ? { endDate: quiz.endDate, description: quiz.description }
+      : { endDate: null, description: null };
+    const hideFeedback =
+      isOwner && shouldHideFeedbackForStudent(quizForHide, user.role);
 
-    // Format attempts with attempt numbers (submitted only)
-    const formattedAttempts = submittedAttempts.map((attempt, index) => ({
-      id: attempt.id,
-      score: attempt.score,
-      maxScore: attempt.maxScore,
-      percentage: attempt.percentage,
-      submittedAt: attempt.submittedAt,
-      attemptNumber: submittedAttempts.length - index,
-      gptFeedback: attempt.gptFeedback,
-    }));
+    const bestScoreRaw = Math.max(...submittedAttempts.map((a) => a.score || 0));
+    const candidateMaxScore =
+      submittedAttempts.find((a) => a.maxScore)?.maxScore || 0;
+    const bestPercentageRaw =
+      candidateMaxScore > 0
+        ? Math.round((bestScoreRaw / candidateMaxScore) * 100)
+        : 0;
+
+    const formattedAttempts = submittedAttempts.map((attempt, index) => {
+      const base = {
+        id: attempt.id,
+        score: attempt.score,
+        maxScore: attempt.maxScore,
+        percentage: attempt.percentage,
+        submittedAt: attempt.submittedAt,
+        attemptNumber: submittedAttempts.length - index,
+        gptFeedback: attempt.gptFeedback,
+      };
+      return hideFeedback
+        ? redactAttemptFeedbackForViewer(base, quizForHide, user.role)
+        : base;
+    });
 
     return NextResponse.json({
       attempts: formattedAttempts,
-      bestScore,
-      bestPercentage,
+      bestScore: hideFeedback ? 0 : bestScoreRaw,
+      bestPercentage: hideFeedback ? 0 : bestPercentageRaw,
       totalAttempts: submittedAttempts.length,
       maxAttempts,
       attemptsRemaining: maxAttempts - submittedAttempts.length,
       inProgress: allAttempts.some((a) => a.submittedAt == null),
     });
-
   } catch (error) {
     console.error('Error fetching attempts:', error);
     return NextResponse.json(
       { error: 'Failed to fetch attempts' },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

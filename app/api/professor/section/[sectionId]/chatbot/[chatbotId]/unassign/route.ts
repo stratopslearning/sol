@@ -4,6 +4,7 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '@/app/db';
 import { chatbotSections, professorSections } from '@/app/db/schema';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
+import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,6 +16,15 @@ export async function POST(
   if (!user || (user.role !== 'PROFESSOR' && user.role !== 'ADMIN')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  const limited = await enforceRateLimit({
+    key: `chatbot-unassign:${user.id}`,
+    limit: 60,
+    windowMs: 60_000,
+    prefix: 'rl',
+    message: 'Too many unassign requests. Please wait a moment.',
+  });
+  if (limited) return limited;
 
   const { sectionId, chatbotId } = await context.params;
 

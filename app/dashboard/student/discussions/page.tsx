@@ -11,11 +11,10 @@ import StudentDiscussionsTableClient from './StudentDiscussionsTableClient';
 import { AppShell } from '@/components/layout/AppShell';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { withBasePath } from '@/lib/basePath';
-import { getOrCreateUser } from '@/lib/getOrCreateUser';
+import { requireStudent } from '@/lib/auth';
 
 export default async function StudentDiscussionsPage() {
-  const user = await getOrCreateUser();
-  if (!user || user.role !== 'STUDENT') return null;
+  const user = await requireStudent();
 
   const enrollments = await db.query.studentSections.findMany({
     where: and(

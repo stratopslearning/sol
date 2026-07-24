@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { db } from '@/app/db';
 import { professorSections, questions, quizSections, quizzes } from '@/app/db/schema';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
+import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,6 +34,15 @@ export async function POST(req: NextRequest) {
     if (!user || user.role !== 'PROFESSOR') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const limited = await enforceRateLimit({
+      key: `quiz-create:${user.id}`,
+      limit: 30,
+      windowMs: 60_000,
+      prefix: 'rl',
+      message: 'Too many quiz create requests. Please wait a moment.',
+    });
+    if (limited) return limited;
 
     const body = await req.json();
     const validatedData = createQuizSchema.parse(body);
