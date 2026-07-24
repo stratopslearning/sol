@@ -3,6 +3,7 @@ import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import { db } from '@/app/db';
 import {
   attempts,
+  chatbotSections,
   professorSections,
   quizSections,
   sections,
@@ -31,6 +32,13 @@ export type SectionQuizRow = {
   submissionCount: number;
 };
 
+export type SectionDiscussionRow = {
+  id: string;
+  title: string;
+  personaName: string;
+  relatedQuizTitle: string | null;
+};
+
 export type SectionDetailData = {
   section: {
     id: string;
@@ -51,6 +59,7 @@ export type SectionDetailData = {
   activeLearnerCount: number;
   activeFacultyCount: number;
   quizzes: SectionQuizRow[];
+  discussions: SectionDiscussionRow[];
 };
 
 export async function loadSectionDetailData(
@@ -106,6 +115,24 @@ export async function loadSectionDetailData(
       submissionCountByQuizId[row.quizId] = row.count;
     }
   }
+
+  const discussionAssignments = await db.query.chatbotSections.findMany({
+    where: eq(chatbotSections.sectionId, sectionId),
+    with: { chatbot: { with: { relatedQuiz: true } } },
+  });
+
+  const sectionDiscussions: SectionDiscussionRow[] = discussionAssignments
+    .map((da) => da.chatbot)
+    .filter(
+      (bot): bot is NonNullable<(typeof discussionAssignments)[0]['chatbot']> =>
+        bot != null && bot.deletedAt == null && bot.isActive && !bot.isTemplate,
+    )
+    .map((bot) => ({
+      id: bot.id,
+      title: bot.title,
+      personaName: bot.personaName,
+      relatedQuizTitle: bot.relatedQuiz?.title ?? null,
+    }));
 
   const learnerEnrollments: SectionEnrollmentRow[] = studentEnrollments
     .map((e) => ({
@@ -165,5 +192,6 @@ export async function loadSectionDetailData(
       endDate: quiz.endDate,
       submissionCount: submissionCountByQuizId[quiz.id] ?? 0,
     })),
+    discussions: sectionDiscussions,
   };
 }

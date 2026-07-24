@@ -26,6 +26,7 @@ type SectionDetailViewProps = {
   sectionId: string;
   enrollmentActions?: ReactNode;
   quizRowActions?: (quizId: string) => ReactNode;
+  discussionRowActions?: (chatbotId: string) => ReactNode;
   headerActions?: ReactNode;
 };
 
@@ -35,9 +36,11 @@ export function SectionDetailView({
   sectionId,
   enrollmentActions,
   quizRowActions,
+  discussionRowActions,
   headerActions,
 }: SectionDetailViewProps) {
-  const { section, learnerEnrollments, facultyEnrollments, quizzes } = data;
+  const { section, learnerEnrollments, facultyEnrollments, quizzes, discussions } =
+    data;
   const gradebookBase =
     role === 'admin'
       ? `/dashboard/admin/sections/${sectionId}/gradebook`
@@ -209,6 +212,65 @@ export function SectionDetailView({
                             </Link>
                           </Button>
                           {quizRowActions?.(quiz.id)}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className="mt-16">
+        <SectionHeading
+          eyebrow="Discussions"
+          title="Assigned discussions"
+          description={`${discussions.length} ${
+            discussions.length === 1 ? 'discussion' : 'discussions'
+          }`}
+        />
+        <div className="mt-6">
+          {discussions.length === 0 ? (
+            <EmptyState
+              eyebrow="Empty"
+              title="No discussions assigned."
+              description="Assign a discussion from the Discussions page."
+            />
+          ) : (
+            <div className="paper paper-shadow overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Discussion</TableHead>
+                    <TableHead>Persona</TableHead>
+                    <TableHead>Linked quiz</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {discussions.map((d) => (
+                    <TableRow key={d.id}>
+                      <TableCell className="font-medium text-ink">
+                        {d.title}
+                      </TableCell>
+                      <TableCell>{d.personaName}</TableCell>
+                      <TableCell className="text-ink-muted">
+                        {d.relatedQuizTitle ?? '—'}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="inline-flex items-center gap-2">
+                          {role === 'professor' ? (
+                            <Button asChild variant="ghost" size="sm">
+                              <Link
+                                href={`/dashboard/professor/discussions/${d.id}`}
+                              >
+                                Sessions
+                              </Link>
+                            </Button>
+                          ) : null}
+                          {discussionRowActions?.(d.id)}
                         </div>
                       </TableCell>
                     </TableRow>
