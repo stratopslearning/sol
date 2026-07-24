@@ -1,64 +1,58 @@
-import type { ComponentProps } from "react";
-import type { ColorPanels } from "@paper-design/shaders-react";
+import type { MeshGradientProps } from "@paper-design/shaders-react";
 
-type ShaderProps = Partial<ComponentProps<typeof ColorPanels>>;
+type MeshProps = Partial<MeshGradientProps>;
 
-/** SOL brand / accent palette for Paper Design ColorPanels shader */
-const SOL_SHADER_COLORS = [
-  "#3a6b58", // brand — forest green
-  "#c97a45", // accent — terracotta
-  "#5f9a82", // mid green
-  "#e8b07a", // warm sand
+/** Soft paper-tinted mesh — forest, terracotta, sand (editorial, not neon). */
+const MESH_LIGHT = [
+  "#f7f4ef", // paper
+  "#3a6b58", // brand
+  "#c97a45", // accent
+  "#8fafa0", // misted green
+  "#e8d5c0", // warm sand
 ] as const;
 
-const SOL_SHADER_COLORS_DARK = [
-  "#6ecfaa", // brand — lifted for dark paper
+const MESH_DARK = [
+  "#1c1a18", // dark paper
+  "#6ecfaa", // brand lifted
   "#e89555", // accent
-  "#4a8f72",
-  "#f0c090",
+  "#4a8f72", // mid green
+  "#3a342e", // warm charcoal
 ] as const;
 
-const sharedShaderSettings: ShaderProps = {
-  density: 4.8,
-  angle1: 0.68,
-  angle2: 0.28,
-  length: 1.13,
-  edges: true,
-  blur: 0.28,
-  fadeIn: 0.85,
-  fadeOut: 0.32,
-  gradient: 0.52,
-  speed: 3.2,
-  scale: 0.94,
-  rotation: 180,
-};
-
-export function getSolShaderProps(options?: {
+export function getSolMeshHeroProps(options?: {
   reducedMotion?: boolean;
   dark?: boolean;
-}): { desktop: ShaderProps; mobile: ShaderProps } {
-  const colors = options?.dark
-    ? [...SOL_SHADER_COLORS_DARK]
-    : [...SOL_SHADER_COLORS];
-
-  const speed = options?.reducedMotion ? 0 : sharedShaderSettings.speed;
-
-  const base: ShaderProps = {
-    ...sharedShaderSettings,
-    colors,
-    colorBack: options?.dark ? "#1a191800" : "#ffffff00",
-    speed,
-  };
+}): {
+  mesh: MeshProps;
+  meshAccent: MeshProps;
+} {
+  const dark = Boolean(options?.dark);
+  const speed = options?.reducedMotion ? 0 : 0.22;
+  const accentSpeed = options?.reducedMotion ? 0 : 0.14;
 
   return {
-    desktop: {
-      ...base,
-      width: 1280,
-      height: 720,
+    mesh: {
+      colors: [...(dark ? MESH_DARK : MESH_LIGHT)],
+      speed,
+      distortion: 0.55,
+      swirl: 0.18,
+      grainMixer: 0.12,
+      grainOverlay: 0.08,
+      scale: 1,
+      fit: "cover",
     },
-    mobile: {
-      ...base,
-      style: { height: "100%", width: "100%" },
+    meshAccent: {
+      colors: dark
+        ? ["#1c1a18", "#6ecfaa", "#e89555", "#2a2826"]
+        : ["#f7f4ef", "#ffffff", "#3a6b58", "#c97a45"],
+      speed: accentSpeed,
+      distortion: 0.35,
+      swirl: 0.28,
+      grainMixer: 0.05,
+      grainOverlay: 0,
+      scale: 1.05,
+      fit: "cover",
+      style: { opacity: dark ? 0.35 : 0.45 },
     },
   };
 }

@@ -82,9 +82,6 @@ export function Navbar() {
               <a href="#approach" className="nav-beam text-ink-muted">
                 Approach
               </a>
-              <a href="#access" className="nav-beam text-ink-muted">
-                Access
-              </a>
             </nav>
 
             <div className="hidden md:flex items-center gap-3">
@@ -164,13 +161,6 @@ export function Navbar() {
                 onClick={() => setIsMobileMenuOpen(false)}
               >
                 Approach
-              </a>
-              <a
-                href="#access"
-                className="nav-beam text-ink py-2 text-sm"
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                Access
               </a>
               <div className="hairline" />
               {isSignedIn ? (

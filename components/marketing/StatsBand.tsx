@@ -1,6 +1,7 @@
 "use client";
 
 import type { MarketingStats } from "@/lib/marketingStats";
+import { cn } from "@/lib/utils";
 
 const numberFormat = new Intl.NumberFormat("en-US");
 
@@ -12,15 +13,24 @@ function StatChip({
   label: string;
 }) {
   return (
-    <span className="inline-flex shrink-0 items-baseline gap-2 px-8 md:px-12">
+    <span className="inline-flex shrink-0 items-baseline gap-2.5 px-6 md:px-10">
       <span
-        className="font-display tnum text-ink text-lg md:text-xl"
-        style={{ fontVariationSettings: '"opsz" 48, "SOFT" 20' }}
+        className="font-display tnum text-brand text-lg md:text-xl"
+        style={{ fontVariationSettings: '"opsz" 48, "SOFT" 25' }}
       >
         {numberFormat.format(value)}
       </span>
-      <span className="eyebrow whitespace-nowrap">{label}</span>
+      <span className="eyebrow whitespace-nowrap text-ink-muted">{label}</span>
     </span>
+  );
+}
+
+function Separator() {
+  return (
+    <span
+      aria-hidden
+      className="mx-1 inline-flex h-1 w-1 shrink-0 rounded-full bg-brand/35 md:mx-2"
+    />
   );
 }
 
@@ -33,22 +43,38 @@ export function StatsBand({ stats }: { stats: MarketingStats }) {
   ] as const;
 
   const renderTrack = (trackId: string) =>
-    items.map((item) => (
+    items.flatMap((item, index) => [
       <StatChip
         key={`${trackId}-${item.label}`}
         value={item.value}
         label={item.label}
-      />
-    ));
+      />,
+      <Separator key={`${trackId}-sep-${index}`} />,
+    ]);
 
   return (
-    <section aria-label="Platform statistics" className="bg-paper overflow-hidden">
-      <div className="marquee-fade py-6 md:py-7" aria-hidden>
+    <section
+      aria-label="Platform statistics"
+      className={cn(
+        "relative -mt-px overflow-hidden",
+        "border-y border-rule/70",
+        "bg-[color-mix(in_oklch,var(--paper)_78%,transparent)]",
+        "backdrop-blur-md",
+      )}
+    >
+      {/* Soft mesh bleed from the hero above */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 -top-16 h-16 bg-[linear-gradient(to_bottom,transparent,color-mix(in_oklch,var(--paper)_55%,transparent))]"
+      />
+
+      <div className="marquee-fade relative py-5 md:py-6" aria-hidden>
         <div className="marquee-track">
           {renderTrack("a")}
           {renderTrack("b")}
         </div>
       </div>
+
       <dl className="sr-only">
         {items.map((item) => (
           <div key={item.label}>

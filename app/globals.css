@@ -507,23 +507,28 @@
 
 .marquee-track {
   display: flex;
+  align-items: center;
   width: max-content;
-  animation: marquee-scroll 48s linear infinite;
+  animation: marquee-scroll 52s linear infinite;
+}
+
+.marquee-fade:hover .marquee-track {
+  animation-play-state: paused;
 }
 
 .marquee-fade {
   mask-image: linear-gradient(
     to right,
     transparent 0%,
-    black 8%,
-    black 92%,
+    black 6%,
+    black 94%,
     transparent 100%
   );
   -webkit-mask-image: linear-gradient(
     to right,
     transparent 0%,
-    black 8%,
-    black 92%,
+    black 6%,
+    black 94%,
     transparent 100%
   );
 }

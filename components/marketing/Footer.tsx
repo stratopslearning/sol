@@ -22,7 +22,6 @@ const footerLinks: FooterSection[] = [
     links: [
       { title: "Capabilities", href: "#capabilities" },
       { title: "Approach", href: "#approach" },
-      { title: "Access", href: "#access" },
     ],
   },
   {
@@ -39,7 +38,6 @@ export function Footer() {
 
   return (
     <footer
-      id="access"
       className="relative w-full overflow-hidden border-t border-rule bg-paper"
     >
       <div
