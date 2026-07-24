@@ -140,15 +140,7 @@ export function Hero() {
 
       <div className="relative z-10 mx-auto flex min-h-[100svh] max-w-[1200px] flex-col justify-end px-4 pb-16 pt-28 md:px-8 md:pb-20 md:pt-32 lg:pb-24">
         <div className="max-w-2xl">
-          <motion.p
-            className="eyebrow mb-5 text-brand"
-            initial={motionOk ? { opacity: 0, y: 12 } : false}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-          >
-            SOL Learning
-          </motion.p>
-
+          
           <h1
             data-hero="headline"
             className="font-display text-ink"
@@ -171,14 +163,6 @@ export function Hero() {
             </span>
           </h1>
 
-          <motion.p
-            className="mt-6 max-w-[56ch] text-base leading-relaxed text-ink-muted md:text-lg"
-            initial={motionOk ? { opacity: 0, y: 14 } : false}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.55, delay: 0.35 }}
-          >
-            The quiz is yours. The grading isn&apos;t.
-          </motion.p>
 
           <motion.div
             className="mt-8 flex flex-col items-start gap-3 sm:flex-row sm:items-center"
