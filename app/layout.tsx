@@ -27,12 +27,29 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000",
+  ),
   title: {
     default: "SOL",
     template: "%s · SOL",
   },
   description:
     "Create quizzes, assign them to sections, and let AI grade short and long answers with reasoning you can review. Built for professors.",
+  openGraph: {
+    title: "SOL",
+    description:
+      "Less time grading, more time teaching. AI-graded quizzes with reasoning faculty can review.",
+    siteName: "SOL",
+    type: "website",
+    locale: "en_US",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "SOL",
+    description:
+      "Less time grading, more time teaching. AI-graded quizzes with reasoning faculty can review.",
+  },
 };
 
 export default async function RootLayout({
