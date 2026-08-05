@@ -124,10 +124,13 @@ export async function streamChatbotReply(opts: {
       stream: true,
     } as never);
 
+    // `as never` above keeps create() loosely typed; stream:true yields chunks.
+    const stream = completion as unknown as AsyncIterable<{
+      choices?: Array<{ delta?: { content?: string | null } }>;
+    }>;
+
     async function* deltas(): AsyncIterable<string> {
-      for await (const chunk of completion as AsyncIterable<{
-        choices?: Array<{ delta?: { content?: string | null } }>;
-      }>) {
+      for await (const chunk of stream) {
         const piece = chunk.choices?.[0]?.delta?.content;
         if (piece) yield piece;
       }
