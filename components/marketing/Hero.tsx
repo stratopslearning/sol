@@ -115,7 +115,7 @@ export function Hero() {
   return (
     <section
       ref={rootRef}
-      aria-label="SOL. Quiz platform with AI grading for subjective answers."
+      aria-label="SOL. Coursework platform for faculty and students."
       className="relative isolate min-h-[100svh] overflow-hidden bg-paper"
     >
       {/* Full-bleed mesh — dominant visual plane */}
@@ -151,7 +151,7 @@ export function Hero() {
               fontVariationSettings: '"opsz" 144, "SOFT" 40',
             }}
           >
-            Less time grading,
+            Coursework for everyone
             <br />
             <span
               className="text-brand"
@@ -159,7 +159,7 @@ export function Hero() {
                 fontVariationSettings: '"opsz" 144, "SOFT" 60',
               }}
             >
-              more time teaching.
+              at the table.
             </span>
           </h1>
 

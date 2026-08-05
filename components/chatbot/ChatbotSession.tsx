@@ -56,6 +56,7 @@ export function ChatbotSession({
 }) {
   const router = useRouter();
   const [sending, setSending] = useState(false);
+  const [streaming, setStreaming] = useState(false);
   const [completing, setCompleting] = useState(false);
   const [sessionId] = useState(initial.session.id);
   const [messages, setMessages] = useState<Message[]>(
@@ -79,8 +80,8 @@ export function ChatbotSession({
   }, [scrollChatToBottom]);
 
   useEffect(() => {
-    scrollChatToBottom(sending ? "auto" : "smooth");
-  }, [messages, sending, scrollChatToBottom]);
+    scrollChatToBottom(sending || streaming ? "auto" : "smooth");
+  }, [messages, sending, streaming, scrollChatToBottom]);
 
   const turnCount = useMemo(
     () => messages.filter((m) => m.role === "user").length,
@@ -89,55 +90,150 @@ export function ChatbotSession({
 
   async function sendMessage() {
     const text = input.trim();
-    if (!text || !sessionId || sending || completed) return;
+    if (!text || !sessionId || sending || streaming || completed) return;
 
-    const optimistic: Message = {
+    const optimisticUser: Message = {
       role: "user",
       content: text,
       at: new Date().toISOString(),
     };
-
-    const rollbackOptimistic = (prev: Message[]) => {
-      const idx = [...prev]
-        .map((m, i) => ({ m, i }))
-        .reverse()
-        .find(
-          ({ m }) =>
-            m.role === "user" &&
-            m.content === text &&
-            m.at === optimistic.at,
-        )?.i;
-      if (idx == null) return prev;
-      return prev.filter((_, i) => i !== idx);
+    const assistantPlaceholder: Message = {
+      role: "assistant",
+      content: "",
+      at: new Date().toISOString(),
     };
 
     setSending(true);
+    setStreaming(false);
     setInput("");
-    setMessages((prev) => [...prev, optimistic]);
-    // Jump immediately so the optimistic message is in view before the reply.
+    setMessages((prev) => [...prev, optimisticUser, assistantPlaceholder]);
     requestAnimationFrame(() => scrollChatToBottom("auto"));
+
+    const rollback = () => {
+      setMessages((prev) => {
+        // Drop trailing empty assistant + matching optimistic user if present.
+        let next = [...prev];
+        if (
+          next.length >= 1 &&
+          next[next.length - 1]?.role === "assistant" &&
+          next[next.length - 1]?.content === ""
+        ) {
+          next = next.slice(0, -1);
+        }
+        const idx = [...next]
+          .map((m, i) => ({ m, i }))
+          .reverse()
+          .find(
+            ({ m }) =>
+              m.role === "user" &&
+              m.content === text &&
+              m.at === optimisticUser.at,
+          )?.i;
+        if (idx != null) next = next.filter((_, i) => i !== idx);
+        return next;
+      });
+      setInput(text);
+    };
 
     try {
       const res = await fetch(apiUrl(`/api/chatbot/${chatbotId}/message`), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "text/event-stream",
+        },
         body: JSON.stringify({ sessionId, message: text }),
       });
-      const data = await res.json();
+
       if (!res.ok) {
-        toast.error(data.error || "Failed to send");
-        setMessages(rollbackOptimistic);
-        setInput(text);
+        let errorMsg = "Failed to send";
+        try {
+          const data = await res.json();
+          errorMsg = data.error || errorMsg;
+        } catch {
+          /* ignore */
+        }
+        toast.error(errorMsg);
+        rollback();
         return;
       }
-      setMessages(data.messages);
-      textareaRef.current?.focus();
+
+      if (!res.body) {
+        toast.error("Failed to send");
+        rollback();
+        return;
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let sawToken = false;
+      let finished = false;
+
+      while (!finished) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop() ?? "";
+
+        for (const part of parts) {
+          const line = part
+            .split("\n")
+            .find((l) => l.startsWith("data: "));
+          if (!line) continue;
+          let event: {
+            type: string;
+            text?: string;
+            message?: string;
+            messages?: Message[];
+          };
+          try {
+            event = JSON.parse(line.slice(6));
+          } catch {
+            continue;
+          }
+
+          if (event.type === "token" && typeof event.text === "string") {
+            if (!sawToken) {
+              sawToken = true;
+              setStreaming(true);
+              setSending(false);
+            }
+            setMessages((prev) => {
+              const next = [...prev];
+              const last = next[next.length - 1];
+              if (last?.role === "assistant") {
+                next[next.length - 1] = {
+                  ...last,
+                  content: last.content + event.text!,
+                };
+              }
+              return next;
+            });
+          } else if (event.type === "done" && Array.isArray(event.messages)) {
+            setMessages(event.messages);
+            finished = true;
+            textareaRef.current?.focus();
+          } else if (event.type === "error") {
+            toast.error(event.message || "Failed to send");
+            rollback();
+            finished = true;
+          }
+        }
+      }
+
+      if (!finished && !sawToken) {
+        toast.error("Failed to send");
+        rollback();
+      }
     } catch {
       toast.error("Failed to send");
-      setMessages(rollbackOptimistic);
-      setInput(text);
+      rollback();
     } finally {
       setSending(false);
+      setStreaming(false);
     }
   }
 
@@ -272,7 +368,9 @@ export function ChatbotSession({
         {!completed ? (
           <Button
             onClick={() => void completeDiscussion()}
-            disabled={completing || messages.length === 0}
+            disabled={
+              completing || messages.length === 0 || sending || streaming
+            }
           >
             <CheckCircle2 className="h-4 w-4 mr-2" />
             {completing ? "Completing…" : "Complete discussion"}
@@ -385,24 +483,31 @@ export function ChatbotSession({
                 >
                   {isUser ? "You" : chatbot.personaName}
                 </p>
-                {m.content}
+                {!m.content &&
+                !isUser &&
+                i === messages.length - 1 &&
+                (sending || streaming) ? (
+                  <span className="inline-flex gap-1 py-0.5" aria-label="Thinking">
+                    <span className="h-1.5 w-1.5 rounded-full bg-ink-faint animate-bounce [animation-delay:0ms]" />
+                    <span className="h-1.5 w-1.5 rounded-full bg-ink-faint animate-bounce [animation-delay:150ms]" />
+                    <span className="h-1.5 w-1.5 rounded-full bg-ink-faint animate-bounce [animation-delay:300ms]" />
+                  </span>
+                ) : (
+                  m.content
+                )}
+                {streaming &&
+                i === messages.length - 1 &&
+                m.role === "assistant" &&
+                m.content ? (
+                  <span
+                    className="inline-block w-[0.4em] h-[1.05em] ml-0.5 align-[-0.15em] bg-brand/70 animate-pulse"
+                    aria-hidden
+                  />
+                ) : null}
               </div>
             </div>
           );
         })}
-
-        {sending ? (
-          <div className="flex gap-3">
-            <div className="shrink-0 h-8 w-8 rounded-full bg-brand-soft border border-brand/15" />
-            <div className="rounded-sm border border-rule bg-paper px-3.5 py-3 text-sm text-ink-muted">
-              <span className="inline-flex gap-1">
-                <span className="h-1.5 w-1.5 rounded-full bg-ink-faint animate-bounce [animation-delay:0ms]" />
-                <span className="h-1.5 w-1.5 rounded-full bg-ink-faint animate-bounce [animation-delay:150ms]" />
-                <span className="h-1.5 w-1.5 rounded-full bg-ink-faint animate-bounce [animation-delay:300ms]" />
-              </span>
-            </div>
-          </div>
-        ) : null}
       </div>
 
       <footer className="shrink-0 border-t border-rule bg-paper p-3 sm:p-4">
@@ -416,7 +521,7 @@ export function ChatbotSession({
                 ? "This discussion is complete."
                 : "Write a thoughtful response… (Enter to send, Shift+Enter for a new line)"
             }
-            disabled={completed || sending}
+            disabled={completed || sending || streaming}
             className="min-h-[88px] max-h-40 resize-y bg-surface"
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
@@ -445,14 +550,14 @@ export function ChatbotSession({
                   variant="outline"
                   className="lg:hidden"
                   onClick={() => void completeDiscussion()}
-                  disabled={completing || messages.length === 0}
+                  disabled={completing || messages.length === 0 || sending || streaming}
                 >
                   Complete
                 </Button>
               ) : null}
               <Button
                 onClick={() => void sendMessage()}
-                disabled={completed || sending || !input.trim()}
+                disabled={completed || sending || streaming || !input.trim()}
               >
                 <Send className="h-4 w-4 mr-2" />
                 Send

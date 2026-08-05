@@ -4,7 +4,7 @@ export {
   MAX_SESSION_TURNS,
   MAX_USER_MESSAGE_CHARS,
 } from '@/lib/chatbot/constants';
-export { generateChatbotReply } from '@/lib/chatbot/respond';
+export { generateChatbotReply, streamChatbotReply } from '@/lib/chatbot/respond';
 export {
   assembleSystemPrompt,
   buildSafeQuizContext,

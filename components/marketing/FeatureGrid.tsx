@@ -11,44 +11,44 @@ const CAPABILITIES = [
   {
     n: "01",
     icon: ClipboardList,
-    title: "Quizzes you design",
+    title: "Quizzes that fit the course",
     body:
-      "Write multiple choice, short answer, and long answer questions the way you would on paper. Your rubric, your wording, your standards.",
+      "Multiple choice, short answer, and long answer — written to the course’s own wording and standards, not a generic template.",
   },
   {
     n: "02",
     icon: MessageSquareText,
-    title: "Subjective answers, graded",
+    title: "Subjective work, scored",
     body:
-      "The questions that usually eat your weekend get scored automatically. Short responses and essays are handled by AI tuned for academic answers.",
+      "Short responses and essays get careful first-pass scoring so feedback can come back while the material is still fresh.",
   },
   {
     n: "03",
     icon: Sparkles,
-    title: "See why it scored that way",
+    title: "Feedback you can see",
     body:
-      "Every subjective grade comes with reasoning you can read, challenge, and override. You stay the grader of record. The model just does the first pass.",
+      "Every subjective score includes reasoning. Faculty can review or adjust; students get clarity on how work was evaluated.",
   },
   {
     n: "04",
     icon: Users,
     title: "Sections and rosters",
     body:
-      "Assign quizzes by section, run a seminar or a lecture hall, and keep student work scoped to the right cohort.",
+      "Work stays scoped to the right cohort — seminars, lecture halls, and multi-section courses without mixing streams.",
   },
   {
     n: "05",
     icon: CheckSquare,
-    title: "Gradebook in one place",
+    title: "Progress in one place",
     body:
-      "Best scores per student, per quiz, per section. Spot who is struggling before the midterm tells you.",
+      "Attempts, scores, and section views live together so everyone can see where things stand without chasing spreadsheets.",
   },
   {
     n: "06",
     icon: ScrollText,
     title: "Export when you need it",
     body:
-      "Pull attempts as CSV or print ready PDF for accreditation, appeals, or your own records.",
+      "Pull attempts as CSV or print-ready PDF for records, appeals, or your own archive.",
   },
 ] as const;
 
@@ -70,19 +70,19 @@ export function FeatureGrid() {
                 fontVariationSettings: '"opsz" 96, "SOFT" 30',
               }}
             >
-              Less time grading.
+              Clearer for faculty.
               <br />
               <em className="text-brand" style={{ fontVariationSettings: '"opsz" 96, "WONK" 1' }}>
-                More time teaching.
+                Clearer for students.
               </em>
             </h2>
           </div>
           <div className="md:col-span-7 md:pt-2">
             <p className="text-base md:text-lg text-ink-muted leading-relaxed max-w-[60ch]">
-              SOL is built for the part of teaching nobody puts on the syllabus:
-              grading subjective work at scale. Professors create quizzes,
-              students submit, AI handles the answers that used to take hours
-              by hand.
+              SOL is a shared coursework space: faculty assign quizzes and
+              discussions, students submit and review feedback, and the hard
+              parts of scoring subjective answers get a careful first pass —
+              with humans still in charge.
             </p>
           </div>
         </div>
