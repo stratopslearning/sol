@@ -35,11 +35,11 @@ export const metadata: Metadata = {
     template: "%s · SOL",
   },
   description:
-    "Create quizzes, assign them to sections, and let AI grade short and long answers with reasoning you can review. Built for professors.",
+    "Quizzes, feedback, and discussion for faculty and students — with clear scoring on subjective work you can review together.",
   openGraph: {
     title: "SOL",
     description:
-      "Less time grading, more time teaching. AI-graded quizzes with reasoning faculty can review.",
+      "Coursework for everyone at the table. Clear quizzes, visible feedback, shared progress.",
     siteName: "SOL",
     type: "website",
     locale: "en_US",
@@ -48,7 +48,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "SOL",
     description:
-      "Less time grading, more time teaching. AI-graded quizzes with reasoning faculty can review.",
+      "Coursework for everyone at the table. Clear quizzes, visible feedback, shared progress.",
   },
 };
 

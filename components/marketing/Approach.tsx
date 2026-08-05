@@ -6,21 +6,21 @@ import { withBasePath } from "@/lib/basePath";
 const TENETS = [
   {
     n: "I",
-    title: "Subjective questions matter.",
+    title: "Real answers matter.",
     body:
-      "Short and long answers are where students actually show what they know. SOL does not punt on them. We built the product around grading the responses professors care about most.",
+      "Short and long responses are where understanding shows up. SOL is built around that work — for the people writing it and the people reviewing it.",
   },
   {
     n: "II",
-    title: "AI assists. You decide.",
+    title: "Clarity over black boxes.",
     body:
-      "The model proposes a score and shows its work. You review, adjust, and own the final grade. Speed without handing over your judgment.",
+      "Scores come with reasoning. Faculty can review or adjust; students can see how their work was read. Speed without hiding the judgment.",
   },
   {
     n: "III",
-    title: "Your quiz, your rules.",
+    title: "Your course, your rules.",
     body:
-      "No template soup. You write the questions, set the rubric, and run the quiz your way. SOL speeds up grading. It does not rewrite your course.",
+      "Questions, rubrics, sections, and discussions stay yours. SOL helps move coursework along — it does not rewrite how you teach or learn.",
   },
 ] as const;
 
@@ -44,8 +44,8 @@ export function Approach() {
               <em className="text-brand">held stubbornly.</em>
             </h2>
             <p className="text-sm text-ink-muted max-w-[40ch] leading-relaxed">
-              Why we built a quiz platform instead of another LMS. Three
-              ideas we will not compromise on.
+              Why we built a coursework platform for both sides of the
+              classroom — three ideas we will not compromise on.
             </p>
           </div>
 

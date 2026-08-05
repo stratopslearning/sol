@@ -16,17 +16,27 @@ import {
   MAX_SESSION_TURNS,
   MAX_USER_MESSAGE_CHARS,
 } from '@/lib/chatbot/constants';
-import { generateChatbotReply } from '@/lib/chatbot/respond';
+import { streamChatbotReply } from '@/lib/chatbot/respond';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
 import { isStudentEntitled } from '@/lib/featureFlags';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 120;
 
 const bodySchema = z.object({
   sessionId: z.string().uuid(),
   message: z.string().min(1).max(MAX_USER_MESSAGE_CHARS),
 });
+
+type SseEvent =
+  | { type: 'token'; text: string }
+  | { type: 'done'; reply: string; messages: ChatbotMessage[] }
+  | { type: 'error'; message: string };
+
+function encodeSse(event: SseEvent): string {
+  return `data: ${JSON.stringify(event)}\n\n`;
+}
 
 export async function POST(
   req: NextRequest,
@@ -94,34 +104,94 @@ export async function POST(
     }
 
     const quiz = await loadSafeQuizForChatbot(bot.relatedQuizId);
-    const reply = await generateChatbotReply({
+    const userText = body.message.trim();
+    const streamed = await streamChatbotReply({
       professorSystemPrompt: bot.systemPrompt,
       quiz,
       history,
-      userMessage: body.message.trim(),
+      userMessage: userText,
       model: bot.model,
     });
 
-    if (!reply.ok) {
-      const status = reply.reason === 'no_api_key' ? 503 : 502;
-      return NextResponse.json({ error: reply.message }, { status });
+    if (!streamed.ok) {
+      const status = streamed.reason === 'no_api_key' ? 503 : 502;
+      return NextResponse.json({ error: streamed.message }, { status });
     }
 
-    const now = new Date().toISOString();
-    const nextMessages: ChatbotMessage[] = [
-      ...history,
-      { role: 'user', content: body.message.trim(), at: now },
-      { role: 'assistant', content: reply.text, at: now },
-    ];
+    const encoder = new TextEncoder();
+    const openaiStream = streamed.stream;
+    const sessionId = session.id;
 
-    await db
-      .update(chatbotSessions)
-      .set({ messages: nextMessages })
-      .where(eq(chatbotSessions.id, session.id));
+    const readable = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        let full = '';
+        try {
+          for await (const piece of openaiStream) {
+            full += piece;
+            controller.enqueue(
+              encoder.encode(encodeSse({ type: 'token', text: piece })),
+            );
+          }
 
-    return NextResponse.json({
-      reply: reply.text,
-      messages: nextMessages,
+          const reply = full.trim();
+          if (!reply) {
+            controller.enqueue(
+              encoder.encode(
+                encodeSse({
+                  type: 'error',
+                  message:
+                    'The assistant returned an empty reply. Please try again.',
+                }),
+              ),
+            );
+            controller.close();
+            return;
+          }
+
+          const now = new Date().toISOString();
+          const nextMessages: ChatbotMessage[] = [
+            ...history,
+            { role: 'user', content: userText, at: now },
+            { role: 'assistant', content: reply, at: now },
+          ];
+
+          await db
+            .update(chatbotSessions)
+            .set({ messages: nextMessages })
+            .where(eq(chatbotSessions.id, sessionId));
+
+          controller.enqueue(
+            encoder.encode(
+              encodeSse({
+                type: 'done',
+                reply,
+                messages: nextMessages,
+              }),
+            ),
+          );
+          controller.close();
+        } catch (err) {
+          console.error('Chatbot stream error:', err);
+          controller.enqueue(
+            encoder.encode(
+              encodeSse({
+                type: 'error',
+                message: 'The assistant failed to respond. Please try again.',
+              }),
+            ),
+          );
+          controller.close();
+        }
+      },
+    });
+
+    return new Response(readable, {
+      headers: {
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no',
+      },
     });
   } catch (error) {
     console.error('Chatbot message error:', error);

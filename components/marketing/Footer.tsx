@@ -64,9 +64,9 @@ export function Footer() {
               </span>
             </a>
             <p className="max-w-[44ch] text-sm leading-relaxed text-ink-muted">
-              A quiz and grading platform for professors who are tired of
-              scoring short answers by hand. Built with faculty, not around
-              them.
+              A coursework platform for faculty and students — quizzes,
+              feedback, and discussion in one place, with clarity on both
+              sides of the desk.
             </p>
             <p className="pt-2 text-sm text-ink-faint md:pt-4">
               © {year} SOL Learning. All rights reserved.
