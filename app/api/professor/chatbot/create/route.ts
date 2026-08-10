@@ -8,8 +8,9 @@ import {
   professorEnrolledInSections,
 } from '@/lib/chatbot/access';
 import { CHATBOT_MODEL } from '@/lib/chatbot/constants';
+import { ApiError, jsonError } from '@/lib/api/errors';
+import { requireProfessorApi } from '@/lib/api/professorAuth';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
-import { getOrCreateUser } from '@/lib/getOrCreateUser';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,10 +26,9 @@ const createSchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
-    const user = await getOrCreateUser();
-    if (!user || (user.role !== 'PROFESSOR' && user.role !== 'ADMIN')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user } = await requireProfessorApi(req, {
+      scope: 'discussions:write',
+    });
 
     const limited = await enforceRateLimit({
       key: `chatbot-create:${user.id}`,
@@ -95,6 +95,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     console.error('Chatbot create error:', error);
+    if (error instanceof ApiError) return jsonError(error);
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { error: 'Invalid data', details: error.errors },

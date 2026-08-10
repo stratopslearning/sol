@@ -4,8 +4,8 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '@/app/db';
 import { professorSections, quizSections } from '@/app/db/schema';
 import { ApiError, apiErrorResponse } from '@/lib/api/errors';
+import { requireProfessorApi } from '@/lib/api/professorAuth';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
-import { getOrCreateUser } from '@/lib/getOrCreateUser';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,10 +14,9 @@ export async function POST(
   context: { params: Promise<{ sectionId: string; quizId: string }> },
 ) {
   try {
-    const user = await getOrCreateUser();
-    if (!user || (user.role !== 'PROFESSOR' && user.role !== 'ADMIN')) {
-      throw ApiError.unauthorized();
-    }
+    const { user } = await requireProfessorApi(_req, {
+      scope: 'sections:write',
+    });
 
     const limited = await enforceRateLimit({
       key: `quiz-unassign:${user.id}`,

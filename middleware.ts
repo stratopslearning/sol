@@ -32,6 +32,15 @@ export default clerkMiddleware(async (auth, req) => {
     ? pathname.slice(BASE_PATH.length) || '/'
     : pathname;
 
+  // Agent access paths authenticate inside the route handler with a personal
+  // access token (`sol_pat_…`) instead of a Clerk cookie, so the edge layer
+  // must not bounce them to the login page. Every handler on these paths
+  // still enforces auth itself (verifyProfessorApiToken / getOrCreateUser).
+  const authHeader = req.headers.get('authorization') ?? '';
+  const hasApiToken = authHeader.startsWith('Bearer sol_pat_');
+  if (appPath === '/api/mcp' || appPath.startsWith('/api/mcp/')) return;
+  if (hasApiToken && appPath.startsWith('/api/professor/')) return;
+
   const isPublic =
     appPath === '/' ||
     // File-based metadata icon routes (extensionless dynamic ones like

@@ -3,7 +3,8 @@ import { and, eq } from 'drizzle-orm';
 
 import { db } from '@/app/db';
 import { chatbotSections, professorSections } from '@/app/db/schema';
-import { getOrCreateUser } from '@/lib/getOrCreateUser';
+import { apiErrorResponse } from '@/lib/api/errors';
+import { requireProfessorApi } from '@/lib/api/professorAuth';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
 
 export const dynamic = 'force-dynamic';
@@ -12,9 +13,11 @@ export async function POST(
   _req: NextRequest,
   context: { params: Promise<{ sectionId: string; chatbotId: string }> },
 ) {
-  const user = await getOrCreateUser();
-  if (!user || (user.role !== 'PROFESSOR' && user.role !== 'ADMIN')) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  let user;
+  try {
+    ({ user } = await requireProfessorApi(_req, { scope: 'sections:write' }));
+  } catch (error) {
+    return apiErrorResponse(error);
   }
 
   const limited = await enforceRateLimit({

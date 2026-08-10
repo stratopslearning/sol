@@ -13,6 +13,7 @@ Default classification: **education record** (not directory information) for all
 | Discussions | `chatbots`, `chatbot_sessions.messages` | Prompts + transcripts | Education record | Assigned students; author faculty; ADMIN |
 | Grading cache | `grading_cache` | Hash key + cached model payload | Derived education content | System only |
 | Audit | `audit_log` | Actor, action, target, metadata, IP | Security / FERPA disclosure log | ADMIN read-only |
+| Agent tokens | `professor_api_tokens` | Token hash, prefix, scopes, usage timestamps (no plaintext) | Credential / security | Owner professor; see [MCP_AGENT_ACCESS.md](./MCP_AGENT_ACCESS.md) |
 | Payments | `stripe_events`, Stripe | Payment metadata | Financial (linked to user) | System / ADMIN ops |
 
 **Outbound processors:** OpenAI receives minimized student answer text and discussion messages for grading/Socratic chat — see [`AI_EDUCATION_RECORDS.md`](./AI_EDUCATION_RECORDS.md).

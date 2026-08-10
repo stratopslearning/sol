@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { and, eq } from 'drizzle-orm';
-import { getAuth } from '@clerk/nextjs/server';
 
 import { db } from '@/app/db';
-import { professorSections, users } from '@/app/db/schema';
+import { professorSections } from '@/app/db/schema';
 import { ApiError, apiErrorResponse } from '@/lib/api/errors';
+import { requireProfessorApi } from '@/lib/api/professorAuth';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
 import { extractRequestMeta, logAudit } from '@/lib/audit';
 
@@ -15,18 +15,10 @@ export async function POST(
   context: { params: Promise<{ sectionId: string }> },
 ) {
   try {
-    const { userId } = getAuth(req);
-    if (!userId) throw ApiError.unauthorized();
     const { sectionId } = await context.params;
-
-    const user = await db.query.users.findFirst({
-      where: eq(users.clerkId, userId),
+    const { user } = await requireProfessorApi(req, {
+      scope: 'sections:write',
     });
-    if (!user) throw ApiError.unauthorized('User not found');
-
-    if (user.role !== 'PROFESSOR' && user.role !== 'ADMIN') {
-      throw ApiError.forbidden();
-    }
 
     const limited = await enforceRateLimit({
       key: `professor-leave:${user.id}`,

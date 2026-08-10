@@ -4,11 +4,38 @@ import { z } from 'zod';
 
 import { db } from '@/app/db';
 import { professorSections, sections } from '@/app/db/schema';
+import { apiErrorResponse } from '@/lib/api/errors';
+import { requireProfessorApi } from '@/lib/api/professorAuth';
+import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
 import { activeOnly } from '@/lib/db/filters';
-import { getOrCreateUser } from '@/lib/getOrCreateUser';
+import { getProfessorSectionDetail } from '@/lib/professor/sections';
 import { parseOptionalEndsAt } from '@/lib/sectionAvailability';
 
 export const dynamic = 'force-dynamic';
+
+/** Section detail (roster, codes, quizzes, discussions) for teaching faculty. */
+export async function GET(
+  req: NextRequest,
+  context: { params: Promise<{ sectionId: string }> },
+) {
+  try {
+    const auth = await requireProfessorApi(req, { scope: 'read' });
+
+    const limited = await enforceRateLimit({
+      key: `professor-read:${auth.user.id}`,
+      limit: 120,
+      windowMs: 60_000,
+      prefix: 'rl',
+    });
+    if (limited) return limited;
+
+    const { sectionId } = await context.params;
+    const detail = await getProfessorSectionDetail(auth.user, sectionId);
+    return NextResponse.json(detail);
+  } catch (error) {
+    return apiErrorResponse(error);
+  }
+}
 
 const patchSchema = z.object({
   endsAt: z.union([z.string(), z.null()]).optional(),
@@ -23,13 +50,8 @@ export async function PATCH(
 ) {
   try {
     const { sectionId } = await context.params;
-    const user = await getOrCreateUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    if (user.role !== 'PROFESSOR' && user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    const auth = await requireProfessorApi(req, { scope: 'sections:write' });
+    const user = auth.user;
 
     if (user.role === 'PROFESSOR') {
       const enrollment = await db.query.professorSections.findFirst({
@@ -86,9 +108,6 @@ export async function PATCH(
     return NextResponse.json({ success: true, section: updated });
   } catch (error) {
     console.error('Professor section PATCH error:', error);
-    return NextResponse.json(
-      { error: 'Failed to update section' },
-      { status: 500 },
-    );
+    return apiErrorResponse(error);
   }
 }

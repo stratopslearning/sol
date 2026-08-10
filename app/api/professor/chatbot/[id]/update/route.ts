@@ -9,7 +9,8 @@ import {
   professorCanLinkQuiz,
   professorEnrolledInSections,
 } from '@/lib/chatbot/access';
-import { getOrCreateUser } from '@/lib/getOrCreateUser';
+import { ApiError, apiErrorResponse, jsonError } from '@/lib/api/errors';
+import { requireProfessorApi } from '@/lib/api/professorAuth';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
 
 export const dynamic = 'force-dynamic';
@@ -30,10 +31,9 @@ export async function PUT(
   context: { params: Promise<{ id: string }> },
 ) {
   try {
-    const user = await getOrCreateUser();
-    if (!user || (user.role !== 'PROFESSOR' && user.role !== 'ADMIN')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user } = await requireProfessorApi(req, {
+      scope: 'discussions:write',
+    });
 
     const limited = await enforceRateLimit({
       key: `chatbot-update:${user.id}`,
@@ -117,6 +117,7 @@ export async function PUT(
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Chatbot update error:', error);
+    if (error instanceof ApiError) return jsonError(error);
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { error: 'Invalid data', details: error.errors },
@@ -134,9 +135,11 @@ export async function GET(
   _req: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
-  const user = await getOrCreateUser();
-  if (!user || (user.role !== 'PROFESSOR' && user.role !== 'ADMIN')) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  let user;
+  try {
+    ({ user } = await requireProfessorApi(_req, { scope: 'read' }));
+  } catch (error) {
+    return apiErrorResponse(error);
   }
 
   const { id } = await context.params;

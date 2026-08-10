@@ -11,6 +11,7 @@ SOL turns long-form course content into structured, auto-graded coursework. Facu
 ## Highlights
 
 - **AI-graded short answers** with rubric-aligned reasoning. Every score includes the model's working so faculty can verify, not just trust.
+- **Professor MCP server** so faculty can run their whole workflow (sections, quizzes, gradebooks, regrades, discussions) from their own AI agent with a scoped personal access token. Connect guide: [`PROFESSOR_MCP.md`](./PROFESSOR_MCP.md).
 - **Course / Section / Quiz model** designed for real institutions: enrollment codes, multi-section courses, professor TAs, and admin oversight.
 - **Soft-delete + audit log** on every destructive action, with admin-only purge endpoints when records truly need to disappear. Admins can browse the trail at `/dashboard/admin/audit`.
 - **Stripe-ready** but launches with payments disabled by default via a feature flag — flip it on without redeploying schema.

@@ -9,6 +9,7 @@ Internal FERPA + SOC 2–style binder (no third-party audit).
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | Data-flow diagram |
 | [DATA_INVENTORY.md](./DATA_INVENTORY.md) | Education-record inventory |
 | [AI_EDUCATION_RECORDS.md](./AI_EDUCATION_RECORDS.md) | OpenAI FERPA posture |
+| [MCP_AGENT_ACCESS.md](./MCP_AGENT_ACCESS.md) | Professor MCP / access-token posture |
 | [SUBPROCESSORS.md](./SUBPROCESSORS.md) | Vendor list |
 | [FERPA_RIDER.md](./FERPA_RIDER.md) | Institution contract template |
 | [BACKUP_RESTORE.md](./BACKUP_RESTORE.md) | Neon restore runbook |

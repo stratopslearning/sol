@@ -2,25 +2,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/app/db';
 import { quizzes, attempts, users, professorSections, quizSections } from '@/app/db/schema';
 import { eq, and, inArray, gte, lte, isNotNull } from 'drizzle-orm';
-import { auth } from '@clerk/nextjs/server';
 import { parse } from 'json2csv';
 
+import { ApiError, jsonError } from '@/lib/api/errors';
+import { requireProfessorApi } from '@/lib/api/professorAuth';
 import { extractRequestMeta, logAudit } from '@/lib/audit';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   try {
-    const { userId } = await auth();
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Get professor user
-    const professor = await db.query.users.findFirst({ where: eq(users.clerkId, userId) });
-    if (!professor || professor.role !== 'PROFESSOR') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    const { user: professor } = await requireProfessorApi(req, {
+      scope: 'read',
+      professorOnly: true,
+    });
 
     // Get all section IDs the professor is enrolled in
     const professorSectionEnrollments = await db.query.professorSections.findMany({
@@ -138,6 +133,7 @@ export async function GET(req: NextRequest) {
 
   } catch (error) {
     console.error('Export error:', error);
+    if (error instanceof ApiError) return jsonError(error);
     return NextResponse.json({ error: 'Failed to export results' }, { status: 500 });
   }
 } 

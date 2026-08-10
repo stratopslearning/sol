@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { and, eq } from 'drizzle-orm';
-import { auth } from '@clerk/nextjs/server';
 
 import { db } from '@/app/db';
-import { quizzes, users } from '@/app/db/schema';
+import { quizzes } from '@/app/db/schema';
+import { ApiError, jsonError } from '@/lib/api/errors';
+import { requireProfessorApi } from '@/lib/api/professorAuth';
 import { activeOnly } from '@/lib/db/filters';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
 
@@ -15,19 +16,7 @@ export async function POST(
 ) {
   try {
     const { quizId } = await params;
-
-    const { userId } = await auth();
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const user = await db.query.users.findFirst({
-      where: eq(users.clerkId, userId),
-    });
-
-    if (!user || (user.role !== 'PROFESSOR' && user.role !== 'ADMIN')) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    const { user } = await requireProfessorApi(req, { scope: 'quizzes:write' });
 
     const limited = await enforceRateLimit({
       key: `quiz-archive:${user.id}`,
@@ -74,6 +63,7 @@ export async function POST(
     });
   } catch (error) {
     console.error('Error archiving quiz:', error);
+    if (error instanceof ApiError) return jsonError(error);
     return NextResponse.json({ error: 'Failed to archive quiz' }, { status: 500 });
   }
 }
