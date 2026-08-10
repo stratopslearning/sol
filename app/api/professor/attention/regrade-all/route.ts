@@ -23,8 +23,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { after } from 'next/server';
 import { z } from 'zod';
 
+import { ApiError, jsonError } from '@/lib/api/errors';
+import { requireProfessorApi } from '@/lib/api/professorAuth';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
-import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import { getAttentionItemsForProfessor } from '@/lib/professorAttention';
 import { regradeAttempt } from '@/lib/regradeAttempt';
 
@@ -60,10 +61,7 @@ async function processWithConcurrency<T>(
 
 export async function POST(req: NextRequest) {
   try {
-    const user = await getOrCreateUser();
-    if (!user || (user.role !== 'PROFESSOR' && user.role !== 'ADMIN')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user } = await requireProfessorApi(req, { scope: 'grades:write' });
 
     // Bulk action is intentionally rarer than per-attempt. Six clicks per
     // ten minutes is plenty for fixing a backlog.
@@ -145,6 +143,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     console.error('Bulk re-grade error:', error);
+    if (error instanceof ApiError) return jsonError(error);
     return NextResponse.json(
       { error: 'Failed to schedule bulk re-grade' },
       { status: 500 },

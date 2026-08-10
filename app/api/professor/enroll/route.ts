@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import { db } from '@/app/db';
 import { sections, professorSections } from '@/app/db/schema';
 import { eq, and } from 'drizzle-orm';
+import { ApiError, jsonError } from '@/lib/api/errors';
+import { requireProfessorApi } from '@/lib/api/professorAuth';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
 import { activeOnly } from '@/lib/db/filters';
 
@@ -10,10 +11,10 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
   try {
-    const user = await getOrCreateUser();
-    if (!user || user.role !== 'PROFESSOR') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user } = await requireProfessorApi(req, {
+      scope: 'sections:write',
+      professorOnly: true,
+    });
 
     const limited = await enforceRateLimit({
       key: `enroll-professor:${user.id}`,
@@ -70,6 +71,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     console.error('Professor enrollment error:', error);
+    if (error instanceof ApiError) return jsonError(error);
     return NextResponse.json({ error: 'Failed to enroll' }, { status: 500 });
   }
 } 

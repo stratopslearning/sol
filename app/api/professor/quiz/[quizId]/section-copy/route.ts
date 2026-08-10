@@ -11,8 +11,9 @@ import {
   quizzes,
   studentSections,
 } from '@/app/db/schema';
+import { ApiError, jsonError } from '@/lib/api/errors';
+import { requireProfessorApi } from '@/lib/api/professorAuth';
 import { activeOnly } from '@/lib/db/filters';
-import { getOrCreateUser } from '@/lib/getOrCreateUser';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,11 +23,7 @@ export async function POST(
 ) {
   try {
     const { quizId } = await params;
-    const user = await getOrCreateUser();
-
-    if (!user || (user.role !== 'PROFESSOR' && user.role !== 'ADMIN')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user } = await requireProfessorApi(_req, { scope: 'quizzes:write' });
 
     const originalQuiz = await db.query.quizzes.findFirst({
       where: and(eq(quizzes.id, quizId), activeOnly(quizzes.deletedAt)),
@@ -162,6 +159,7 @@ export async function POST(
     });
   } catch (error) {
     console.error('Quiz section-copy error:', error);
+    if (error instanceof ApiError) return jsonError(error);
     return NextResponse.json(
       { error: 'Failed to open quiz for editing' },
       { status: 500 },

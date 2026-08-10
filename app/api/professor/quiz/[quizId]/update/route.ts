@@ -8,8 +8,9 @@ import {
   quizSections,
   quizzes,
 } from '@/app/db/schema';
+import { ApiError, jsonError } from '@/lib/api/errors';
+import { requireProfessorApi } from '@/lib/api/professorAuth';
 import { activeOnly } from '@/lib/db/filters';
-import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import { upsertQuizQuestions } from '@/lib/quizQuestionUpsert';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
 
@@ -42,10 +43,7 @@ export async function PUT(
 ) {
   try {
     const { quizId } = await params;
-    const user = await getOrCreateUser();
-    if (!user || (user.role !== 'PROFESSOR' && user.role !== 'ADMIN')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user } = await requireProfessorApi(req, { scope: 'quizzes:write' });
 
     const limited = await enforceRateLimit({
       key: `quiz-update:${user.id}`,
@@ -167,6 +165,7 @@ export async function PUT(
 
   } catch (error) {
     console.error('Quiz update error:', error);
+    if (error instanceof ApiError) return jsonError(error);
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: 'Invalid data', details: error.errors }, { status: 400 });
     }

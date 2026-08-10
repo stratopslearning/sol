@@ -323,6 +323,36 @@ export const auditLog = pgTable(
   }),
 );
 
+/**
+ * Personal access tokens for the professor API / MCP server.
+ *
+ * Only a SHA-256 hash of the secret is stored; the plaintext (`sol_pat_…`) is
+ * shown exactly once at mint time. `scopes` gates which tool families a token
+ * may call (see `lib/professorApiTokens.ts`). Revocation is a tombstone so the
+ * audit trail keeps the row.
+ */
+export const professorApiTokens = pgTable(
+  'professor_api_tokens',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    name: text('name').notNull(),
+    tokenHash: text('token_hash').unique().notNull(),
+    // First characters of the plaintext token, for display ("sol_pat_ab12…").
+    prefix: text('prefix').notNull(),
+    scopes: jsonb('scopes').$type<string[]>().notNull().default([]),
+    lastUsedAt: ts('last_used_at'),
+    expiresAt: ts('expires_at'),
+    revokedAt: ts('revoked_at'),
+    createdAt: ts('created_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    userIdx: index('professor_api_tokens_user_idx').on(table.userId),
+  }),
+);
+
 // Socratic discussion chatbots — professor-authored (or seeded templates).
 export const chatbots = pgTable(
   'chatbots',

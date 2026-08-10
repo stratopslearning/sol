@@ -3,8 +3,9 @@ import { and, eq } from 'drizzle-orm';
 
 import { db } from '@/app/db';
 import { professorSections, questions, quizSections, quizzes } from '@/app/db/schema';
+import { ApiError, jsonError } from '@/lib/api/errors';
+import { requireProfessorApi } from '@/lib/api/professorAuth';
 import { activeOnly } from '@/lib/db/filters';
-import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
 
 export const dynamic = 'force-dynamic';
@@ -15,10 +16,7 @@ export async function POST(
 ) {
   try {
     const { quizId } = await params;
-    const user = await getOrCreateUser();
-    if (!user || (user.role !== 'PROFESSOR' && user.role !== 'ADMIN')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user } = await requireProfessorApi(req, { scope: 'quizzes:write' });
 
     const limited = await enforceRateLimit({
       key: `quiz-dup:${user.id}`,
@@ -129,6 +127,7 @@ export async function POST(
 
   } catch (error) {
     console.error('Quiz duplication error:', error);
+    if (error instanceof ApiError) return jsonError(error);
     return NextResponse.json({ error: 'Failed to duplicate quiz' }, { status: 500 });
   }
 } 

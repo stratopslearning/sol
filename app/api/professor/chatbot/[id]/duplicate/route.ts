@@ -5,8 +5,9 @@ import { db } from '@/app/db';
 import { chatbots } from '@/app/db/schema';
 import { getActiveChatbot } from '@/lib/chatbot/access';
 import { CHATBOT_MODEL } from '@/lib/chatbot/constants';
+import { ApiError, jsonError } from '@/lib/api/errors';
+import { requireProfessorApi } from '@/lib/api/professorAuth';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
-import { getOrCreateUser } from '@/lib/getOrCreateUser';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,10 +16,9 @@ export async function POST(
   context: { params: Promise<{ id: string }> },
 ) {
   try {
-    const user = await getOrCreateUser();
-    if (!user || (user.role !== 'PROFESSOR' && user.role !== 'ADMIN')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user } = await requireProfessorApi(_req, {
+      scope: 'discussions:write',
+    });
 
     const limited = await enforceRateLimit({
       key: `chatbot-dup:${user.id}`,
@@ -63,6 +63,7 @@ export async function POST(
     });
   } catch (error) {
     console.error('Chatbot duplicate error:', error);
+    if (error instanceof ApiError) return jsonError(error);
     return NextResponse.json(
       { error: 'Failed to duplicate discussion' },
       { status: 500 },

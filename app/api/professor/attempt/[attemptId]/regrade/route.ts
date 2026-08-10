@@ -4,8 +4,9 @@ import { z } from 'zod';
 
 import { db } from '@/app/db';
 import { attempts, professorSections } from '@/app/db/schema';
+import { ApiError, jsonError } from '@/lib/api/errors';
+import { requireProfessorApi } from '@/lib/api/professorAuth';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
-import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import { regradeAttempt } from '@/lib/regradeAttempt';
 
 export const dynamic = 'force-dynamic';
@@ -21,11 +22,7 @@ export async function POST(
 ) {
   try {
     const { attemptId } = await params;
-    const user = await getOrCreateUser();
-
-    if (!user || (user.role !== 'PROFESSOR' && user.role !== 'ADMIN')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user } = await requireProfessorApi(_req, { scope: 'grades:write' });
 
     // Individual re-grades are a professor action with a built-in cost ceiling
     // (each call hits OpenAI). 60 per 5 minutes is plenty for clearing a
@@ -88,6 +85,7 @@ export async function POST(
     });
   } catch (error) {
     console.error('Re-grade attempt error:', error);
+    if (error instanceof ApiError) return jsonError(error);
     if (error instanceof Error && error.message === 'Attempt not found') {
       return NextResponse.json({ error: error.message }, { status: 404 });
     }
