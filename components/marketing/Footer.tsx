@@ -20,8 +20,27 @@ const footerLinks: FooterSection[] = [
   {
     label: "Platform",
     links: [
-      { title: "Capabilities", href: "#capabilities" },
-      { title: "Approach", href: "#approach" },
+      { title: "Capabilities", href: withBasePath("/#capabilities") },
+      { title: "Approach", href: withBasePath("/#approach") },
+    ],
+  },
+  {
+    label: "Guides",
+    links: [
+      { title: "Docs", href: withBasePath("/docs") },
+      { title: "About SOL", href: withBasePath("/docs/about-sol") },
+      {
+        title: "Professor onboarding",
+        href: withBasePath("/docs/professor-onboarding"),
+      },
+      {
+        title: "Student getting started",
+        href: withBasePath("/docs/student-getting-started"),
+      },
+      {
+        title: "Agent Access",
+        href: withBasePath("/docs/professor-agent-access"),
+      },
     ],
   },
   {
@@ -73,7 +92,7 @@ export function Footer() {
             </p>
           </AnimatedContainer>
 
-          <div className="grid grid-cols-2 gap-8 sm:gap-10 xl:col-span-2 xl:mt-0">
+          <div className="grid grid-cols-2 gap-8 sm:grid-cols-3 sm:gap-10 xl:col-span-2 xl:mt-0">
             {footerLinks.map((section, index) => (
               <AnimatedContainer
                 key={section.label}

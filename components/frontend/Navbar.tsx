@@ -76,11 +76,23 @@ export function Navbar() {
             </a>
 
             <nav className="hidden md:flex items-center gap-8 text-sm">
-              <a href="#capabilities" className="nav-beam text-ink-muted">
+              <a
+                href={withBasePath("/#capabilities")}
+                className="nav-beam text-ink-muted"
+              >
                 Capabilities
               </a>
-              <a href="#approach" className="nav-beam text-ink-muted">
+              <a
+                href={withBasePath("/#approach")}
+                className="nav-beam text-ink-muted"
+              >
                 Approach
+              </a>
+              <a
+                href={withBasePath("/docs")}
+                className="nav-beam text-ink-muted"
+              >
+                Docs
               </a>
             </nav>
 
@@ -149,18 +161,25 @@ export function Navbar() {
           >
             <div className="px-4 py-5 flex flex-col gap-4">
               <a
-                href="#capabilities"
+                href={withBasePath("/#capabilities")}
                 className="nav-beam text-ink py-2 text-sm"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
                 Capabilities
               </a>
               <a
-                href="#approach"
+                href={withBasePath("/#approach")}
                 className="nav-beam text-ink py-2 text-sm"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
                 Approach
+              </a>
+              <a
+                href={withBasePath("/docs")}
+                className="nav-beam text-ink py-2 text-sm"
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                Docs
               </a>
               <div className="hairline" />
               {isSignedIn ? (

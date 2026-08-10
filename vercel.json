@@ -10,6 +10,18 @@
     {
       "source": "/.well-known/:path*",
       "destination": "/learning/well-known/:path*"
+    },
+    {
+      "source": "/llms.txt",
+      "destination": "/learning/llms.txt"
+    },
+    {
+      "source": "/robots.txt",
+      "destination": "/learning/robots.txt"
+    },
+    {
+      "source": "/sitemap.xml",
+      "destination": "/learning/sitemap.xml"
     }
   ]
 }

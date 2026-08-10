@@ -11,7 +11,7 @@ SOL turns long-form course content into structured, auto-graded coursework. Facu
 ## Highlights
 
 - **AI-graded short answers** with rubric-aligned reasoning. Every score includes the model's working so faculty can verify, not just trust.
-- **Professor MCP server** so faculty can run their whole workflow (sections, quizzes, gradebooks, regrades, discussions) from their own AI agent with a scoped personal access token. Connect guide: [`PROFESSOR_MCP.md`](./PROFESSOR_MCP.md).
+- **Professor MCP server** so faculty can run their whole workflow (sections, quizzes, gradebooks, regrades, discussions) from their own AI agent with a scoped personal access token. Connect guide: [/learning/docs/professor-agent-access](https://www.strat-ops.net/learning/docs/professor-agent-access) ([source](./content/docs/professor-agent-access.md)).
 - **Course / Section / Quiz model** designed for real institutions: enrollment codes, multi-section courses, professor TAs, and admin oversight.
 - **Soft-delete + audit log** on every destructive action, with admin-only purge endpoints when records truly need to disappear. Admins can browse the trail at `/dashboard/admin/audit`.
 - **Stripe-ready** but launches with payments disabled by default via a feature flag — flip it on without redeploying schema.
@@ -42,7 +42,7 @@ SOL turns long-form course content into structured, auto-graded coursework. Facu
 | Role | Reach |
 | --- | --- |
 | `STUDENT` | Enrolls into sections via code, takes quizzes, sees own attempts and grades. |
-| `PROFESSOR` | Authors quizzes, assigns to sections they teach, views section gradebooks, enrolls into sections via professor codes. |
+| `PROFESSOR` | Authors quizzes, assigns to sections they teach, views section gradebooks, enrolls into sections via professor codes. Faculty setup: [/learning/docs/professor-onboarding](https://www.strat-ops.net/learning/docs/professor-onboarding). |
 | `ADMIN` | Manages users, courses, sections, all quizzes; soft-delete and purge; audit log access. |
 
 Cross-role access attempts redirect to the user's own dashboard rather than 404. The full check chain lives in [`lib/auth.ts`](./lib/auth.ts) (`requireAuth`, `requireRole`, `requireAdmin`, `requireProfessor`, `requireStudent`).
