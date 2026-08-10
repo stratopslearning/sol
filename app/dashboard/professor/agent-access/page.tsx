@@ -2,7 +2,6 @@ import { AppShell } from "@/components/layout/AppShell";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { getOrCreateUser } from "@/lib/getOrCreateUser";
 import { withBasePath } from "@/lib/basePath";
-import { env } from "@/lib/env";
 import { listProfessorApiTokens } from "@/lib/professorApiTokens";
 
 import AgentAccessClient from "./AgentAccessClient";
@@ -15,8 +14,21 @@ export default async function ProfessorAgentAccessPage() {
     return null;
   }
 
-  const tokens = await listProfessorApiTokens(user.id);
-  const origin = (env().NEXT_PUBLIC_BASE_URL ?? "").replace(/\/$/, "");
+  let tokens: Awaited<ReturnType<typeof listProfessorApiTokens>> = [];
+  try {
+    tokens = await listProfessorApiTokens(user.id);
+  } catch (error) {
+    // Surface the real cause in server logs; keep the page usable so minting
+    // still works if the list query fails (e.g. mid-migration).
+    console.error("[agent-access] listProfessorApiTokens failed:", error);
+  }
+
+  // Prefer the public site URL already used elsewhere (layout, Stripe). Avoid
+  // calling env() here — that helper is for boot-time validation in
+  // instrumentation, not page renders.
+  const origin = (
+    process.env.NEXT_PUBLIC_BASE_URL || "https://www.strat-ops.net"
+  ).replace(/\/$/, "");
   const mcpUrl = `${origin}${withBasePath("/api/mcp")}`;
 
   return (
