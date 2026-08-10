@@ -172,9 +172,10 @@ How the pieces fit at runtime:
    `WWW-Authenticate: Bearer resource_metadata="…"` challenge.
 2. Connector fetches
    `https://www.strat-ops.net/.well-known/oauth-protected-resource/learning/api/mcp`
-   (a Vercel rewrite maps the apex path into the app's `/learning` basePath),
-   which names Clerk's Frontend API (`clerk.strat-ops.net`) as the
-   authorization server.
+   (a Vercel rewrite maps the apex path onto the app's internal
+   `/learning/well-known/...` route — Next can't serve a literal `.well-known`
+   app directory), which names Clerk's Frontend API (`clerk.strat-ops.net`) as
+   the authorization server.
 3. Connector registers via DCR, runs the OAuth 2.1 + PKCE browser flow on
    Clerk's hosted authorize page, and retries with the OAuth access token.
 4. `/api/mcp` verifies the token with Clerk, resolves the SOL user, and

@@ -9,7 +9,7 @@
   "rewrites": [
     {
       "source": "/.well-known/:path*",
-      "destination": "/learning/.well-known/:path*"
+      "destination": "/learning/well-known/:path*"
     }
   ]
 }
