@@ -5,5 +5,11 @@
       "path": "/api/cron/grade-pending",
       "schedule": "15 9 * * *"
     }
+  ],
+  "rewrites": [
+    {
+      "source": "/.well-known/:path*",
+      "destination": "/learning/.well-known/:path*"
+    }
   ]
 }

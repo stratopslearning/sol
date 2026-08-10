@@ -17,6 +17,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@clerk/mcp-tools": "^0.3.1",
     "@clerk/nextjs": "^6.23.3",
     "@gsap/react": "^2.1.2",
     "@hookform/resolvers": "^5.1.1",

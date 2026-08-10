@@ -20,6 +20,21 @@ function redirectWithinApp(path: string, req: Request) {
 export default clerkMiddleware(async (auth, req) => {
   const { pathname } = req.nextUrl;
 
+  // OAuth discovery (RFC 8414 / RFC 9728) is probed at the site apex
+  // (e.g. /.well-known/oauth-protected-resource/learning/api/mcp) and under
+  // the basePath. The App Router cannot own a dot-directory (`.well-known`
+  // segments are not routable on this Next version), so both public forms
+  // are rewritten onto the internal `/well-known/*` routes. Note
+  // `nextUrl.pathname` already has the basePath stripped, so both forms
+  // present identically here; use a plain URL to avoid NextURL re-adding
+  // the basePath on serialization.
+  if (pathname.startsWith('/.well-known/')) {
+    const rest = pathname.slice('/.well-known/'.length);
+    return NextResponse.rewrite(
+      new URL(`${BASE_PATH}/well-known/${rest}${req.nextUrl.search}`, req.url),
+    );
+  }
+
   // Recover from accidental double basePath (Link href passed through withBasePath).
   const doubleBase = `${BASE_PATH}${BASE_PATH}`;
   if (pathname.startsWith(doubleBase)) {
@@ -40,6 +55,11 @@ export default clerkMiddleware(async (auth, req) => {
   const hasApiToken = authHeader.startsWith('Bearer sol_pat_');
   if (appPath === '/api/mcp' || appPath.startsWith('/api/mcp/')) return;
   if (hasApiToken && appPath.startsWith('/api/professor/')) return;
+
+  // OAuth discovery metadata (RFC 8414 / RFC 9728) must be fetchable without
+  // a session — Claude.ai / ChatGPT read it before any user is signed in.
+  // (/.well-known/* rewrites above bypass this; this covers direct hits.)
+  if (appPath.startsWith('/well-known/')) return;
 
   const isPublic =
     appPath === '/' ||

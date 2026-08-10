@@ -93,7 +93,24 @@ export async function getOrCreateUser(): Promise<UserData | null> {
   try {
     const { userId } = await auth();
     if (!userId) return null;
+    return await getOrCreateUserByClerkId(userId);
+  } catch (error) {
+    if (isNextInternalError(error)) throw error;
+    console.error('Error in getOrCreateUser:', error);
+    return null;
+  }
+}
 
+/**
+ * Same upsert as `getOrCreateUser`, but for callers that already resolved the
+ * Clerk user id themselves (e.g. the MCP OAuth bearer path, where there is no
+ * Clerk session cookie — `auth({ acceptsToken: 'oauth_token' })` returns the
+ * token subject instead).
+ */
+export async function getOrCreateUserByClerkId(
+  userId: string,
+): Promise<UserData | null> {
+  try {
     // Fast path: row already exists. Only the read is needed for the common case.
     const existingUser = await db.query.users.findFirst({
       where: eq(dbUsers.clerkId, userId),
@@ -141,7 +158,7 @@ export async function getOrCreateUser(): Promise<UserData | null> {
     return toUserData(upserted);
   } catch (error) {
     if (isNextInternalError(error)) throw error;
-    console.error('Error in getOrCreateUser:', error);
+    console.error('Error in getOrCreateUserByClerkId:', error);
     return null;
   }
 }

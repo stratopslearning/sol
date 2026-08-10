@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Copy, KeyRound, Trash2 } from "lucide-react";
+import { Copy, KeyRound, Sparkles, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -119,6 +119,46 @@ export default function AgentAccessClient({
     <div className="flex flex-col gap-10">
       <section className="paper paper-shadow p-6 flex flex-col gap-4">
         <div className="flex items-center gap-2">
+          <Sparkles className="h-4 w-4" />
+          <span className="eyebrow text-ink-faint">
+            Claude.ai &amp; ChatGPT — no token needed
+          </span>
+        </div>
+        <p className="text-sm text-ink-muted leading-relaxed max-w-2xl">
+          Claude.ai and ChatGPT connect with your SOL login instead of a
+          token. Paste the MCP URL below into the connector settings, click
+          Connect, and sign in when the SOL window opens. These sessions get
+          your full professor permissions; disconnect the connector to revoke
+          access.
+        </p>
+        <div className="flex items-center gap-2">
+          <code className="text-xs break-all bg-surface px-2 py-1.5 rounded">
+            {mcpUrl}
+          </code>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => copy(mcpUrl, "MCP URL")}
+          >
+            <Copy className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+        <ul className="text-xs text-ink-muted leading-relaxed list-disc pl-4 flex flex-col gap-1">
+          <li>
+            <span className="font-medium text-ink">Claude.ai:</span> Settings
+            → Connectors → Add custom connector → paste the URL → Connect.
+          </li>
+          <li>
+            <span className="font-medium text-ink">ChatGPT:</span> Settings →
+            Apps &amp; Connectors → enable Developer mode → Create → paste the
+            URL and choose OAuth.
+          </li>
+        </ul>
+      </section>
+
+      <section className="paper paper-shadow p-6 flex flex-col gap-4">
+        <div className="flex items-center gap-2">
           <KeyRound className="h-4 w-4" />
           <span className="eyebrow text-ink-faint">New access token</span>
         </div>
@@ -191,8 +231,10 @@ export default function AgentAccessClient({
       <section className="paper paper-shadow p-6 flex flex-col gap-4">
         <span className="eyebrow text-ink-faint">Connect your agent</span>
         <p className="text-sm text-ink-muted leading-relaxed max-w-2xl">
-          Add SOL as a remote MCP server in Cursor, Claude, or any MCP-capable
-          client. Use the URL below with your token as a Bearer header.
+          Add SOL as a remote MCP server in Cursor, Claude Code, or any
+          MCP-capable client with a headers field. Use the URL below with your
+          token as a Bearer header. Tokens let you limit scopes — use one for
+          least-privilege access.
         </p>
         <div className="flex items-center gap-2">
           <code className="text-xs break-all bg-surface px-2 py-1.5 rounded">
