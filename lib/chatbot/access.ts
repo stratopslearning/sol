@@ -11,6 +11,7 @@ import {
   studentSections,
 } from '@/app/db/schema';
 import type { SafeQuizInput } from '@/lib/chatbot/safeQuizContext';
+import { isSectionConcluded } from '@/lib/sectionAvailability';
 
 export async function getActiveChatbot(chatbotId: string) {
   return db.query.chatbots.findFirst({
@@ -40,8 +41,13 @@ export async function getStudentAccessSectionIds(
       eq(studentSections.studentId, studentId),
       eq(studentSections.status, 'ACTIVE'),
     ),
+    with: { section: true },
   });
-  const enrolled = new Set(enrollments.map((e) => e.sectionId));
+  const enrolled = new Set(
+    enrollments
+      .filter((e) => e.section && !isSectionConcluded(e.section))
+      .map((e) => e.sectionId),
+  );
   const assigned = await getChatbotAssignedSectionIds(chatbotId);
   return assigned.filter((id) => enrolled.has(id));
 }

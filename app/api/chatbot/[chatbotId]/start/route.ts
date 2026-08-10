@@ -5,6 +5,7 @@ import { db } from '@/app/db';
 import {
   chatbotAssignments,
   chatbotSessions,
+  sections,
   type ChatbotMessage,
 } from '@/app/db/schema';
 import {
@@ -14,6 +15,10 @@ import {
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import { isStudentEntitled } from '@/lib/featureFlags';
+import {
+  isSectionConcluded,
+  SECTION_CONCLUDED_MESSAGE,
+} from '@/lib/sectionAvailability';
 
 export const dynamic = 'force-dynamic';
 
@@ -49,10 +54,6 @@ export async function POST(
     }
 
     const accessSections = await getStudentAccessSectionIds(user.id, chatbotId);
-    if (accessSections.length === 0) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-    const sectionId = accessSections[0];
 
     let assignment = await db.query.chatbotAssignments.findFirst({
       where: and(
@@ -61,19 +62,11 @@ export async function POST(
       ),
     });
 
-    if (!assignment) {
-      const [created] = await db
-        .insert(chatbotAssignments)
-        .values({
-          chatbotId,
-          studentId: user.id,
-        })
-        .returning();
-      assignment = created;
-    }
-
     // Explicit review of a known session (must belong to this student + bot).
     if (requestedSessionId) {
+      if (!assignment) {
+        return NextResponse.json({ error: 'Session not found' }, { status: 404 });
+      }
       const requested = await db.query.chatbotSessions.findFirst({
         where: and(
           eq(chatbotSessions.id, requestedSessionId),
@@ -95,6 +88,67 @@ export async function POST(
         },
         chatbot: serializeBot(bot),
       });
+    }
+
+    if (accessSections.length === 0) {
+      // Allow resume/review of an existing assignment when section concluded.
+      if (assignment) {
+        const existing =
+          (await db.query.chatbotSessions.findFirst({
+            where: and(
+              eq(chatbotSessions.assignmentId, assignment.id),
+              eq(chatbotSessions.status, 'in_progress'),
+            ),
+          })) ??
+          (assignment.isCompleted
+            ? await db.query.chatbotSessions.findFirst({
+                where: and(
+                  eq(chatbotSessions.assignmentId, assignment.id),
+                  eq(chatbotSessions.status, 'completed'),
+                ),
+                orderBy: [desc(chatbotSessions.completedAt)],
+              })
+            : null);
+        if (existing) {
+          return NextResponse.json({
+            session: {
+              id: existing.id,
+              assignmentId: assignment.id,
+              status: existing.status,
+              messages: existing.messages ?? [],
+              isCompleted:
+                assignment.isCompleted || existing.status === 'completed',
+            },
+            chatbot: serializeBot(bot),
+          });
+        }
+      }
+      return NextResponse.json(
+        { error: SECTION_CONCLUDED_MESSAGE, sectionConcluded: true },
+        { status: 403 },
+      );
+    }
+
+    const sectionId = accessSections[0];
+    const section = await db.query.sections.findFirst({
+      where: eq(sections.id, sectionId),
+    });
+    if (isSectionConcluded(section)) {
+      return NextResponse.json(
+        { error: SECTION_CONCLUDED_MESSAGE, sectionConcluded: true },
+        { status: 400 },
+      );
+    }
+
+    if (!assignment) {
+      const [created] = await db
+        .insert(chatbotAssignments)
+        .values({
+          chatbotId,
+          studentId: user.id,
+        })
+        .returning();
+      assignment = created;
     }
 
     // Resume in-progress if any.

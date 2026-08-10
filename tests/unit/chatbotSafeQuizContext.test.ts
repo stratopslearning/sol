@@ -66,21 +66,23 @@ describe('assembleSystemPrompt', () => {
     expect(system).toContain('Discuss departments in hospitals.');
     expect(system).toContain('Hospital Quiz');
     expect(system).toContain('never reveal');
+    expect(system).toContain('FERPA');
     expect(systemPromptLooksSafe(system)).toBe(true);
   });
 });
 
 describe('history helpers', () => {
-  it('toOpenAiMessages uses server history, not a client-supplied parallel list', () => {
+  it('toOpenAiMessages redacts emails in user turns', () => {
     const history: ChatbotMessage[] = [
-      { role: 'user', content: 'Hi', at: '1' },
+      { role: 'user', content: 'Email me at a@b.co', at: '1' },
       { role: 'assistant', content: 'Hello — ready?', at: '2' },
     ];
-    const messages = toOpenAiMessages('SYSTEM', history, 'I am ready');
-    expect(messages[0]).toEqual({ role: 'system', content: 'SYSTEM' });
-    expect(messages[1]).toEqual({ role: 'user', content: 'Hi' });
-    expect(messages[2]).toEqual({ role: 'assistant', content: 'Hello — ready?' });
-    expect(messages[3]).toEqual({ role: 'user', content: 'I am ready' });
+    const messages = toOpenAiMessages('SYSTEM', history, 'ping me at x@y.co');
+    expect(messages[1]).toEqual({
+      role: 'user',
+      content: 'Email me at [REDACTED_EMAIL]',
+    });
+    expect(messages[3].content).toContain('[REDACTED_EMAIL]');
   });
 
   it('truncateHistory keeps the newest window', () => {

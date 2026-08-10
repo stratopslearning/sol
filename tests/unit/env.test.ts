@@ -44,4 +44,32 @@ describe('lib/env', () => {
     expect(() => mod.env()).not.toThrow();
     expect(mod.env().NODE_ENV).toBe('development');
   });
+
+  it('throws in production without Upstash', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('DATABASE_URL', 'postgres://test');
+    vi.stubEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'pk');
+    vi.stubEnv('CLERK_SECRET_KEY', 'sk');
+    vi.stubEnv('NEXT_PUBLIC_BASE_URL', 'https://example.com');
+    vi.stubEnv('NEXT_PUBLIC_PAYMENTS_ENABLED', 'false');
+    vi.stubEnv('UPSTASH_REDIS_REST_URL', undefined as unknown as string);
+    vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', undefined as unknown as string);
+    delete process.env.UPSTASH_REDIS_REST_URL;
+    delete process.env.UPSTASH_REDIS_REST_TOKEN;
+    const mod = await import('@/lib/env');
+    expect(() => mod.env()).toThrow(/UPSTASH_REDIS/);
+  });
+
+  it('accepts production with Upstash configured', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('DATABASE_URL', 'postgres://test');
+    vi.stubEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'pk');
+    vi.stubEnv('CLERK_SECRET_KEY', 'sk');
+    vi.stubEnv('NEXT_PUBLIC_BASE_URL', 'https://example.com');
+    vi.stubEnv('NEXT_PUBLIC_PAYMENTS_ENABLED', 'false');
+    vi.stubEnv('UPSTASH_REDIS_REST_URL', 'https://example.upstash.io');
+    vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', 'token');
+    const mod = await import('@/lib/env');
+    expect(() => mod.env()).not.toThrow();
+  });
 });

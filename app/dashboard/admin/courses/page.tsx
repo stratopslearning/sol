@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { activeOnly } from "@/lib/db/filters";
 import { requireAdmin } from "@/lib/auth";
 import { withBasePath } from "@/lib/basePath";
+import { partitionBySectionConclusion } from "@/lib/sectionAvailability";
 
 import AdminCoursesPageContentClient from "./AdminCoursesPageContentClient";
 
@@ -14,11 +15,13 @@ export default async function AdminCoursesPage() {
   const allCourses = await db.query.courses.findMany({
     where: activeOnly(courses.deletedAt),
   });
-  const allSections = await db.query.sections.findMany({
+  const allSectionsRaw = await db.query.sections.findMany({
     where: activeOnly(sections.deletedAt),
   });
+  const { active: ongoingSections } =
+    partitionBySectionConclusion(allSectionsRaw);
   const sectionCountByCourse: Record<string, number> = {};
-  for (const section of allSections) {
+  for (const section of ongoingSections) {
     sectionCountByCourse[section.courseId] =
       (sectionCountByCourse[section.courseId] || 0) + 1;
   }

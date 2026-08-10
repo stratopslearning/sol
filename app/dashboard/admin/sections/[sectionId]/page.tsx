@@ -64,6 +64,7 @@ export default async function AdminSectionDetailPage({
                 name: data.section.name,
                 professorEnrollmentCode: data.section.professorEnrollmentCode,
                 studentEnrollmentCode: data.section.studentEnrollmentCode,
+                endsAt: data.section.endsAt,
               }}
             />
             <SectionFormModal
@@ -73,6 +74,7 @@ export default async function AdminSectionDetailPage({
                 name: data.section.name,
                 professorEnrollmentCode: data.section.professorEnrollmentCode,
                 studentEnrollmentCode: data.section.studentEnrollmentCode,
+                endsAt: data.section.endsAt,
               }}
             />
           </div>

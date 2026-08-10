@@ -13,6 +13,10 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { withBasePath } from '@/lib/basePath';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import { appRedirect } from '@/lib/serverRedirect';
+import {
+  isSectionConcluded,
+  partitionEnrollmentsByConclusion,
+} from '@/lib/sectionAvailability';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -40,12 +44,22 @@ export default async function EditDiscussionPage(props: PageProps) {
     with: { section: { with: { course: true } } },
   });
 
-  const enrolledSections = professorSectionsList.map((ps) => ({
+  const assignedIdSet = new Set(
+    bot.sectionAssignments.map((s) => s.sectionId),
+  );
+  const sectionOptionsSource = professorSectionsList.filter(
+    (ps) =>
+      !isSectionConcluded(ps.section) || assignedIdSet.has(ps.section.id),
+  );
+
+  const enrolledSections = sectionOptionsSource.map((ps) => ({
     id: ps.section.id,
     title: `${ps.section.course.title} - ${ps.section.name}`,
   }));
 
-  const enrolledSectionIds = professorSectionsList.map((ps) => ps.sectionId);
+  const { active: ongoingEnrollments } =
+    partitionEnrollmentsByConclusion(professorSectionsList);
+  const enrolledSectionIds = ongoingEnrollments.map((ps) => ps.sectionId);
   const ownedQuizzes = await db.query.quizzes.findMany({
     where: eq(quizzes.professorId, user.id),
   });

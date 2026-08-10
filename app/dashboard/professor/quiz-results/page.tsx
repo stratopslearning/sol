@@ -20,6 +20,7 @@ import {
 import { withBasePath } from "@/lib/basePath";
 import { getOrCreateUser } from "@/lib/getOrCreateUser";
 import { fetchSubmittedAttemptsForProfessorSections } from "@/lib/professorVisibleAttempts";
+import { partitionEnrollmentsByConclusion } from "@/lib/sectionAvailability";
 import { cleanQuizDescription } from "@/lib/utils";
 
 export default async function QuizResultsPage() {
@@ -30,8 +31,10 @@ export default async function QuizResultsPage() {
     where: eq(professorSections.professorId, user.id),
     with: { section: { with: { course: true } } },
   });
+  const { active: ongoingEnrollments } =
+    partitionEnrollmentsByConclusion(professorSectionsList);
 
-  const enrolledSectionIds = professorSectionsList.map((ps) => ps.section.id);
+  const enrolledSectionIds = ongoingEnrollments.map((ps) => ps.section.id);
 
   if (enrolledSectionIds.length === 0) {
     return (

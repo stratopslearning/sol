@@ -94,6 +94,15 @@ export async function POST(
           }),
         );
       }
+      if (error.message.includes('section has ended')) {
+        return apiErrorResponse(
+          new ApiError({
+            status: 400,
+            message: error.message,
+            extras: { sectionConcluded: true },
+          }),
+        );
+      }
       if (error.message.includes('has ended')) {
         return apiErrorResponse(
           new ApiError({

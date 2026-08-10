@@ -5,6 +5,8 @@ import { eq, and, inArray, gte, lte, isNotNull } from 'drizzle-orm';
 import { auth } from '@clerk/nextjs/server';
 import { parse } from 'json2csv';
 
+import { extractRequestMeta, logAudit } from '@/lib/audit';
+
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
@@ -106,6 +108,23 @@ export async function GET(req: NextRequest) {
     // Generate CSV
     const csv = parse(csvData, {
       fields: ['Student Name', 'Student Email', 'Quiz Name', 'Attempt Date', 'Score', 'Max Score', 'Attempt Number'],
+    });
+
+    const meta = extractRequestMeta(req);
+    await logAudit({
+      actorUserId: professor.id,
+      actorClerkId: professor.clerkId,
+      action: 'education.grades.export',
+      targetType: 'quiz',
+      targetId: quizId ?? 'all',
+      metadata: {
+        rowCount: csvData.length,
+        dateFrom: dateFrom || null,
+        dateTo: dateTo || null,
+        sectionCount: sectionIds.length,
+      },
+      ip: meta.ip,
+      userAgent: meta.userAgent,
     });
 
     // Return CSV file

@@ -32,6 +32,7 @@ import { activeOnly } from '@/lib/db/filters';
 import { withBasePath } from '@/lib/basePath';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import { getAttentionItemsForProfessor } from '@/lib/professorAttention';
+import { partitionEnrollmentsByConclusion } from '@/lib/sectionAvailability';
 
 export default async function ProfessorDashboard() {
   const user = await getOrCreateUser();
@@ -43,8 +44,10 @@ export default async function ProfessorDashboard() {
       section: { with: { course: true } },
     },
   });
+  const { active: ongoingEnrollments } =
+    partitionEnrollmentsByConclusion(professorEnrollments);
 
-  const sectionIds = professorEnrollments.map((e) => e.sectionId);
+  const sectionIds = ongoingEnrollments.map((e) => e.sectionId);
 
   const sectionQuizLinks =
     sectionIds.length > 0
@@ -107,7 +110,7 @@ export default async function ProfessorDashboard() {
         })
       : [];
 
-  const totalSections = professorEnrollments.length;
+  const totalSections = ongoingEnrollments.length;
   const activeQuizzes = professorQuizzes.filter((q) => q.isActive).length;
   const draftQuizzes = professorQuizzes.filter((q) => !q.isActive).length;
   const submittedAttemptsList = professorQuizzes.flatMap((q) =>

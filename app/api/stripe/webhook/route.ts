@@ -4,6 +4,7 @@ import type Stripe from 'stripe';
 
 import { db } from '@/app/db';
 import { stripeEvents, users as dbUsers } from '@/app/db/schema';
+import { logAudit } from '@/lib/audit';
 import { stripe } from '@/lib/stripe';
 
 // Stripe webhooks need the raw request body for signature verification, so
@@ -118,6 +119,14 @@ async function processStripeEvent(event: Stripe.Event): Promise<void> {
           `checkout.session.completed referenced unknown clerkUserId ${clerkUserId} (session ${session.id})`,
         );
       }
+      await logAudit({
+        actorUserId: result[0].id,
+        actorClerkId: clerkUserId,
+        action: 'education.paid.update',
+        targetType: 'user',
+        targetId: result[0].id,
+        metadata: { paid: true, source: 'stripe.checkout.session.completed' },
+      });
       return;
     }
 
@@ -166,10 +175,22 @@ async function processStripeEvent(event: Stripe.Event): Promise<void> {
         return;
       }
 
-      await db
+      const cleared = await db
         .update(dbUsers)
         .set({ paid: false, updatedAt: new Date() })
-        .where(eq(dbUsers.clerkId, clerkUserId));
+        .where(eq(dbUsers.clerkId, clerkUserId))
+        .returning({ id: dbUsers.id });
+
+      if (cleared[0]) {
+        await logAudit({
+          actorUserId: cleared[0].id,
+          actorClerkId: clerkUserId,
+          action: 'education.paid.update',
+          targetType: 'user',
+          targetId: cleared[0].id,
+          metadata: { paid: false, source: event.type },
+        });
+      }
       return;
     }
 

@@ -470,7 +470,7 @@ export default function AdminQuizzesPageClient({
             );
             return quiz ? (
               <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 backdrop-blur-sm p-4">
-                <div className="bg-surface text-ink rounded-lg paper-shadow-lg border border-rule p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+                <div className="bg-surface text-ink rounded-lg paper-shadow-lg border border-rule p-6 w-full max-w-3xl max-h-[90vh] overflow-y-auto">
                   <QuizEditForm
                     quiz={{ ...quiz, questions: quiz.questions ?? [] }}
                     courses={courseOptions}

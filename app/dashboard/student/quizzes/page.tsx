@@ -7,6 +7,7 @@ import { AppShell } from '@/components/layout/AppShell';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { withBasePath } from '@/lib/basePath';
 import { requireStudent } from '@/lib/auth';
+import { partitionEnrollmentsByConclusion } from '@/lib/sectionAvailability';
 import {
   formatDateTimeStable,
   normalizeDatabaseDate,
@@ -19,8 +20,11 @@ export default async function StudentQuizzesPage() {
     where: eq(studentSections.studentId, user.id),
     with: { section: true },
   });
+  const { active: activeEnrollments } =
+    partitionEnrollmentsByConclusion(enrollments);
 
-  const sectionIds = enrollments.map((e) => e.sectionId);
+  const sectionIds = activeEnrollments.map((e) => e.sectionId);
+  const activeSectionIdSet = new Set(sectionIds);
 
   const quizAssignments =
     sectionIds.length > 0
@@ -77,6 +81,7 @@ export default async function StudentQuizzesPage() {
     endDate: quiz.endDate,
     maxAttempts: quiz.maxAttempts ?? 1,
     sectionNames: (quiz.sectionAssignments ?? [])
+      .filter((sa) => sa.sectionId && activeSectionIdSet.has(sa.sectionId))
       .map((sa) => sa.section?.name)
       .filter((n): n is string => Boolean(n)),
   }));

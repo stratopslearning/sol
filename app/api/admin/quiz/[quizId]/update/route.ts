@@ -6,6 +6,10 @@ import { z } from 'zod';
 import { db } from '@/app/db';
 import { quizSections, quizzes, users } from '@/app/db/schema';
 import { upsertQuizQuestions } from '@/lib/quizQuestionUpsert';
+import {
+  buildQuizDescriptionWithMetadata,
+  extractQuizMetadata,
+} from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,7 +21,7 @@ const isoDateString = z
 
 const adminQuizUpdateSchema = z.object({
   title: z.string().min(1).max(200),
-  description: z.string().max(4_000).optional().nullable(),
+  description: z.string().max(8_000).optional().nullable(),
   maxAttempts: z.number().int().min(1).max(20),
   timeLimit: z.number().int().min(1).max(24 * 60).optional().nullable(),
   passingScore: z.number().int().min(0).max(100).default(60),
@@ -71,13 +75,20 @@ export async function PUT(
       );
     }
     const data = parsed.data;
+    const hideFeedbackAfterDue = extractQuizMetadata(
+      data.description,
+    ).hideFeedbackAfterDue;
+    const normalizedDescription = buildQuizDescriptionWithMetadata(
+      data.description,
+      hideFeedbackAfterDue,
+    );
 
     await db.transaction(async (tx) => {
       await tx
         .update(quizzes)
         .set({
           title: data.title,
-          description: data.description ?? null,
+          description: normalizedDescription || null,
           maxAttempts: data.maxAttempts,
           timeLimit: data.timeLimit ?? null,
           passingScore: data.passingScore,

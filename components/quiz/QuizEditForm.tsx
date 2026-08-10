@@ -23,7 +23,12 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { SectionMultiSelect } from '@/components/ui/SectionMultiSelect';
-import { cleanQuizDescription, extractQuizMetadata } from '@/lib/utils';
+import {
+  buildQuizDescriptionWithMetadata,
+  cleanQuizDescription,
+  extractQuizMetadata,
+} from '@/lib/utils';
+import { toast } from 'sonner';
 
 interface Question {
   id: string;
@@ -241,7 +246,10 @@ export function QuizEditForm({ quiz, courses, apiEndpoint = `/api/professor/quiz
         },
         body: JSON.stringify({
           title: formData.title,
-          description: formData.description ? `${formData.description}\n\n<!-- QUIZ_METADATA: ${JSON.stringify({ hideFeedbackAfterDue: formData.hideFeedbackAfterDue })} -->` : (formData.hideFeedbackAfterDue ? `<!-- QUIZ_METADATA: ${JSON.stringify({ hideFeedbackAfterDue: formData.hideFeedbackAfterDue })} -->` : ''),
+          description: buildQuizDescriptionWithMetadata(
+            formData.description,
+            formData.hideFeedbackAfterDue,
+          ),
           maxAttempts: formData.maxAttempts,
           timeLimit: formData.timeLimit,
           passingScore: formData.passingScore,
@@ -263,11 +271,23 @@ export function QuizEditForm({ quiz, courses, apiEndpoint = `/api/professor/quiz
           router.push(`/dashboard/professor/quizzes?success=true&quizId=${quiz.id}`);
         }
       } else {
-        throw new Error('Failed to update quiz');
+        let message = 'Failed to update quiz';
+        try {
+          const errBody = await response.json();
+          if (typeof errBody?.error === 'string') message = errBody.error;
+          if (Array.isArray(errBody?.details) && errBody.details[0]?.message) {
+            message = `${message}: ${errBody.details[0].message}`;
+          }
+        } catch {
+          /* ignore */
+        }
+        throw new Error(message);
       }
     } catch (error) {
       console.error('Error updating quiz:', error);
-      // Handle error (show toast, etc.)
+      toast.error(
+        error instanceof Error ? error.message : 'Failed to update quiz',
+      );
     } finally {
       setIsSubmitting(false);
     }

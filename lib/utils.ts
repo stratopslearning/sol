@@ -297,13 +297,23 @@ export function shouldHideFeedbackForStudent(quiz: { endDate: Date | null; descr
 }
 
 /**
- * Clean quiz description by removing metadata for display purposes
- * @param description - Quiz description that may contain metadata
- * @returns Clean description without metadata
+ * Clean quiz description by removing embedded quiz-settings metadata.
  */
 export function cleanQuizDescription(description: string | null | undefined): string {
   if (!description) return '';
-  
-  // Remove metadata from description for display
-  return description.replace(/\n\n<!-- QUIZ_METADATA: {.*?} -->/g, '').trim();
+
+  return description
+    .replace(/\n*<!--\s*QUIZ_METADATA:\s*{[\s\S]*?}\s*-->/g, '')
+    .trim();
+}
+
+/** Persist human description + optional hide-feedback flag as one description column. */
+export function buildQuizDescriptionWithMetadata(
+  description: string | null | undefined,
+  hideFeedbackAfterDue: boolean,
+): string {
+  const clean = cleanQuizDescription(description);
+  if (!hideFeedbackAfterDue) return clean;
+  const meta = `<!-- QUIZ_METADATA: ${JSON.stringify({ hideFeedbackAfterDue: true })} -->`;
+  return clean ? `${clean}\n\n${meta}` : meta;
 }

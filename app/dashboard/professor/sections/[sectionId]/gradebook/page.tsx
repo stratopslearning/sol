@@ -17,6 +17,7 @@ import { AppShell } from '@/components/layout/AppShell';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { SectionHeading } from '@/components/layout/SectionHeading';
 import { EmptyState } from '@/components/patterns/EmptyState';
+import { logGradebookAccess } from '@/lib/audit';
 import { requireAuth, getDashboardUrl } from '@/lib/auth';
 import { withBasePath } from '@/lib/basePath';
 import { activeOnly } from '@/lib/db/filters';
@@ -34,6 +35,13 @@ export default async function SectionGradebookPage({
   if (me.role !== 'PROFESSOR' && me.role !== 'ADMIN') {
     appRedirect(getDashboardUrl(me.role));
   }
+
+  await logGradebookAccess({
+    actorUserId: me.id,
+    actorClerkId: me.clerkId,
+    sectionId,
+    role: me.role,
+  });
 
   const section = await db.query.sections.findFirst({
     where: and(eq(sections.id, sectionId), activeOnly(sections.deletedAt)),

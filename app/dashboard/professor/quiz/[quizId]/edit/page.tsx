@@ -14,6 +14,7 @@ import { activeOnly } from "@/lib/db/filters";
 import { withBasePath } from "@/lib/basePath";
 import { getOrCreateUser } from "@/lib/getOrCreateUser";
 import { cleanQuizDescription } from "@/lib/utils";
+import { isSectionConcluded } from "@/lib/sectionAvailability";
 
 import { CreateEditableCopyButton } from "./CreateEditableCopyButton";
 
@@ -77,13 +78,13 @@ export default async function EditQuizPage({
               label: "My quizzes",
               href: withBasePath("/dashboard/professor/quizzes"),
             },
-            { label: "Edit copy" },
+            { label: "Edit" },
           ]}
           eyebrow="Shared quiz"
           title={quiz.title}
           description={`This quiz was created by ${
             quiz.professor?.email ?? "another instructor"
-          }. Create a section-specific copy before editing questions, dates, or settings.`}
+          }. Click Edit to work on a version for your section only — other sections keep the original.`}
           actions={
             <Button asChild variant="outline">
               <a
@@ -105,14 +106,14 @@ export default async function EditQuizPage({
                 <Copy className="h-5 w-5" />
               </div>
               <div className="min-w-0">
-                <span className="eyebrow text-ink-faint">Section copy</span>
+                <span className="eyebrow text-ink-faint">Shared quiz</span>
                 <h2 className="mt-2 font-display text-2xl text-ink">
-                  Make this quiz editable for your section.
+                  Edit this quiz for your section.
                 </h2>
                 <p className="mt-3 max-w-2xl text-sm leading-6 text-ink-muted">
-                  Admin-created quizzes can be shared across many sections. To
-                  protect other classes, SOL will create a professor-owned copy
-                  and move only your enrolled section assignments onto it.
+                  This quiz is shared across sections. Editing creates your own
+                  version and moves only the sections you teach onto it, so
+                  other classes keep the original.
                 </p>
                 <div className="mt-6 flex flex-wrap gap-2">
                   {editableSectionAssignments.map((assignment) => (
@@ -150,10 +151,10 @@ export default async function EditQuizPage({
                 </dd>
               </div>
               <div>
-                <dt className="eyebrow text-ink-faint">After copying</dt>
+                <dt className="eyebrow text-ink-faint">After you edit</dt>
                 <dd className="mt-1 text-ink-muted">
-                  You can edit title, questions, dates, attempts, and status on
-                  the new copy.
+                  You can change title, questions, dates, attempts, and status
+                  on your version.
                 </dd>
               </div>
             </dl>
@@ -179,15 +180,22 @@ export default async function EditQuizPage({
         : null,
   }));
 
-  const enrolledSections = professorSectionsList.map((ps) => ({
+  const assignedSectionIds = quiz.sectionAssignments.map(
+    (sa) => sa.section.id,
+  );
+  const assignedIdSet = new Set(assignedSectionIds);
+
+  // Prefer ongoing sections for assignment; keep currently assigned concluded
+  // sections visible so edit doesn't silently drop them.
+  const sectionOptionsSource = professorSectionsList.filter(
+    (ps) =>
+      !isSectionConcluded(ps.section) || assignedIdSet.has(ps.section.id),
+  );
+  const enrolledSections = sectionOptionsSource.map((ps) => ({
     id: ps.section.id,
     title: `${ps.section.course.title} - ${ps.section.name}`,
     description: ps.section.course.description,
   }));
-
-  const assignedSectionIds = quiz.sectionAssignments.map(
-    (sa) => sa.section.id,
-  );
 
   return (
     <AppShell

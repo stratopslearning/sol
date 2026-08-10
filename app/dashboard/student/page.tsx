@@ -17,6 +17,7 @@ import { SectionHeading } from '@/components/layout/SectionHeading';
 import { StatCard } from '@/components/patterns/StatCard';
 import { activeOnly } from '@/lib/db/filters';
 import { requireStudent } from '@/lib/auth';
+import { partitionEnrollmentsByConclusion } from '@/lib/sectionAvailability';
 
 export default async function StudentDashboard() {
   const user = await requireStudent();
@@ -25,8 +26,10 @@ export default async function StudentDashboard() {
     where: eq(studentSections.studentId, user.id),
     with: { section: true },
   });
+  const { active: activeEnrollments } =
+    partitionEnrollmentsByConclusion(enrollments);
 
-  const sectionIds = enrollments.map((e) => e.sectionId);
+  const sectionIds = activeEnrollments.map((e) => e.sectionId);
 
   const availableQuizzes =
     sectionIds.length > 0
@@ -81,7 +84,7 @@ export default async function StudentDashboard() {
   });
   const bestPercentages = Object.values(bestPerQuiz);
 
-  const totalSections = enrollments.length;
+  const totalSections = activeEnrollments.length;
   const totalQuizzes = uniqueActiveQuizzes.length;
   const totalAttempts = submittedOnly.length;
   const averageScore =
@@ -156,7 +159,7 @@ export default async function StudentDashboard() {
             title="Where you're studying"
           />
           <div className="paper paper-shadow p-1">
-            <EnrollmentList enrollments={enrollments} />
+            <EnrollmentList enrollments={activeEnrollments} />
           </div>
         </div>
         <div className="flex flex-col gap-5">

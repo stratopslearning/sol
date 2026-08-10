@@ -752,22 +752,12 @@
 }
 
 /* ============================================================================
-   404 — brand field with ghost numeral
+   404 — hero mesh field with ghost numeral
 ============================================================================ */
-.not-found-page {
-  position: relative;
-  display: flex;
-  min-height: 100vh;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  background: var(--brand);
-  color: var(--brand-fg);
-}
-
 .not-found-watermark {
   position: absolute;
   inset: 0;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -777,32 +767,14 @@
   font-weight: 600;
   line-height: 1;
   letter-spacing: -0.045em;
-  color: oklch(1 0 0 / 0.1);
+  color: color-mix(in oklch, var(--ink) 8%, transparent);
   user-select: none;
   pointer-events: none;
   font-variation-settings: "opsz" 144, "SOFT" 40;
 }
 
 .dark .not-found-watermark {
-  color: oklch(0 0 0 / 0.14);
-}
-
-.not-found-cta {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 9999px;
-  background: var(--brand-fg);
-  color: var(--brand);
-  padding: 0.875rem 2rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  line-height: 1;
-  transition: background-color 180ms cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.not-found-cta:hover {
-  opacity: 0.92;
+  color: color-mix(in oklch, var(--ink) 12%, transparent);
 }
 
 /* ============================================================================

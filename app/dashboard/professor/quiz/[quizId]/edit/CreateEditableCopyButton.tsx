@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Copy } from "lucide-react";
+import { Edit } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -22,12 +22,11 @@ export function CreateEditableCopyButton({ quizId }: { quizId: string }) {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to create editable copy");
+        throw new Error(data.error || "Failed to open quiz for editing");
       }
 
-      toast.success("Editable copy created", {
-        description:
-          "Your section now uses a professor-owned version of this quiz.",
+      toast.success("Ready to edit", {
+        description: "Your section now uses your own version of this quiz.",
       });
       router.push(`/dashboard/professor/quiz/${data.quiz.id}/edit`);
       router.refresh();
@@ -35,7 +34,7 @@ export function CreateEditableCopyButton({ quizId }: { quizId: string }) {
       toast.error(
         error instanceof Error
           ? error.message
-          : "Failed to create editable copy",
+          : "Failed to open quiz for editing",
       );
     } finally {
       setLoading(false);
@@ -44,8 +43,8 @@ export function CreateEditableCopyButton({ quizId }: { quizId: string }) {
 
   return (
     <Button onClick={handleCreateCopy} loading={loading} disabled={loading}>
-      <Copy className="h-4 w-4" />
-      {loading ? "Creating copy..." : "Create editable copy"}
+      <Edit className="h-4 w-4" />
+      {loading ? "Preparing…" : "Edit"}
     </Button>
   );
 }

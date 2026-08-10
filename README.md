@@ -12,9 +12,9 @@ SOL turns long-form course content into structured, auto-graded coursework. Facu
 
 - **AI-graded short answers** with rubric-aligned reasoning. Every score includes the model's working so faculty can verify, not just trust.
 - **Course / Section / Quiz model** designed for real institutions: enrollment codes, multi-section courses, professor TAs, and admin oversight.
-- **Soft-delete + audit log** on every destructive action, with admin-only purge endpoints when records truly need to disappear.
+- **Soft-delete + audit log** on every destructive action, with admin-only purge endpoints when records truly need to disappear. Admins can browse the trail at `/dashboard/admin/audit`.
 - **Stripe-ready** but launches with payments disabled by default via a feature flag — flip it on without redeploying schema.
-- **FERPA-aware defaults**: PII never logged in production, server-side authorization on every page and API route, role-based redirects.
+- **FERPA-aware defaults**: PII never logged in production, server-side authorization on every page and API route, role-based redirects. Internal control binder: [`compliance/`](./compliance/).
 - **Deterministic fallback grading** so the system stays usable when OpenAI is unreachable or the key is rotated.
 
 ---

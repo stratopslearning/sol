@@ -113,6 +113,36 @@ async function main() {
       fail('course + section CRUD', e);
     }
 
+    // --- section endsAt (conclude / reopen) ---
+    try {
+      const pastEnds = new Date(Date.now() - 60_000);
+      await db
+        .update(schema.sections)
+        .set({ endsAt: pastEnds })
+        .where(eq(schema.sections.id, sectionId));
+      const concluded = await db.query.sections.findFirst({
+        where: eq(schema.sections.id, sectionId),
+      });
+      if (!concluded?.endsAt) throw new Error('endsAt not persisted');
+      const { isSectionConcluded } = await import('../lib/sectionAvailability');
+      if (!isSectionConcluded(concluded)) {
+        throw new Error('section should be concluded after past endsAt');
+      }
+      await db
+        .update(schema.sections)
+        .set({ endsAt: null })
+        .where(eq(schema.sections.id, sectionId));
+      const reopened = await db.query.sections.findFirst({
+        where: eq(schema.sections.id, sectionId),
+      });
+      if (reopened?.endsAt != null || isSectionConcluded(reopened)) {
+        throw new Error('clearing endsAt should reopen section');
+      }
+      ok('section endsAt conclude/reopen');
+    } catch (e) {
+      fail('section endsAt conclude/reopen', e);
+    }
+
     // --- enrollments ---
     try {
       await db.insert(schema.professorSections).values({

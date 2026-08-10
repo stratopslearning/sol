@@ -1,12 +1,25 @@
-import { appRedirect } from '@/lib/serverRedirect';
-import { getOrCreateUser } from '@/lib/getOrCreateUser';
-import { db } from '@/app/db';
-import { assignments, attempts, questions, quizzes } from '@/app/db/schema';
 import { and, eq, isNull } from 'drizzle-orm';
+
+import { db } from '@/app/db';
+import {
+  assignments,
+  attempts,
+  questions,
+  quizSections,
+  quizzes,
+  sections,
+} from '@/app/db/schema';
 import { QuizTakeForm } from '@/components/quiz/QuizTakeForm';
 import { activeOnly } from '@/lib/db/filters';
 import { isStudentEntitled } from '@/lib/featureFlags';
+import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import { getQuizAvailability } from '@/lib/quizAvailability';
+import { resolveAttemptSectionId } from '@/lib/resolveAttemptSection';
+import {
+  isSectionConcluded,
+  SECTION_CONCLUDED_MESSAGE,
+} from '@/lib/sectionAvailability';
+import { appRedirect } from '@/lib/serverRedirect';
 import { cleanQuizDescription, normalizeDatabaseDate } from '@/lib/utils';
 
 interface QuizPageProps {
@@ -34,12 +47,16 @@ export default async function QuizPage(props: QuizPageProps) {
   const now = new Date();
   const startDate = normalizeDatabaseDate(quiz.startDate);
   const endDate = normalizeDatabaseDate(quiz.endDate);
-  
+
   if (startDate && now < startDate) {
-    appRedirect(`/dashboard/student?error=quiz_not_started&quizId=${quizId}&message=${encodeURIComponent('This quiz has not started yet.')}`);
+    appRedirect(
+      `/dashboard/student?error=quiz_not_started&quizId=${quizId}&message=${encodeURIComponent('This quiz has not started yet.')}`,
+    );
   }
   if (endDate && now > endDate) {
-    appRedirect(`/dashboard/student?error=quiz_ended&quizId=${quizId}&message=${encodeURIComponent('This quiz has ended.')}`);
+    appRedirect(
+      `/dashboard/student?error=quiz_ended&quizId=${quizId}&message=${encodeURIComponent('This quiz has ended.')}`,
+    );
   }
 
   // Fetch questions for this quiz
@@ -83,6 +100,22 @@ export default async function QuizPage(props: QuizPageProps) {
     ),
   });
 
+  const quizSectionLinks = await db.query.quizSections.findMany({
+    where: eq(quizSections.quizId, quizId),
+  });
+  const quizSectionIds = quizSectionLinks.map((qs) => qs.sectionId);
+  const sectionId = await resolveAttemptSectionId(user.id, quizSectionIds);
+  if (sectionId) {
+    const section = await db.query.sections.findFirst({
+      where: eq(sections.id, sectionId),
+    });
+    if (isSectionConcluded(section, now) && !inProgressAttempt) {
+      appRedirect(
+        `/dashboard/student?error=section_concluded&quizId=${quizId}&message=${encodeURIComponent(SECTION_CONCLUDED_MESSAGE)}`,
+      );
+    }
+  }
+
   const availability = getQuizAvailability(quiz, assignment, now);
   if (!availability.allowed && !inProgressAttempt) {
     const messages = {
@@ -106,31 +139,33 @@ export default async function QuizPage(props: QuizPageProps) {
   return (
     <div className="bg-paper text-ink min-h-screen">
       <QuizTakeForm
-      quiz={{
-        id: quiz.id,
-        title: quiz.title,
-        description: quiz.description ? cleanQuizDescription(quiz.description) : undefined,
-        timeLimit: quiz.timeLimit || undefined,
-        endDate: quizEndDate ? quizEndDate.toISOString() : null,
-        totalQuestions: quizQuestions.length,
-      }}
-      questions={quizQuestions.map(q => ({
-        id: q.id,
-        type: q.type,
-        question: q.question,
-        options:
-          typeof q.options === 'string'
-            ? JSON.parse(q.options)
-            : Array.isArray(q.options)
-              ? q.options
-              : undefined,
-        order: q.order,
-        points: q.points,
-      }))}
-      assignmentId={assignment.id}
-      userId={user.id}
-      userRole={user.role}
-    />
+        quiz={{
+          id: quiz.id,
+          title: quiz.title,
+          description: quiz.description
+            ? cleanQuizDescription(quiz.description)
+            : undefined,
+          timeLimit: quiz.timeLimit || undefined,
+          endDate: quizEndDate ? quizEndDate.toISOString() : null,
+          totalQuestions: quizQuestions.length,
+        }}
+        questions={quizQuestions.map((q) => ({
+          id: q.id,
+          type: q.type,
+          question: q.question,
+          options:
+            typeof q.options === 'string'
+              ? JSON.parse(q.options)
+              : Array.isArray(q.options)
+                ? q.options
+                : undefined,
+          order: q.order,
+          points: q.points,
+        }))}
+        assignmentId={assignment.id}
+        userId={user.id}
+        userRole={user.role}
+      />
     </div>
   );
 }
