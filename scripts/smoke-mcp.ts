@@ -8,6 +8,12 @@
  *   SOL_MCP_URL=http://localhost:3000/learning/api/mcp \
  *   SOL_MCP_TOKEN=sol_pat_… \
  *   npx tsx scripts/smoke-mcp.ts
+ *
+ * Note: the endpoint also accepts Clerk OAuth access tokens (Claude.ai /
+ * ChatGPT connectors), but that flow is interactive (browser sign-in +
+ * PKCE) and can't run headlessly here — this script stays PAT-only for CI.
+ * OAuth is covered by unit tests (tests/unit/mcpAuth.test.ts) and a manual
+ * connector smoke after deploy.
  */
 import { config as loadEnv } from 'dotenv';
 

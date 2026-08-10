@@ -2,7 +2,14 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Archive, Copy, Edit, Eye, MessagesSquare } from "lucide-react";
+import {
+  Archive,
+  ArchiveRestore,
+  Copy,
+  Edit,
+  Eye,
+  MessagesSquare,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -174,14 +181,21 @@ export function QuizActions({
               aria-label={isActive ? "Archive quiz" : "Activate quiz"}
               onClick={handleArchive}
             >
-              <Archive className="h-4 w-4" />
+              {isActive ? (
+                <Archive className="h-4 w-4" />
+              ) : (
+                <ArchiveRestore className="h-4 w-4" />
+              )}
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top">
             {isActive ? "Archive quiz" : "Activate quiz"}
           </TooltipContent>
         </Tooltip>
-      ) : null}
+      ) : (
+        // Keep icon columns aligned when archive is unavailable (shared quizzes).
+        <span className="inline-flex size-8 shrink-0" aria-hidden />
+      )}
     </div>
   );
 }

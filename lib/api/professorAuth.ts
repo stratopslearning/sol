@@ -24,6 +24,8 @@ export interface ProfessorApiAuth {
   user: UserData;
   /** True when authenticated via personal access token (agent path). */
   viaToken: boolean;
+  /** True when authenticated via a Clerk OAuth access token (Claude.ai / ChatGPT connectors). */
+  viaOAuth?: boolean;
   tokenId: string | null;
   scopes: TokenScope[];
 }
