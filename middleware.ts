@@ -47,6 +47,22 @@ export default clerkMiddleware(async (auth, req) => {
     ? pathname.slice(BASE_PATH.length) || '/'
     : pathname;
 
+  // Markdown mirrors for public docs (llmstxt.org): /docs.md and /docs/:slug.md
+  if (appPath === '/docs.md' || appPath === '/docs/index.md') {
+    return NextResponse.rewrite(
+      new URL(`${BASE_PATH}/docs/md/index${req.nextUrl.search}`, req.url),
+    );
+  }
+  const docsMdMatch = appPath.match(/^\/docs\/([^/]+)\.md$/);
+  if (docsMdMatch) {
+    return NextResponse.rewrite(
+      new URL(
+        `${BASE_PATH}/docs/md/${docsMdMatch[1]}${req.nextUrl.search}`,
+        req.url,
+      ),
+    );
+  }
+
   // Agent access paths authenticate inside the route handler with a personal
   // access token (`sol_pat_…`) instead of a Clerk cookie, so the edge layer
   // must not bounce them to the login page. Every handler on these paths
@@ -69,6 +85,12 @@ export default clerkMiddleware(async (auth, req) => {
     appPath.startsWith('/apple-icon/') ||
     appPath === '/icon' ||
     appPath.startsWith('/icon/') ||
+    appPath === '/docs' ||
+    appPath.startsWith('/docs/') ||
+    appPath === '/docs.md' ||
+    appPath === '/llms.txt' ||
+    appPath === '/robots.txt' ||
+    appPath === '/sitemap.xml' ||
     appPath === '/login' ||
     appPath.startsWith('/login/') ||
     appPath === '/signup' ||

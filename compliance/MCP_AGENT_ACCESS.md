@@ -67,7 +67,7 @@ user row and run the same authorization checks.
   a disclosure to the school official themselves, not to a new third party;
   however, what the professor's AI client then does with the data is governed
   by the institution's own AI/tooling policy. The connect guide
-  ([PROFESSOR_MCP.md](../PROFESSOR_MCP.md)) tells faculty to use
+  ([Agent Access guide](../content/docs/professor-agent-access.md)) tells faculty to use
   institution-approved agents only.
 - Server-side AI (grading, Socratic chat) is unchanged and still follows
   [AI_EDUCATION_RECORDS.md](./AI_EDUCATION_RECORDS.md) minimization.
