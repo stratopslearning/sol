@@ -286,7 +286,9 @@ export default function AdminQuizzesPageClient({
                     <TableHead className="tnum">Attempts</TableHead>
                     <TableHead className="tnum">Time limit</TableHead>
                     <TableHead className="tnum">Questions</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead className="sticky right-0 z-10 bg-surface-sunken/95 px-3 text-right">
+                      Actions
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -345,7 +347,7 @@ export default function AdminQuizzesPageClient({
                           <TableCell className="tnum text-ink-muted align-top">
                             {quiz.questions?.length ?? 0}
                           </TableCell>
-                          <TableCell className="text-right align-top">
+                          <TableCell className="sticky right-0 z-10 bg-paper px-3 text-right align-top">
                             <div className="flex items-center justify-end gap-2">
                               <Button
                                 size="sm"

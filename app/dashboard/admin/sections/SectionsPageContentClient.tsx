@@ -207,7 +207,9 @@ export default function SectionsPageContentClient({
                 <TableHead className="tnum">Faculty</TableHead>
                 <TableHead>Faculty code</TableHead>
                 <TableHead>Learner code</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead className="sticky right-0 z-10 bg-surface-sunken/95 px-3 text-right">
+                  Actions
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -251,7 +253,7 @@ export default function SectionsPageContentClient({
                         />
                       </div>
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="sticky right-0 z-10 bg-paper px-3 text-right align-middle">
                       <div className="inline-flex items-center gap-1">
                         <Button asChild variant="ghost" size="sm">
                           <Link

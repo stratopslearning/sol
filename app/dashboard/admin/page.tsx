@@ -11,22 +11,11 @@ import { StatCard } from '@/components/patterns/StatCard';
 import { activeOnly } from '@/lib/db/filters';
 import { withBasePath } from '@/lib/basePath';
 import { requireAdmin } from '@/lib/auth';
+import {
+  getBalancedGridClass,
+  getBalancedItemClass,
+} from '@/lib/balancedGrid';
 import { partitionBySectionConclusion } from '@/lib/sectionAvailability';
-
-function getCourseCardLayoutClass(courseCount: number, index: number) {
-  const isLast = index === courseCount - 1;
-  const hasSingleMdRemainder = courseCount > 1 && courseCount % 2 === 1;
-  const hasSingleLgRemainder = courseCount > 3 && courseCount % 3 === 1;
-
-  if (!isLast) return '';
-
-  return [
-    hasSingleMdRemainder ? 'md:col-span-2' : '',
-    hasSingleLgRemainder ? 'lg:col-span-1 lg:col-start-2' : 'lg:col-span-1',
-  ]
-    .filter(Boolean)
-    .join(' ');
-}
 
 export default async function AdminDashboardPage() {
   // Defense in depth: middleware also enforces admin-only on /dashboard/admin,
@@ -44,6 +33,7 @@ export default async function AdminDashboardPage() {
 
   const studentCount = allUsers.filter((u) => u.role === 'STUDENT').length;
   const professorCount = allUsers.filter((u) => u.role === 'PROFESSOR').length;
+  const courseCount = allCourses.length;
 
   return (
     <AppShell role="admin" topbarEyebrow="Administration" topbarTitle="Overview">
@@ -118,7 +108,7 @@ export default async function AdminDashboardPage() {
             actions={<CourseFormModal mode="create" />}
           />
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className={`${getBalancedGridClass(courseCount)} items-stretch`}>
             {allCourses.map((course, index) => {
               const safeCourse = {
                 ...course,
@@ -127,8 +117,8 @@ export default async function AdminDashboardPage() {
               return (
                 <article
                   key={course.id}
-                  className={`paper paper-shadow p-6 flex flex-col gap-3 hover:bg-surface-sunken/40 transition-colors ${getCourseCardLayoutClass(
-                    allCourses.length,
+                  className={`paper paper-shadow p-6 flex flex-col gap-3 hover:bg-surface-sunken/40 transition-colors ${getBalancedItemClass(
+                    courseCount,
                     index,
                   )}`}
                 >
