@@ -16,7 +16,7 @@ export default async function ProfessorAgentAccessPage() {
   }
 
   const tokens = await listProfessorApiTokens(user.id);
-  const origin = (env.NEXT_PUBLIC_BASE_URL ?? "").replace(/\/$/, "");
+  const origin = (env().NEXT_PUBLIC_BASE_URL ?? "").replace(/\/$/, "");
   const mcpUrl = `${origin}${withBasePath("/api/mcp")}`;
 
   return (
