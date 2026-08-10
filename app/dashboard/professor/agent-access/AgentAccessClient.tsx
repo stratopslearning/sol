@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Copy, KeyRound, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { apiUrl, withBasePath } from "@/lib/basePath";
+import { apiUrl } from "@/lib/basePath";
 import { formatDateTimeStable } from "@/lib/utils";
 
 const SCOPE_OPTIONS: { id: string; label: string; hint: string }[] = [
@@ -34,19 +34,18 @@ type TokenRow = {
 
 export default function AgentAccessClient({
   initialTokens,
+  mcpUrl,
 }: {
   initialTokens: TokenRow[];
+  /** Absolute MCP endpoint — computed on the server to avoid hydration mismatch. */
+  mcpUrl: string;
 }) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [scopes, setScopes] = useState<string[]>(["read", "quizzes:write"]);
   const [loading, setLoading] = useState(false);
   const [mintedToken, setMintedToken] = useState<string | null>(null);
-
-  const mcpUrl =
-    typeof window !== "undefined"
-      ? `${window.location.origin}${withBasePath("/api/mcp")}`
-      : withBasePath("/api/mcp");
+  const mintInFlight = useRef(false);
 
   const toggleScope = (scope: string) => {
     setScopes((prev) =>
@@ -60,6 +59,7 @@ export default function AgentAccessClient({
   };
 
   const mint = async () => {
+    if (mintInFlight.current || loading) return;
     if (!name.trim()) {
       toast.error("Give the token a name (e.g. the agent it's for)");
       return;
@@ -68,6 +68,7 @@ export default function AgentAccessClient({
       toast.error("Select at least one scope");
       return;
     }
+    mintInFlight.current = true;
     setLoading(true);
     try {
       const res = await fetch(apiUrl("/api/professor/tokens"), {
@@ -77,8 +78,13 @@ export default function AgentAccessClient({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        const retryAfter = Number(res.headers.get("Retry-After") || 0);
+        const base =
+          typeof data.error === "string" ? data.error : "Failed to create token";
         toast.error(
-          typeof data.error === "string" ? data.error : "Failed to create token",
+          res.status === 429 && retryAfter > 0
+            ? `${base} Try again in ~${retryAfter}s.`
+            : base,
         );
         return;
       }
@@ -87,6 +93,7 @@ export default function AgentAccessClient({
       toast.success("Token created — copy it now, it won't be shown again");
       router.refresh();
     } finally {
+      mintInFlight.current = false;
       setLoading(false);
     }
   };

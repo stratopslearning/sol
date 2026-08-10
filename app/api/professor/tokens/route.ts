@@ -48,15 +48,7 @@ export async function POST(req: NextRequest) {
   try {
     const user = await requireSessionProfessor();
 
-    const limited = await enforceRateLimit({
-      key: `token-mint:${user.id}`,
-      limit: 10,
-      windowMs: 60_000,
-      prefix: 'rl',
-      message: 'Too many token requests. Please wait a moment.',
-    });
-    if (limited) return limited;
-
+    // Validate before rate-limiting so retries on bad input don't burn quota.
     const body = await req.json().catch(() => null);
     const parsed = createSchema.safeParse(body);
     if (!parsed.success) {
@@ -70,6 +62,17 @@ export async function POST(req: NextRequest) {
         'Token limit reached (10 active). Revoke an unused token first.',
       );
     }
+
+    // Generous window: minting is rare, but hydration remounts / double-clicks
+    // were burning a 10/min budget before a token ever landed.
+    const limited = await enforceRateLimit({
+      key: `token-mint:${user.id}`,
+      limit: 20,
+      windowMs: 60 * 60_000,
+      prefix: 'rl:pat',
+      message: 'Too many token requests. Please wait a moment.',
+    });
+    if (limited) return limited;
 
     const minted = await mintProfessorApiToken({
       userId: user.id,
