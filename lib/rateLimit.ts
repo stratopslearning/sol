@@ -53,8 +53,9 @@ function getUpstashLimiter(
   limit: number,
   windowMs: number,
 ): Ratelimit | null {
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  // Dynamic lookup avoids Next.js build-time inlining of undefined server secrets.
+  const url = process.env['UPSTASH_REDIS_REST_URL'];
+  const token = process.env['UPSTASH_REDIS_REST_TOKEN'];
   if (!url || !token) {
     return null;
   }
@@ -67,9 +68,14 @@ function getUpstashLimiter(
   const cacheKey = `${prefix}:${limit}:${windowMs}`;
   let limiter = upstashLimiters.get(cacheKey);
   if (!limiter) {
+    // Prefer second-based windows — Upstash docs use "10 s" / "1 m".
+    const window =
+      windowMs % 60_000 === 0
+        ? (`${windowMs / 60_000} m` as `${number} m`)
+        : (`${Math.max(1, Math.ceil(windowMs / 1000))} s` as `${number} s`);
     limiter = new Ratelimit({
       redis: redisClient,
-      limiter: Ratelimit.slidingWindow(limit, `${windowMs} ms`),
+      limiter: Ratelimit.slidingWindow(limit, window),
       analytics: false,
       prefix,
     });
@@ -84,9 +90,10 @@ function getUpstashLimiter(
  * Returns a RateLimitResult; the caller is responsible for translating a
  * `success: false` into a 429 (or whatever response shape the route uses).
  *
- * In production, Upstash must be configured (enforced by `lib/env.ts`). If it
- * is somehow missing at runtime, we fail closed (deny) rather than using the
- * unsafe in-memory fallback across multiple instances.
+ * Prefer Upstash when configured. If it is missing at runtime, fall back to
+ * the in-memory limiter and log loudly — fail-closed 429s were blocking
+ * legitimate first requests (token mint / MCP) whenever the Redis env was
+ * unavailable in a given serverless isolate.
  */
 export async function rateLimit(opts: {
   key: string;
@@ -97,24 +104,21 @@ export async function rateLimit(opts: {
   const prefix = opts.prefix ?? 'rl';
   const upstash = getUpstashLimiter(prefix, opts.limit, opts.windowMs);
   if (upstash) {
-    const res = await upstash.limit(opts.key);
-    return {
-      success: res.success,
-      limit: res.limit,
-      remaining: res.remaining,
-      reset: res.reset,
-    };
-  }
-  if (process.env.NODE_ENV === 'production') {
+    try {
+      const res = await upstash.limit(opts.key);
+      return {
+        success: res.success,
+        limit: res.limit,
+        remaining: res.remaining,
+        reset: res.reset,
+      };
+    } catch (error) {
+      console.error('Rate limit: Upstash error — falling back to in-memory', error);
+    }
+  } else if (process.env.NODE_ENV === 'production') {
     console.error(
-      'Rate limit: Upstash not configured in production — failing closed',
+      'Rate limit: Upstash not configured in production — falling back to in-memory',
     );
-    return {
-      success: false,
-      limit: opts.limit,
-      remaining: 0,
-      reset: Date.now() + opts.windowMs,
-    };
   }
   return inMemoryLimit(`${prefix}:${opts.key}`, opts.limit, opts.windowMs);
 }
