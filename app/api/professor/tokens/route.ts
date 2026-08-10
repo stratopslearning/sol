@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { ApiError, apiErrorResponse } from '@/lib/api/errors';
-import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
 import { extractRequestMeta, logAudit } from '@/lib/audit';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import {
@@ -48,7 +47,6 @@ export async function POST(req: NextRequest) {
   try {
     const user = await requireSessionProfessor();
 
-    // Validate before rate-limiting so retries on bad input don't burn quota.
     const body = await req.json().catch(() => null);
     const parsed = createSchema.safeParse(body);
     if (!parsed.success) {
@@ -63,16 +61,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Generous window: minting is rare, but hydration remounts / double-clicks
-    // were burning a 10/min budget before a token ever landed.
-    const limited = await enforceRateLimit({
-      key: `token-mint:${user.id}`,
-      limit: 20,
-      windowMs: 60 * 60_000,
-      prefix: 'rl:pat',
-      message: 'Too many token requests. Please wait a moment.',
-    });
-    if (limited) return limited;
+    // No Redis rate limit here: minting already requires a live professor
+    // session, and the 10-active-token cap is the real abuse control. An
+    // Upstash miss was fail-closing every mint with a 429 (~3600s).
 
     const minted = await mintProfessorApiToken({
       userId: user.id,
