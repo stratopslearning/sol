@@ -169,8 +169,7 @@ export default function ProfessorQuizzesTableClient({
       </div>
 
       <div className="paper paper-shadow overflow-hidden">
-        <div className="overflow-x-auto">
-          <Table className="table-fixed min-w-[1270px]">
+        <Table className="table-fixed min-w-[1310px]">
             <colgroup>
               <col className="w-[240px]" />
               <col className="w-[110px]" />
@@ -180,7 +179,7 @@ export default function ProfessorQuizzesTableClient({
               <col className="w-[100px]" />
               <col className="w-[110px]" />
               <col className="w-[170px]" />
-              <col className="w-[180px]" />
+              <col className="w-[220px]" />
             </colgroup>
             <TableHeader>
               <TableRow>
@@ -192,7 +191,7 @@ export default function ProfessorQuizzesTableClient({
                 <TableHead className="tnum">Attempts</TableHead>
                 <TableHead className="tnum">Average</TableHead>
                 <TableHead>Dates</TableHead>
-                <TableHead className="sticky right-0 z-10 bg-surface-sunken/95 px-3 text-right">
+                <TableHead className="sticky right-0 z-10 border-l border-rule bg-surface-sunken px-4 text-right">
                   Actions
                 </TableHead>
               </TableRow>
@@ -278,7 +277,7 @@ export default function ProfessorQuizzesTableClient({
                           </span>
                         </div>
                       </TableCell>
-                      <TableCell className="sticky right-0 z-10 bg-paper px-3 text-right align-top">
+                      <TableCell className="sticky right-0 z-10 border-l border-rule bg-surface px-4 text-right align-top">
                         <div className="flex min-w-max items-center justify-end">
                           <QuizActions
                             quizId={quiz.id}
@@ -293,7 +292,6 @@ export default function ProfessorQuizzesTableClient({
               )}
             </TableBody>
           </Table>
-        </div>
       </div>
 
       {totalPages > 1 ? (
