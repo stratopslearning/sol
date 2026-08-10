@@ -83,10 +83,16 @@ export function Navbar() {
                 Capabilities
               </a>
               <a
-                href={withBasePath("/#approach")}
+                href={withBasePath("/#compare")}
                 className="nav-beam text-ink-muted"
               >
-                Approach
+                Compare
+              </a>
+              <a
+                href={withBasePath("/#faq")}
+                className="nav-beam text-ink-muted"
+              >
+                FAQ
               </a>
               <a
                 href={withBasePath("/docs")}
@@ -168,11 +174,18 @@ export function Navbar() {
                 Capabilities
               </a>
               <a
-                href={withBasePath("/#approach")}
+                href={withBasePath("/#compare")}
                 className="nav-beam text-ink py-2 text-sm"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
-                Approach
+                Compare
+              </a>
+              <a
+                href={withBasePath("/#faq")}
+                className="nav-beam text-ink py-2 text-sm"
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                FAQ
               </a>
               <a
                 href={withBasePath("/docs")}

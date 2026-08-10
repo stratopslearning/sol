@@ -28,7 +28,7 @@ export default function DocsIndexPage() {
 
   return (
     <DocsShell>
-      <div className="relative overflow-hidden border-b border-rule bg-paper">
+      <div className="relative overflow-hidden border-b border-rule bg-[color-mix(in_oklch,var(--paper)_72%,transparent)]">
         <div
           aria-hidden
           className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-[radial-gradient(40%_140px_at_20%_0%,color-mix(in_oklch,var(--brand)_14%,transparent),transparent)]"

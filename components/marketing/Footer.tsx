@@ -21,7 +21,9 @@ const footerLinks: FooterSection[] = [
     label: "Platform",
     links: [
       { title: "Capabilities", href: withBasePath("/#capabilities") },
+      { title: "Compare", href: withBasePath("/#compare") },
       { title: "Approach", href: withBasePath("/#approach") },
+      { title: "FAQ", href: withBasePath("/#faq") },
     ],
   },
   {
@@ -57,7 +59,7 @@ export function Footer() {
 
   return (
     <footer
-      className="relative w-full overflow-hidden border-t border-rule bg-paper"
+      className="relative w-full overflow-hidden border-t border-rule bg-[color-mix(in_oklch,var(--paper)_72%,transparent)]"
     >
       <div
         aria-hidden

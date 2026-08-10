@@ -56,7 +56,7 @@ export function FeatureGrid() {
   return (
     <section
       id="capabilities"
-      className="bg-paper border-t border-rule"
+      className="border-t border-rule bg-[color-mix(in_oklch,var(--paper)_72%,transparent)] dark:bg-[color-mix(in_oklch,var(--surface-sunken)_78%,transparent)]"
     >
       <div className="mx-auto max-w-[1200px] px-4 md:px-8 py-20 md:py-28">
         <div className="grid md:grid-cols-12 gap-10 mb-14">
@@ -93,7 +93,7 @@ export function FeatureGrid() {
             return (
               <article
                 key={cap.n}
-                className="bg-surface p-7 flex flex-col gap-3 transition-colors hover:bg-surface-sunken/40"
+                className="flex flex-col gap-3 bg-[color-mix(in_oklch,var(--surface)_88%,transparent)] p-7 transition-colors hover:bg-[color-mix(in_oklch,var(--surface-sunken)_70%,transparent)] dark:bg-[color-mix(in_oklch,var(--paper)_82%,transparent)] dark:hover:bg-black/40"
               >
                 <div className="flex items-center justify-between">
                   <span className="font-mono tnum text-xs text-ink-faint">

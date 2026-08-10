@@ -26,7 +26,10 @@ const TENETS = [
 
 export function Approach() {
   return (
-    <section id="approach" className="bg-surface-sunken border-t border-rule">
+    <section
+      id="approach"
+      className="border-t border-rule bg-[color-mix(in_oklch,var(--surface-sunken)_78%,transparent)] dark:bg-[color-mix(in_oklch,var(--paper)_55%,transparent)]"
+    >
       <div className="mx-auto max-w-[1200px] px-4 md:px-8 py-20 md:py-28">
         <div className="grid md:grid-cols-12 gap-10">
           <div className="md:col-span-4 md:sticky md:top-24 self-start flex flex-col gap-4">

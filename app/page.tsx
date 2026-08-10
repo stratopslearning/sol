@@ -3,8 +3,12 @@ import { Hero } from "@/components/marketing/Hero";
 import { StatsBand } from "@/components/marketing/StatsBand";
 import { FeatureGrid } from "@/components/marketing/FeatureGrid";
 import { Approach } from "@/components/marketing/Approach";
+import { Comparison } from "@/components/marketing/Comparison";
+import { Faq } from "@/components/marketing/Faq";
 import { Footer } from "@/components/marketing/Footer";
+import { PaperTexturedRegion } from "@/components/marketing/PaperTexturedRegion";
 import { JsonLd } from "@/components/seo/JsonLd";
+import { MARKETING_FAQS } from "@/lib/marketingFaq";
 import { getMarketingStats } from "@/lib/marketingStats";
 import { absoluteUrl } from "@/lib/siteUrl";
 
@@ -32,7 +36,7 @@ export default async function Home() {
             operatingSystem: "Web",
             url: homeUrl,
             description:
-              "Coursework platform for institutions: faculty author quizzes and discussions; students enroll by learner code; short-answer grading stays reviewable.",
+              "Coursework platform for instructors and learners: quizzes and discussions with reviewable AI-assisted scoring for subjective answers.",
             offers: {
               "@type": "Offer",
               availability: "https://schema.org/InStock",
@@ -42,16 +46,32 @@ export default async function Home() {
                 "Institutional deployments; student payments are feature-flagged per campus.",
             },
           },
+          {
+            "@context": "https://schema.org",
+            "@type": "FAQPage",
+            mainEntity: MARKETING_FAQS.map((item) => ({
+              "@type": "Question",
+              name: item.q,
+              acceptedAnswer: {
+                "@type": "Answer",
+                text: item.a,
+              },
+            })),
+          },
         ]}
       />
       <Navbar />
       <main id="main">
         <Hero />
-        <StatsBand stats={stats} />
-        <FeatureGrid />
-        <Approach />
+        <PaperTexturedRegion>
+          <StatsBand stats={stats} />
+          <FeatureGrid />
+          <Comparison />
+          <Approach />
+          <Faq />
+          <Footer />
+        </PaperTexturedRegion>
       </main>
-      <Footer />
     </>
   );
 }
