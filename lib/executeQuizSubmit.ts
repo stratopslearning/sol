@@ -7,6 +7,7 @@ import {
   questions,
   quizSections,
   quizzes,
+  sections,
 } from '@/app/db/schema';
 import { scheduleAttemptRetry } from '@/lib/backgroundRetry';
 import { activeOnly } from '@/lib/db/filters';
@@ -19,6 +20,10 @@ import { getOrDeriveRubric } from '@/lib/gradingRubric';
 import { mergeAttemptAnswers } from '@/lib/shouldForceAutoSubmit';
 import { resolveAttemptSectionId } from '@/lib/resolveAttemptSection';
 import { assertQuizSubmitWindow } from '@/lib/quizSubmitPolicy';
+import {
+  isSectionConcluded,
+  SECTION_CONCLUDED_MESSAGE,
+} from '@/lib/sectionAvailability';
 
 export class MaxAttemptsExceededError extends Error {
   constructor(public readonly maxAttempts: number) {
@@ -92,6 +97,13 @@ export async function executeQuizSubmit(
   const sectionId = await resolveAttemptSectionId(studentId, quizSectionIds);
   if (!sectionId) {
     throw new Error('No valid section found for this quiz/assignment');
+  }
+
+  const section = await db.query.sections.findFirst({
+    where: eq(sections.id, sectionId),
+  });
+  if (!bypassAvailability && isSectionConcluded(section, now)) {
+    throw new Error(SECTION_CONCLUDED_MESSAGE);
   }
 
   const existingAttempts = await db.query.attempts.findMany({

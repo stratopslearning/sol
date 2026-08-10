@@ -33,7 +33,33 @@ export type Section = {
   name: string;
   professorEnrollmentCode: string;
   studentEnrollmentCode: string;
+  endsAt?: Date | string | null;
 };
+
+function extractLocalDateAndTime(
+  date: Date | string | null | undefined,
+): { date: string; time: string } {
+  if (!date) return { date: "", time: "" };
+  const dateObj = typeof date === "string" ? new Date(date) : date;
+  if (Number.isNaN(dateObj.getTime())) return { date: "", time: "" };
+  const year = dateObj.getFullYear();
+  const month = String(dateObj.getMonth() + 1).padStart(2, "0");
+  const day = String(dateObj.getDate()).padStart(2, "0");
+  const hours = String(dateObj.getHours()).padStart(2, "0");
+  const minutes = String(dateObj.getMinutes()).padStart(2, "0");
+  return { date: `${year}-${month}-${day}`, time: `${hours}:${minutes}` };
+}
+
+function combineLocalDateTime(date: string, time: string): string | null {
+  if (!date) return null;
+  if (!time) {
+    const [year, month, day] = date.split("-").map(Number);
+    return new Date(year, month - 1, day, 23, 59, 0).toISOString();
+  }
+  const [year, month, day] = date.split("-").map(Number);
+  const [hours, minutes] = time.split(":").map(Number);
+  return new Date(year, month - 1, day, hours, minutes, 0).toISOString();
+}
 
 type Mode = "create" | "edit" | "delete";
 
@@ -52,7 +78,10 @@ export function SectionFormModal({
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const initialEnds = extractLocalDateAndTime(section?.endsAt);
   const [name, setName] = useState(section?.name || "");
+  const [endsDate, setEndsDate] = useState(initialEnds.date);
+  const [endsTime, setEndsTime] = useState(initialEnds.time || "23:59");
   const [bulkNames, setBulkNames] = useState("");
   const [loading, setLoading] = useState(false);
   const [createdSectionId, setCreatedSectionId] = useState<string | null>(null);
@@ -96,10 +125,11 @@ export function SectionFormModal({
           toast.error("Failed to create sections");
         }
       } else if (isCreate) {
+        const endsAt = combineLocalDateTime(endsDate, endsTime);
         const res = await fetch(apiUrl(`/api/admin/section`), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, courseId }),
+          body: JSON.stringify({ name, courseId, endsAt }),
         });
         if (!res.ok) {
           toast.error("Failed to create section");
@@ -111,10 +141,11 @@ export function SectionFormModal({
         router.refresh();
         if (!data.section?.id) setOpen(false);
       } else if (isEdit && section) {
+        const endsAt = combineLocalDateTime(endsDate, endsTime);
         const res = await fetch(apiUrl(`/api/admin/section/${section.id}`), {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name }),
+          body: JSON.stringify({ name, endsAt }),
         });
         if (!res.ok) {
           toast.error("Failed to update section");
@@ -249,6 +280,35 @@ export function SectionFormModal({
                 />
               </div>
             )}
+
+            {!isBulk ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="section-ends-date">Section end date</Label>
+                  <Input
+                    id="section-ends-date"
+                    type="date"
+                    value={endsDate}
+                    onChange={(e) => setEndsDate(e.target.value)}
+                    disabled={loading}
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="section-ends-time">End time</Label>
+                  <Input
+                    id="section-ends-time"
+                    type="time"
+                    value={endsTime}
+                    onChange={(e) => setEndsTime(e.target.value)}
+                    disabled={loading}
+                  />
+                </div>
+                <p className="sm:col-span-2 text-xs text-ink-muted">
+                  Optional. After this moment, students see the section as past /
+                  archived and cannot start new work.
+                </p>
+              </div>
+            ) : null}
 
             <DialogFooter>
               <Button

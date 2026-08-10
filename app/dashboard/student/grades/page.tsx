@@ -6,12 +6,18 @@ import { AppShell } from "@/components/layout/AppShell";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { withBasePath } from "@/lib/basePath";
 import { requireStudent } from "@/lib/auth";
+import { isSectionConcluded } from "@/lib/sectionAvailability";
 import { formatDateTimeStable } from "@/lib/utils";
 
 import StudentGradesTableClient from "./StudentGradesTableClient";
 
-export default async function StudentGradesPage() {
+export default async function StudentGradesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ sectionId?: string }>;
+}) {
   const user = await requireStudent();
+  const { sectionId: focusSectionId } = await searchParams;
 
   const allAttempts = await db.query.attempts.findMany({
     where: eq(attempts.studentId, user.id),
@@ -39,6 +45,7 @@ export default async function StudentGradesPage() {
     maxScore: a.maxScore,
     percentage: a.percentage,
     passed: a.passed,
+    sectionArchived: isSectionConcluded(a.section),
   }));
 
   return (
@@ -50,10 +57,13 @@ export default async function StudentGradesPage() {
         ]}
         eyebrow="Record"
         title="Your gradebook."
-        description="Your attempts grouped by section and quiz — best scores, submission dates, and quick access to review each one."
+        description="Your attempts grouped by section and quiz — best scores, submission dates, and quick access to review each one. Archived sections stay visible here."
       />
       <div className="mt-10">
-        <StudentGradesTableClient attempts={attemptRows} />
+        <StudentGradesTableClient
+          attempts={attemptRows}
+          initialSectionId={focusSectionId}
+        />
       </div>
     </AppShell>
   );

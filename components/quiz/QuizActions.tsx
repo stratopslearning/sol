@@ -37,11 +37,11 @@ export function QuizActions({
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to create editable copy");
+        throw new Error(data.error || "Failed to open quiz for editing");
       }
 
-      toast.success("Editable copy created", {
-        description: "Opening the professor-owned version now.",
+      toast.success("Ready to edit", {
+        description: "Opening your section’s version of this quiz.",
       });
       router.push(`/dashboard/professor/quiz/${data.quiz.id}/edit`);
       router.refresh();
@@ -49,7 +49,7 @@ export function QuizActions({
       toast.error(
         error instanceof Error
           ? error.message
-          : "Failed to create editable copy",
+          : "Failed to open quiz for editing",
       );
     } finally {
       setCopyingForEdit(false);
@@ -125,14 +125,14 @@ export function QuizActions({
             <Button
               size="iconSm"
               variant="ghost"
-              aria-label="Create editable copy"
+              aria-label="Edit"
               onClick={handleCreateEditableCopy}
               disabled={copyingForEdit}
             >
               <Edit className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="top">Create editable copy</TooltipContent>
+          <TooltipContent side="top">Edit</TooltipContent>
         </Tooltip>
       )}
 

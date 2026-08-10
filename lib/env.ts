@@ -40,9 +40,8 @@ const baseSchema = z.object({
   NEXT_PUBLIC_SENTRY_DSN: z.string().url().optional(),
   SENTRY_DSN: z.string().url().optional(),
 
-  // Rate limiting (Upstash). Optional — when unset we fall back to in-memory
-  // limiting, which is fine for single-instance dev but should not be relied
-  // on in horizontally scaled prod.
+  // Rate limiting (Upstash). Optional in development (in-memory fallback).
+  // Required in production — see invariants below.
   UPSTASH_REDIS_REST_URL: z.string().url().optional(),
   UPSTASH_REDIS_REST_TOKEN: z.string().min(1).optional(),
 
@@ -74,6 +73,13 @@ function loadEnv(): RawEnv {
     if (!data.NEXT_PUBLIC_BASE_URL) {
       throw new Error(
         'NEXT_PUBLIC_BASE_URL is required in production (used for canonical URLs).',
+      );
+    }
+    // Distributed rate limiting is required in production — in-memory fallback
+    // is not safe across multiple Vercel instances (SOC 2 / abuse control).
+    if (!data.UPSTASH_REDIS_REST_URL || !data.UPSTASH_REDIS_REST_TOKEN) {
+      throw new Error(
+        'UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are required in production.',
       );
     }
     if (data.NEXT_PUBLIC_PAYMENTS_ENABLED === 'true') {

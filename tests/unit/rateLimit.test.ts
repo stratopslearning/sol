@@ -2,7 +2,7 @@
  * Unit tests for the in-memory rate limiter fallback. We don't test Upstash
  * here — the integration test environment can swap in the real driver.
  */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { rateLimit } from '@/lib/rateLimit';
 
@@ -13,6 +13,8 @@ beforeEach(() => {
   // path. Vitest gives each test a fresh process.env unless we mutate it.
   delete process.env.UPSTASH_REDIS_REST_URL;
   delete process.env.UPSTASH_REDIS_REST_TOKEN;
+  // Fail-closed production path must not trigger in unit tests.
+  vi.stubEnv('NODE_ENV', 'test');
 });
 
 describe('rateLimit (in-memory)', () => {

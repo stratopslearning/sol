@@ -9,14 +9,17 @@ import { Toaster } from "@/components/ui/sonner";
 import { activeOnly } from "@/lib/db/filters";
 import { withBasePath } from "@/lib/basePath";
 import { requireAdmin } from "@/lib/auth";
+import { partitionBySectionConclusion } from "@/lib/sectionAvailability";
 
 export default async function AdminQuizNewPage() {
   await requireAdmin();
-  const allSections = await db.query.sections.findMany({
+  const allSectionsRaw = await db.query.sections.findMany({
     where: activeOnly(sections.deletedAt),
     with: { course: true },
   });
-  const courseOptions = allSections.map((section) => ({
+  const { active: ongoingSections } =
+    partitionBySectionConclusion(allSectionsRaw);
+  const courseOptions = ongoingSections.map((section) => ({
     id: section.id,
     title: `${section.name} (${section.course?.title || "Unknown"})`,
   }));

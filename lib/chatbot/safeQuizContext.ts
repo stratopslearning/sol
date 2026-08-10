@@ -1,4 +1,5 @@
 import type { ChatbotMessage } from '@/app/db/schema';
+import { minimizeStudentTextForAi } from '@/lib/ai/minimizeEducationPayload';
 import { SOCRATIC_LEARNING_RULES } from '@/lib/chatbot/baseRules';
 import {
   HISTORY_WINDOW_MESSAGES,
@@ -63,7 +64,13 @@ export function assembleSystemPrompt(
   professorSystemPrompt: string,
   safeQuizContext: string,
 ): string {
-  const parts = [SOCRATIC_LEARNING_RULES, professorSystemPrompt.trim()];
+  const ferpaGuard =
+    'FERPA: Do not ask for or repeat student legal names, emails, student IDs, or other directory identifiers. Coach on course concepts only.';
+  const parts = [
+    SOCRATIC_LEARNING_RULES,
+    ferpaGuard,
+    professorSystemPrompt.trim(),
+  ];
   if (safeQuizContext.trim()) {
     parts.push(safeQuizContext.trim());
   }
@@ -88,9 +95,13 @@ export function toOpenAiMessages(
     { role: 'system', content: systemContent },
     ...truncateHistory(history).map((m) => ({
       role: m.role as 'user' | 'assistant',
-      content: m.content,
+      // Minimize education-record PII (e.g. emails) before leaving the boundary.
+      content:
+        m.role === 'user'
+          ? minimizeStudentTextForAi(m.content)
+          : m.content,
     })),
-    { role: 'user', content: userMessage },
+    { role: 'user', content: minimizeStudentTextForAi(userMessage) },
   ];
 }
 

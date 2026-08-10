@@ -59,6 +59,8 @@ export const sections = pgTable(
     professorEnrollmentCode: text('professor_enrollment_code').unique().notNull(), // 6-character code for professors
     studentEnrollmentCode: text('student_enrollment_code').unique().notNull(), // 6-character code for students
     isActive: boolean('is_active').default(true).notNull(),
+    /** When set and now > endsAt, section is concluded for students (Canvas-style). */
+    endsAt: ts('ends_at'),
     deletedAt: ts('deleted_at'),
     createdAt: ts('created_at').defaultNow().notNull(),
     updatedAt: ts('updated_at').defaultNow().notNull(),

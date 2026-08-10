@@ -46,6 +46,7 @@ export type SectionDetailData = {
     courseId: string;
     professorEnrollmentCode: string;
     studentEnrollmentCode: string;
+    endsAt: Date | null;
     createdAt: Date;
     updatedAt: Date;
     course: {
@@ -169,6 +170,7 @@ export async function loadSectionDetailData(
       courseId: section.courseId,
       professorEnrollmentCode: section.professorEnrollmentCode,
       studentEnrollmentCode: section.studentEnrollmentCode,
+      endsAt: section.endsAt ?? null,
       createdAt: section.createdAt,
       updatedAt: section.updatedAt,
       course: section.course

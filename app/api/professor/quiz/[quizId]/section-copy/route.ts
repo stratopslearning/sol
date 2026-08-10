@@ -163,7 +163,7 @@ export async function POST(
   } catch (error) {
     console.error('Quiz section-copy error:', error);
     return NextResponse.json(
-      { error: 'Failed to create editable quiz copy' },
+      { error: 'Failed to open quiz for editing' },
       { status: 500 },
     );
   }

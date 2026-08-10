@@ -4,9 +4,11 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '@/app/db';
 import { courses, sections, studentSections } from '@/app/db/schema';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
+import { extractRequestMeta, logAudit } from '@/lib/audit';
 import { activeOnly } from '@/lib/db/filters';
 import { paymentsEnabled } from '@/lib/featureFlags';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
+import { isSectionConcluded } from '@/lib/sectionAvailability';
 
 export const dynamic = 'force-dynamic';
 
@@ -62,9 +64,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid enrollment code' }, { status: 404 });
     }
 
-    // Refuse to enroll into archived sections.
+    // Refuse to enroll into archived / concluded sections.
     if (!section.isActive) {
       return NextResponse.json({ error: 'This section is no longer active.' }, { status: 400 });
+    }
+    if (isSectionConcluded(section)) {
+      return NextResponse.json(
+        { error: 'This section has ended. Enrollment is closed.' },
+        { status: 400 },
+      );
     }
 
     // Already enrolled in this exact section?
@@ -79,8 +87,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Already enrolled in this section' }, { status: 400 });
     }
 
-    // Already enrolled in another active section in the same course?
-    const existingCourseEnrollment = await db.query.studentSections.findFirst({
+    // Already enrolled in another active (non-concluded) section in the same course?
+    const existingCourseEnrollments = await db.query.studentSections.findMany({
       where: and(
         eq(studentSections.studentId, user.id),
         eq(studentSections.status, 'ACTIVE'),
@@ -90,10 +98,13 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    if (
-      existingCourseEnrollment &&
-      existingCourseEnrollment.section.courseId === section.courseId
-    ) {
+    const conflictingEnrollment = existingCourseEnrollments.find(
+      (e) =>
+        e.section.courseId === section.courseId &&
+        !isSectionConcluded(e.section),
+    );
+
+    if (conflictingEnrollment) {
       return NextResponse.json(
         {
           error:
@@ -106,6 +117,18 @@ export async function POST(req: NextRequest) {
     await db.insert(studentSections).values({
       studentId: user.id,
       sectionId: section.id,
+    });
+
+    const meta = extractRequestMeta(req);
+    await logAudit({
+      actorUserId: user.id,
+      actorClerkId: user.clerkId,
+      action: 'education.enrollment.join',
+      targetType: 'section',
+      targetId: section.id,
+      metadata: { courseId: section.courseId },
+      ip: meta.ip,
+      userAgent: meta.userAgent,
     });
 
     const course = await db.query.courses.findFirst({

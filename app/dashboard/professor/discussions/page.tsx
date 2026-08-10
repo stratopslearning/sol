@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { ensureCh1TemplateChatbot } from '@/lib/chatbot/seed';
 import { appPath, withBasePath } from '@/lib/basePath';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
+import { partitionEnrollmentsByConclusion } from '@/lib/sectionAvailability';
 
 export default async function ProfessorDiscussionsPage() {
   const user = await getOrCreateUser();
@@ -22,6 +23,11 @@ export default async function ProfessorDiscussionsPage() {
     where: eq(professorSections.professorId, user.id),
     with: { section: { with: { course: true } } },
   });
+  const { active: ongoingEnrollments } =
+    partitionEnrollmentsByConclusion(enrollments);
+  const ongoingSectionIds = new Set(
+    ongoingEnrollments.map((e) => e.sectionId),
+  );
 
   const ownedAndTemplates = await db.query.chatbots.findMany({
     where: and(
@@ -42,6 +48,7 @@ export default async function ProfessorDiscussionsPage() {
     isTemplate: bot.isTemplate,
     relatedQuizTitle: bot.relatedQuiz?.title ?? null,
     sectionNames: (bot.sectionAssignments ?? [])
+      .filter((sa) => sa.sectionId && ongoingSectionIds.has(sa.sectionId))
       .map((sa) => sa.section?.name)
       .filter((n): n is string => Boolean(n)),
     isActive: bot.isActive,

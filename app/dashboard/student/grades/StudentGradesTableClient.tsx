@@ -49,6 +49,7 @@ type AttemptRow = {
   maxScore: number | null;
   percentage: number | null;
   passed: boolean | null;
+  sectionArchived?: boolean;
 };
 
 type QuizGroup = {
@@ -62,6 +63,7 @@ type SectionGroup = {
   sectionId: string;
   sectionName: string;
   courseTitle: string | null;
+  archived: boolean;
   quizzes: QuizGroup[];
   attemptCount: number;
   quizCount: number;
@@ -121,6 +123,7 @@ function buildSectionGroups(attempts: AttemptRow[]): SectionGroup[] {
         sectionId: sample.sectionId,
         sectionName: sample.sectionName,
         courseTitle: sample.courseTitle,
+        archived: Boolean(sample.sectionArchived),
         quizzes,
         attemptCount: sectionAttempts.length,
         quizCount: quizzes.length,
@@ -164,11 +167,17 @@ function ReviewButton({ attempt }: { attempt: AttemptRow }) {
 
 export default function StudentGradesTableClient({
   attempts,
+  initialSectionId,
 }: {
   attempts: AttemptRow[];
+  initialSectionId?: string;
 }) {
   const [search, setSearch] = useState("");
-  const [sectionFilter, setSectionFilter] = useState<string>("ALL");
+  const [sectionFilter, setSectionFilter] = useState<string>(
+    initialSectionId && attempts.some((a) => a.sectionId === initialSectionId)
+      ? initialSectionId
+      : "ALL",
+  );
 
   const sections = useMemo(() => {
     const seen = new Map<string, string>();
@@ -306,6 +315,9 @@ function SectionGradebook({ section }: { section: SectionGroup }) {
                   </div>
                 ) : null}
                 <div className="mt-2 flex flex-wrap gap-2">
+                  {section.archived ? (
+                    <Badge variant="outline">Archived</Badge>
+                  ) : null}
                   <Badge variant="info">
                     {section.quizCount} quiz
                     {section.quizCount === 1 ? "" : "zes"}

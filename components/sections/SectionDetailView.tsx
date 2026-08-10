@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Calendar, FileText, Users } from 'lucide-react';
 
 import CopyEnrollmentButton from '@/components/CopyEnrollmentButton';
+import { SectionEndsAtEditor } from '@/components/sections/SectionEndsAtEditor';
 import { SectionRosterTable } from '@/components/sections/SectionRosterTable';
 import { SectionHeading } from '@/components/layout/SectionHeading';
 import { EmptyState } from '@/components/patterns/EmptyState';
@@ -17,7 +18,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { cleanQuizDescription, formatDateStable } from '@/lib/utils';
+import { isSectionConcluded } from '@/lib/sectionAvailability';
+import { cleanQuizDescription, formatDateStable, formatDateTimeStable } from '@/lib/utils';
 import type { SectionDetailData } from '@/lib/sectionDetailData';
 
 type SectionDetailViewProps = {
@@ -41,6 +43,7 @@ export function SectionDetailView({
 }: SectionDetailViewProps) {
   const { section, learnerEnrollments, facultyEnrollments, quizzes, discussions } =
     data;
+  const concluded = isSectionConcluded(section);
   const gradebookBase =
     role === 'admin'
       ? `/dashboard/admin/sections/${sectionId}/gradebook`
@@ -69,16 +72,42 @@ export function SectionDetailView({
           hint="Assigned to this section"
         />
         <StatCard
-          label="Created"
-          value={formatDateStable(section.createdAt) ?? '—'}
+          label="Section end"
+          value={
+            section.endsAt
+              ? (formatDateStable(section.endsAt) ?? '—')
+              : 'Open'
+          }
           icon={<Calendar className="h-4 w-4" />}
-          hint={`Updated ${formatDateStable(section.updatedAt) ?? '—'}`}
+          hint={
+            concluded
+              ? 'Concluded for students'
+              : section.endsAt
+                ? (formatDateTimeStable(section.endsAt) ?? 'Scheduled')
+                : 'No end date set'
+          }
         />
       </section>
 
       {headerActions ? (
         <div className="mt-6 flex flex-wrap gap-2">{headerActions}</div>
       ) : null}
+
+      <section className="mt-12">
+        <SectionHeading
+          eyebrow="Availability"
+          title="When this section ends"
+          description="Students lose active access after the end date; grades remain under Past / Archived."
+        />
+        <div className="mt-6">
+          <SectionEndsAtEditor
+            sectionId={sectionId}
+            endsAt={section.endsAt}
+            mode={role}
+            sectionName={section.name}
+          />
+        </div>
+      </section>
 
       <section className="mt-12">
         <SectionHeading eyebrow="Codes" title="Enrolment access" />
@@ -89,6 +118,7 @@ export function SectionDetailView({
             ) : null}
             <Badge variant="info">{data.activeLearnerCount} active learners</Badge>
             <Badge variant="default">{data.activeFacultyCount} active faculty</Badge>
+            {concluded ? <Badge variant="outline">Concluded</Badge> : null}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

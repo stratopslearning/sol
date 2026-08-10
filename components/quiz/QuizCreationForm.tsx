@@ -46,7 +46,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { format } from 'date-fns';
-import { cn, formatDateTimeUTC, fromUTC } from '@/lib/utils';
+import { cn, formatDateTimeUTC, fromUTC, buildQuizDescriptionWithMetadata } from '@/lib/utils';
 import CourseMultiSelect from '@/components/CourseMultiSelect';
 import { toast } from 'sonner';
 import { Label } from '@/components/ui/label';
@@ -310,7 +310,10 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
           ...data,
           startDate: data.startDate ? data.startDate.toISOString() : undefined,
           endDate: data.endDate ? data.endDate.toISOString() : undefined,
-          description: data.description ? `${data.description}\n\n<!-- QUIZ_METADATA: ${JSON.stringify({ hideFeedbackAfterDue: data.hideFeedbackAfterDue })} -->` : (data.hideFeedbackAfterDue ? `<!-- QUIZ_METADATA: ${JSON.stringify({ hideFeedbackAfterDue: data.hideFeedbackAfterDue })} -->` : ''),
+          description: buildQuizDescriptionWithMetadata(
+            data.description,
+            data.hideFeedbackAfterDue,
+          ),
           sectionIds: sectionIds, // for admin endpoint compatibility
           questions: questionsWithOrder,
         }),

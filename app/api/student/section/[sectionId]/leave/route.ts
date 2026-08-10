@@ -5,12 +5,13 @@ import { db } from '@/app/db';
 import { studentSections } from '@/app/db/schema';
 import { ApiError, apiErrorResponse } from '@/lib/api/errors';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
+import { extractRequestMeta, logAudit } from '@/lib/audit';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ sectionId: string }> },
 ) {
   try {
@@ -47,6 +48,17 @@ export async function POST(
         eq(studentSections.studentId, user.id),
       ),
     );
+
+    const meta = extractRequestMeta(req);
+    await logAudit({
+      actorUserId: user.id,
+      actorClerkId: user.clerkId,
+      action: 'education.enrollment.leave',
+      targetType: 'section',
+      targetId: sectionId,
+      ip: meta.ip,
+      userAgent: meta.userAgent,
+    });
 
     return NextResponse.json({
       success: true,

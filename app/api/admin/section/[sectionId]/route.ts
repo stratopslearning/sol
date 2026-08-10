@@ -6,11 +6,13 @@ import { z } from 'zod';
 import { db } from '@/app/db';
 import { sections, users } from '@/app/db/schema';
 import { extractRequestMeta, logAudit } from '@/lib/audit';
+import { parseOptionalEndsAt } from '@/lib/sectionAvailability';
 
 export const dynamic = 'force-dynamic';
 
 const updateSectionSchema = z.object({
   name: z.string().min(1, 'Section name is required').max(100, 'Section name too long'),
+  endsAt: z.union([z.string(), z.null()]).optional(),
 });
 
 export async function PUT(
@@ -34,9 +36,20 @@ export async function PUT(
     }
     const body = await req.json();
     const validatedData = updateSectionSchema.parse(body);
+    const patch: { name: string; endsAt?: Date | null; updatedAt: Date } = {
+      name: validatedData.name,
+      updatedAt: new Date(),
+    };
+    if ('endsAt' in body) {
+      const endsAtResult = parseOptionalEndsAt(validatedData.endsAt ?? null);
+      if (!endsAtResult.ok) {
+        return NextResponse.json({ error: endsAtResult.error }, { status: 400 });
+      }
+      patch.endsAt = endsAtResult.endsAt;
+    }
     const [updatedSection] = await db
       .update(sections)
-      .set({ name: validatedData.name })
+      .set(patch)
       .where(eq(sections.id, sectionId))
       .returning();
     return NextResponse.json({ success: true, section: updatedSection });

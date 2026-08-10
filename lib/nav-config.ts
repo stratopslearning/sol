@@ -7,6 +7,7 @@ import {
   TrendingUp,
   CheckCircle,
   MessagesSquare,
+  ScrollText,
   type LucideIcon,
 } from "lucide-react";
 
@@ -69,6 +70,12 @@ export const ROLE_CONFIG: Record<AppRole, RoleConfig> = {
         label: "People",
         icon: Users,
         key: "users",
+      },
+      {
+        href: withBasePath("/dashboard/admin/audit"),
+        label: "Audit log",
+        icon: ScrollText,
+        key: "audit",
       },
     ],
   },

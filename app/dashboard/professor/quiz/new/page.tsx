@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { QuizCreationForm } from "@/components/quiz/QuizCreationForm";
 import { withBasePath } from "@/lib/basePath";
 import { getOrCreateUser } from "@/lib/getOrCreateUser";
+import { partitionEnrollmentsByConclusion } from "@/lib/sectionAvailability";
 
 export default async function CreateQuizPage() {
   const user = await getOrCreateUser();
@@ -16,8 +17,10 @@ export default async function CreateQuizPage() {
     where: eq(professorSections.professorId, user.id),
     with: { section: { with: { course: true } } },
   });
+  const { active: ongoingEnrollments } =
+    partitionEnrollmentsByConclusion(professorSectionsList);
 
-  const enrolledSections = professorSectionsList.map((ps) => ({
+  const enrolledSections = ongoingEnrollments.map((ps) => ({
     id: ps.section.id,
     title: `${ps.section.course.title} - ${ps.section.name}`,
     description: ps.section.course.description,

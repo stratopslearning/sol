@@ -83,6 +83,10 @@ function getUpstashLimiter(
  *
  * Returns a RateLimitResult; the caller is responsible for translating a
  * `success: false` into a 429 (or whatever response shape the route uses).
+ *
+ * In production, Upstash must be configured (enforced by `lib/env.ts`). If it
+ * is somehow missing at runtime, we fail closed (deny) rather than using the
+ * unsafe in-memory fallback across multiple instances.
  */
 export async function rateLimit(opts: {
   key: string;
@@ -99,6 +103,17 @@ export async function rateLimit(opts: {
       limit: res.limit,
       remaining: res.remaining,
       reset: res.reset,
+    };
+  }
+  if (process.env.NODE_ENV === 'production') {
+    console.error(
+      'Rate limit: Upstash not configured in production — failing closed',
+    );
+    return {
+      success: false,
+      limit: opts.limit,
+      remaining: 0,
+      reset: Date.now() + opts.windowMs,
     };
   }
   return inMemoryLimit(`${prefix}:${opts.key}`, opts.limit, opts.windowMs);

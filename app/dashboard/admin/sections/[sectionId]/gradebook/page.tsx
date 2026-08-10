@@ -15,6 +15,7 @@ import { AppShell } from '@/components/layout/AppShell';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { SectionHeading } from '@/components/layout/SectionHeading';
 import { EmptyState } from '@/components/patterns/EmptyState';
+import { logGradebookAccess } from '@/lib/audit';
 import { requireAdmin } from '@/lib/auth';
 import { withBasePath } from '@/lib/basePath';
 import { activeOnly } from '@/lib/db/filters';
@@ -26,8 +27,15 @@ export default async function AdminSectionGradebookPage({
 }: {
   params: Promise<{ sectionId: string }>;
 }) {
-  await requireAdmin();
+  const admin = await requireAdmin();
   const { sectionId } = await params;
+
+  await logGradebookAccess({
+    actorUserId: admin.id,
+    actorClerkId: admin.clerkId,
+    sectionId,
+    role: admin.role,
+  });
 
   const section = await db.query.sections.findFirst({
     where: and(eq(sections.id, sectionId), activeOnly(sections.deletedAt)),

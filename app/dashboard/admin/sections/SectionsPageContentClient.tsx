@@ -44,6 +44,7 @@ type SectionRow = {
   courseId: string;
   professorEnrollmentCode: string;
   studentEnrollmentCode: string;
+  endsAt?: string | Date | null;
   createdAt: string | Date;
   learnerCount: number;
   facultyCount: number;
@@ -82,9 +83,13 @@ function sectionCompare(a: SectionRow, b: SectionRow, mode: SectionSortMode) {
 export default function SectionsPageContentClient({
   allSections,
   allCourses,
+  pastSectionsHref,
+  pastSectionsCount = 0,
 }: {
   allSections: SectionRow[];
   allCourses: { id: string; title: string }[];
+  pastSectionsHref?: string;
+  pastSectionsCount?: number;
 }) {
   const [filter, setFilter] = useState("");
   const [courseId, setCourseId] = useState<string>("ALL");
@@ -133,9 +138,17 @@ export default function SectionsPageContentClient({
         ]}
         eyebrow="Catalog"
         title="Sections."
-        description="Every section across every course, with enrolment codes ready to share with faculty and learners."
+        description="Ongoing sections across every course, with enrolment codes ready to share with faculty and learners."
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {pastSectionsHref ? (
+              <Button asChild variant="outline">
+                <Link href={pastSectionsHref}>
+                  View past sections
+                  {pastSectionsCount > 0 ? ` (${pastSectionsCount})` : ""}
+                </Link>
+              </Button>
+            ) : null}
             <SectionFormModal mode="create" allCourses={allCourses} />
             <SectionFormModal mode="create" bulk allCourses={allCourses} />
           </div>

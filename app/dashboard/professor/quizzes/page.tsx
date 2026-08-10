@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { withBasePath } from "@/lib/basePath";
 import { getOrCreateUser } from "@/lib/getOrCreateUser";
 import { formatDateStable } from "@/lib/utils";
+import { partitionEnrollmentsByConclusion } from "@/lib/sectionAvailability";
 
 import ProfessorQuizzesTableClient from "./ProfessorQuizzesTableClient";
 
@@ -22,23 +23,28 @@ export default async function ProfessorQuizzesPage() {
     where: eq(professorSections.professorId, user.id),
     with: { section: true },
   });
+  const { active: ongoingEnrollments } =
+    partitionEnrollmentsByConclusion(professorEnrollments);
 
-  const enrolledSectionIds = professorEnrollments.map((e) => e.sectionId);
+  const enrolledSectionIds = ongoingEnrollments.map((e) => e.sectionId);
 
-  const sectionQuizzes = await db.query.quizSections.findMany({
-    where: inArray(quizSections.sectionId, enrolledSectionIds),
-    with: {
-      quiz: {
-        with: {
-          sectionAssignments: { with: { section: true } },
-          attempts: true,
-          questions: true,
-          professor: true,
-        },
-      },
-    },
-    orderBy: (quizSections, { desc }) => desc(quizSections.assignedAt),
-  });
+  const sectionQuizzes =
+    enrolledSectionIds.length > 0
+      ? await db.query.quizSections.findMany({
+          where: inArray(quizSections.sectionId, enrolledSectionIds),
+          with: {
+            quiz: {
+              with: {
+                sectionAssignments: { with: { section: true } },
+                attempts: true,
+                questions: true,
+                professor: true,
+              },
+            },
+          },
+          orderBy: (quizSections, { desc }) => desc(quizSections.assignedAt),
+        })
+      : [];
 
   const seenQuizIds = new Set<string>();
   const uniqueQuizzes = sectionQuizzes

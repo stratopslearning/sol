@@ -27,8 +27,8 @@ the corresponding test credentials.)
 | `OPENAI_API_KEY`                  | yes\*     | Required for AI grading. App falls back to deterministic grading without it but pass/fail accuracy degrades. |
 | `NEXT_PUBLIC_BASE_URL`            | yes       | Absolute https URL, no trailing slash. Used for Stripe redirects and canonical links. |
 | `SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN` | optional | Match the Sentry project's prod DSN.                          |
-| `UPSTASH_REDIS_REST_URL`          | optional  | Upgrades rate-limiting from in-memory to distributed.              |
-| `UPSTASH_REDIS_REST_TOKEN`        | optional  | Required if `UPSTASH_REDIS_REST_URL` is set.                       |
+| `UPSTASH_REDIS_REST_URL`          | **yes (prod)** | Required in production — app refuses to boot without it. Distributed rate limiting. |
+| `UPSTASH_REDIS_REST_TOKEN`        | **yes (prod)** | Required with the URL above.                       |
 
 > **Paywall default:** `NEXT_PUBLIC_PAYMENTS_ENABLED` defaults to `false`, so
 > the Stripe gate is OFF out of the box — students sign in and go straight to
@@ -145,3 +145,20 @@ For the first 24-48 hours watch:
 
 If anything is wrong, the rate limiter and idempotency table mean the
 system can be redeployed without losing partial state.
+
+---
+
+## 7. Security & compliance (production hardening)
+
+1. **Preview protection** — In Vercel → Project → Settings → Deployment Protection,
+   require authentication for Preview deployments so education-record staging
+   data is not world-readable.
+2. **Separate secrets** — Production Clerk / Neon / Stripe / OpenAI keys must
+   never be copied into Preview. Use Preview-specific Clerk + Neon branch.
+3. **Console SSO / MFA** — Enable SSO or MFA on Vercel, Neon, Clerk, OpenAI,
+   Stripe, Sentry, Upstash, and GitHub org accounts.
+4. **OpenAI ZDR** — Complete [`compliance/evidence/OPENAI_ZDR_CHECKLIST.md`](./compliance/evidence/OPENAI_ZDR_CHECKLIST.md).
+5. **Headers** — Confirm production responses include `Strict-Transport-Security`
+   and `Content-Security-Policy` (set in `next.config.ts`).
+6. **Self-audit** — Follow [`compliance/SELF_AUDIT.md`](./compliance/SELF_AUDIT.md)
+   (access reviews, restore drill, IR tabletop). Full binder: [`compliance/`](./compliance/).

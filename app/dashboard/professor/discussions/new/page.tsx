@@ -7,6 +7,7 @@ import { AppShell } from '@/components/layout/AppShell';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { withBasePath } from '@/lib/basePath';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
+import { partitionEnrollmentsByConclusion } from '@/lib/sectionAvailability';
 
 interface PageProps {
   searchParams: Promise<{ quizId?: string }>;
@@ -22,13 +23,15 @@ export default async function NewDiscussionPage(props: PageProps) {
     where: eq(professorSections.professorId, user.id),
     with: { section: { with: { course: true } } },
   });
+  const { active: ongoingEnrollments } =
+    partitionEnrollmentsByConclusion(professorSectionsList);
 
-  const enrolledSections = professorSectionsList.map((ps) => ({
+  const enrolledSections = ongoingEnrollments.map((ps) => ({
     id: ps.section.id,
     title: `${ps.section.course.title} - ${ps.section.name}`,
   }));
 
-  const enrolledSectionIds = professorSectionsList.map((ps) => ps.sectionId);
+  const enrolledSectionIds = ongoingEnrollments.map((ps) => ps.sectionId);
 
   const ownedQuizzes = await db.query.quizzes.findMany({
     where: eq(quizzes.professorId, user.id),

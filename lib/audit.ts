@@ -1,11 +1,11 @@
 /**
  * Append-only audit log helper.
  *
- * Every privileged mutation (admin user/section/course/quiz CRUD, role
- * changes, paid flag adjustments) should write an entry here so we have a
- * forensic record. We intentionally do NOT throw on logging failures — a
- * Sentry breadcrumb is preferred to letting an audit-log outage take down
- * the actual feature path.
+ * Privileged mutations and FERPA-sensitive disclosures (admin CRUD, enrollment,
+ * gradebook access, exports, role/paid changes) write here for forensic and
+ * education-record accountability. We intentionally do NOT throw on logging
+ * failures — a console error is preferred to letting an audit-log outage take
+ * down the actual feature path.
  */
 import type { NextRequest } from 'next/server';
 
@@ -51,4 +51,21 @@ export function extractRequestMeta(req: NextRequest): {
   const ip = fwd?.split(',')[0]?.trim() || req.headers.get('x-real-ip') || null;
   const userAgent = req.headers.get('user-agent') || null;
   return { ip, userAgent };
+}
+
+/** Log faculty/admin viewing a section gradebook (education-record disclosure). */
+export async function logGradebookAccess(opts: {
+  actorUserId: string;
+  actorClerkId?: string | null;
+  sectionId: string;
+  role: string;
+}): Promise<void> {
+  await logAudit({
+    actorUserId: opts.actorUserId,
+    actorClerkId: opts.actorClerkId ?? null,
+    action: 'education.gradebook.view',
+    targetType: 'section',
+    targetId: opts.sectionId,
+    metadata: { viewerRole: opts.role },
+  });
 }

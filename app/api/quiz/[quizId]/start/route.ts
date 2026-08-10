@@ -8,6 +8,7 @@ import {
   attempts,
   quizSections,
   quizzes,
+  sections,
 } from '@/app/db/schema';
 import { autoSubmitInProgressAttempt } from '@/lib/autoSubmitInProgressAttempt';
 import { ApiError, apiErrorResponse } from '@/lib/api/errors';
@@ -17,6 +18,10 @@ import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import { isStudentEntitled } from '@/lib/featureFlags';
 import { getQuizAvailability } from '@/lib/quizAvailability';
 import { resolveAttemptSectionId } from '@/lib/resolveAttemptSection';
+import {
+  isSectionConcluded,
+  SECTION_CONCLUDED_MESSAGE,
+} from '@/lib/sectionAvailability';
 import { shouldForceAutoSubmitInProgress } from '@/lib/shouldForceAutoSubmit';
 import {
   getRemainingSeconds,
@@ -137,6 +142,17 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
     const sectionId = await resolveAttemptSectionId(user.id, quizSectionIds);
     if (!sectionId) {
       throw ApiError.badRequest('No valid section found for this quiz/assignment');
+    }
+
+    const section = await db.query.sections.findFirst({
+      where: eq(sections.id, sectionId),
+    });
+    if (isSectionConcluded(section, now) && !inProgressAttempt) {
+      throw new ApiError({
+        status: 400,
+        message: SECTION_CONCLUDED_MESSAGE,
+        extras: { sectionConcluded: true },
+      });
     }
 
     if (inProgressAttempt) {

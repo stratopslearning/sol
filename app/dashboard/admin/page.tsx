@@ -11,6 +11,7 @@ import { StatCard } from '@/components/patterns/StatCard';
 import { activeOnly } from '@/lib/db/filters';
 import { withBasePath } from '@/lib/basePath';
 import { requireAdmin } from '@/lib/auth';
+import { partitionBySectionConclusion } from '@/lib/sectionAvailability';
 
 function getCourseCardLayoutClass(courseCount: number, index: number) {
   const isLast = index === courseCount - 1;
@@ -33,11 +34,13 @@ export default async function AdminDashboardPage() {
   // can never leak data.
   await requireAdmin();
 
-  const [allCourses, allSections, allUsers] = await Promise.all([
+  const [allCourses, allSectionsRaw, allUsers] = await Promise.all([
     db.query.courses.findMany({ where: activeOnly(courses.deletedAt) }),
     db.query.sections.findMany({ where: activeOnly(sections.deletedAt) }),
     db.query.users.findMany(),
   ]);
+  const { active: ongoingSections } =
+    partitionBySectionConclusion(allSectionsRaw);
 
   const studentCount = allUsers.filter((u) => u.role === 'STUDENT').length;
   const professorCount = allUsers.filter((u) => u.role === 'PROFESSOR').length;
@@ -65,8 +68,8 @@ export default async function AdminDashboardPage() {
           />
           <StatCard
             label="Sections"
-            value={allSections.length}
-            hint="Active sections across all terms"
+            value={ongoingSections.length}
+            hint="Ongoing sections across all terms"
             icon={<Layers className="h-4 w-4" />}
           />
           <StatCard

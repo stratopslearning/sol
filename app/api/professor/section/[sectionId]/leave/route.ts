@@ -6,6 +6,7 @@ import { db } from '@/app/db';
 import { professorSections, users } from '@/app/db/schema';
 import { ApiError, apiErrorResponse } from '@/lib/api/errors';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
+import { extractRequestMeta, logAudit } from '@/lib/audit';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,6 +55,17 @@ export async function POST(
           eq(professorSections.professorId, user.id),
         ),
       );
+
+    const meta = extractRequestMeta(req);
+    await logAudit({
+      actorUserId: user.id,
+      actorClerkId: user.clerkId,
+      action: 'education.professor_enrollment.leave',
+      targetType: 'section',
+      targetId: sectionId,
+      ip: meta.ip,
+      userAgent: meta.userAgent,
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {
