@@ -187,6 +187,8 @@ export function buildLlmsTxt(options?: { docsScoped?: boolean }): string {
   if (!docsScoped) {
     lines.push(
       `- [Marketing home](${absoluteUrl('/')}): Product overview for humans.`,
+      `- [Privacy Policy](${absoluteUrl('/privacy')}): Education records, subprocessors, retention.`,
+      `- [Terms of Use](${absoluteUrl('/terms')}): Acceptable use and institutional terms.`,
       `- [Site llms.txt](${absoluteUrl('/llms.txt')}): This file.`,
       `- [Docs llms.txt](${absoluteUrl('/docs/llms.txt')}): Docs-scoped LLM index.`,
     );

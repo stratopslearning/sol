@@ -35,12 +35,21 @@ export default clerkMiddleware(async (auth, req) => {
     );
   }
 
-  // Recover from accidental double basePath (Link href passed through withBasePath).
+  // Recover from accidental double basePath.
+  // Browser: /learning/learning/dashboard/...
+  // nextUrl.pathname has one basePath stripped → /learning/dashboard/...
+  // (Looking for /learning/learning on pathname only works if stripping failed.)
   const doubleBase = `${BASE_PATH}${BASE_PATH}`;
   if (pathname.startsWith(doubleBase)) {
-    const url = req.nextUrl.clone();
-    url.pathname = pathname.slice(BASE_PATH.length);
-    return NextResponse.redirect(url);
+    return NextResponse.redirect(
+      new URL(`${pathname.slice(BASE_PATH.length)}${req.nextUrl.search}`, req.url),
+    );
+  }
+  if (pathname === BASE_PATH || pathname.startsWith(`${BASE_PATH}/`)) {
+    const stripped = pathname.slice(BASE_PATH.length) || '/';
+    return NextResponse.redirect(
+      new URL(`${BASE_PATH}${stripped}${req.nextUrl.search}`, req.url),
+    );
   }
 
   const appPath = pathname.startsWith(BASE_PATH)
@@ -88,6 +97,8 @@ export default clerkMiddleware(async (auth, req) => {
     appPath === '/docs' ||
     appPath.startsWith('/docs/') ||
     appPath === '/docs.md' ||
+    appPath === '/privacy' ||
+    appPath === '/terms' ||
     appPath === '/llms.txt' ||
     appPath === '/robots.txt' ||
     appPath === '/sitemap.xml' ||

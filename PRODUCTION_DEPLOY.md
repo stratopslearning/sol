@@ -157,8 +157,16 @@ system can be redeployed without losing partial state.
    never be copied into Preview. Use Preview-specific Clerk + Neon branch.
 3. **Console SSO / MFA** — Enable SSO or MFA on Vercel, Neon, Clerk, OpenAI,
    Stripe, Sentry, Upstash, and GitHub org accounts.
-4. **OpenAI ZDR** — Complete [`compliance/evidence/OPENAI_ZDR_CHECKLIST.md`](./compliance/evidence/OPENAI_ZDR_CHECKLIST.md).
-5. **Headers** — Confirm production responses include `Strict-Transport-Security`
+4. **Clerk end-user session / MFA / lockout** — Configure Production instance
+   per [`compliance/CLERK_AUTH_CONTROLS.md`](./compliance/CLERK_AUTH_CONTROLS.md)
+   and keep screenshots for HECVAT.
+5. **Vercel Firewall / WAF** — Enable on Production per
+   [`compliance/WAF_VERCEL.md`](./compliance/WAF_VERCEL.md).
+6. **OpenAI ZDR** — Complete [`compliance/evidence/OPENAI_ZDR_CHECKLIST.md`](./compliance/evidence/OPENAI_ZDR_CHECKLIST.md).
+7. **Headers** — Confirm production responses include `Strict-Transport-Security`
    and `Content-Security-Policy` (set in `next.config.ts`).
-6. **Self-audit** — Follow [`compliance/SELF_AUDIT.md`](./compliance/SELF_AUDIT.md)
+8. **Self-audit** — Follow [`compliance/SELF_AUDIT.md`](./compliance/SELF_AUDIT.md)
    (access reviews, restore drill, IR tabletop). Full binder: [`compliance/`](./compliance/).
+   University packet: [`compliance/HECVAT_LITE_ANSWERS.md`](./compliance/HECVAT_LITE_ANSWERS.md).
+9. **Campus SSO (FGCU)** — When ready, follow
+   [`compliance/SSO_FGCU_PLAN.md`](./compliance/SSO_FGCU_PLAN.md).

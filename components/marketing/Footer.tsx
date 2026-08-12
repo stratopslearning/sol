@@ -52,6 +52,13 @@ const footerLinks: FooterSection[] = [
       { title: "Sign up", href: withBasePath("/signup") },
     ],
   },
+  {
+    label: "Legal",
+    links: [
+      { title: "Privacy", href: withBasePath("/privacy") },
+      { title: "Terms", href: withBasePath("/terms") },
+    ],
+  },
 ];
 
 export function Footer() {
@@ -94,7 +101,7 @@ export function Footer() {
             </p>
           </AnimatedContainer>
 
-          <div className="grid grid-cols-2 gap-8 sm:grid-cols-3 sm:gap-10 xl:col-span-2 xl:mt-0">
+          <div className="grid grid-cols-2 gap-8 sm:grid-cols-2 lg:grid-cols-4 sm:gap-10 xl:col-span-2 xl:mt-0">
             {footerLinks.map((section, index) => (
               <AnimatedContainer
                 key={section.label}

@@ -1,14 +1,19 @@
 import { redirect, permanentRedirect, type RedirectType } from "next/navigation";
 
-import { withBasePath } from "@/lib/basePath";
+import { appPath } from "@/lib/basePath";
 
 /**
- * `next/navigation` `redirect()` does NOT prepend the configured `basePath`
- * (https://github.com/vercel/next.js/issues/54546). Use `appRedirect` for any
- * app-internal redirect from server components, route handlers, server actions,
- * or auth helpers so the response Location stays under `/learning`.
+ * Server-side redirects for app-internal paths.
  *
- * Pass external URLs (`http://...`, `https://...`) through untouched.
+ * Next.js 15.3+ applies `basePath` to `redirect()` / `permanentRedirect()` via
+ * `addPathPrefix` during render. Passing an already-prefixed path
+ * (`/learning/dashboard`) therefore becomes `/learning/learning/dashboard`.
+ *
+ * Pass app-relative paths (`/dashboard/...`). Absolute `http(s)://` URLs are
+ * left untouched. Accidental basePath prefixes are stripped first.
+ *
+ * @see https://github.com/vercel/next.js/issues/54546 (historical — fixed by
+ * framework prefixing; this helper must NOT also prefix)
  */
 export function appRedirect(path: string, type?: RedirectType): never {
   redirect(resolveTarget(path), type);
@@ -26,5 +31,5 @@ function resolveTarget(path: string): string {
   ) {
     return path;
   }
-  return withBasePath(path);
+  return appPath(path);
 }

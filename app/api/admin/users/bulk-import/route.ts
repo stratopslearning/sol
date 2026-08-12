@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth, clerkClient } from '@clerk/nextjs/server';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { db } from '@/app/db';
@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
       try {
         // Check if user already exists in our database
         const existingUser = await db.query.users.findFirst({
-          where: eq(users.email, userData.email),
+          where: sql`lower(${users.email}) = ${userData.email.toLowerCase()}`,
         });
 
         if (existingUser) {
@@ -111,11 +111,71 @@ export async function POST(req: NextRequest) {
           });
         } catch (clerkError: any) {
           if (clerkError.errors?.[0]?.code === 'form_identifier_exists') {
-            results.push({
-              success: false,
-              message: `User with email ${userData.email} already exists in Clerk`,
-              details: { email: userData.email, error: 'Email already exists in Clerk' },
-            });
+            // Clerk already has this email (e.g. self sign-up). Link that
+            // identity into SOL instead of failing the whole import row.
+            try {
+              const list = await clerk.users.getUserList({
+                emailAddress: [userData.email],
+                limit: 1,
+              });
+              const existingClerk = list.data[0];
+              if (!existingClerk) {
+                results.push({
+                  success: false,
+                  message: `User with email ${userData.email} already exists in Clerk but could not be resolved`,
+                  details: { email: userData.email, error: 'Email already exists in Clerk' },
+                });
+                errorCount++;
+                continue;
+              }
+
+              const linked = await db.query.users.findFirst({
+                where: eq(users.clerkId, existingClerk.id),
+              });
+              if (linked) {
+                results.push({
+                  success: false,
+                  message: `User with email ${userData.email} already exists`,
+                  details: { email: userData.email, clerkId: existingClerk.id },
+                });
+                errorCount++;
+                continue;
+              }
+
+              const [dbUser] = await db
+                .insert(users)
+                .values({
+                  clerkId: existingClerk.id,
+                  email: userData.email,
+                  firstName:
+                    userData.firstName || existingClerk.firstName || null,
+                  lastName: userData.lastName || existingClerk.lastName || null,
+                  role: userData.role,
+                  paid: userData.paid,
+                })
+                .returning();
+
+              results.push({
+                success: true,
+                message: `Linked existing Clerk user ${userData.email} as ${userData.role}`,
+                details: {
+                  email: userData.email,
+                  role: userData.role,
+                  dbId: dbUser.id,
+                  clerkId: existingClerk.id,
+                  linkedExistingClerk: true,
+                },
+              });
+              successCount++;
+            } catch (linkError: any) {
+              results.push({
+                success: false,
+                message: `Failed to link existing Clerk user ${userData.email}: ${linkError.message || 'Unknown error'}`,
+                details: { email: userData.email, error: linkError.message },
+              });
+              errorCount++;
+            }
+            continue;
           } else {
             results.push({
               success: false,

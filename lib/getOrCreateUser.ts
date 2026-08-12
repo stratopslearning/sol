@@ -1,5 +1,5 @@
 import { auth, clerkClient } from '@clerk/nextjs/server';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 
 import { db } from '@/app/db';
 import { users as dbUsers } from '@/app/db/schema';
@@ -80,14 +80,13 @@ export function toPublicUserDto(user: UserData): PublicUserDto {
  * Syncs the Clerk userId / profile fields into our database for business logic.
  *
  * Implementation notes:
- *   - We use Postgres `INSERT ... ON CONFLICT (clerk_id) DO UPDATE` so that
- *     two concurrent requests from the same fresh user (e.g. dashboard +
- *     navigation) do not race to create duplicate rows. The unique index on
- *     `clerk_id` is what makes this safe.
- *   - Clerk profile fields (email, names) are refreshed on every login since
- *     the user can change them on Clerk's side and we don't want to drift.
- *     `role` and `paid` are NEVER touched here — those are managed by admins
- *     and the Stripe webhook respectively.
+ *   - Lookup by `clerk_id` first (common path).
+ *   - If missing, look up by email (case-insensitive) and **relink** the row to
+ *     the current Clerk id. This repairs orphans after a Clerk user was deleted
+ *     and recreated without creating a second SOL profile.
+ *   - Insert uses `ON CONFLICT (clerk_id) DO UPDATE` for concurrent first logins.
+ *   - Partial unique index on `lower(email)` prevents duplicate non-empty emails.
+ *   - `role` and `paid` are NEVER overwritten on sync — admins / Stripe own those.
  */
 export async function getOrCreateUser(): Promise<UserData | null> {
   try {
@@ -111,15 +110,11 @@ export async function getOrCreateUserByClerkId(
   userId: string,
 ): Promise<UserData | null> {
   try {
-    // Fast path: row already exists. Only the read is needed for the common case.
     const existingUser = await db.query.users.findFirst({
       where: eq(dbUsers.clerkId, userId),
     });
     if (existingUser) return toUserData(existingUser);
 
-    // Slow path: fetch profile from Clerk and upsert. We tolerate Clerk failures
-    // by falling back to placeholder values, but we still create the row so the
-    // request can proceed (the user can update their profile later).
     let email = '';
     let firstName: string | null = null;
     let lastName: string | null = null;
@@ -133,6 +128,28 @@ export async function getOrCreateUserByClerkId(
       console.warn('Failed to fetch Clerk user profile during sync', e);
     }
 
+    // Relink orphan row that already owns this email under a stale clerk_id.
+    if (email) {
+      const byEmail = await db.query.users.findFirst({
+        where: sql`lower(${dbUsers.email}) = ${email.toLowerCase()}`,
+      });
+      if (byEmail) {
+        const [relinked] = await db
+          .update(dbUsers)
+          .set({
+            clerkId: userId,
+            email,
+            firstName: firstName ?? byEmail.firstName,
+            lastName: lastName ?? byEmail.lastName,
+            lastSyncedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(dbUsers.id, byEmail.id))
+          .returning();
+        return toUserData(relinked);
+      }
+    }
+
     const [upserted] = await db
       .insert(dbUsers)
       .values({
@@ -142,14 +159,15 @@ export async function getOrCreateUserByClerkId(
         lastName,
         role: 'STUDENT',
         paid: false,
+        lastSyncedAt: new Date(),
       })
       .onConflictDoUpdate({
         target: dbUsers.clerkId,
-        // Only refresh profile metadata. Role and paid are governed elsewhere.
         set: {
           email,
           firstName,
           lastName,
+          lastSyncedAt: new Date(),
           updatedAt: new Date(),
         },
       })

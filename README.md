@@ -73,7 +73,7 @@ The app is mounted at **`/learning`** (Next.js `basePath`). Local dev URL:
 http://localhost:3000/learning
 ```
 
-> Anything that builds an absolute path must go through `withBasePath()` / `apiUrl()` from [`lib/basePath.ts`](./lib/basePath.ts). Server redirects must use `appRedirect()` from [`lib/serverRedirect.ts`](./lib/serverRedirect.ts) so `/learning` is preserved.
+> Anything that builds an absolute path for plain `<a href>` / `fetch` must go through `withBasePath()` / `apiUrl()` from [`lib/basePath.ts`](./lib/basePath.ts). Server `redirect()` already receives `basePath` from Next.js 15.3+ — use [`appRedirect()`](./lib/serverRedirect.ts) with **app-relative** paths (`/dashboard/...`), not pre-prefixed ones.
 
 ---
 

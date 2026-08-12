@@ -28,6 +28,8 @@ Provider maintains administrative, technical, and physical safeguards appropriat
 
 Provider will notify Institution without undue delay after confirming a breach of Institution education records in Provider’s possession, and will cooperate on investigation and required notices.
 
+**Institutional customization (e.g. FGCU):** Have counsel replace placeholders with named breach contacts, notification SLAs, and any state-specific education-privacy terms before signature. This file is a template only — not legal advice.
+
 ## 7. Student / parent rights
 
 Institution remains the FERPA “educational agency or institution” for access, amendment, and hearing rights. Provider will assist Institution in fulfilling access, amendment, and deletion requests using product tools (including soft-delete and purge) within a commercially reasonable time.

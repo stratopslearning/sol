@@ -327,6 +327,78 @@ async function main() {
       fail('chatbot create/update/assign/unassign', e);
     }
 
+    // --- email uniqueness + admin-style user delete reassignment ---
+    try {
+      const email = `smoke-dup-${slug()}@test.local`;
+      const [u1] = await db
+        .insert(schema.users)
+        .values({
+          clerkId: `smoke_dup_a_${slug()}`,
+          email,
+          role: 'PROFESSOR',
+          paid: false,
+        })
+        .returning();
+      let dupBlocked = false;
+      try {
+        await db.insert(schema.users).values({
+          clerkId: `smoke_dup_b_${slug()}`,
+          email,
+          role: 'STUDENT',
+          paid: false,
+        });
+      } catch {
+        dupBlocked = true;
+      }
+      if (!dupBlocked) {
+        throw new Error('expected unique email index to block duplicate insert');
+      }
+
+      const [admin] = await db
+        .insert(schema.users)
+        .values({
+          clerkId: `smoke_admin_${slug()}`,
+          email: `smoke-admin-${slug()}@test.local`,
+          role: 'ADMIN',
+          paid: true,
+        })
+        .returning();
+
+      const [ownedQuiz] = await db
+        .insert(schema.quizzes)
+        .values({
+          title: `Smoke Owned ${slug()}`,
+          professorId: u1.id,
+          maxAttempts: 1,
+          passingScore: 60,
+          isActive: true,
+        })
+        .returning();
+
+      // Simulate admin delete reassignment then user delete
+      await db
+        .update(schema.quizzes)
+        .set({ professorId: admin.id })
+        .where(eq(schema.quizzes.professorId, u1.id));
+      await db.delete(schema.users).where(eq(schema.users.id, u1.id));
+      const gone = await db.query.users.findFirst({
+        where: eq(schema.users.id, u1.id),
+      });
+      if (gone) throw new Error('user still present after delete');
+      const reassigned = await db.query.quizzes.findFirst({
+        where: eq(schema.quizzes.id, ownedQuiz.id),
+      });
+      if (reassigned?.professorId !== admin.id) {
+        throw new Error('quiz was not reassigned to admin');
+      }
+
+      await db.delete(schema.quizzes).where(eq(schema.quizzes.id, ownedQuiz.id));
+      await db.delete(schema.users).where(eq(schema.users.id, admin.id));
+      ok('email unique + user delete reassignment');
+    } catch (e) {
+      fail('email unique + user delete reassignment', e);
+    }
+
     // --- soft-delete quiz ---
     try {
       await db

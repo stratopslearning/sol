@@ -9,7 +9,7 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { relations } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
 
 // All timestamps are timestamptz so the database always stores/returns UTC.
 // The frontend formats with the user's timezone via date-fns-tz, but the wire
@@ -17,22 +17,34 @@ import { relations } from 'drizzle-orm';
 const ts = (name: string) => timestamp(name, { withTimezone: true });
 
 // Users table - syncs with Clerk
-export const users = pgTable('users', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  clerkId: text('clerk_id').unique().notNull(), // Clerk's userId
-  email: text('email').notNull(),
-  firstName: text('first_name'),
-  lastName: text('last_name'),
-  role: text('role', { enum: ['STUDENT', 'PROFESSOR', 'ADMIN'] }).default('STUDENT').notNull(),
-  paid: boolean('paid').default(false).notNull(),
-  // Stripe customer mapping for refund/dispute lookups. Nullable because
-  // not every user has gone through checkout yet.
-  stripeCustomerId: text('stripe_customer_id'),
-  // Last time we synced this user with Clerk's source-of-truth profile.
-  lastSyncedAt: ts('last_synced_at'),
-  createdAt: ts('created_at').defaultNow().notNull(),
-  updatedAt: ts('updated_at').defaultNow().notNull(),
-});
+export const users = pgTable(
+  'users',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    clerkId: text('clerk_id').unique().notNull(), // Clerk's userId
+    email: text('email').notNull(),
+    firstName: text('first_name'),
+    lastName: text('last_name'),
+    role: text('role', { enum: ['STUDENT', 'PROFESSOR', 'ADMIN'] })
+      .default('STUDENT')
+      .notNull(),
+    paid: boolean('paid').default(false).notNull(),
+    // Stripe customer mapping for refund/dispute lookups. Nullable because
+    // not every user has gone through checkout yet.
+    stripeCustomerId: text('stripe_customer_id'),
+    // Last time we synced this user with Clerk's source-of-truth profile.
+    lastSyncedAt: ts('last_synced_at'),
+    createdAt: ts('created_at').defaultNow().notNull(),
+    updatedAt: ts('updated_at').defaultNow().notNull(),
+  },
+  (t) => ({
+    // One SOL profile per email (case-insensitive). Empty emails excluded so
+    // rare Clerk-profile fetch failures don't collide on ''.
+    emailLowerUnique: uniqueIndex('users_email_lower_unique')
+      .on(sql`lower(${t.email})`)
+      .where(sql`${t.email} <> ''`),
+  }),
+);
 
 // Courses table - Admin creates courses (no professor assignment at course level)
 export const courses = pgTable('courses', {
