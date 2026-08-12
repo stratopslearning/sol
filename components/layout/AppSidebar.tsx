@@ -213,11 +213,10 @@ function BrandHeader({ subtitle }: { subtitle: string }) {
     <div className="flex flex-col gap-1">
       <a
         href={withBasePath("/")}
-        className="font-display text-xl tracking-tight text-ink hover:text-brand transition-colors inline-flex items-baseline gap-1"
+        className="font-display text-xl tracking-tight text-ink hover:text-brand transition-colors"
         style={{ fontVariationSettings: '"opsz" 36, "SOFT" 30' }}
       >
-        <span>SOL</span>
-        <span className="text-brand text-sm">·</span>
+        SOL
       </a>
       <span className="eyebrow">{subtitle}</span>
     </div>

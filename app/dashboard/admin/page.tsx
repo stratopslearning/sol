@@ -122,12 +122,6 @@ export default async function AdminDashboardPage() {
                     index,
                   )}`}
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <span className="font-mono tnum text-xs text-ink-faint">
-                      {String(course.id).padStart(3, '0')}
-                    </span>
-                    <FileText className="h-4 w-4 text-brand" />
-                  </div>
                   <h3
                     className="font-display text-ink"
                     style={{
