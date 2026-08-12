@@ -49,7 +49,7 @@ export function Faq() {
                   value={`item-${i}`}
                   className="border-rule"
                 >
-                  <AccordionTrigger className="py-5 text-left font-display text-base text-ink hover:no-underline hover:text-brand md:text-lg [&[data-state=open]]:text-brand">
+                  <AccordionTrigger className="py-5 text-left font-display text-base text-ink transition-colors duration-150 hover:no-underline hover:text-brand md:text-lg [&[data-state=open]]:text-brand [&[data-state=open]>svg]:duration-150">
                     <span
                       style={{
                         fontVariationSettings: '"opsz" 36, "SOFT" 30',
@@ -58,7 +58,7 @@ export function Faq() {
                       {item.q}
                     </span>
                   </AccordionTrigger>
-                  <AccordionContent className="pb-5 text-base leading-relaxed text-ink-muted">
+                  <AccordionContent className="pb-5 text-base leading-relaxed text-ink-muted will-change-[height]">
                     {item.a}
                   </AccordionContent>
                 </AccordionItem>

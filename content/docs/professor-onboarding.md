@@ -1,19 +1,17 @@
 ---
 title: Professor onboarding
-description: From first sign-up through a fully set-up teaching term — verify your account, join sections, enroll students, and assign quizzes.
+description: From first sign-up through a fully set-up teaching term. Verify your account, join sections, enroll students, and assign quizzes.
 audience: faculty
 order: 1
 ---
 
 # Professor onboarding guide
 
-This guide walks faculty from first account creation through a fully set-up teaching term on SOL.
+This guide walks faculty from first account creation through a fully set-up teaching term on SOL
 
 **Live app:** [https://www.strat-ops.net/learning](https://www.strat-ops.net/learning)
 
 SOL is invite-only at most institutions. New accounts start as **students**. After we verify your school affiliation, we promote you to **professor** so you can join sections, author quizzes, and grade coursework.
-
----
 
 ## At a glance
 
@@ -30,21 +28,17 @@ SOL is invite-only at most institutions. New accounts start as **students**. Aft
 
 Optional later: connect an AI agent via **Agent Access** (see [Agent Access](/docs/professor-agent-access)).
 
----
-
 ## Before you start
 
 Have ready:
 
-- Your **institutional email** (the address your school uses for you — e.g. `@university.edu`)
+- Your **institutional email** (the address your school uses for you, e.g. `@university.edu`)
 - The course / section names you will teach this term (so we can provision the catalog correctly)
-- A way to reach us for verification (email or your institution’s SOL coordinator — see [Contact](#contact--support))
+- A way to reach us for verification (email or your institution’s SOL coordinator, see [Contact](#contact--support))
 
 You do **not** need to create courses yourself. Admins create the course catalog and sections; you join sections with a faculty code.
 
----
-
-## Step 1 — Create your account (school email)
+## Step 1: Create your account (school email)
 
 1. Open the app: [https://www.strat-ops.net/learning](https://www.strat-ops.net/learning)
 2. Choose **Sign up** (or go directly to `/learning/signup`).
@@ -61,9 +55,7 @@ New accounts are created as **Student** by default. That is expected. Until we p
 
 Do **not** enroll in sections as a student while waiting for professor access. Wait for the role change.
 
----
-
-## Step 2 — Notify us for verification
+## Step 2: Notify us for verification
 
 After you can sign in successfully, tell us you need professor access.
 
@@ -72,16 +64,14 @@ Include in your message:
 - Full name (as it should appear to students)
 - School email used to sign up (must match the account)
 - Institution / department
-- Courses and sections you will teach this term (titles and any section labels, e.g. “CS 101 — Section A”)
+- Courses and sections you will teach this term (titles and any section labels, e.g. “CS 101, Section A”)
 - Preferred start date / term
 
 **We will not promote an account we cannot verify.** Using your school email and listing the courses you teach speeds this up.
 
-> **Tip for coordinators:** If your institution already has a SOL admin, they can promote you from **Dashboard → People** without waiting on an external ticket. See [Admin checklist](#admin-checklist-sol-team--institutional-admins) below.
+> **Tip for coordinators:** If your institution already has a SOL admin, they can promote you from **Dashboard → People** without waiting on an external ticket.
 
----
-
-## Step 3 — We verify you and set your role to Professor
+## Step 3: We verify you and set your role to Professor
 
 On our side:
 
@@ -98,23 +88,19 @@ After promotion:
 
 If you still see the student dashboard after we confirm the change, hard-refresh or clear the session and sign in again.
 
----
-
-## Step 4 — Receive your faculty enrolment codes
+## Step 4: Receive your faculty enrolment codes
 
 Courses and sections are provisioned by an administrator (not by professors in the live product):
 
 1. Admin creates the **course** (and sections if needed) under Admin → Courses / Sections.
 2. Each section gets two codes:
-   - **Faculty enrolment code** — for professors / TAs to join the section as teachers
-   - **Learner enrolment code** — for students to join the section as learners
+   - **Faculty enrolment code**, for professors / TAs to join the section as teachers
+   - **Learner enrolment code**, for students to join the section as learners
 3. Someone on the SOL / registrar side sends you the **faculty** code(s) for your section(s).
 
 Keep faculty codes private. Anyone with a faculty code can join that section as teaching faculty.
 
----
-
-## Step 5 — Join your sections
+## Step 5: Join your sections
 
 1. Open **Faculty → Overview** (`/learning/dashboard/professor`).
 2. Find **Add a section**.
@@ -135,9 +121,7 @@ Repeat for every section you teach.
 
 That empty state means you have not successfully joined a section yet (or codes have not been issued). Contact your SOL admin / registrar with the course name so they can confirm the faculty code.
 
----
-
-## Step 6 — Get your students enrolled
+## Step 6: Get your students enrolled
 
 Students do **not** receive in-app email invites. You share a code out of band (syllabus, LMS announcement, email, first-day slide).
 
@@ -152,9 +136,7 @@ Point students at the [Student getting started](/docs/student-getting-started) g
 
 **Roster check:** On the section page you can see learners who have enrolled. If a student says they joined but you do not see them, have them confirm the exact code and that they used the learner code (not the faculty code).
 
----
-
-## Step 7 — Compose and assign quizzes
+## Step 7: Compose and assign quizzes
 
 1. Go to **My Quizzes** or use **Compose quiz** from Overview (`/learning/dashboard/professor/quiz/new`).
 2. Author questions (including short-answer items that can be AI-graded with a rubric).
@@ -172,9 +154,7 @@ Students in those sections can then take the quiz. You can later:
 
 Under **Discussions** you can create Socratic discussion bots, assign them to sections, and review student sessions. Same pattern as quizzes: create → assign to sections you teach.
 
----
-
-## Step 8 — Teach day-to-day
+## Step 8: Teach day-to-day
 
 | Where | Use it for |
 | --- | --- |
@@ -182,14 +162,12 @@ Under **Discussions** you can create Socratic discussion bots, assign them to se
 | **My Sections** → section | Roster, codes, assigned work, links into gradebook |
 | **Gradebook** | Section-level scores |
 | **All Results** | Cross-quiz attempt overview |
-| **Attention** | Attempts that need review (pending / manual / fallback grading) — regrade or resolve |
+| **Attention** | Attempts that need review (pending / manual / fallback grading), regrade or resolve |
 | **Attempt** pages | Open a single submission, inspect AI rationale, override / regrade |
 
 AI-graded short answers always include model reasoning so you can verify scores rather than trust them blindly. When the AI path is unavailable, deterministic fallback grading keeps the pipeline moving; those items often surface in **Attention**.
 
----
-
-## Optional — Agent Access (AI assistants)
+## Optional: Agent Access (AI assistants)
 
 If you want to manage sections, quizzes, gradebooks, and discussions from an AI agent (Claude, ChatGPT, Cursor, etc.):
 
@@ -197,8 +175,6 @@ If you want to manage sections, quizzes, gradebooks, and discussions from an AI 
 2. Follow the [Agent Access guide](/docs/professor-agent-access) for OAuth connectors or personal access tokens.
 
 Agent access only works while your role is **Professor** (or Admin). Downgrading the role revokes token usability.
-
----
 
 ## Checklist (print / send to faculty)
 
@@ -214,24 +190,6 @@ Agent access only works while your role is **Professor** (or Admin). Downgrading
 - [ ] Know where **Attention** and **Gradebook** live
 - [ ] (Optional) Set up Agent Access
 
----
-
-## Admin checklist (SOL team / institutional admins)
-
-Use this when onboarding a verified professor:
-
-1. Confirm school email and teaching assignment.
-2. **People** → **Change role** → **Professor**  
-   - Or **Bulk import** CSV with `email,firstName,lastName,role,paid` and `PROFESSOR` if provisioning ahead of first login.
-3. Create **course** and **section(s)** if they do not exist yet.
-4. Send the professor the **faculty enrolment code**(s) only.
-5. Remind them to share the **learner** code with students themselves.
-6. Spot-check **Audit log** for the role change if your compliance process requires it.
-
-Professors cannot create the institutional course catalog in the live product; keep catalog ownership on the admin side.
-
----
-
 ## Troubleshooting
 
 | Symptom | What to try |
@@ -239,11 +197,9 @@ Professors cannot create the institutional course catalog in the live product; k
 | Still on student dashboard after promotion | Sign out / in; confirm the admin changed the correct email account |
 | “Invalid enrollment code” when joining a section | Confirm you have the **faculty** code, not the learner code; codes are case-sensitive as issued |
 | Students cannot find the course | They must enroll with the **learner** code; there is no public course directory to browse into |
-| Empty My Sections | You have not joined yet, or the section was not created — ask admin for the faculty code |
+| Empty My Sections | You have not joined yet, or the section was not created. Ask admin for the faculty code |
 | No AI scores / items stuck in Attention | Check Attention queue; use regrade; escalate to SOL ops if grading is systemically down |
-| Cannot open Faculty routes | Role is still `STUDENT` — complete Steps 2–3 |
-
----
+| Cannot open Faculty routes | Role is still `STUDENT`. Complete Steps 2–3 |
 
 ## Contact & support
 
@@ -251,9 +207,7 @@ For role verification and catalog setup, contact your institution’s SOL admini
 
 When writing in, include the **exact school email** on the account and the **course / section** names you need.
 
----
-
 ## Related guides
 
-- [Agent Access](/docs/professor-agent-access) — connect an AI agent to your faculty workflow
-- [Student getting started](/docs/student-getting-started) — what to share with learners
+- [Agent Access](/docs/professor-agent-access): connect an AI agent to your faculty workflow
+- [Student getting started](/docs/student-getting-started): what to share with learners

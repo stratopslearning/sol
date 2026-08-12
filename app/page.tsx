@@ -6,7 +6,6 @@ import { Approach } from "@/components/marketing/Approach";
 import { Comparison } from "@/components/marketing/Comparison";
 import { Faq } from "@/components/marketing/Faq";
 import { Footer } from "@/components/marketing/Footer";
-import { PaperTexturedRegion } from "@/components/marketing/PaperTexturedRegion";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { MARKETING_FAQS } from "@/lib/marketingFaq";
 import { getMarketingStats } from "@/lib/marketingStats";
@@ -63,14 +62,12 @@ export default async function Home() {
       <Navbar />
       <main id="main">
         <Hero />
-        <PaperTexturedRegion>
-          <StatsBand stats={stats} />
-          <FeatureGrid />
-          <Comparison />
-          <Approach />
-          <Faq />
-          <Footer />
-        </PaperTexturedRegion>
+        <StatsBand stats={stats} />
+        <FeatureGrid />
+        <Comparison />
+        <Approach />
+        <Faq />
+        <Footer />
       </main>
     </>
   );

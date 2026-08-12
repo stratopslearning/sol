@@ -14,7 +14,8 @@ export function AuthSignIn() {
       signUpUrl={withBasePath("/signup")}
       // Prefer Clerk's redirect_url (OAuth consent for Claude.ai / ChatGPT MCP).
       // forceRedirectUrl would override that and strand the connector mid-flow.
-      fallbackRedirectUrl={withBasePath("/")}
+      // Fallback sends normal logins to /dashboard, which routes by role.
+      fallbackRedirectUrl={withBasePath("/dashboard")}
       appearance={clerkAppearance}
       fallback={<AuthFormSkeleton variant="signin" />}
     />

@@ -13,7 +13,8 @@ export function AuthSignUp() {
       routing="path"
       signInUrl={withBasePath("/login")}
       // Prefer Clerk's redirect_url (OAuth consent for Claude.ai / ChatGPT MCP).
-      fallbackRedirectUrl={withBasePath("/")}
+      // Fallback sends normal sign-ups to /dashboard, which routes by role.
+      fallbackRedirectUrl={withBasePath("/dashboard")}
       appearance={clerkAppearance}
       fallback={<AuthFormSkeleton variant="signup" />}
     />

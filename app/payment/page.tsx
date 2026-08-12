@@ -43,7 +43,7 @@ export default async function PaymentPage() {
       <AuthShell
         title="You're in. Welcome."
         description="Your enrolment is on file. Every course, every quiz, every attempt is now available to you."
-        footnote="If you ever need a receipt or refund, write to enrolment@sol.example — institutional billing teams respond within one business day."
+        footnote="If you ever need a receipt or refund, write to enrolment@SOLexample — institutional billing teams respond within one business day."
       >
         <div className="flex flex-col gap-6">
           <div className="flex items-start gap-3">

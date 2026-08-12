@@ -37,7 +37,7 @@ SOL is an academic learning management system for institutions that take pedagog
 | App | https://www.strat-ops.net/learning |
 | Docs | https://www.strat-ops.net/learning/docs |
 | This page (HTML) | https://www.strat-ops.net/learning/docs/about-sol |
-| This page (markdown) | https://www.strat-ops.net/learning/docs/about-sol.md |
+| This page (markdown) | https://www.strat-ops.net/learning/docs/about-SOLmd |
 | LLM index | https://www.strat-ops.net/learning/llms.txt |
 | Docs LLM index | https://www.strat-ops.net/learning/docs/llms.txt |
 | Professor MCP | https://www.strat-ops.net/learning/api/mcp |

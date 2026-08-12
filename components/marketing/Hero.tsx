@@ -115,7 +115,7 @@ export function Hero() {
   return (
     <section
       ref={rootRef}
-      aria-label="SOL. Coursework platform for faculty and students."
+      aria-label="SOL Coursework platform for faculty and students."
       className="relative isolate min-h-[100svh] overflow-hidden bg-paper"
     >
       {/* Full-bleed mesh — dominant visual plane */}

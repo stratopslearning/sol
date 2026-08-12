@@ -7,7 +7,7 @@ order: 1
 
 # Student getting started
 
-A short path from first account to your first quiz on SOL.
+A short path from first account to your first quiz on SOL
 
 **Live app:** [https://www.strat-ops.net/learning](https://www.strat-ops.net/learning)
 

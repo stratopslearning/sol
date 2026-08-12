@@ -119,7 +119,7 @@ export function buildDocsIndexMarkdown(): string {
   const lines = [
     '# SOL Docs',
     '',
-    'Public guides for faculty and students on SOL.',
+    'Public guides for faculty and students on SOL',
     '',
     `HTML index: ${absoluteUrl('/docs')}`,
     `LLM index: ${absoluteUrl('/docs/llms.txt')}`,

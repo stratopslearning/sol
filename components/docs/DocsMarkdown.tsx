@@ -1,3 +1,4 @@
+import type { HTMLAttributes, ReactNode } from 'react';
 import type { Components } from 'react-markdown';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -20,6 +21,46 @@ function resolveHref(href: string | undefined): string | undefined {
   return href;
 }
 
+function headingText(node: ReactNode): string {
+  if (typeof node === 'string' || typeof node === 'number') {
+    return String(node);
+  }
+  if (Array.isArray(node)) {
+    return node.map(headingText).join('');
+  }
+  if (node && typeof node === 'object' && 'props' in node) {
+    return headingText(
+      (node as { props?: { children?: ReactNode } }).props?.children,
+    );
+  }
+  return '';
+}
+
+/** GitHub-style slug so in-page `#…` links in docs resolve. */
+function slugifyHeading(text: string): string {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/[^\p{L}\p{M}\p{N}\p{Pc}\- ]/gu, '')
+    .replace(/ /g, '-');
+}
+
+function Heading({
+  as: Tag,
+  children,
+  ...props
+}: {
+  as: 'h2' | 'h3' | 'h4';
+  children?: ReactNode;
+} & HTMLAttributes<HTMLHeadingElement>) {
+  const id = slugifyHeading(headingText(children));
+  return (
+    <Tag id={id || undefined} {...props}>
+      {children}
+    </Tag>
+  );
+}
+
 const components: Components = {
   a({ href, children, ...props }) {
     const resolved = resolveHref(href);
@@ -35,6 +76,27 @@ const components: Components = {
       >
         {children}
       </a>
+    );
+  },
+  h2({ children, ...props }) {
+    return (
+      <Heading as="h2" {...props}>
+        {children}
+      </Heading>
+    );
+  },
+  h3({ children, ...props }) {
+    return (
+      <Heading as="h3" {...props}>
+        {children}
+      </Heading>
+    );
+  },
+  h4({ children, ...props }) {
+    return (
+      <Heading as="h4" {...props}>
+        {children}
+      </Heading>
     );
   },
   table({ children, ...props }) {

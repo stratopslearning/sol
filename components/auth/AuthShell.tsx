@@ -33,8 +33,8 @@ export function AuthShell({
           className,
         )}
       >
-        <div className="w-full max-w-[440px] flex flex-col items-center gap-7 animate-rise">
-          <article className="auth-card w-full">
+        <div className="flex w-full max-w-[480px] flex-col items-center gap-7 animate-rise">
+          <article className="auth-card w-full overflow-visible">
             <header className="auth-card-header">
               <h1
                 className="font-display text-ink text-balance"

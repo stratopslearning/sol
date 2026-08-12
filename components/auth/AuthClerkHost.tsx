@@ -8,12 +8,22 @@ import { cn } from "@/lib/utils";
 const CHROME_SELECTORS = [
   '[class*="footerPages"]',
   '[class*="developmentMode"]',
+  '[class*="DevelopmentMode"]',
+  '[class*="devMode"]',
   '[class*="cl-badge"]',
 ].join(",");
 
 function stripClerkChrome(root: HTMLElement) {
   root.querySelectorAll(CHROME_SELECTORS).forEach((el) => {
-    if (el instanceof HTMLElement) el.style.display = "none";
+    if (!(el instanceof HTMLElement)) return;
+    // Keep real footer actions ("Use another method", sign-up link).
+    if (
+      el.className.includes("footerAction") ||
+      el.closest('[class*="footerAction"]')
+    ) {
+      return;
+    }
+    el.style.display = "none";
   });
 }
 
