@@ -13,6 +13,19 @@ afterEach(() => {
   vi.resetModules();
 });
 
+function stubProductionBase() {
+  vi.stubEnv('NODE_ENV', 'production');
+  vi.stubEnv('DATABASE_URL', 'postgres://test');
+  vi.stubEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'pk');
+  vi.stubEnv('CLERK_SECRET_KEY', 'sk');
+  vi.stubEnv('NEXT_PUBLIC_BASE_URL', 'https://example.com');
+  vi.stubEnv('NEXT_PUBLIC_PAYMENTS_ENABLED', 'false');
+  vi.stubEnv('UPSTASH_REDIS_REST_URL', 'https://example.upstash.io');
+  vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', 'token');
+  vi.stubEnv('CRON_SECRET', 'cron-secret');
+  vi.stubEnv('OPENAI_API_KEY', 'sk-openai');
+}
+
 describe('lib/env', () => {
   it('throws when DATABASE_URL is missing', async () => {
     vi.stubEnv('NODE_ENV', 'production');
@@ -52,6 +65,8 @@ describe('lib/env', () => {
     vi.stubEnv('CLERK_SECRET_KEY', 'sk');
     vi.stubEnv('NEXT_PUBLIC_BASE_URL', 'https://example.com');
     vi.stubEnv('NEXT_PUBLIC_PAYMENTS_ENABLED', 'false');
+    vi.stubEnv('CRON_SECRET', 'cron-secret');
+    vi.stubEnv('OPENAI_API_KEY', 'sk-openai');
     vi.stubEnv('UPSTASH_REDIS_REST_URL', undefined as unknown as string);
     vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', undefined as unknown as string);
     delete process.env.UPSTASH_REDIS_REST_URL;
@@ -60,15 +75,40 @@ describe('lib/env', () => {
     expect(() => mod.env()).toThrow(/UPSTASH_REDIS/);
   });
 
-  it('accepts production with Upstash configured', async () => {
-    vi.stubEnv('NODE_ENV', 'production');
-    vi.stubEnv('DATABASE_URL', 'postgres://test');
-    vi.stubEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'pk');
-    vi.stubEnv('CLERK_SECRET_KEY', 'sk');
-    vi.stubEnv('NEXT_PUBLIC_BASE_URL', 'https://example.com');
-    vi.stubEnv('NEXT_PUBLIC_PAYMENTS_ENABLED', 'false');
-    vi.stubEnv('UPSTASH_REDIS_REST_URL', 'https://example.upstash.io');
-    vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', 'token');
+  it('throws in production without CRON_SECRET', async () => {
+    stubProductionBase();
+    vi.stubEnv('CRON_SECRET', undefined as unknown as string);
+    delete process.env.CRON_SECRET;
+    const mod = await import('@/lib/env');
+    expect(() => mod.env()).toThrow(/CRON_SECRET/);
+  });
+
+  it('throws in production without OPENAI_API_KEY', async () => {
+    stubProductionBase();
+    vi.stubEnv('OPENAI_API_KEY', undefined as unknown as string);
+    delete process.env.OPENAI_API_KEY;
+    const mod = await import('@/lib/env');
+    expect(() => mod.env()).toThrow(/OPENAI_API_KEY/);
+  });
+
+  it('throws in Vercel production if LOAD_TEST_SECRET is set', async () => {
+    stubProductionBase();
+    vi.stubEnv('VERCEL_ENV', 'production');
+    vi.stubEnv('LOAD_TEST_SECRET', 'load-test-secret-16');
+    const mod = await import('@/lib/env');
+    expect(() => mod.env()).toThrow(/LOAD_TEST_SECRET/);
+  });
+
+  it('allows LOAD_TEST_SECRET on Vercel preview', async () => {
+    stubProductionBase();
+    vi.stubEnv('VERCEL_ENV', 'preview');
+    vi.stubEnv('LOAD_TEST_SECRET', 'load-test-secret-16');
+    const mod = await import('@/lib/env');
+    expect(() => mod.env()).not.toThrow();
+  });
+
+  it('accepts production with Upstash, CRON_SECRET, and OPENAI_API_KEY configured', async () => {
+    stubProductionBase();
     const mod = await import('@/lib/env');
     expect(() => mod.env()).not.toThrow();
   });

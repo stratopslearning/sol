@@ -14,7 +14,10 @@
     "db:reconcile-history": "tsx scripts/reconcile-drizzle-history.ts",
     "db:backfill-stripe-customer": "tsx scripts/backfill-stripe-customer.ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "load-test:seed": "tsx scripts/load-test/seed.ts",
+    "load-test:cleanup": "tsx scripts/load-test/cleanup.ts",
+    "load-test:k6": "bash load-test/k6/run.sh"
   },
   "dependencies": {
     "@clerk/mcp-tools": "^0.3.1",

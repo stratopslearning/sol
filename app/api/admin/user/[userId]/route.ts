@@ -13,7 +13,7 @@ import {
 } from '@/app/db/schema';
 import { extractRequestMeta, logAudit } from '@/lib/audit';
 import type { UserData } from '@/lib/getOrCreateUser';
-import { toUserData } from '@/lib/getOrCreateUser';
+import { invalidateUserCache, toUserData } from '@/lib/getOrCreateUser';
 
 export const dynamic = 'force-dynamic';
 
@@ -74,6 +74,11 @@ export async function PATCH(
       .set({ ...validatedData, updatedAt: new Date() })
       .where(eq(users.id, targetUserId))
       .returning();
+
+    invalidateUserCache({
+      userId: targetUserId,
+      clerkId: updatedUser.clerkId,
+    });
 
     const meta = extractRequestMeta(req);
     await logAudit({

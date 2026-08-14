@@ -311,8 +311,8 @@ export const stripeEvents = pgTable('stripe_events', {
   processedAt: ts('processed_at'),
 });
 
-// Audit log of administrative + sensitive actions. Append-only; admins should
-// never be able to mutate or delete past entries.
+// Audit log of administrative + sensitive actions. Append-only; a Postgres
+// trigger (drizzle/0011_audit_log_append_only.sql) rejects UPDATE/DELETE.
 export const auditLog = pgTable(
   'audit_log',
   {

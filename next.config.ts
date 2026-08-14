@@ -23,9 +23,11 @@ const nextConfig: NextConfig = {
       "img-src 'self' data: blob: https:",
       "font-src 'self' data: https:",
       "style-src 'self' 'unsafe-inline' https:",
-      // Clerk (dev + custom FAPI + abuse protection), Stripe.js, Sentry, Next.
+      // Clerk still needs 'unsafe-inline' (no nonce CSP in this pass).
+      // Production drops 'unsafe-eval'; Next.js production bundles do not
+      // require it. Dev keeps eval for webpack/HMR.
       [
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+        `script-src 'self' 'unsafe-inline'${process.env.NODE_ENV === 'production' ? '' : " 'unsafe-eval'"}`,
         'https://*.clerk.accounts.dev',
         'https://*.clerk.com',
         clerkFrontendApi,

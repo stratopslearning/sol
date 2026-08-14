@@ -25,13 +25,14 @@ Last design walkthrough: see [`evidence/TYPE1_WALKTHROUGH.md`](./evidence/TYPE1_
 | CC-05 | Encryption at rest | Neon Postgres default encryption | Neon docs + restore drill | pass |
 | CC-06 | Security headers | [`next.config.ts`](../next.config.ts) `headers()` (HSTS, CSP, etc.) | curl -I production | pass |
 | CC-07 | Rate limiting | [`lib/rateLimit.ts`](../lib/rateLimit.ts); Upstash **required in production** | 429 smoke; env validation | pass |
-| CC-08 | Audit logging of privileged actions | [`lib/audit.ts`](../lib/audit.ts); admin UI [`app/dashboard/admin/audit`](../app/dashboard/admin/audit) | Sample `audit_log` rows | pass |
+| CC-08 | Audit logging of privileged actions | [`lib/audit.ts`](../lib/audit.ts); exam `quiz.attempt.start` / `quiz.attempt.submit`; admin UI [`app/dashboard/admin/audit`](../app/dashboard/admin/audit) | Sample `audit_log` rows | pass |
 | CC-09 | Change management | PRs + [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) | CI runs; branch protection notes | pass |
 | CC-10 | Vulnerability management | Dependabot / `npm audit` cadence in [`policies/VULNERABILITY_MANAGEMENT.md`](./policies/VULNERABILITY_MANAGEMENT.md) | Quarterly audit notes | pass |
 | CC-11 | Incident response | [`policies/INCIDENT_RESPONSE.md`](./policies/INCIDENT_RESPONSE.md) | Tabletop in `evidence/` | pass |
 | CC-12 | Backup & recovery | Neon PITR; [`BACKUP_RESTORE.md`](./BACKUP_RESTORE.md) | Annual restore drill | pass |
 | CC-13 | Monitoring | Sentry (PII off in prod); Vercel/Neon metrics | Sentry project config | pass |
 | CC-14 | Cron / job auth | `CRON_SECRET` on grade-pending cron | Cron logs | pass |
+| CC-15 | Payments flag before charging | Set `NEXT_PUBLIC_PAYMENTS_ENABLED=true` in Vercel Production before charging $10/student. Default remains `false` for unpaid pilots. | Vercel env screenshot | n/a until go-live |
 
 ---
 

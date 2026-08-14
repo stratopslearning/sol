@@ -45,6 +45,22 @@ function inMemoryLimit(
   };
 }
 
+function isProdRuntime(): boolean {
+  return (
+    process.env.NODE_ENV === 'production' ||
+    process.env.VERCEL_ENV === 'production'
+  );
+}
+
+function failClosed(limit: number, windowMs: number): RateLimitResult {
+  return {
+    success: false,
+    limit,
+    remaining: 0,
+    reset: Date.now() + windowMs,
+  };
+}
+
 let redisClient: Redis | undefined;
 const upstashLimiters = new Map<string, Ratelimit>();
 
@@ -90,10 +106,9 @@ function getUpstashLimiter(
  * Returns a RateLimitResult; the caller is responsible for translating a
  * `success: false` into a 429 (or whatever response shape the route uses).
  *
- * Prefer Upstash when configured. If it is missing at runtime, fall back to
- * the in-memory limiter and log loudly — fail-closed 429s were blocking
- * legitimate first requests (token mint / MCP) whenever the Redis env was
- * unavailable in a given serverless isolate.
+ * Prefer Upstash when configured. In production, Upstash errors (or a missing
+ * Redis client at runtime) fail closed so each isolate cannot independently
+ * allow the full burst. Dev/test keep the in-memory fallback.
  */
 export async function rateLimit(opts: {
   key: string;
@@ -113,12 +128,17 @@ export async function rateLimit(opts: {
         reset: res.reset,
       };
     } catch (error) {
+      if (isProdRuntime()) {
+        console.error('Rate limit: Upstash error — failing closed', error);
+        return failClosed(opts.limit, opts.windowMs);
+      }
       console.error('Rate limit: Upstash error — falling back to in-memory', error);
     }
-  } else if (process.env.NODE_ENV === 'production') {
+  } else if (isProdRuntime()) {
     console.error(
-      'Rate limit: Upstash not configured in production — falling back to in-memory',
+      'Rate limit: Upstash not configured in production — failing closed',
     );
+    return failClosed(opts.limit, opts.windowMs);
   }
   return inMemoryLimit(`${prefix}:${opts.key}`, opts.limit, opts.windowMs);
 }

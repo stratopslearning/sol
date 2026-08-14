@@ -1,6 +1,7 @@
 import { clerkMiddleware } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import { BASE_PATH, withBasePath } from '@/lib/basePath';
+import { isLoadTestRequest } from '@/lib/loadTestAuth';
 
 /**
  * Clerk middleware runs on Vercel's Edge runtime. That means we CANNOT import
@@ -80,6 +81,11 @@ export default clerkMiddleware(async (auth, req) => {
   const hasApiToken = authHeader.startsWith('Bearer sol_pat_');
   if (appPath === '/api/mcp' || appPath.startsWith('/api/mcp/')) return;
   if (hasApiToken && appPath.startsWith('/api/professor/')) return;
+
+  // k6 impersonation: skip the Clerk login redirect. The Node handler still
+  // authenticates via x-load-test-* headers in getOrCreateUser. Hard-disabled
+  // when VERCEL_ENV=production (see lib/loadTestAuth.ts).
+  if (isLoadTestRequest(req.headers)) return;
 
   // OAuth discovery metadata (RFC 8414 / RFC 9728) must be fetchable without
   // a session — Claude.ai / ChatGPT read it before any user is signed in.
