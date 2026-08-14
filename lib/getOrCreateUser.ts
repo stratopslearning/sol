@@ -1,8 +1,11 @@
+import { cache } from 'react';
 import { auth, clerkClient } from '@clerk/nextjs/server';
+import { headers } from 'next/headers';
 import { eq, sql } from 'drizzle-orm';
 
 import { db } from '@/app/db';
 import { users as dbUsers } from '@/app/db/schema';
+import { readLoadTestUserId } from '@/lib/loadTestAuth';
 
 /**
  * Next.js signals "this page must be dynamic" by throwing internal errors with
@@ -75,6 +78,64 @@ export function toPublicUserDto(user: UserData): PublicUserDto {
   };
 }
 
+/** Isolate TTL for successful UserData lookups. Safety net if a writer forgets invalidate. */
+export const USER_CACHE_TTL_MS = 30_000;
+
+type CachedUserEntry = { user: UserData; expiresAt: number };
+
+const userCacheByClerkId = new Map<string, CachedUserEntry>();
+const userCacheById = new Map<string, CachedUserEntry>();
+
+function readFresh(entry: CachedUserEntry | undefined): UserData | undefined {
+  if (!entry) return undefined;
+  if (Date.now() > entry.expiresAt) {
+    userCacheByClerkId.delete(entry.user.clerkId);
+    userCacheById.delete(entry.user.id);
+    return undefined;
+  }
+  return entry.user;
+}
+
+function rememberUser(user: UserData): void {
+  const expiresAt = Date.now() + USER_CACHE_TTL_MS;
+  const entry: CachedUserEntry = { user, expiresAt };
+  userCacheByClerkId.set(user.clerkId, entry);
+  userCacheById.set(user.id, entry);
+}
+
+function getCachedByClerkId(clerkId: string): UserData | undefined {
+  return readFresh(userCacheByClerkId.get(clerkId));
+}
+
+function getCachedByUserId(userId: string): UserData | undefined {
+  return readFresh(userCacheById.get(userId));
+}
+
+/**
+ * Drop cached UserData. Pass nothing to clear the isolate maps (tests).
+ * Call on any write to `role` or `paid`.
+ */
+export function invalidateUserCache(args: {
+  clerkId?: string;
+  userId?: string;
+} = {}): void {
+  if (!args.clerkId && !args.userId) {
+    userCacheByClerkId.clear();
+    userCacheById.clear();
+    return;
+  }
+  if (args.clerkId) {
+    const entry = userCacheByClerkId.get(args.clerkId);
+    userCacheByClerkId.delete(args.clerkId);
+    if (entry) userCacheById.delete(entry.user.id);
+  }
+  if (args.userId) {
+    const entry = userCacheById.get(args.userId);
+    userCacheById.delete(args.userId);
+    if (entry) userCacheByClerkId.delete(entry.user.clerkId);
+  }
+}
+
 /**
  * Gets or creates a user in the database based on Clerk authentication.
  * Syncs the Clerk userId / profile fields into our database for business logic.
@@ -88,8 +149,37 @@ export function toPublicUserDto(user: UserData): PublicUserDto {
  *   - Partial unique index on `lower(email)` prevents duplicate non-empty emails.
  *   - `role` and `paid` are NEVER overwritten on sync — admins / Stripe own those.
  */
-export async function getOrCreateUser(): Promise<UserData | null> {
+/**
+ * Staging k6 path: resolve a pre-seeded user from load-test headers.
+ * Returns `undefined` when this is not a load-test request so callers fall
+ * through to Clerk. Returns `null` when the headers are valid but the user
+ * row is missing (never auto-create).
+ */
+async function lookupLoadTestUser(): Promise<UserData | null | undefined> {
   try {
+    const headerBag = await headers();
+    const userId = readLoadTestUserId(headerBag);
+    if (!userId) return undefined;
+    const cached = getCachedByUserId(userId);
+    if (cached) return cached;
+    const row = await db.query.users.findFirst({
+      where: eq(dbUsers.id, userId),
+    });
+    if (!row) return null;
+    const user = toUserData(row);
+    rememberUser(user);
+    return user;
+  } catch (error) {
+    if (isNextInternalError(error)) throw error;
+    return undefined;
+  }
+}
+
+async function getOrCreateUserImpl(): Promise<UserData | null> {
+  try {
+    const impersonated = await lookupLoadTestUser();
+    if (impersonated !== undefined) return impersonated;
+
     const { userId } = await auth();
     if (!userId) return null;
     return await getOrCreateUserByClerkId(userId);
@@ -100,20 +190,29 @@ export async function getOrCreateUser(): Promise<UserData | null> {
   }
 }
 
+export const getOrCreateUser = cache(getOrCreateUserImpl);
+
 /**
  * Same upsert as `getOrCreateUser`, but for callers that already resolved the
  * Clerk user id themselves (e.g. the MCP OAuth bearer path, where there is no
  * Clerk session cookie — `auth({ acceptsToken: 'oauth_token' })` returns the
  * token subject instead).
  */
-export async function getOrCreateUserByClerkId(
+async function getOrCreateUserByClerkIdUncached(
   userId: string,
 ): Promise<UserData | null> {
   try {
+    const cached = getCachedByClerkId(userId);
+    if (cached) return cached;
+
     const existingUser = await db.query.users.findFirst({
       where: eq(dbUsers.clerkId, userId),
     });
-    if (existingUser) return toUserData(existingUser);
+    if (existingUser) {
+      const user = toUserData(existingUser);
+      rememberUser(user);
+      return user;
+    }
 
     let email = '';
     let firstName: string | null = null;
@@ -134,6 +233,7 @@ export async function getOrCreateUserByClerkId(
         where: sql`lower(${dbUsers.email}) = ${email.toLowerCase()}`,
       });
       if (byEmail) {
+        invalidateUserCache({ clerkId: byEmail.clerkId, userId: byEmail.id });
         const [relinked] = await db
           .update(dbUsers)
           .set({
@@ -146,7 +246,9 @@ export async function getOrCreateUserByClerkId(
           })
           .where(eq(dbUsers.id, byEmail.id))
           .returning();
-        return toUserData(relinked);
+        const user = toUserData(relinked);
+        rememberUser(user);
+        return user;
       }
     }
 
@@ -173,7 +275,9 @@ export async function getOrCreateUserByClerkId(
       })
       .returning();
 
-    return toUserData(upserted);
+    const user = toUserData(upserted);
+    rememberUser(user);
+    return user;
   } catch (error) {
     if (isNextInternalError(error)) throw error;
     console.error('Error in getOrCreateUserByClerkId:', error);
@@ -181,23 +285,35 @@ export async function getOrCreateUserByClerkId(
   }
 }
 
+export const getOrCreateUserByClerkId = cache(getOrCreateUserByClerkIdUncached);
+
 /**
  * Gets user data without creating if not exists
  */
-export async function getUser(): Promise<UserData | null> {
+async function getUserImpl(): Promise<UserData | null> {
   try {
+    const impersonated = await lookupLoadTestUser();
+    if (impersonated !== undefined) return impersonated;
+
     const { userId } = await auth();
     if (!userId) return null;
+    const cached = getCachedByClerkId(userId);
+    if (cached) return cached;
     const user = await db.query.users.findFirst({
       where: eq(dbUsers.clerkId, userId),
     });
-    return user ? toUserData(user) : null;
+    if (!user) return null;
+    const data = toUserData(user);
+    rememberUser(data);
+    return data;
   } catch (error) {
     if (isNextInternalError(error)) throw error;
     console.error('Error in getUser:', error);
     return null;
   }
 }
+
+export const getUser = cache(getUserImpl);
 
 /**
  * Updates user data in the database
@@ -216,7 +332,11 @@ export async function updateUser(
       })
       .where(eq(dbUsers.clerkId, userId))
       .returning();
-    return updatedUser ? toUserData(updatedUser) : null;
+    if (!updatedUser) return null;
+    const user = toUserData(updatedUser);
+    invalidateUserCache({ clerkId: user.clerkId, userId: user.id });
+    rememberUser(user);
+    return user;
   } catch (error) {
     if (isNextInternalError(error)) throw error;
     console.error('Error in updateUser:', error);

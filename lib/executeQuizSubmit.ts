@@ -1,25 +1,13 @@
 import { and, eq } from 'drizzle-orm';
 
 import { db } from '@/app/db';
-import {
-  assignments,
-  attempts,
-  questions,
-  quizSections,
-  quizzes,
-  sections,
-} from '@/app/db/schema';
+import { assignments, attempts, questions, sections } from '@/app/db/schema';
 import { scheduleAttemptRetry } from '@/lib/backgroundRetry';
-import { activeOnly } from '@/lib/db/filters';
-import {
-  gradeMultipleQuestions,
-  outcomeToFeedback,
-  type GradingRequest,
-} from '@/lib/grading';
-import { getOrDeriveRubric } from '@/lib/gradingRubric';
+import { loadExamContext, missingExamResource } from '@/lib/examContext';
 import { mergeAttemptAnswers } from '@/lib/shouldForceAutoSubmit';
 import { resolveAttemptSectionId } from '@/lib/resolveAttemptSection';
 import { assertQuizSubmitWindow } from '@/lib/quizSubmitPolicy';
+import { scoreSubmittedQuestions } from '@/lib/scoreSubmittedQuestions';
 import {
   isSectionConcluded,
   SECTION_CONCLUDED_MESSAGE,
@@ -70,30 +58,20 @@ export async function executeQuizSubmit(
     bypassAvailability = false,
   } = input;
 
-  const assignment = await db.query.assignments.findFirst({
-    where: and(
-      eq(assignments.id, assignmentId),
-      eq(assignments.quizId, quizId),
-      eq(assignments.studentId, studentId),
-    ),
-  });
-  if (!assignment) {
+  const ctx = await loadExamContext({ quizId, assignmentId, studentId });
+  const missing = missingExamResource(ctx.assignment, ctx.quiz);
+  if (missing === 'assignment') {
     throw new Error('Assignment not found');
   }
-
-  const quiz = await db.query.quizzes.findFirst({
-    where: and(eq(quizzes.id, quizId), activeOnly(quizzes.deletedAt)),
-  });
-  if (!quiz) {
+  if (missing === 'quiz') {
     throw new Error('Quiz not found');
   }
+  const assignment = ctx.assignment!;
+  const quiz = ctx.quiz!;
 
   const now = new Date();
 
-  const quizSectionLinks = await db.query.quizSections.findMany({
-    where: eq(quizSections.quizId, quizId),
-  });
-  const quizSectionIds = quizSectionLinks.map((qs) => qs.sectionId);
+  const quizSectionIds = ctx.quizSectionLinks.map((qs) => qs.sectionId);
   const sectionId = await resolveAttemptSectionId(studentId, quizSectionIds);
   if (!sectionId) {
     throw new Error('No valid section found for this quiz/assignment');
@@ -106,15 +84,8 @@ export async function executeQuizSubmit(
     throw new Error(SECTION_CONCLUDED_MESSAGE);
   }
 
-  const existingAttempts = await db.query.attempts.findMany({
-    where: and(
-      eq(attempts.assignmentId, assignmentId),
-      eq(attempts.studentId, studentId),
-    ),
-  });
-  const inProgressAttempt = existingAttempts.find((a) => !a.submittedAt);
-  const submittedAttempts = existingAttempts.filter((a) => a.submittedAt != null);
-  const attemptCount = submittedAttempts.length;
+  const inProgressAttempt = ctx.inProgressAttempt;
+  const attemptCount = ctx.submittedCount;
 
   if (!inProgressAttempt && attemptCount >= quiz.maxAttempts) {
     throw new MaxAttemptsExceededError(quiz.maxAttempts);
@@ -144,80 +115,8 @@ export async function executeQuizSubmit(
     where: eq(questions.quizId, quizId),
   });
 
-  let totalScore = 0;
-  let maxScore = 0;
-  const gptFeedback: Record<string, unknown> = {};
-  const pendingQuestionIds: string[] = [];
-  const shortAnswerGradingRequests: Array<{
-    questionId: string;
-    maxPoints: number;
-    request: GradingRequest;
-  }> = [];
-
-  for (const question of quizQuestions) {
-    const userAnswer = answers[question.id];
-
-    if (!userAnswer || userAnswer.trim?.() === '') {
-      maxScore += question.points;
-      if (question.type === 'SHORT_ANSWER') {
-        gptFeedback[question.id] = {
-          score: 0,
-          feedback: 'Please read the textbook and try again.',
-          confidence: 100,
-          maxPoints: question.points,
-          status: 'graded',
-        };
-      }
-      continue;
-    }
-
-    if (question.type === 'MULTIPLE_CHOICE' || question.type === 'TRUE_FALSE') {
-      maxScore += question.points;
-      if (userAnswer === question.correctAnswer) {
-        totalScore += question.points;
-      }
-    } else if (question.type === 'SHORT_ANSWER') {
-      const { rubric, rubricVersion } = await getOrDeriveRubric({
-        id: question.id,
-        question: question.question,
-        correctAnswer: question.correctAnswer,
-        rubric: question.rubric,
-        rubricVersion: question.rubricVersion ?? 1,
-      });
-      shortAnswerGradingRequests.push({
-        questionId: question.id,
-        maxPoints: question.points,
-        request: {
-          question: question.question,
-          studentAnswer: userAnswer,
-          correctAnswer: question.correctAnswer || undefined,
-          maxPoints: question.points,
-          questionType: 'SHORT_ANSWER',
-          questionId: question.id,
-          rubric,
-          rubricVersion,
-        },
-      });
-    }
-  }
-
-  if (shortAnswerGradingRequests.length > 0) {
-    const gradingResults = await gradeMultipleQuestions(
-      shortAnswerGradingRequests.map((item) => item.request),
-      { concurrency: 5, perQuestionTimeoutMs: 25_000 },
-    );
-    shortAnswerGradingRequests.forEach((item, index) => {
-      const outcome = gradingResults[index]!;
-      const stored = outcomeToFeedback(outcome);
-      gptFeedback[item.questionId] = stored;
-      if (outcome.status === 'graded') {
-        totalScore += outcome.score;
-        maxScore += item.maxPoints;
-      } else {
-        pendingQuestionIds.push(item.questionId);
-      }
-    });
-  }
+  const { totalScore, maxScore, gptFeedback, pendingQuestionIds } =
+    await scoreSubmittedQuestions(quizQuestions, answers);
 
   const percentage = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0;
   const passingScore = quiz.passingScore ?? 60;
@@ -255,7 +154,7 @@ export async function executeQuizSubmit(
             attemptNumber: currentAttemptNumber,
             totalAttempts: attemptCount + 1,
             maxAttempts: quiz.maxAttempts,
-          },
+          } as Record<string, unknown>,
           gradingStatus: attemptGradingStatus,
           submittedAt: submitTime,
         })
@@ -279,7 +178,7 @@ export async function executeQuizSubmit(
             attemptNumber: currentAttemptNumber,
             totalAttempts: attemptCount + 1,
             maxAttempts: quiz.maxAttempts,
-          },
+          } as Record<string, unknown>,
           gradingStatus: attemptGradingStatus,
           startedAt: attemptStartTime,
           submittedAt: submitTime,

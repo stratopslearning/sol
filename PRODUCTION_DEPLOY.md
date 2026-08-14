@@ -24,7 +24,8 @@ the corresponding test credentials.)
 | `STRIPE_WEBHOOK_SECRET`           | when paywall on | Required only when paywall is enabled.                       |
 | `STRIPE_PRICE_ID`                 | when paywall on | The price you actually charge in production.                |
 | `STRIPE_PRODUCT_ID`               | optional  | Only needed if you want fallback when `STRIPE_PRICE_ID` is unset.  |
-| `OPENAI_API_KEY`                  | yes\*     | Required for AI grading. App falls back to deterministic grading without it but pass/fail accuracy degrades. |
+| `OPENAI_API_KEY`                  | yes       | Required in production — app refuses to boot without it (short-answer grading). |
+| `CRON_SECRET`                     | **yes (prod)** | Bearer for `/api/cron/grade-pending`. Vercel Cron sends `Authorization: Bearer`. |
 | `NEXT_PUBLIC_BASE_URL`            | yes       | Absolute https URL, no trailing slash. Used for Stripe redirects and canonical links. |
 | `SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN` | optional | Match the Sentry project's prod DSN.                          |
 | `UPSTASH_REDIS_REST_URL`          | **yes (prod)** | Required in production — app refuses to boot without it. Distributed rate limiting. |

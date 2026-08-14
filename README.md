@@ -89,10 +89,11 @@ Validated at boot via Zod in [`lib/env.ts`](./lib/env.ts). The full production c
 | `NEXT_PUBLIC_CLERK_SIGN_IN_URL` | `/learning/login` |
 | `NEXT_PUBLIC_CLERK_SIGN_UP_URL` | `/learning/signup` |
 | `NEXT_PUBLIC_BASE_URL` | Absolute origin (e.g. `https://www.strat-ops.net`), no trailing slash, no basePath. |
-| `OPENAI_API_KEY` | Optional in dev; required for production AI grading. Falls back to deterministic scoring when absent. |
+| `OPENAI_API_KEY` | Optional in dev; **required in production** (boot fails without it). |
+| `CRON_SECRET` | Optional in dev; **required in production** (Vercel Cron `Authorization` bearer). |
 | `NEXT_PUBLIC_PAYMENTS_ENABLED` | `false` (default) keeps the Stripe paywall off. Set to `true` only after Stripe keys + webhook are wired. |
 | `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / `STRIPE_PRICE_ID` | Required only when payments are enabled. |
-| `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | Optional. Promotes rate-limiting from in-memory to distributed. |
+| `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | Optional in dev (in-memory rate limit). **Required in production.** |
 | `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN` | Optional but recommended in production. |
 
 ---

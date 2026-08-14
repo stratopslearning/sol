@@ -27,8 +27,12 @@ const baseSchema = z.object({
   STRIPE_PRODUCT_ID: z.string().min(1).optional(),
   STRIPE_PRICE_ID: z.string().min(1).optional(),
 
-  // OpenAI
+  // OpenAI — optional in development (SA answers stay pending). Required
+  // in production so short-answer exams cannot sit ungraded forever.
   OPENAI_API_KEY: z.string().min(1).optional(),
+
+  // Vercel Cron bearer for grade-pending. Required in production.
+  CRON_SECRET: z.string().min(1).optional(),
 
   // App
   NEXT_PUBLIC_BASE_URL: z
@@ -53,6 +57,11 @@ const baseSchema = z.object({
     .enum(['true', 'false'])
     .optional()
     .default('false'),
+
+  // Staging/dev k6 impersonation. Must never be set when VERCEL_ENV=production.
+  // Do not set on preview either unless Vercel Deployment Protection is on
+  // (see compliance/WAF_VERCEL.md) — the secret is session-equivalent.
+  LOAD_TEST_SECRET: z.string().min(16).optional(),
 });
 
 type RawEnv = z.infer<typeof baseSchema>;
@@ -69,6 +78,12 @@ function loadEnv(): RawEnv {
   const data = parsed.data;
 
   // Higher-level invariants we cannot express purely via Zod:
+  if (process.env.VERCEL_ENV === 'production' && data.LOAD_TEST_SECRET) {
+    throw new Error(
+      'LOAD_TEST_SECRET must not be set when VERCEL_ENV=production.',
+    );
+  }
+
   if (data.NODE_ENV === 'production') {
     if (!data.NEXT_PUBLIC_BASE_URL) {
       throw new Error(
@@ -80,6 +95,16 @@ function loadEnv(): RawEnv {
     if (!data.UPSTASH_REDIS_REST_URL || !data.UPSTASH_REDIS_REST_TOKEN) {
       throw new Error(
         'UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are required in production.',
+      );
+    }
+    if (!data.CRON_SECRET) {
+      throw new Error(
+        'CRON_SECRET is required in production (Vercel Cron Authorization).',
+      );
+    }
+    if (!data.OPENAI_API_KEY) {
+      throw new Error(
+        'OPENAI_API_KEY is required in production (short-answer grading).',
       );
     }
     if (data.NEXT_PUBLIC_PAYMENTS_ENABLED === 'true') {

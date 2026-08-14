@@ -5,6 +5,7 @@ import type Stripe from 'stripe';
 import { db } from '@/app/db';
 import { stripeEvents, users as dbUsers } from '@/app/db/schema';
 import { logAudit } from '@/lib/audit';
+import { invalidateUserCache } from '@/lib/getOrCreateUser';
 import { stripe } from '@/lib/stripe';
 
 // Stripe webhooks need the raw request body for signature verification, so
@@ -119,6 +120,7 @@ async function processStripeEvent(event: Stripe.Event): Promise<void> {
           `checkout.session.completed referenced unknown clerkUserId ${clerkUserId} (session ${session.id})`,
         );
       }
+      invalidateUserCache({ clerkId: clerkUserId, userId: result[0].id });
       await logAudit({
         actorUserId: result[0].id,
         actorClerkId: clerkUserId,
@@ -182,6 +184,7 @@ async function processStripeEvent(event: Stripe.Event): Promise<void> {
         .returning({ id: dbUsers.id });
 
       if (cleared[0]) {
+        invalidateUserCache({ clerkId: clerkUserId, userId: cleared[0].id });
         await logAudit({
           actorUserId: cleared[0].id,
           actorClerkId: clerkUserId,

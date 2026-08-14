@@ -33,6 +33,11 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# load-test runtime artifacts (never commit seeded ids or branch secrets)
+/load-test/fixture.json
+/load-test/.env
+/load-test/results/
+
 # vercel
 .vercel
 

@@ -1,8 +1,8 @@
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import { Clock, FileText, Plus, TrendingUp, Users } from "lucide-react";
 
 import { db } from "@/app/db";
-import { professorSections, quizSections } from "@/app/db/schema";
+import { attempts, professorSections, quizSections } from "@/app/db/schema";
 import { AppShell } from "@/components/layout/AppShell";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { SectionHeading } from "@/components/layout/SectionHeading";
@@ -36,7 +36,6 @@ export default async function ProfessorQuizzesPage() {
             quiz: {
               with: {
                 sectionAssignments: { with: { section: true } },
-                attempts: true,
                 questions: true,
                 professor: true,
               },
@@ -55,9 +54,34 @@ export default async function ProfessorQuizzesPage() {
       return true;
     });
 
+  const quizIds = uniqueQuizzes.map((q) => q.id);
+  const submittedRows =
+    quizIds.length > 0 && enrolledSectionIds.length > 0
+      ? await db.query.attempts.findMany({
+          where: and(
+            inArray(attempts.quizId, quizIds),
+            isNotNull(attempts.submittedAt),
+            inArray(attempts.sectionId, enrolledSectionIds),
+          ),
+          columns: {
+            studentId: true,
+            quizId: true,
+            percentage: true,
+            score: true,
+            maxScore: true,
+          },
+        })
+      : [];
+  const submittedByQuiz = new Map<string, typeof submittedRows>();
+  for (const row of submittedRows) {
+    const list = submittedByQuiz.get(row.quizId) ?? [];
+    list.push(row);
+    submittedByQuiz.set(row.quizId, list);
+  }
+
   const quizzesWithStats = uniqueQuizzes.map((quiz) => {
     const isCreatedByProfessor = quiz.professorId === user.id;
-    const submitted = quiz.attempts.filter((a) => a.submittedAt != null);
+    const submitted = submittedByQuiz.get(quiz.id) ?? [];
     const totalAttempts = submitted.length;
     const uniqueStudents = new Set(submitted.map((a) => a.studentId)).size;
     const bestPerStudent: Record<string, number> = {};
@@ -84,7 +108,6 @@ export default async function ProfessorQuizzesPage() {
     return {
       ...quiz,
       isCreatedByProfessor,
-      submittedAttempts: submitted,
       totalAttempts,
       uniqueStudents,
       averageScore,
@@ -97,11 +120,7 @@ export default async function ProfessorQuizzesPage() {
     (sum, q) => sum + q.totalAttempts,
     0,
   );
-  const activeStudents = new Set(
-    quizzesWithStats.flatMap((q) =>
-      q.submittedAttempts.map((a) => a.studentId),
-    ),
-  ).size;
+  const activeStudents = new Set(submittedRows.map((a) => a.studentId)).size;
   const avgPerformance =
     quizzesWithStats.length > 0
       ? Math.round(

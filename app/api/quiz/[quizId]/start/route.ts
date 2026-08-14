@@ -3,17 +3,12 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { db } from '@/app/db';
-import {
-  assignments,
-  attempts,
-  quizSections,
-  quizzes,
-  sections,
-} from '@/app/db/schema';
+import { attempts, sections } from '@/app/db/schema';
 import { autoSubmitInProgressAttempt } from '@/lib/autoSubmitInProgressAttempt';
 import { ApiError, apiErrorResponse } from '@/lib/api/errors';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
-import { activeOnly } from '@/lib/db/filters';
+import { logQuizAttemptAudit } from '@/lib/audit';
+import { loadExamContext, missingExamResource } from '@/lib/examContext';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import { isStudentEntitled } from '@/lib/featureFlags';
 import { getQuizAvailability } from '@/lib/quizAvailability';
@@ -61,19 +56,16 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
     }
     const { assignmentId } = parseResult.data;
 
-    const assignment = await db.query.assignments.findFirst({
-      where: and(
-        eq(assignments.id, assignmentId),
-        eq(assignments.quizId, quizId),
-        eq(assignments.studentId, user.id),
-      ),
+    const ctx = await loadExamContext({
+      quizId,
+      assignmentId,
+      studentId: user.id,
     });
-    if (!assignment) throw ApiError.notFound('Assignment not found');
-
-    const quiz = await db.query.quizzes.findFirst({
-      where: and(eq(quizzes.id, quizId), activeOnly(quizzes.deletedAt)),
-    });
-    if (!quiz) throw ApiError.notFound('Quiz not found');
+    const missing = missingExamResource(ctx.assignment, ctx.quiz);
+    if (missing === 'assignment') throw ApiError.notFound('Assignment not found');
+    if (missing === 'quiz') throw ApiError.notFound('Quiz not found');
+    const assignment = ctx.assignment!;
+    const quiz = ctx.quiz!;
     if (!quiz.isActive) {
       throw new ApiError({
         status: 400,
@@ -83,14 +75,8 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
     }
 
     const now = new Date();
-    const existingAttempts = await db.query.attempts.findMany({
-      where: and(
-        eq(attempts.assignmentId, assignmentId),
-        eq(attempts.studentId, user.id),
-      ),
-    });
-    const submittedAttempts = existingAttempts.filter((a) => a.submittedAt != null);
-    const inProgressAttempt = existingAttempts.find((a) => !a.submittedAt);
+    const submittedCount = ctx.submittedCount;
+    const inProgressAttempt = ctx.inProgressAttempt;
 
     if (inProgressAttempt) {
       const startedAtDate =
@@ -111,6 +97,16 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
           now,
         );
         if (autoResult.submitted) {
+          logQuizAttemptAudit({
+            action: 'quiz.attempt.submit',
+            actorUserId: user.id,
+            actorClerkId: user.clerkId,
+            attemptId: autoResult.attemptId,
+            quizId,
+            assignmentId,
+            metadata: { serverAutoSubmitted: true },
+            req,
+          });
           return NextResponse.json({
             success: true,
             serverAutoSubmitted: true,
@@ -135,10 +131,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
       });
     }
 
-    const quizSectionLinks = await db.query.quizSections.findMany({
-      where: eq(quizSections.quizId, quizId),
-    });
-    const quizSectionIds = quizSectionLinks.map((qs) => qs.sectionId);
+    const quizSectionIds = ctx.quizSectionLinks.map((qs) => qs.sectionId);
     const sectionId = await resolveAttemptSectionId(user.id, quizSectionIds);
     if (!sectionId) {
       throw ApiError.badRequest('No valid section found for this quiz/assignment');
@@ -156,12 +149,22 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
     }
 
     if (inProgressAttempt) {
-      if (submittedAttempts.length >= quiz.maxAttempts) {
+      if (submittedCount >= quiz.maxAttempts) {
         const autoResult = await autoSubmitInProgressAttempt(
           inProgressAttempt.id,
           now,
         );
         if (autoResult.submitted) {
+          logQuizAttemptAudit({
+            action: 'quiz.attempt.submit',
+            actorUserId: user.id,
+            actorClerkId: user.clerkId,
+            attemptId: autoResult.attemptId,
+            quizId,
+            assignmentId,
+            metadata: { serverAutoSubmitted: true, maxAttemptsReached: true },
+            req,
+          });
           return NextResponse.json({
             success: true,
             serverAutoSubmitted: true,
@@ -204,6 +207,16 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
           ? (inProgressAttempt.answers as Record<string, string>)
           : {};
 
+      logQuizAttemptAudit({
+        action: 'quiz.attempt.start',
+        actorUserId: user.id,
+        actorClerkId: user.clerkId,
+        attemptId: inProgressAttempt.id,
+        quizId,
+        assignmentId,
+        metadata: { resumed: true, forceAutoSubmit },
+        req,
+      });
       return NextResponse.json({
         success: true,
         attemptId: inProgressAttempt.id,
@@ -220,7 +233,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
       });
     }
 
-    if (submittedAttempts.length >= quiz.maxAttempts) {
+    if (submittedCount >= quiz.maxAttempts) {
       throw new ApiError({
         status: 400,
         message: `Maximum attempts (${quiz.maxAttempts}) reached for this quiz. You cannot retake this quiz.`,
@@ -271,6 +284,16 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
           ? (open.answers as Record<string, string>)
           : {};
 
+      logQuizAttemptAudit({
+        action: 'quiz.attempt.start',
+        actorUserId: user.id,
+        actorClerkId: user.clerkId,
+        attemptId: open.id,
+        quizId,
+        assignmentId,
+        metadata: { resumed: true, concurrentInsert: true },
+        req,
+      });
       return NextResponse.json({
         success: true,
         attemptId: open.id,
@@ -299,6 +322,16 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
       now,
     );
 
+    logQuizAttemptAudit({
+      action: 'quiz.attempt.start',
+      actorUserId: user.id,
+      actorClerkId: user.clerkId,
+      attemptId: attempt.id,
+      quizId,
+      assignmentId,
+      metadata: { resumed: false },
+      req,
+    });
     return NextResponse.json({
       success: true,
       attemptId: attempt.id,

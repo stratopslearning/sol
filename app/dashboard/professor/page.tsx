@@ -67,7 +67,6 @@ export default async function ProfessorDashboard() {
             sectionAssignments: {
               with: { section: { with: { course: true } } },
             },
-            attempts: true,
           },
         })
       : [];
@@ -101,11 +100,29 @@ export default async function ProfessorDashboard() {
         })
       : [];
 
+  const submittedAttemptsList =
+    professorQuizzes.length > 0 && sectionIds.length > 0
+      ? await db.query.attempts.findMany({
+          where: and(
+            inArray(
+              attempts.quizId,
+              professorQuizzes.map((q) => q.id),
+            ),
+            isNotNull(attempts.submittedAt),
+            inArray(attempts.sectionId, sectionIds),
+          ),
+          columns: {
+            studentId: true,
+            quizId: true,
+            percentage: true,
+            score: true,
+            maxScore: true,
+          },
+        })
+      : [];
+
   const totalSections = ongoingEnrollments.length;
   const activeQuizzes = professorQuizzes.filter((q) => q.isActive).length;
-  const submittedAttemptsList = professorQuizzes.flatMap((q) =>
-    q.attempts.filter((a) => a.submittedAt != null),
-  );
   const bestPerStudentQuiz: Record<string, number> = {};
   submittedAttemptsList.forEach((a) => {
     const key = `${a.studentId}:${a.quizId}`;

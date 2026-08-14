@@ -53,6 +53,36 @@ export function extractRequestMeta(req: NextRequest): {
   return { ip, userAgent };
 }
 
+/** Fire-and-forget exam start/submit audit. Never throws. */
+export function logQuizAttemptAudit(opts: {
+  action: 'quiz.attempt.start' | 'quiz.attempt.submit';
+  actorUserId: string;
+  actorClerkId?: string | null;
+  attemptId: string;
+  quizId: string;
+  assignmentId: string;
+  metadata?: Record<string, unknown>;
+  req?: NextRequest;
+}): void {
+  const meta = opts.req
+    ? extractRequestMeta(opts.req)
+    : { ip: null, userAgent: null };
+  void logAudit({
+    actorUserId: opts.actorUserId,
+    actorClerkId: opts.actorClerkId ?? null,
+    action: opts.action,
+    targetType: 'attempt',
+    targetId: opts.attemptId,
+    metadata: {
+      quizId: opts.quizId,
+      assignmentId: opts.assignmentId,
+      ...opts.metadata,
+    },
+    ip: meta.ip,
+    userAgent: meta.userAgent,
+  });
+}
+
 /** Log faculty/admin viewing a section gradebook (education-record disclosure). */
 export async function logGradebookAccess(opts: {
   actorUserId: string;

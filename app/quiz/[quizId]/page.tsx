@@ -14,6 +14,7 @@ import { activeOnly } from '@/lib/db/filters';
 import { isStudentEntitled } from '@/lib/featureFlags';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import { getQuizAvailability } from '@/lib/quizAvailability';
+import { assertStudentCanOpenQuiz } from '@/lib/quizEnrollment';
 import { resolveAttemptSectionId } from '@/lib/resolveAttemptSection';
 import {
   isSectionConcluded,
@@ -59,11 +60,19 @@ export default async function QuizPage(props: QuizPageProps) {
     );
   }
 
-  // Fetch questions for this quiz
-  const quizQuestions = await db.query.questions.findMany({
-    where: eq(questions.quizId, quizId),
-    orderBy: questions.order,
+  // Enrollment before questions — unenrolled students must not see the bank
+  // or get a lazy assignment row.
+  const quizSectionLinks = await db.query.quizSections.findMany({
+    where: eq(quizSections.quizId, quizId),
   });
+  const quizSectionIds = quizSectionLinks.map((qs) => qs.sectionId);
+  const resolvedSectionId = await resolveAttemptSectionId(
+    user.id,
+    quizSectionIds,
+  );
+  const open = assertStudentCanOpenQuiz(resolvedSectionId);
+  if (!open.allowed) appRedirect('/dashboard/student');
+  const sectionId = open.sectionId;
 
   // Fetch or create assignment (upsert-safe for concurrent page loads in dev).
   const assignmentWhere = and(
@@ -92,28 +101,27 @@ export default async function QuizPage(props: QuizPageProps) {
     appRedirect('/dashboard/student');
   }
 
-  const inProgressAttempt = await db.query.attempts.findFirst({
-    where: and(
-      eq(attempts.quizId, quizId),
-      eq(attempts.studentId, user.id),
-      isNull(attempts.submittedAt),
-    ),
-  });
-
-  const quizSectionLinks = await db.query.quizSections.findMany({
-    where: eq(quizSections.quizId, quizId),
-  });
-  const quizSectionIds = quizSectionLinks.map((qs) => qs.sectionId);
-  const sectionId = await resolveAttemptSectionId(user.id, quizSectionIds);
-  if (sectionId) {
-    const section = await db.query.sections.findFirst({
+  const [quizQuestions, inProgressAttempt, section] = await Promise.all([
+    db.query.questions.findMany({
+      where: eq(questions.quizId, quizId),
+      orderBy: questions.order,
+    }),
+    db.query.attempts.findFirst({
+      where: and(
+        eq(attempts.quizId, quizId),
+        eq(attempts.studentId, user.id),
+        isNull(attempts.submittedAt),
+      ),
+    }),
+    db.query.sections.findFirst({
       where: eq(sections.id, sectionId),
-    });
-    if (isSectionConcluded(section, now) && !inProgressAttempt) {
-      appRedirect(
-        `/dashboard/student?error=section_concluded&quizId=${quizId}&message=${encodeURIComponent(SECTION_CONCLUDED_MESSAGE)}`,
-      );
-    }
+    }),
+  ]);
+
+  if (isSectionConcluded(section, now) && !inProgressAttempt) {
+    appRedirect(
+      `/dashboard/student?error=section_concluded&quizId=${quizId}&message=${encodeURIComponent(SECTION_CONCLUDED_MESSAGE)}`,
+    );
   }
 
   const availability = getQuizAvailability(quiz, assignment, now);

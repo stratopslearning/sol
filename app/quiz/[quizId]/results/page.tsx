@@ -7,6 +7,10 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { withBasePath } from "@/lib/basePath";
 import { appRedirect } from "@/lib/serverRedirect";
+import {
+  attemptNeedsBackgroundRetry,
+  scheduleAttemptRetry,
+} from "@/lib/backgroundRetry";
 import { getOrCreateUser } from "@/lib/getOrCreateUser";
 
 interface ResultsPageProps {
@@ -38,6 +42,13 @@ export default async function ResultsPage({
   }
 
   const quiz = attempt.quiz;
+  if (
+    attempt.gradingStatus !== "complete" ||
+    attemptNeedsBackgroundRetry(attempt.gptFeedback)
+  ) {
+    scheduleAttemptRetry(attempt.id);
+  }
+
   const percentage =
     attempt.percentage ??
     (attempt.maxScore

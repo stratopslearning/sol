@@ -47,3 +47,18 @@ describe('rateLimit (in-memory)', () => {
     expect(fresh.success).toBe(true);
   });
 });
+
+describe('rateLimit (production fail-closed)', () => {
+  it('rejects when Upstash is missing in production', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    delete process.env.UPSTASH_REDIS_REST_URL;
+    delete process.env.UPSTASH_REDIS_REST_TOKEN;
+    const r = await rateLimit({
+      key: baseKey(),
+      limit: 5,
+      windowMs: 60_000,
+    });
+    expect(r.success).toBe(false);
+    expect(r.remaining).toBe(0);
+  });
+});

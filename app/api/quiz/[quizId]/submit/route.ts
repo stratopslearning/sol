@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
-import { db } from '@/app/db';
-import { assignments } from '@/app/db/schema';
 import { ApiError, apiErrorResponse } from '@/lib/api/errors';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
+import { logQuizAttemptAudit } from '@/lib/audit';
 import {
   executeQuizSubmit,
   MaxAttemptsExceededError,
@@ -53,15 +51,6 @@ export async function POST(
     }
     const { assignmentId, answers, autoSubmitted } = parseResult.data;
 
-    const assignment = await db.query.assignments.findFirst({
-      where: and(
-        eq(assignments.id, assignmentId),
-        eq(assignments.quizId, quizId),
-        eq(assignments.studentId, user.id),
-      ),
-    });
-    if (!assignment) throw ApiError.notFound('Assignment not found');
-
     // autoSubmitted is client telemetry only — never grants availability/timer bypass.
     const result = await executeQuizSubmit({
       quizId,
@@ -70,6 +59,20 @@ export async function POST(
       answers,
       autoSubmitted,
       bypassAvailability: false,
+    });
+
+    logQuizAttemptAudit({
+      action: 'quiz.attempt.submit',
+      actorUserId: user.id,
+      actorClerkId: user.clerkId,
+      attemptId: result.attemptId,
+      quizId,
+      assignmentId,
+      metadata: {
+        autoSubmitted,
+        gradingStatus: result.gradingStatus,
+      },
+      req,
     });
 
     return NextResponse.json({ success: true, ...result });
@@ -130,7 +133,10 @@ export async function POST(
           }),
         );
       }
-      if (error.message === 'Quiz not found') {
+      if (
+        error.message === 'Quiz not found' ||
+        error.message === 'Assignment not found'
+      ) {
         return apiErrorResponse(ApiError.notFound(error.message));
       }
     }

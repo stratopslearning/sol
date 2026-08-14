@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { db } from '@/app/db';
-import { assignments, attempts, quizzes } from '@/app/db/schema';
+import { attempts } from '@/app/db/schema';
 import { ApiError, apiErrorResponse } from '@/lib/api/errors';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
-import { activeOnly } from '@/lib/db/filters';
+import { loadExamContext, missingExamResource } from '@/lib/examContext';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import { isStudentEntitled } from '@/lib/featureFlags';
 import { isTimeLimitExceeded } from '@/lib/quizTimeLimit';
@@ -50,28 +50,19 @@ export async function PATCH(
     }
     const { assignmentId, answers } = parseResult.data;
 
-    const assignment = await db.query.assignments.findFirst({
-      where: and(
-        eq(assignments.id, assignmentId),
-        eq(assignments.quizId, quizId),
-        eq(assignments.studentId, user.id),
-      ),
+    const ctx = await loadExamContext({
+      quizId,
+      assignmentId,
+      studentId: user.id,
+      includeSections: false,
+      includeSubmittedAttempts: false,
     });
-    if (!assignment) throw ApiError.notFound('Assignment not found');
+    const missing = missingExamResource(ctx.assignment, ctx.quiz);
+    if (missing === 'assignment') throw ApiError.notFound('Assignment not found');
+    if (missing === 'quiz') throw ApiError.notFound('Quiz not found');
+    const quiz = ctx.quiz!;
 
-    const quiz = await db.query.quizzes.findFirst({
-      where: and(eq(quizzes.id, quizId), activeOnly(quizzes.deletedAt)),
-    });
-    if (!quiz) throw ApiError.notFound('Quiz not found');
-
-    const existingAttempts = await db.query.attempts.findMany({
-      where: and(
-        eq(attempts.assignmentId, assignmentId),
-        eq(attempts.studentId, user.id),
-        eq(attempts.quizId, quizId),
-      ),
-    });
-    const inProgressAttempt = existingAttempts.find((a) => !a.submittedAt);
+    const inProgressAttempt = ctx.inProgressAttempt;
 
     if (!inProgressAttempt) {
       throw ApiError.notFound(
