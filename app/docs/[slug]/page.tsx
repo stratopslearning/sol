@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
 import { CopyPageButton } from '@/components/docs/CopyPageButton';
+import { DocsLayout } from '@/components/docs/DocsLayout';
 import { DocsMarkdown } from '@/components/docs/DocsMarkdown';
-import { DocsNav } from '@/components/docs/DocsNav';
 import { DocsShell } from '@/components/docs/DocsShell';
 import { JsonLd } from '@/components/seo/JsonLd';
 import { withBasePath } from '@/lib/basePath';
@@ -85,11 +85,7 @@ export default async function DocPage({ params }: PageProps) {
           },
         }}
       />
-      <div className="mx-auto grid max-w-[1200px] gap-10 px-4 py-12 md:grid-cols-[220px_minmax(0,1fr)] md:gap-14 md:px-8 md:py-16">
-        <aside className="md:sticky md:top-24 md:self-start">
-          <DocsNav docs={docs} activeSlug={doc.slug} />
-        </aside>
-
+      <DocsLayout docs={docs} activeSlug={doc.slug}>
         <article className="min-w-0">
           <header className="mb-10 border-b border-rule pb-8">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -124,7 +120,7 @@ export default async function DocPage({ params }: PageProps) {
 
           <DocsMarkdown content={doc.body} />
         </article>
-      </div>
+      </DocsLayout>
     </DocsShell>
   );
 }

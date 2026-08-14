@@ -28,7 +28,7 @@ export function Approach() {
   return (
     <section
       id="approach"
-      className="border-t border-rule bg-[color-mix(in_oklch,var(--surface-sunken)_78%,transparent)] dark:bg-[color-mix(in_oklch,var(--paper)_55%,transparent)]"
+      className="border-t border-rule bg-[color-mix(in_oklch,var(--surface-sunken)_78%,transparent)]"
     >
       <div className="mx-auto max-w-[1200px] px-4 md:px-8 py-20 md:py-28">
         <div className="grid md:grid-cols-12 gap-10">

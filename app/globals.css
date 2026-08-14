@@ -652,40 +652,6 @@
   animation: scale-in 240ms cubic-bezier(0.4, 0, 0.2, 1) both;
 }
 
-/* Infinite horizontal marquee — landing stats ticker */
-@keyframes marquee-scroll {
-  from { transform: translateX(0); }
-  to { transform: translateX(-50%); }
-}
-
-.marquee-track {
-  display: flex;
-  align-items: center;
-  width: max-content;
-  animation: marquee-scroll 52s linear infinite;
-}
-
-.marquee-fade:hover .marquee-track {
-  animation-play-state: paused;
-}
-
-.marquee-fade {
-  mask-image: linear-gradient(
-    to right,
-    transparent 0%,
-    black 6%,
-    black 94%,
-    transparent 100%
-  );
-  -webkit-mask-image: linear-gradient(
-    to right,
-    transparent 0%,
-    black 6%,
-    black 94%,
-    transparent 100%
-  );
-}
-
 /* ----- Reduced motion ----- */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -695,14 +661,6 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
-  }
-
-  .marquee-track {
-    animation: none;
-    flex-wrap: wrap;
-    justify-content: center;
-    width: 100%;
-    gap: 0;
   }
 }
 

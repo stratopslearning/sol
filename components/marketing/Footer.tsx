@@ -1,10 +1,6 @@
-"use client";
-
-import type { ComponentProps, ReactNode } from "react";
-import { motion, useReducedMotion } from "framer-motion";
-
 import { withBasePath } from "@/lib/basePath";
-import { cn } from "@/lib/utils";
+
+import { TwinklePixels } from "./TwinklePixels";
 
 interface FooterLink {
   title: string;
@@ -21,6 +17,7 @@ const footerLinks: FooterSection[] = [
     label: "Platform",
     links: [
       { title: "Capabilities", href: withBasePath("/#capabilities") },
+      { title: "Product", href: withBasePath("/#product") },
       { title: "Compare", href: withBasePath("/#compare") },
       { title: "Approach", href: withBasePath("/#approach") },
       { title: "FAQ", href: withBasePath("/#faq") },
@@ -65,24 +62,13 @@ export function Footer() {
   const year = new Date().getFullYear();
 
   return (
-    <footer
-      className="relative w-full overflow-hidden border-t border-rule bg-[color-mix(in_oklch,var(--paper)_72%,transparent)]"
-    >
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-[radial-gradient(35%_128px_at_50%_0%,color-mix(in_oklch,var(--brand)_18%,transparent),transparent)]"
-      />
-      <div
-        aria-hidden
-        className="absolute top-0 right-1/2 left-1/2 h-px w-1/3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand/40 blur-[2px]"
-      />
-
-      <div className="relative mx-auto max-w-[1200px] px-4 py-14 md:px-8 md:py-16 lg:py-20">
-        <div className="grid w-full gap-10 xl:grid-cols-3 xl:gap-12">
-          <AnimatedContainer className="space-y-4 xl:col-span-1">
+    <footer className="relative w-full overflow-hidden border-t border-rule bg-[color-mix(in_oklch,var(--surface-sunken)_78%,transparent)]">
+      <div className="relative z-10 mx-auto max-w-[1200px] px-4 pt-16 pb-28 md:px-8 md:pt-20 md:pb-32">
+        <div className="flex flex-col gap-12 lg:flex-row lg:items-start lg:justify-between lg:gap-16">
+          <div className="max-w-[22rem] shrink-0 space-y-4">
             <a
               href={withBasePath("/")}
-              className="inline-flex items-baseline gap-1 text-ink"
+              className="inline-flex items-baseline text-ink"
             >
               <span
                 className="font-display text-2xl tracking-tight"
@@ -91,79 +77,44 @@ export function Footer() {
                 SOL
               </span>
             </a>
-            <p className="max-w-[44ch] text-sm leading-relaxed text-ink-muted">
+            <p className="text-sm leading-relaxed text-ink-muted">
               A coursework platform for faculty and students — quizzes,
-              feedback, and discussion in one place, with clarity on both
-              sides of the desk.
+              feedback, and discussion in one place.
             </p>
-            <p className="pt-2 text-sm text-ink-faint md:pt-4">
-              © {year} SOL Learning. All rights reserved.
-            </p>
-          </AnimatedContainer>
-
-          <div className="grid grid-cols-2 gap-8 sm:grid-cols-2 lg:grid-cols-4 sm:gap-10 xl:col-span-2 xl:mt-0">
-            {footerLinks.map((section, index) => (
-              <AnimatedContainer
-                key={section.label}
-                delay={0.1 + index * 0.1}
-              >
-                <div>
-                  <h3 className="eyebrow">{section.label}</h3>
-                  <ul className="mt-4 space-y-2.5 text-sm text-ink-muted">
-                    {section.links.map((link) => (
-                      <li key={link.title}>
-                        <a
-                          href={link.href}
-                          className="inline-flex items-center transition-colors duration-300 hover:text-ink"
-                        >
-                          {link.title}
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </AnimatedContainer>
-            ))}
           </div>
+
+          <nav
+            aria-label="Footer"
+            className="grid grid-cols-2 gap-x-8 gap-y-10 sm:grid-cols-4 sm:gap-x-10 lg:gap-x-14"
+          >
+            {footerLinks.map((section) => (
+              <div key={section.label}>
+                <h3 className="eyebrow text-ink-faint">{section.label}</h3>
+                <ul className="mt-4 space-y-3 text-sm">
+                  {section.links.map((link) => (
+                    <li key={link.title}>
+                      <a
+                        href={link.href}
+                        className="text-ink/85 transition-colors duration-200 hover:text-brand"
+                      >
+                        {link.title}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </nav>
         </div>
 
-        <AnimatedContainer delay={0.35} className="mt-14">
-          <div className="hairline mb-6" />
-          <div className="flex justify-end text-xs text-ink-faint">
-            <span className="font-mono tnum">v3 · {year} edition</span>
-          </div>
-        </AnimatedContainer>
+        <div className="mt-16 flex flex-wrap items-end justify-between gap-4 md:mt-20">
+          <p className="text-sm text-ink-faint">
+            © {year} SOL Learning. All rights reserved.
+          </p>
+        </div>
       </div>
+
+      <TwinklePixels className="absolute inset-x-0 bottom-0 h-44 md:h-56" />
     </footer>
-  );
-}
-
-type ViewAnimationProps = {
-  delay?: number;
-  className?: ComponentProps<typeof motion.div>["className"];
-  children: ReactNode;
-};
-
-function AnimatedContainer({
-  className,
-  delay = 0.1,
-  children,
-}: ViewAnimationProps) {
-  const shouldReduceMotion = useReducedMotion();
-
-  if (shouldReduceMotion) {
-    return <div className={className}>{children}</div>;
-  }
-
-  return (
-    <motion.div
-      initial={{ filter: "blur(4px)", translateY: -8, opacity: 0 }}
-      whileInView={{ filter: "blur(0px)", translateY: 0, opacity: 1 }}
-      viewport={{ once: true }}
-      transition={{ delay, duration: 0.8 }}
-      className={cn(className)}
-    >
-      {children}
-    </motion.div>
   );
 }

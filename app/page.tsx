@@ -1,18 +1,16 @@
 import { Navbar } from "@/components/frontend/Navbar";
 import { Hero } from "@/components/marketing/Hero";
-import { StatsBand } from "@/components/marketing/StatsBand";
 import { FeatureGrid } from "@/components/marketing/FeatureGrid";
+import { ProductTour } from "@/components/marketing/ProductTour";
 import { Approach } from "@/components/marketing/Approach";
 import { Comparison } from "@/components/marketing/Comparison";
 import { Faq } from "@/components/marketing/Faq";
 import { Footer } from "@/components/marketing/Footer";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { MARKETING_FAQS } from "@/lib/marketingFaq";
-import { getMarketingStats } from "@/lib/marketingStats";
 import { absoluteUrl } from "@/lib/siteUrl";
 
 export default async function Home() {
-  const stats = await getMarketingStats();
   const homeUrl = absoluteUrl("/");
 
   return (
@@ -62,8 +60,8 @@ export default async function Home() {
       <Navbar />
       <main id="main">
         <Hero />
-        <StatsBand stats={stats} />
         <FeatureGrid />
+        <ProductTour />
         <Comparison />
         <Approach />
         <Faq />
