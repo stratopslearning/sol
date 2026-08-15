@@ -6,9 +6,14 @@ import { defineConfig } from 'drizzle-kit';
 config({ path: '.env' });
 config({ path: '.env.local', override: true });
 
-if (!process.env.DATABASE_URL) {
+// Prefer a dedicated migrator role (sol_migrator). Fall back to DATABASE_URL
+// for local/dev single-credential setups.
+const migrateUrl =
+  process.env.DATABASE_MIGRATE_URL || process.env.DATABASE_URL;
+
+if (!migrateUrl) {
   throw new Error(
-    'DATABASE_URL environment variable is required. Set it in .env or .env.local before running drizzle-kit.',
+    'DATABASE_MIGRATE_URL or DATABASE_URL is required. Set it in .env or .env.local before running drizzle-kit.',
   );
 }
 
@@ -17,8 +22,8 @@ export default defineConfig({
   out: './drizzle',
   dialect: 'postgresql',
   dbCredentials: {
-    url: process.env.DATABASE_URL,
+    url: migrateUrl,
   },
   verbose: true,
   strict: true,
-}); 
+});

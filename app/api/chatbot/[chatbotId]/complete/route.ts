@@ -7,6 +7,7 @@ import { chatbotAssignments, chatbotSessions } from '@/app/db/schema';
 import { studentCanAccessChatbot } from '@/lib/chatbot/access';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
 import { isStudentEntitled } from '@/lib/featureFlags';
+import { readJsonBody } from '@/lib/api/readJsonBody';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
 
 export const dynamic = 'force-dynamic';
@@ -37,7 +38,7 @@ export async function POST(
     if (limited) return limited;
 
     const { chatbotId } = await context.params;
-    const body = bodySchema.parse(await req.json());
+    const body = bodySchema.parse(await readJsonBody(req));
 
     const canAccess = await studentCanAccessChatbot(user.id, chatbotId);
     if (!canAccess) {

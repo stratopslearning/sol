@@ -83,7 +83,8 @@ Validated at boot via Zod in [`lib/env.ts`](./lib/env.ts). The full production c
 
 | Variable | Purpose |
 | --- | --- |
-| `DATABASE_URL` | Neon Postgres pooled connection string. |
+| `DATABASE_URL` | Neon Postgres pooled connection string (`sol_app` in production). |
+| `DATABASE_MIGRATE_URL` | Optional; migrator role URL for drizzle-kit / migrate scripts. |
 | `CLERK_SECRET_KEY` | Clerk server key (dev or prod). |
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk publishable key. |
 | `NEXT_PUBLIC_CLERK_SIGN_IN_URL` | `/learning/login` |
@@ -91,6 +92,7 @@ Validated at boot via Zod in [`lib/env.ts`](./lib/env.ts). The full production c
 | `NEXT_PUBLIC_BASE_URL` | Absolute origin (e.g. `https://www.strat-ops.net`), no trailing slash, no basePath. |
 | `OPENAI_API_KEY` | Optional in dev; **required in production** (boot fails without it). |
 | `CRON_SECRET` | Optional in dev; **required in production** (Vercel Cron `Authorization` bearer). |
+| `CLERK_WEBHOOK_SIGNING_SECRET` | Optional in dev; **required in production** (Clerk session → audit_log webhook). |
 | `NEXT_PUBLIC_PAYMENTS_ENABLED` | `false` (default) keeps the Stripe paywall off. Set to `true` only after Stripe keys + webhook are wired. |
 | `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / `STRIPE_PRICE_ID` | Required only when payments are enabled. |
 | `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | Optional in dev (in-memory rate limit). **Required in production.** |

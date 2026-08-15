@@ -13,28 +13,25 @@ import { requireProfessorApi } from '@/lib/api/professorAuth';
 import { activeOnly } from '@/lib/db/filters';
 import { upsertQuizQuestions } from '@/lib/quizQuestionUpsert';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
+import { readJsonBody } from '@/lib/api/readJsonBody';
+import { quizQuestionInputSchema } from '@/lib/quizSchemas';
 
 export const dynamic = 'force-dynamic';
 
 const updateQuizSchema = z.object({
-  title: z.string().min(1),
-  description: z.string().optional(),
-  sectionIds: z.array(z.string()).min(1, 'Select at least one section'),
+  title: z.string().min(1).max(200),
+  description: z.string().max(8_000).optional(),
+  sectionIds: z
+    .array(z.string().min(1))
+    .min(1, 'Select at least one section')
+    .max(50),
   maxAttempts: z.number().min(1).max(10).default(1),
-  timeLimit: z.number().min(1).optional(),
+  timeLimit: z.number().min(1).max(24 * 60).optional(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
   isActive: z.boolean().default(true),
   passingScore: z.number().int().min(0).max(100).default(60),
-  questions: z.array(z.object({
-    id: z.string().optional(),
-    type: z.enum(['MULTIPLE_CHOICE', 'TRUE_FALSE', 'SHORT_ANSWER']),
-    question: z.string().min(1),
-    options: z.array(z.string()).optional(),
-    correctAnswer: z.string().optional(),
-    points: z.number().min(1).default(1),
-    order: z.number().min(0),
-  })),
+  questions: z.array(quizQuestionInputSchema).max(200),
 });
 
 export async function PUT(
@@ -53,7 +50,7 @@ export async function PUT(
       message: 'Too many quiz update requests. Please wait a moment.',
     });
     if (limited) return limited;
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const validatedData = updateQuizSchema.parse(body);
 
     // Check if quiz exists and belongs to professor. Soft-deleted quizzes

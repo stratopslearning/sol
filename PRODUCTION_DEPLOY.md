@@ -16,9 +16,11 @@ the corresponding test credentials.)
 
 | Variable                          | Required? | Notes                                                              |
 | --------------------------------- | --------- | ------------------------------------------------------------------ |
-| `DATABASE_URL`                    | yes       | Neon production pooled connection string.                          |
+| `DATABASE_URL`                    | yes       | Neon **pooled** connection string for the `sol_app` role (DML only). See §4b. |
+| `DATABASE_MIGRATE_URL`            | recommended | Neon connection for `sol_migrator` (DDL). Used by drizzle-kit / migrate scripts. Falls back to `DATABASE_URL` locally. |
 | `CLERK_SECRET_KEY`                | yes       | From the Clerk **Production** instance.                            |
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`| yes      | Production publishable key.                                        |
+| `CLERK_WEBHOOK_SIGNING_SECRET`    | **yes (prod)** | Svix signing secret for `/api/clerk/webhook` (auth session audit). Alias: `CLERK_WEBHOOK_SECRET`. |
 | `NEXT_PUBLIC_PAYMENTS_ENABLED`    | optional  | `true` to enforce the Stripe paywall, `false` (default) to let any signed-in student straight into the dashboard. Defaults to `false` until you flip the paywall on. |
 | `STRIPE_SECRET_KEY`               | when paywall on | Live mode key (`sk_live_...`). Optional while `NEXT_PUBLIC_PAYMENTS_ENABLED` is `false`. |
 | `STRIPE_WEBHOOK_SECRET`           | when paywall on | Required only when paywall is enabled.                       |
@@ -51,6 +53,12 @@ traffic instead of failing per-request later.
 4. Verify a magic-link / sign-up flow against the production deploy with a
    test account. The first sign-in should call `getOrCreateUser` and
    create a row in `users` (you can confirm via Neon's SQL editor).
+5. Register the Clerk auth webhook:
+   - Endpoint: `https://<your-domain>/learning/api/clerk/webhook`
+   - Events: `session.created`, `session.ended`, `session.revoked`, `session.removed`
+   - Paste the Signing secret into Vercel as `CLERK_WEBHOOK_SIGNING_SECRET`
+   - Confirm a sign-in writes `auth.session.create` to `audit_log` and a row
+     into `clerk_events`
 
 ---
 
@@ -78,7 +86,10 @@ traffic instead of failing per-request later.
 
 ## 4. Database migration (Neon prod)
 
-Run from a developer machine pointed at the production `DATABASE_URL`
+Prefer `DATABASE_MIGRATE_URL` (the `sol_migrator` role) for all migrate
+commands. Runtime traffic must keep using the `sol_app` `DATABASE_URL`.
+
+Run from a developer machine pointed at the production migrator URL
 (set it in `.env.local` for the duration):
 
 ```sh
@@ -93,10 +104,10 @@ npm run db:reconcile-history
 # 4. Apply pending migrations. Prefer apply-migration.ts until Drizzle
 #    journal history is fully reconciled (missing 0000 makes `npm run migrate`
 #    unreliable). Newest additive migration:
-npx tsx scripts/apply-migration.ts drizzle/0007_attempts_one_open.sql
+npx tsx scripts/apply-migration.ts drizzle/0012_clerk_events.sql
 #    Earlier examples:
+# npx tsx scripts/apply-migration.ts drizzle/0007_attempts_one_open.sql
 # npx tsx scripts/apply-migration.ts drizzle/0006_chatbots.sql
-# npx tsx scripts/apply-migration.ts drizzle/0004_phase6_destructive.sql
 #    Do not regenerate historical 0003–0006 kit snapshots casually.
 
 # 5. Backfill stripe_customer_id for users who paid before we started
@@ -114,7 +125,30 @@ SELECT column_name, data_type FROM information_schema.columns
 -- Soft-delete columns + indexes exist.
 SELECT table_name, column_name FROM information_schema.columns
  WHERE column_name IN ('deleted_at','passing_score');
+
+-- Clerk webhook idempotency table exists.
+SELECT to_regclass('public.clerk_events');
 ```
+
+---
+
+## 4b. Neon least-privilege roles (recommended before broad rollout)
+
+Today a single owner-class URL works, but production should split credentials:
+
+| Role | Privileges | Env var |
+| --- | --- | --- |
+| `sol_app` | `SELECT/INSERT/UPDATE/DELETE` + sequence `USAGE`. **No** DDL. | `DATABASE_URL` (pooled) |
+| `sol_migrator` | DDL for drizzle migrations | `DATABASE_MIGRATE_URL` |
+
+1. Open Neon SQL Editor as the project owner.
+2. Edit passwords in [`scripts/sql/create-app-role.sql`](scripts/sql/create-app-role.sql) and run the script.
+3. Create connection strings for both roles (prefer `-pooler` for `sol_app`).
+4. Set Vercel Production `DATABASE_URL` → `sol_app`, `DATABASE_MIGRATE_URL` → `sol_migrator`.
+5. Smoke-test: login, quiz submit, then `npx tsx scripts/apply-migration.ts drizzle/0012_clerk_events.sql` with the migrator URL (should no-op if already applied).
+6. Confirm `SET ROLE sol_app; CREATE TABLE _x(id int);` fails.
+
+Do **not** apply the role SQL from CI or the Next.js runtime.
 
 ---
 

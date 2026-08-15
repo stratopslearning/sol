@@ -72,17 +72,18 @@ describe('assembleSystemPrompt', () => {
 });
 
 describe('history helpers', () => {
-  it('toOpenAiMessages redacts emails in user turns', () => {
+  it('toOpenAiMessages wraps user turns in student_message delimiters and redacts emails', () => {
     const history: ChatbotMessage[] = [
       { role: 'user', content: 'Email me at a@b.co', at: '1' },
       { role: 'assistant', content: 'Hello — ready?', at: '2' },
     ];
     const messages = toOpenAiMessages('SYSTEM', history, 'ping me at x@y.co');
-    expect(messages[1]).toEqual({
-      role: 'user',
-      content: 'Email me at [REDACTED_EMAIL]',
-    });
+    expect(messages[1].role).toBe('user');
+    expect(messages[1].content).toContain('<student_message>');
+    expect(messages[1].content).toContain('[REDACTED_EMAIL]');
+    expect(messages[1].content).toContain('</student_message>');
     expect(messages[3].content).toContain('[REDACTED_EMAIL]');
+    expect(messages[3].content).toContain('<student_message>');
   });
 
   it('truncateHistory keeps the newest window', () => {
@@ -95,5 +96,27 @@ describe('history helpers', () => {
     expect(truncated).toHaveLength(4);
     expect(truncated[0].content).toBe('m6');
     expect(truncated[3].content).toBe('m9');
+  });
+});
+
+describe('assistant reply leak scrub', () => {
+  it('flags answer-key phrasing and replaces with refusal', async () => {
+    const { assistantReplyLooksSafe, scrubAssistantReply } = await import(
+      '@/lib/chatbot/safeQuizContext'
+    );
+    const { CHATBOT_LEAK_REFUSAL } = await import('@/lib/chatbot/baseRules');
+    expect(assistantReplyLooksSafe('Nice reasoning — what else?')).toBe(true);
+    expect(assistantReplyLooksSafe('Here is the answer key: A')).toBe(false);
+    expect(scrubAssistantReply('The correct option is B')).toBe(
+      CHATBOT_LEAK_REFUSAL,
+    );
+  });
+});
+
+describe('assembleSystemPrompt injection guards', () => {
+  it('includes untrusted-input rules', () => {
+    const system = assembleSystemPrompt('Discuss silos.', '');
+    expect(system).toContain('UNTRUSTED STUDENT INPUT');
+    expect(system).toContain('<student_message>');
   });
 });

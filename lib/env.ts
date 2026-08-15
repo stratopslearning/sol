@@ -14,10 +14,18 @@ import { z } from 'zod';
 const baseSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   DATABASE_URL: z.string().url(),
+  // Optional migrate-only URL (sol_migrator). Runtime always uses DATABASE_URL
+  // (sol_app). Local/dev may leave this unset and reuse DATABASE_URL.
+  DATABASE_MIGRATE_URL: z.string().url().optional(),
 
   // Clerk
   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: z.string().min(1),
   CLERK_SECRET_KEY: z.string().min(1),
+
+  // Clerk webhooks (Svix). Prefer CLERK_WEBHOOK_SIGNING_SECRET (Clerk SDK
+  // default). CLERK_WEBHOOK_SECRET is accepted as an alias in the route.
+  CLERK_WEBHOOK_SIGNING_SECRET: z.string().min(1).optional(),
+  CLERK_WEBHOOK_SECRET: z.string().min(1).optional(),
 
   // Stripe. Keys are required only when the paywall is enabled (see invariants
   // below). When disabled, the Stripe routes stay mounted but never run, so
@@ -105,6 +113,11 @@ function loadEnv(): RawEnv {
     if (!data.OPENAI_API_KEY) {
       throw new Error(
         'OPENAI_API_KEY is required in production (short-answer grading).',
+      );
+    }
+    if (!data.CLERK_WEBHOOK_SIGNING_SECRET && !data.CLERK_WEBHOOK_SECRET) {
+      throw new Error(
+        'CLERK_WEBHOOK_SIGNING_SECRET is required in production (Clerk auth-event webhook).',
       );
     }
     if (data.NEXT_PUBLIC_PAYMENTS_ENABLED === 'true') {

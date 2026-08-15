@@ -25,14 +25,17 @@ Last design walkthrough: see [`evidence/TYPE1_WALKTHROUGH.md`](./evidence/TYPE1_
 | CC-05 | Encryption at rest | Neon Postgres default encryption | Neon docs + restore drill | pass |
 | CC-06 | Security headers | [`next.config.ts`](../next.config.ts) `headers()` (HSTS, CSP, etc.) | curl -I production | pass |
 | CC-07 | Rate limiting | [`lib/rateLimit.ts`](../lib/rateLimit.ts); Upstash **required in production** | 429 smoke; env validation | pass |
-| CC-08 | Audit logging of privileged actions | [`lib/audit.ts`](../lib/audit.ts); exam `quiz.attempt.start` / `quiz.attempt.submit`; admin UI [`app/dashboard/admin/audit`](../app/dashboard/admin/audit) | Sample `audit_log` rows | pass |
+| CC-08 | Audit logging of privileged actions | [`lib/audit.ts`](../lib/audit.ts); exam start/submit; Clerk session webhook → `auth.session.*`; admin Audit UI | Sample `audit_log` + `clerk_events` rows | partial |
 | CC-09 | Change management | PRs + [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) | CI runs; branch protection notes | pass |
 | CC-10 | Vulnerability management | Dependabot / `npm audit` cadence in [`policies/VULNERABILITY_MANAGEMENT.md`](./policies/VULNERABILITY_MANAGEMENT.md) | Quarterly audit notes | pass |
 | CC-11 | Incident response | [`policies/INCIDENT_RESPONSE.md`](./policies/INCIDENT_RESPONSE.md) | Tabletop in `evidence/` | pass |
 | CC-12 | Backup & recovery | Neon PITR; [`BACKUP_RESTORE.md`](./BACKUP_RESTORE.md) | Annual restore drill | pass |
 | CC-13 | Monitoring | Sentry (PII off in prod); Vercel/Neon metrics | Sentry project config | pass |
-| CC-14 | Cron / job auth | `CRON_SECRET` on grade-pending cron | Cron logs | pass |
+| CC-14 | Cron / job auth | `CRON_SECRET` on grade-pending cron; middleware public bypass for `/api/cron/*` | Cron logs | pass |
 | CC-15 | Payments flag before charging | Set `NEXT_PUBLIC_PAYMENTS_ENABLED=true` in Vercel Production before charging $10/student. Default remains `false` for unpaid pilots. | Vercel env screenshot | n/a until go-live |
+| CC-16 | Same-origin CSRF on cookie mutations | [`lib/api/sameOrigin.ts`](../lib/api/sameOrigin.ts) + [`middleware.ts`](../middleware.ts); Bearer/MCP/cron/webhooks exempt | Unit tests; 403 on cross-origin POST | pass |
+| CC-17 | Request size + JSON content-type | [`lib/api/readJsonBody.ts`](../lib/api/readJsonBody.ts); Zod field maxes on quiz/bulk | Unit tests; 413 smoke | pass |
+| CC-18 | Neon least-privilege DB roles | `sol_app` (DML) + `sol_migrator` (DDL); [`scripts/sql/create-app-role.sql`](../scripts/sql/create-app-role.sql) | Role applied in Neon + Vercel env split | partial |
 
 ---
 
@@ -55,7 +58,8 @@ Last design walkthrough: see [`evidence/TYPE1_WALKTHROUGH.md`](./evidence/TYPE1_
 | PI-01 | Deterministic grading path | Rubric match → TS score; [`lib/grading.ts`](../lib/grading.ts) | Unit tests | pass |
 | PI-02 | Fallback when AI unavailable | Deterministic / pending status; no silent fake scores | `grading.test.ts` | pass |
 | PI-03 | Stripe webhook idempotency | `stripe_events` unique event id | Integration tests | pass |
-| PI-04 | Chatbot never leaks answer keys | [`lib/chatbot/safeQuizContext.ts`](../lib/chatbot/safeQuizContext.ts) | Unit tests | pass |
+| PI-04 | Chatbot never leaks answer keys | [`lib/chatbot/safeQuizContext.ts`](../lib/chatbot/safeQuizContext.ts); delimiter wrap + reply scrub | Unit tests | pass |
+| PI-05 | Clerk webhook idempotency | `clerk_events` unique `event_id` (svix-id) | Unit mapping tests; Neon row | partial |
 
 ---
 
@@ -67,7 +71,7 @@ Last design walkthrough: see [`evidence/TYPE1_WALKTHROUGH.md`](./evidence/TYPE1_
 | F-02 | Legitimate educational use | [`policies/FERPA_EDUCATION_RECORDS.md`](./policies/FERPA_EDUCATION_RECORDS.md); [`FERPA_RIDER.md`](./FERPA_RIDER.md) | Rider template | pass |
 | F-03 | School-official subprocessors | [`SUBPROCESSORS.md`](./SUBPROCESSORS.md); OpenAI ZDR posture in [`AI_EDUCATION_RECORDS.md`](./AI_EDUCATION_RECORDS.md) | OpenAI org checklist | pass |
 | F-04 | Prompt minimization (no profile PII to AI) | [`lib/ai/minimizeEducationPayload.ts`](../lib/ai/minimizeEducationPayload.ts) used by grading + chatbot | Unit tests | pass |
-| F-05 | Disclosure / access logging | Enrollment, role change, gradebook view, export, purge → `audit_log` | Admin audit UI samples | pass |
+| F-05 | Disclosure / access logging | Enrollment, role change, gradebook view, export, purge, `auth.session.*` → `audit_log` | Admin audit UI samples | partial |
 | F-06 | Access / amend / delete rights | Soft-delete + purge; [`policies/DATA_RETENTION.md`](./policies/DATA_RETENTION.md) | Purge checklist evidence | pass |
 | F-07 | Redisclosure controls | FERPA rider + no public grade APIs | Rider + authz | pass |
 | F-08 | Institution disclosure requests | Audited via [`app/api/admin/disclosure`](../app/api/admin/disclosure) | Audit action `ferpa.disclosure.record` | pass |

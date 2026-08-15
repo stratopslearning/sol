@@ -3,6 +3,7 @@ import { chatbotOpenAI, CHATBOT_MODEL } from '@/lib/chatbot/client';
 import {
   assembleSystemPrompt,
   buildSafeQuizContext,
+  scrubAssistantReply,
   toOpenAiMessages,
   type SafeQuizInput,
 } from '@/lib/chatbot/safeQuizContext';
@@ -90,7 +91,7 @@ export async function generateChatbotReply(opts: {
         message: 'The assistant returned an empty reply. Please try again.',
       };
     }
-    return { ok: true, text };
+    return { ok: true, text: scrubAssistantReply(text) };
   } catch (err: unknown) {
     const mapped = mapOpenAiError(err);
     return { ok: false, ...mapped };
@@ -142,3 +143,6 @@ export async function streamChatbotReply(opts: {
     return { ok: false, ...mapped };
   }
 }
+
+/** Re-export scrub for the streaming route (full reply checked after stream). */
+export { scrubAssistantReply };

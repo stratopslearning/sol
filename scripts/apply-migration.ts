@@ -41,8 +41,8 @@ async function main() {
   if (!fs.existsSync(absolutePath)) {
     throw new Error(`Migration file not found: ${absolutePath}`);
   }
-  if (!process.env.DATABASE_URL) {
-    throw new Error('DATABASE_URL not set');
+  if (!process.env.DATABASE_MIGRATE_URL && !process.env.DATABASE_URL) {
+    throw new Error('DATABASE_MIGRATE_URL or DATABASE_URL not set');
   }
 
   const sql = fs.readFileSync(absolutePath, 'utf8');
@@ -54,7 +54,9 @@ async function main() {
   const hash = hashMigrationSql(sql);
   console.log(`Applying ${path.basename(absolutePath)} (${statements.length} statements, hash ${hash.slice(0, 8)})`);
 
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const connectionString =
+    process.env.DATABASE_MIGRATE_URL || process.env.DATABASE_URL!;
+  const pool = new Pool({ connectionString });
   const client = await pool.connect();
   try {
     // Skip if already applied.
