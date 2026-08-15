@@ -19,6 +19,8 @@ Configure these in the **Clerk Production** instance Dashboard. Attach screensho
 
 **Screenshot:** Clerk → Sessions / User & Authentication → Session lifetime settings.
 
+**Also confirm:** password-reset link expiry and “revoke other sessions on password change” (Clerk defaults) — screenshot for the packet.
+
 **Status:** Not yet recorded — capture Sessions settings next.
 
 ---
@@ -62,17 +64,27 @@ Keep a copy of this Dashboard screenshot in the FGCU packet (filename example: `
 
 ## 5. Auth event auditing
 
-**Application audit log (`audit_log`):** sensitive resource actions with IP + user-agent (`lib/audit.ts`).
+**Application audit log (`audit_log`):** sensitive resource actions with IP + user-agent (`lib/audit.ts`), plus Clerk session lifecycle via webhook:
 
-**Clerk Dashboard:** retains login / logout / session events.
+| Clerk event | Audit action |
+| --- | --- |
+| `session.created` | `auth.session.create` |
+| `session.ended` / `session.revoked` / `session.removed` | `auth.session.end` |
 
-**Optional enhancement (recommended before broad rollout):**
+**Implementation:** [`app/api/clerk/webhook/route.ts`](../app/api/clerk/webhook/route.ts) — Svix signature verify, `clerk_events` idempotency, map Clerk user → SOL `users.id`.
 
-1. Add Clerk webhook endpoint for `session.created`, `session.ended`, `user.signed_out`.
-2. Verify Svix signature; map Clerk user → SOL `users.id`.
-3. Write `auth.session.create` / `auth.session.end` rows via `logAudit`.
+**Ops to go live:**
 
-Until webhooks ship, HECVAT answer: “Auth events retained in Clerk; application logs education-record access and privileged mutations with IP.”
+1. Clerk Dashboard → Webhooks → Add endpoint  
+   `https://<domain>/learning/api/clerk/webhook`
+2. Subscribe to `session.created`, `session.ended`, `session.revoked`, `session.removed`
+3. Paste signing secret into Vercel as `CLERK_WEBHOOK_SIGNING_SECRET` (required in production)
+4. Apply migration `drizzle/0012_clerk_events.sql`
+5. Sign in once and confirm `audit_log` + `clerk_events` rows
+
+**Status:** Code shipped; endpoint live status = **partial** until Dashboard wiring + secret are confirmed in production.
+
+**Clerk Dashboard** also retains login / logout / session events as a second copy.
 
 ---
 
@@ -80,8 +92,10 @@ Until webhooks ship, HECVAT answer: “Auth events retained in Clerk; applicatio
 
 - [ ] Session lifetime screenshot
 - [ ] Inactivity timeout screenshot
+- [ ] Reset-link expiry / revoke-other-sessions screenshot
 - [x] Attack protection / lockout screenshot (2026-08-11 — lockout, device trust, bot sign-up, user enumeration all Enabled)
 - [ ] MFA policy screenshot
+- [ ] Clerk webhook endpoint configured + sample `auth.session.*` audit row
 - [ ] (When ready) Enterprise SSO connection screenshot for FGCU
 
 **Operator sign-off:** __________________ (date: ________)

@@ -24,6 +24,7 @@ function stubProductionBase() {
   vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', 'token');
   vi.stubEnv('CRON_SECRET', 'cron-secret');
   vi.stubEnv('OPENAI_API_KEY', 'sk-openai');
+  vi.stubEnv('CLERK_WEBHOOK_SIGNING_SECRET', 'whsec_test');
 }
 
 describe('lib/env', () => {
@@ -105,6 +106,16 @@ describe('lib/env', () => {
     vi.stubEnv('LOAD_TEST_SECRET', 'load-test-secret-16');
     const mod = await import('@/lib/env');
     expect(() => mod.env()).not.toThrow();
+  });
+
+  it('throws in production without CLERK_WEBHOOK_SIGNING_SECRET', async () => {
+    stubProductionBase();
+    vi.stubEnv('CLERK_WEBHOOK_SIGNING_SECRET', undefined as unknown as string);
+    vi.stubEnv('CLERK_WEBHOOK_SECRET', undefined as unknown as string);
+    delete process.env.CLERK_WEBHOOK_SIGNING_SECRET;
+    delete process.env.CLERK_WEBHOOK_SECRET;
+    const mod = await import('@/lib/env');
+    expect(() => mod.env()).toThrow(/CLERK_WEBHOOK/);
   });
 
   it('accepts production with Upstash, CRON_SECRET, and OPENAI_API_KEY configured', async () => {

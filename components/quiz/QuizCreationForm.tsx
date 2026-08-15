@@ -193,6 +193,12 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
     const file = event.target.files?.[0];
     if (!file) return;
 
+    if (file.type !== 'text/csv' && !file.name.toLowerCase().endsWith('.csv')) {
+      setCsvError('Please upload a valid CSV file');
+      event.target.value = '';
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = (e) => {
       try {

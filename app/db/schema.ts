@@ -311,6 +311,16 @@ export const stripeEvents = pgTable('stripe_events', {
   processedAt: ts('processed_at'),
 });
 
+// Clerk webhook events — same idempotency pattern (svix-id is stable across retries).
+export const clerkEvents = pgTable('clerk_events', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  eventId: text('event_id').unique().notNull(),
+  type: text('type').notNull(),
+  payload: jsonb('payload').notNull(),
+  receivedAt: ts('received_at').defaultNow().notNull(),
+  processedAt: ts('processed_at'),
+});
+
 // Audit log of administrative + sensitive actions. Append-only; a Postgres
 // trigger (drizzle/0011_audit_log_append_only.sql) rejects UPDATE/DELETE.
 export const auditLog = pgTable(

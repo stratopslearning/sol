@@ -7,27 +7,12 @@ import { professorSections, questions, quizSections, quizzes } from '@/app/db/sc
 import { ApiError, jsonError } from '@/lib/api/errors';
 import { requireProfessorApi } from '@/lib/api/professorAuth';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
+import { readJsonBody } from '@/lib/api/readJsonBody';
+import { quizCreateBaseSchema } from '@/lib/quizSchemas';
 
 export const dynamic = 'force-dynamic';
 
-const createQuizSchema = z.object({
-  title: z.string().min(1),
-  description: z.string().optional(),
-  sectionIds: z.array(z.string()).min(1, 'Select at least one section'),
-  maxAttempts: z.number().min(1).max(10).default(1),
-  timeLimit: z.number().min(1).optional(),
-  passingScore: z.number().int().min(0).max(100).default(60),
-  startDate: z.string().optional(),
-  endDate: z.string().optional(),
-  questions: z.array(z.object({
-    type: z.enum(['MULTIPLE_CHOICE', 'TRUE_FALSE', 'SHORT_ANSWER']),
-    question: z.string().min(1),
-    options: z.array(z.string()).optional(),
-    correctAnswer: z.string().optional(),
-    points: z.number().min(1).default(1),
-    order: z.number().min(0),
-  })),
-});
+const createQuizSchema = quizCreateBaseSchema;
 
 export async function POST(req: NextRequest) {
   try {
@@ -45,7 +30,7 @@ export async function POST(req: NextRequest) {
     });
     if (limited) return limited;
 
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const validatedData = createQuizSchema.parse(body);
 
     // Verify professor is enrolled in all specified sections

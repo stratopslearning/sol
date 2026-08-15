@@ -6,20 +6,21 @@ import { z } from 'zod';
 import { db } from '@/app/db';
 import { users } from '@/app/db/schema';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
+import { readJsonBody } from '@/lib/api/readJsonBody';
 
 export const dynamic = 'force-dynamic';
 
 // Validation schema for user import data
 const userImportSchema = z.object({
-  email: z.string().email(),
-  firstName: z.string().optional(),
-  lastName: z.string().optional(),
+  email: z.string().email().max(320),
+  firstName: z.string().max(100).optional(),
+  lastName: z.string().max(100).optional(),
   role: z.enum(['STUDENT', 'PROFESSOR', 'ADMIN']),
   paid: z.boolean().default(false),
 });
 
 const bulkImportSchema = z.object({
-  users: z.array(userImportSchema),
+  users: z.array(userImportSchema).min(1).max(100),
 });
 
 interface ImportResult {
@@ -60,7 +61,7 @@ export async function POST(req: NextRequest) {
     if (limited) return limited;
 
     // Parse and validate request body
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const validatedData = bulkImportSchema.parse(body);
     
     if (validatedData.users.length === 0) {
@@ -69,7 +70,7 @@ export async function POST(req: NextRequest) {
       }, { status: 400 });
     }
 
-    // Limit batch size for performance
+    // Limit batch size for performance (also enforced by Zod .max(100))
     if (validatedData.users.length > 100) {
       return NextResponse.json({ 
         error: 'Maximum 100 users can be imported at once' 

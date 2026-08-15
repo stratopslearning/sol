@@ -27,14 +27,21 @@ import {
   handleMcpBody,
   PARSE_ERROR,
 } from '@/lib/mcp/protocol';
+import { readJsonBody } from '@/lib/api/readJsonBody';
+import { ApiError } from '@/lib/api/errors';
 
 export const dynamic = 'force-dynamic';
 // Synchronous batch regrades can call OpenAI several times.
 export const maxDuration = 120;
 
-/** Browser-based connectors preflight and read responses cross-origin. */
+/**
+ * Browser-based connectors (Claude.ai / ChatGPT) preflight cross-origin.
+ * `*` is safe here because auth is Bearer (PAT or OAuth access token) — never
+ * cookies — so credentials are not ambient. Credentials mode stays off.
+ */
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Credentials': 'false',
   'Access-Control-Allow-Methods': 'POST, GET, DELETE, OPTIONS',
   'Access-Control-Allow-Headers':
     'Authorization, Content-Type, Mcp-Session-Id, Mcp-Protocol-Version',
@@ -82,8 +89,16 @@ export async function POST(req: NextRequest) {
 
   let body: unknown;
   try {
-    body = await req.json();
-  } catch {
+    body = await readJsonBody(req);
+  } catch (err) {
+    if (err instanceof ApiError && err.code === 'payload_too_large') {
+      return withCors(
+        NextResponse.json(
+          { error: 'Payload too large', code: 'payload_too_large' },
+          { status: 413 },
+        ),
+      );
+    }
     return withCors(
       NextResponse.json(
         {

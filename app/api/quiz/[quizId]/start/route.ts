@@ -7,6 +7,7 @@ import { attempts, sections } from '@/app/db/schema';
 import { autoSubmitInProgressAttempt } from '@/lib/autoSubmitInProgressAttempt';
 import { ApiError, apiErrorResponse } from '@/lib/api/errors';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
+import { readJsonBody } from '@/lib/api/readJsonBody';
 import { logQuizAttemptAudit } from '@/lib/audit';
 import { loadExamContext, missingExamResource } from '@/lib/examContext';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
@@ -49,7 +50,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
     });
     if (limited) return limited;
 
-    const rawBody = await req.json().catch(() => null);
+    const rawBody = await readJsonBody(req);
     const parseResult = startBodySchema.safeParse(rawBody);
     if (!parseResult.success) {
       throw ApiError.badRequest('Invalid request body', parseResult.error.errors);

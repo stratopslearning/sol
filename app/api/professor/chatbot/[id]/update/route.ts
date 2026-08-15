@@ -12,6 +12,7 @@ import {
 import { ApiError, apiErrorResponse, jsonError } from '@/lib/api/errors';
 import { requireProfessorApi } from '@/lib/api/professorAuth';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
+import { readJsonBody } from '@/lib/api/readJsonBody';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,7 +54,7 @@ export async function PUT(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const body = updateSchema.parse(await req.json());
+    const body = updateSchema.parse(await readJsonBody(req));
 
     if (body.sectionIds && user.role === 'PROFESSOR') {
       const ok = await professorEnrolledInSections(user.id, body.sectionIds);

@@ -65,6 +65,13 @@ export class ApiError extends Error {
       extras,
     });
   }
+  static payloadTooLarge(message = 'Payload too large') {
+    return new ApiError({
+      status: 413,
+      message,
+      code: 'payload_too_large',
+    });
+  }
   static internal(message = 'Internal server error') {
     return new ApiError({ status: 500, message, code: 'internal' });
   }

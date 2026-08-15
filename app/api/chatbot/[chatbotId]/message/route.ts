@@ -16,8 +16,10 @@ import {
   MAX_SESSION_TURNS,
   MAX_USER_MESSAGE_CHARS,
 } from '@/lib/chatbot/constants';
-import { streamChatbotReply } from '@/lib/chatbot/respond';
+import { streamChatbotReply, scrubAssistantReply } from '@/lib/chatbot/respond';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
+import { readJsonBody } from '@/lib/api/readJsonBody';
+import { sanitizeStoredText } from '@/lib/api/sanitizeStoredText';
 import { isStudentEntitled } from '@/lib/featureFlags';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
 
@@ -61,7 +63,7 @@ export async function POST(
     if (limited) return limited;
 
     const { chatbotId } = await context.params;
-    const body = bodySchema.parse(await req.json());
+    const body = bodySchema.parse(await readJsonBody(req));
 
     const bot = await getActiveChatbot(chatbotId);
     if (!bot || bot.isTemplate) {
@@ -104,7 +106,7 @@ export async function POST(
     }
 
     const quiz = await loadSafeQuizForChatbot(bot.relatedQuizId);
-    const userText = body.message.trim();
+    const userText = sanitizeStoredText(body.message);
     const streamed = await streamChatbotReply({
       professorSystemPrompt: bot.systemPrompt,
       quiz,
@@ -133,8 +135,8 @@ export async function POST(
             );
           }
 
-          const reply = full.trim();
-          if (!reply) {
+          const rawReply = full.trim();
+          if (!rawReply) {
             controller.enqueue(
               encoder.encode(
                 encodeSse({
@@ -147,6 +149,10 @@ export async function POST(
             controller.close();
             return;
           }
+
+          // Post-stream leak scrub: persist + done use the safe reply even if
+          // progressive tokens already streamed (client should prefer `done`).
+          const reply = scrubAssistantReply(rawReply);
 
           const now = new Date().toISOString();
           const nextMessages: ChatbotMessage[] = [

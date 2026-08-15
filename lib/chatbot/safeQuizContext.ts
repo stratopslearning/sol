@@ -1,6 +1,9 @@
 import type { ChatbotMessage } from '@/app/db/schema';
 import { minimizeStudentTextForAi } from '@/lib/ai/minimizeEducationPayload';
-import { SOCRATIC_LEARNING_RULES } from '@/lib/chatbot/baseRules';
+import {
+  CHATBOT_LEAK_REFUSAL,
+  SOCRATIC_LEARNING_RULES,
+} from '@/lib/chatbot/baseRules';
 import {
   HISTORY_WINDOW_MESSAGES,
   SAFE_QUIZ_CONTEXT_CHAR_BUDGET,
@@ -86,6 +89,12 @@ export function truncateHistory(
   return messages.slice(messages.length - maxMessages);
 }
 
+/** Wrap untrusted student text so the model treats it as data, not instructions. */
+export function wrapStudentMessage(text: string): string {
+  const minimized = minimizeStudentTextForAi(text);
+  return `<student_message>\n${minimized}\n</student_message>`;
+}
+
 export function toOpenAiMessages(
   systemContent: string,
   history: ChatbotMessage[],
@@ -95,13 +104,10 @@ export function toOpenAiMessages(
     { role: 'system', content: systemContent },
     ...truncateHistory(history).map((m) => ({
       role: m.role as 'user' | 'assistant',
-      // Minimize education-record PII (e.g. emails) before leaving the boundary.
       content:
-        m.role === 'user'
-          ? minimizeStudentTextForAi(m.content)
-          : m.content,
+        m.role === 'user' ? wrapStudentMessage(m.content) : m.content,
     })),
-    { role: 'user', content: minimizeStudentTextForAi(userMessage) },
+    { role: 'user', content: wrapStudentMessage(userMessage) },
   ];
 }
 
@@ -116,4 +122,31 @@ export function systemPromptLooksSafe(systemContent: string): boolean {
   ];
   const lower = systemContent.toLowerCase();
   return !forbidden.some((f) => lower.includes(f.toLowerCase()));
+}
+
+/**
+ * Cheap leak detector for assistant replies. Flags schema field names and
+ * common "here is the answer key" phrasing — not a guarantee against all
+ * paraphrases, but catches the most dangerous dump patterns.
+ */
+export function assistantReplyLooksSafe(reply: string): boolean {
+  if (!reply) return true;
+  const lower = reply.toLowerCase();
+  const forbidden = [
+    'correctanswer',
+    'correct_answer',
+    'answer key',
+    'answerkey',
+    'the correct option is',
+    'the right answer is',
+    'gptfeedback',
+    'gpt_feedback',
+  ];
+  return !forbidden.some((f) => lower.includes(f));
+}
+
+/** Replace a leaky reply with a fixed Socratic refusal. */
+export function scrubAssistantReply(reply: string): string {
+  if (assistantReplyLooksSafe(reply)) return reply;
+  return CHATBOT_LEAK_REFUSAL;
 }

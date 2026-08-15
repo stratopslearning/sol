@@ -1,5 +1,10 @@
 import { clerkMiddleware } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
+import {
+  isBodyTooLarge,
+  isSameOrigin,
+  shouldEnforceSameOrigin,
+} from '@/lib/api/sameOrigin';
 import { BASE_PATH, withBasePath } from '@/lib/basePath';
 import { isLoadTestRequest } from '@/lib/loadTestAuth';
 
@@ -79,13 +84,41 @@ export default clerkMiddleware(async (auth, req) => {
   // still enforces auth itself (verifyProfessorApiToken / getOrCreateUser).
   const authHeader = req.headers.get('authorization') ?? '';
   const hasApiToken = authHeader.startsWith('Bearer sol_pat_');
+  const loadTest = isLoadTestRequest(req.headers);
+
+  // CSRF: cookie-authenticated mutating /api/* must be same-origin.
+  // Bearer PAT / MCP / cron / webhooks / load-test stay exempt.
+  if (
+    shouldEnforceSameOrigin(req.method, appPath, authHeader || null, loadTest)
+  ) {
+    if (!isSameOrigin(req)) {
+      return NextResponse.json(
+        { error: 'Forbidden', code: 'csrf_origin' },
+        { status: 403 },
+      );
+    }
+  }
+
+  // Cheap early reject for oversized API bodies (chunked bodies are checked
+  // again in readJsonBody at the route).
+  if (
+    appPath.startsWith('/api/') &&
+    shouldEnforceSameOrigin(req.method, appPath, authHeader || null, loadTest) &&
+    isBodyTooLarge(req.headers.get('content-length'))
+  ) {
+    return NextResponse.json(
+      { error: 'Payload too large', code: 'payload_too_large' },
+      { status: 413 },
+    );
+  }
+
   if (appPath === '/api/mcp' || appPath.startsWith('/api/mcp/')) return;
   if (hasApiToken && appPath.startsWith('/api/professor/')) return;
 
   // k6 impersonation: skip the Clerk login redirect. The Node handler still
   // authenticates via x-load-test-* headers in getOrCreateUser. Hard-disabled
   // when VERCEL_ENV=production (see lib/loadTestAuth.ts).
-  if (isLoadTestRequest(req.headers)) return;
+  if (loadTest) return;
 
   // OAuth discovery metadata (RFC 8414 / RFC 9728) must be fetchable without
   // a session — Claude.ai / ChatGPT read it before any user is signed in.
@@ -116,7 +149,12 @@ export default clerkMiddleware(async (auth, req) => {
     appPath.startsWith('/api/user/') ||
     appPath === '/api/stripe/product' ||
     appPath.startsWith('/api/stripe/product') ||
-    appPath.startsWith('/api/stripe/webhook');
+    appPath.startsWith('/api/stripe/webhook') ||
+    appPath.startsWith('/api/clerk/webhook') ||
+    // Cron authenticates with CRON_SECRET in the route handler — must not
+    // bounce to /login before that check runs.
+    appPath === '/api/cron' ||
+    appPath.startsWith('/api/cron/');
 
   if (isPublic) return;
 

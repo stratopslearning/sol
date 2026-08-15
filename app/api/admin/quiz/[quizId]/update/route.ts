@@ -10,6 +10,7 @@ import {
   buildQuizDescriptionWithMetadata,
   extractQuizMetadata,
 } from '@/lib/utils';
+import { readJsonBody } from '@/lib/api/readJsonBody';
 
 export const dynamic = 'force-dynamic';
 
@@ -66,7 +67,7 @@ export async function PUT(
       );
     }
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const parsed = adminQuizUpdateSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(

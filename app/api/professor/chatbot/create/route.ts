@@ -11,6 +11,7 @@ import { CHATBOT_MODEL } from '@/lib/chatbot/constants';
 import { ApiError, jsonError } from '@/lib/api/errors';
 import { requireProfessorApi } from '@/lib/api/professorAuth';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
+import { readJsonBody } from '@/lib/api/readJsonBody';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,7 +39,7 @@ export async function POST(req: NextRequest) {
     });
     if (limited) return limited;
 
-    const body = createSchema.parse(await req.json());
+    const body = createSchema.parse(await readJsonBody(req));
 
     if (user.role === 'PROFESSOR') {
       const ok = await professorEnrolledInSections(user.id, body.sectionIds);

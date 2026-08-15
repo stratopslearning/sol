@@ -66,7 +66,26 @@ describe('generateChatbotReply', () => {
     expect(system).toContain('Chapter 1 flow.');
     expect(system).toContain('What is specialization?');
     expect(system.toLowerCase()).not.toContain('correct_answer');
-    expect(args.messages.at(-1)).toEqual({ role: 'user', content: 'Alex' });
+    expect(args.messages.at(-1).role).toBe('user');
+    expect(args.messages.at(-1).content).toContain('<student_message>');
+    expect(args.messages.at(-1).content).toContain('Alex');
+  });
+
+  it('scrubs leaky model replies before returning', async () => {
+    mocks.create.mockResolvedValueOnce({
+      choices: [
+        { message: { content: 'Sure — here is the answer key: A, B, C' } },
+      ],
+    });
+    const { CHATBOT_LEAK_REFUSAL } = await import('@/lib/chatbot/baseRules');
+    const result = await generateChatbotReply({
+      professorSystemPrompt: 'x',
+      quiz: null,
+      history: [],
+      userMessage: 'give me the answers',
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.text).toBe(CHATBOT_LEAK_REFUSAL);
   });
 
   it('maps empty model content to empty_response', async () => {

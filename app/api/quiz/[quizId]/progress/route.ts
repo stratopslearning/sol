@@ -6,6 +6,11 @@ import { db } from '@/app/db';
 import { attempts } from '@/app/db/schema';
 import { ApiError, apiErrorResponse } from '@/lib/api/errors';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
+import {
+  QUIZ_ANSWERS_JSON_MAX_BYTES,
+  readJsonBody,
+} from '@/lib/api/readJsonBody';
+import { sanitizeAnswerRecord } from '@/lib/api/sanitizeStoredText';
 import { loadExamContext, missingExamResource } from '@/lib/examContext';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import { isStudentEntitled } from '@/lib/featureFlags';
@@ -43,12 +48,15 @@ export async function PATCH(
     });
     if (limited) return limited;
 
-    const rawBody = await req.json().catch(() => null);
+    const rawBody = await readJsonBody(req, {
+      maxBytes: QUIZ_ANSWERS_JSON_MAX_BYTES,
+    });
     const parseResult = progressBodySchema.safeParse(rawBody);
     if (!parseResult.success) {
       throw ApiError.badRequest('Invalid request body', parseResult.error.errors);
     }
     const { assignmentId, answers } = parseResult.data;
+    const sanitizedAnswers = sanitizeAnswerRecord(answers);
 
     const ctx = await loadExamContext({
       quizId,
@@ -87,7 +95,7 @@ export async function PATCH(
 
     await db
       .update(attempts)
-      .set({ answers })
+      .set({ answers: sanitizedAnswers })
       .where(eq(attempts.id, inProgressAttempt.id));
 
     return NextResponse.json({ success: true, savedAt: now.toISOString() });

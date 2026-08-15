@@ -4,6 +4,7 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '@/app/db';
 import { courses, sections, studentSections } from '@/app/db/schema';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
+import { readJsonBody } from '@/lib/api/readJsonBody';
 import { extractRequestMeta, logAudit } from '@/lib/audit';
 import { activeOnly } from '@/lib/db/filters';
 import { paymentsEnabled } from '@/lib/featureFlags';
@@ -45,7 +46,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { enrollmentCode } = await req.json();
+    const body = (await readJsonBody(req)) as { enrollmentCode?: unknown };
+    const { enrollmentCode } = body;
     if (!enrollmentCode || typeof enrollmentCode !== 'string') {
       return NextResponse.json(
         { error: 'Enrollment code is required' },

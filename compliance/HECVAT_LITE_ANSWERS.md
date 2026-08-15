@@ -57,7 +57,10 @@ Internal answer pack for higher-ed security questionnaires (including FGCU-style
 | RBAC / ABAC | **Yes** — roles `STUDENT` / `PROFESSOR` / `ADMIN`; resource scoping by section enrollment | `lib/auth.ts`, `lib/quizAccess.ts` |
 | WAF | **Yes** — Vercel Firewall active on production (verified 2026-08-11). Bot Protection still to enable. Plus CSP/HSTS and Upstash rate limits. | [`WAF_VERCEL.md`](./WAF_VERCEL.md) |
 | Security headers | **Yes** — CSP, HSTS, frame deny, etc. | `next.config.ts` |
+| CSRF (cookie APIs) | **Yes** — same-origin Origin/Referer check on mutating `/api/*`; Bearer/MCP/webhooks/cron exempt | `lib/api/sameOrigin.ts`, `middleware.ts` |
+| Request size limits | **Yes** — JSON body byte caps + Zod field maxes | `lib/api/readJsonBody.ts` |
 | Rate limiting | **Yes** — Upstash required in production | `lib/rateLimit.ts`, `PRODUCTION_DEPLOY.md` |
+| DB least privilege | **Partial** — `sol_app` / `sol_migrator` SQL + runbook shipped; apply in Neon before claiming pass | `scripts/sql/create-app-role.sql`, `PRODUCTION_DEPLOY.md` §4b |
 | Software supply chain | Dependabot + vulnerability policy; run `npm audit` before submission and attach output | [`policies/VULNERABILITY_MANAGEMENT.md`](./policies/VULNERABILITY_MANAGEMENT.md) |
 | Secure SDLC | Authz checks, Zod validation, secrets via env | [`policies/SECURE_DEVELOPMENT.md`](./policies/SECURE_DEVELOPMENT.md) |
 
@@ -72,7 +75,7 @@ Internal answer pack for higher-ed security questionnaires (including FGCU-style
 | MFA | Configurable in Clerk (recommended for faculty/admin and FGCU org). Document production settings per [`CLERK_AUTH_CONTROLS.md`](./CLERK_AUTH_CONTROLS.md). | [`CLERK_AUTH_CONTROLS.md`](./CLERK_AUTH_CONTROLS.md) |
 | Session timeout / inactivity | Configured in Clerk Dashboard (session lifetime + inactivity). Target settings documented in [`CLERK_AUTH_CONTROLS.md`](./CLERK_AUTH_CONTROLS.md). | [`CLERK_AUTH_CONTROLS.md`](./CLERK_AUTH_CONTROLS.md) |
 | Lockout | Clerk brute-force / lockout protections — enable and screenshot per runbook | [`CLERK_AUTH_CONTROLS.md`](./CLERK_AUTH_CONTROLS.md) |
-| Audit logging | **Yes** for sensitive app actions (role change, gradebook view/export, purge, enrollment, MCP) with timestamp, actor, IP, user-agent. Login/logout retained in Clerk; optional webhook mirror documented in auth controls. | `lib/audit.ts`, admin Audit UI |
+| Audit logging | **Yes** for sensitive app actions (role change, gradebook view/export, purge, enrollment, MCP) with timestamp, actor, IP, user-agent. Clerk session create/end mirrored into `audit_log` via webhook (`auth.session.*`) once the Dashboard endpoint + `CLERK_WEBHOOK_SIGNING_SECRET` are live. | `lib/audit.ts`, `app/api/clerk/webhook`, admin Audit UI |
 
 ---
 
@@ -97,6 +100,8 @@ Internal answer pack for higher-ed security questionnaires (including FGCU-style
 - Third-party pen test report — **No** (unless separately commissioned)
 - Completed third-party VPAT — **No** (self-ACR only until commissioned)
 - Campus SAML connected to FGCU — **Not yet** (plan ready)
+- Neon `sol_app` least-privilege role applied in production — **Not yet** (SQL + runbook ready)
+- Clerk auth webhook live in production — **Code ready; wire Dashboard + secret**
 - Dedicated CISO / security team — **No**
 - Per-institution database tenancy — **No**
 - Encrypted-at-rest CSV files on faculty laptops — **No** (policy + UI warning)

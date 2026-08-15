@@ -3,6 +3,11 @@ import { z } from 'zod';
 
 import { ApiError, apiErrorResponse } from '@/lib/api/errors';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
+import {
+  QUIZ_ANSWERS_JSON_MAX_BYTES,
+  readJsonBody,
+} from '@/lib/api/readJsonBody';
+import { sanitizeAnswerRecord } from '@/lib/api/sanitizeStoredText';
 import { logQuizAttemptAudit } from '@/lib/audit';
 import {
   executeQuizSubmit,
@@ -44,19 +49,22 @@ export async function POST(
     });
     if (limited) return limited;
 
-    const rawBody = await req.json().catch(() => null);
+    const rawBody = await readJsonBody(req, {
+      maxBytes: QUIZ_ANSWERS_JSON_MAX_BYTES,
+    });
     const parseResult = submitBodySchema.safeParse(rawBody);
     if (!parseResult.success) {
       throw ApiError.badRequest('Invalid request body', parseResult.error.errors);
     }
     const { assignmentId, answers, autoSubmitted } = parseResult.data;
+    const sanitizedAnswers = sanitizeAnswerRecord(answers);
 
     // autoSubmitted is client telemetry only — never grants availability/timer bypass.
     const result = await executeQuizSubmit({
       quizId,
       assignmentId,
       studentId: user.id,
-      answers,
+      answers: sanitizedAnswers,
       autoSubmitted,
       bypassAvailability: false,
     });

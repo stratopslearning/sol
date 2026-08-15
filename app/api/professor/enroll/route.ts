@@ -5,6 +5,7 @@ import { eq, and } from 'drizzle-orm';
 import { ApiError, jsonError } from '@/lib/api/errors';
 import { requireProfessorApi } from '@/lib/api/professorAuth';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
+import { readJsonBody } from '@/lib/api/readJsonBody';
 import { activeOnly } from '@/lib/db/filters';
 
 export const dynamic = 'force-dynamic';
@@ -25,8 +26,9 @@ export async function POST(req: NextRequest) {
     });
     if (limited) return limited;
 
-    const { enrollmentCode } = await req.json();
-    if (!enrollmentCode) {
+    const body = (await readJsonBody(req)) as { enrollmentCode?: unknown };
+    const { enrollmentCode } = body;
+    if (!enrollmentCode || typeof enrollmentCode !== 'string') {
       return NextResponse.json({ error: 'Enrollment code is required' }, { status: 400 });
     }
 

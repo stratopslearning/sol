@@ -5,13 +5,14 @@ import { z } from 'zod';
 
 import { db } from '@/app/db';
 import { sections, users } from '@/app/db/schema';
+import { readJsonBody } from '@/lib/api/readJsonBody';
 import { generateEnrollmentCode } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
 const bulkSectionSchema = z.object({
-  names: z.array(z.string().min(1)),
-  courseId: z.string().min(1),
+  names: z.array(z.string().min(1).max(100)).min(1).max(50),
+  courseId: z.string().min(1).max(100),
 });
 
 export async function POST(req: NextRequest) {
@@ -24,7 +25,7 @@ export async function POST(req: NextRequest) {
     if (!user || user.role !== 'ADMIN') {
       return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
     }
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const validatedData = bulkSectionSchema.parse(body);
     const newSections = await db.transaction(async (tx) => {
       const created = [];

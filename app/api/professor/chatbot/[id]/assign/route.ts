@@ -10,6 +10,7 @@ import {
 import { ApiError, jsonError } from '@/lib/api/errors';
 import { requireProfessorApi } from '@/lib/api/professorAuth';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
+import { readJsonBody } from '@/lib/api/readJsonBody';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,7 +48,7 @@ export async function POST(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const body = assignSchema.parse(await req.json());
+    const body = assignSchema.parse(await readJsonBody(req));
     if (user.role === 'PROFESSOR') {
       const ok = await professorEnrolledInSections(user.id, body.sectionIds);
       if (!ok) {
