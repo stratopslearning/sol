@@ -79,6 +79,7 @@ export default async function StudentQuizzesPage() {
     id: quiz.id,
     title: quiz.title,
     endDate: quiz.endDate,
+    startDate: quiz.startDate,
     maxAttempts: quiz.maxAttempts ?? 1,
     sectionNames: (quiz.sectionAssignments ?? [])
       .filter((sa) => sa.sectionId && activeSectionIdSet.has(sa.sectionId))
@@ -91,7 +92,9 @@ export default async function StudentQuizzesPage() {
   const bestPercentageByQuizId: Record<string, number> = {};
   const latestAttemptIdByQuizId: Record<string, string> = {};
   const isOverdueByQuizId: Record<string, boolean> = {};
+  const isNotStartedByQuizId: Record<string, boolean> = {};
   const dueDateLabelByQuizId: Record<string, string> = {};
+  const opensAtLabelByQuizId: Record<string, string> = {};
   const now = new Date();
   assignedQuizzes.forEach((quiz) => {
     const list = attemptsByQuiz[quiz.id] ?? [];
@@ -110,8 +113,13 @@ export default async function StudentQuizzesPage() {
       );
       latestAttemptIdByQuizId[quiz.id] = latest.id;
     }
+    const startDate = normalizeDatabaseDate(quiz.startDate);
     const endDate = normalizeDatabaseDate(quiz.endDate);
+    isNotStartedByQuizId[quiz.id] = startDate ? startDate > now : false;
     isOverdueByQuizId[quiz.id] = endDate ? endDate < now : false;
+    if (quiz.startDate) {
+      opensAtLabelByQuizId[quiz.id] = formatDateTimeStable(quiz.startDate);
+    }
     if (quiz.endDate) {
       dueDateLabelByQuizId[quiz.id] = formatDateTimeStable(quiz.endDate);
     }
@@ -136,7 +144,9 @@ export default async function StudentQuizzesPage() {
           bestPercentageByQuizId={bestPercentageByQuizId}
           latestAttemptIdByQuizId={latestAttemptIdByQuizId}
           isOverdueByQuizId={isOverdueByQuizId}
+          isNotStartedByQuizId={isNotStartedByQuizId}
           dueDateLabelByQuizId={dueDateLabelByQuizId}
+          opensAtLabelByQuizId={opensAtLabelByQuizId}
         />
       </div>
     </AppShell>

@@ -3,6 +3,13 @@
 
 import * as Sentry from '@sentry/nextjs';
 
+import {
+  SENTRY_DENY_URLS,
+  SENTRY_IGNORE_ERRORS,
+  sentryEventMessage,
+  shouldIgnoreSentryMessage,
+} from '@/lib/sentryIgnore';
+
 const isProd = process.env.NODE_ENV === 'production';
 
 Sentry.init({
@@ -24,6 +31,13 @@ Sentry.init({
   // PII: stripped in production so cookies / headers / IPs do not flow into
   // Sentry. Replay still captures the page DOM — see Sentry docs for masking.
   sendDefaultPii: !isProd,
+
+  ignoreErrors: SENTRY_IGNORE_ERRORS,
+  denyUrls: SENTRY_DENY_URLS,
+  beforeSend(event) {
+    if (shouldIgnoreSentryMessage(sentryEventMessage(event))) return null;
+    return event;
+  },
 });
 
 export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;

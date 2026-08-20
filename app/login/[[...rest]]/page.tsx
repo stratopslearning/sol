@@ -1,5 +1,5 @@
 import { AuthShell } from "@/components/auth/AuthShell";
-import { AuthSignIn } from "@/components/auth/AuthSignIn";
+import { AuthSignInLazy } from "@/components/auth/AuthWidgetsLazy";
 
 export const metadata = {
   title: "Sign in",
@@ -12,7 +12,7 @@ export default function LoginPage() {
       description="Sign in to review attempts, publish quizzes, and clear the grading queue."
       footnote="Sessions are scoped to one device. Sign out by closing your browser when you are done."
     >
-      <AuthSignIn />
+      <AuthSignInLazy />
     </AuthShell>
   );
 }

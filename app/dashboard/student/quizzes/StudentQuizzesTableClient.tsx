@@ -32,6 +32,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/patterns/EmptyState";
+import { getQuizBlockCopy } from "@/lib/quizBlockCopy";
 import { normalizeDatabaseDate } from "@/lib/utils";
 
 const ROWS_PER_PAGE = 15;
@@ -41,6 +42,7 @@ type QuizRow = {
   id: string;
   title: string;
   endDate: Date | string | null;
+  startDate?: Date | string | null;
   maxAttempts: number;
   sectionNames: string[];
 };
@@ -70,7 +72,9 @@ export default function StudentQuizzesTableClient({
   bestPercentageByQuizId,
   latestAttemptIdByQuizId,
   isOverdueByQuizId,
+  isNotStartedByQuizId,
   dueDateLabelByQuizId,
+  opensAtLabelByQuizId,
 }: {
   quizzes: QuizRow[];
   submittedCountByQuizId: Record<string, number>;
@@ -78,7 +82,9 @@ export default function StudentQuizzesTableClient({
   bestPercentageByQuizId: Record<string, number>;
   latestAttemptIdByQuizId: Record<string, string>;
   isOverdueByQuizId: Record<string, boolean>;
+  isNotStartedByQuizId: Record<string, boolean>;
   dueDateLabelByQuizId: Record<string, string>;
+  opensAtLabelByQuizId: Record<string, string>;
 }) {
   const [search, setSearch] = useState("");
   const [sectionFilter, setSectionFilter] = useState<string>("ALL");
@@ -210,9 +216,13 @@ export default function StudentQuizzesTableClient({
               const maxAttempts = quiz.maxAttempts || 1;
               const canRetake = submittedCount < maxAttempts;
               const isOverdue = isOverdueByQuizId[quiz.id] ?? false;
+              const isNotStarted = isNotStartedByQuizId[quiz.id] ?? false;
+              const opensAtLabel = opensAtLabelByQuizId[quiz.id];
 
               let statusBadge: React.ReactNode;
-              if (isOverdue) {
+              if (isNotStarted) {
+                statusBadge = <Badge variant="info">Not open yet</Badge>;
+              } else if (isOverdue) {
                 statusBadge = <Badge variant="destructive">Overdue</Badge>;
               } else if (hasSubmitted) {
                 statusBadge = <Badge variant="info">Attempted</Badge>;
@@ -222,19 +232,43 @@ export default function StudentQuizzesTableClient({
                 statusBadge = <Badge variant="outline">Open</Badge>;
               }
 
+              const toastBlockedStart = (code: "quiz_not_started" | "quiz_ended") => {
+                const copy = getQuizBlockCopy(code, {
+                  opensAtLabel,
+                  closedAtLabel: dueDateLabelByQuizId[quiz.id],
+                });
+                if (code === "quiz_not_started") {
+                  toast.info(copy.title, {
+                    description: copy.description,
+                    duration: 8000,
+                  });
+                } else {
+                  toast.error(copy.title, {
+                    description: copy.description,
+                    duration: 8000,
+                  });
+                }
+              };
+
               let actionButton: React.ReactNode;
-              if (isOverdue && (!hasSubmitted && !inProgress || canRetake)) {
+              if (isNotStarted && !inProgress) {
                 actionButton = (
                   <Button
                     type="button"
                     size="sm"
                     variant="outline"
-                    onClick={() =>
-                      toast.error("Quiz due date has passed", {
-                        description:
-                          "This quiz is closed and can no longer be started or retaken.",
-                      })
-                    }
+                    onClick={() => toastBlockedStart("quiz_not_started")}
+                  >
+                    Start
+                  </Button>
+                );
+              } else if (isOverdue && (!hasSubmitted && !inProgress || canRetake)) {
+                actionButton = (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => toastBlockedStart("quiz_ended")}
                   >
                     {hasSubmitted || inProgress ? "Retake" : "Start"}
                   </Button>

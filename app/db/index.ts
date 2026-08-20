@@ -16,6 +16,13 @@ if (typeof WebSocket === 'undefined') {
   neonConfig.webSocketConstructor = ws;
 }
 
+// Prefer HTTP fetch for pooled queries on serverless. Neon idle WebSockets are
+// what produce "Connection terminated unexpectedly" on Vercel after the
+// compute suspends; fetch reconnects per query instead of holding a socket.
+if (typeof neonConfig.poolQueryViaFetch !== 'undefined') {
+  neonConfig.poolQueryViaFetch = true;
+}
+
 // One Pool per Lambda/edge instance. Cap at 1 connection: the default node-pg
 // `max` of 10 times hundreds of warm Vercel instances exhausts Neon compute
 // (≈100 connections at 0.25 CU). Prefer Neon's pooled (`-pooler`) DATABASE_URL.
@@ -47,9 +54,15 @@ const pool =
   new Pool({
     connectionString,
     max: poolMax,
-    idleTimeoutMillis: 10_000,
+    idleTimeoutMillis: 5_000,
     connectionTimeoutMillis: 10_000,
   });
+
+pool.on('error', (error: Error) => {
+  // Idle-client disconnects are expected with Neon's proxy. Swallow so they
+  // do not become unhandled 'error' events; the next query opens a new socket.
+  console.error('[db] neon pool error', error);
+});
 
 if (process.env.NODE_ENV !== 'production') {
   globalThis.__neonPool__ = pool;

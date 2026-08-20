@@ -144,7 +144,16 @@ export function TwinklePixels({ className }: { className?: string }) {
     draw(0);
     if (!reduceMotion) raf = requestAnimationFrame(loop);
 
-    const ro = new ResizeObserver(resize);
+    let resizeRaf = 0;
+    const scheduleResize = () => {
+      if (resizeRaf) return;
+      resizeRaf = requestAnimationFrame(() => {
+        resizeRaf = 0;
+        resize();
+      });
+    };
+
+    const ro = new ResizeObserver(scheduleResize);
     ro.observe(wrap);
 
     const io = new IntersectionObserver(
@@ -170,6 +179,7 @@ export function TwinklePixels({ className }: { className?: string }) {
     return () => {
       running = false;
       cancelAnimationFrame(raf);
+      cancelAnimationFrame(resizeRaf);
       ro.disconnect();
       io.disconnect();
       mo.disconnect();

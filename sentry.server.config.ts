@@ -3,6 +3,13 @@
 
 import * as Sentry from '@sentry/nextjs';
 
+import {
+  SENTRY_DENY_URLS,
+  SENTRY_IGNORE_ERRORS,
+  sentryEventMessage,
+  shouldIgnoreSentryMessage,
+} from '@/lib/sentryIgnore';
+
 const isProd = process.env.NODE_ENV === 'production';
 
 Sentry.init({
@@ -24,6 +31,10 @@ Sentry.init({
   // can contain PII that we don't want in our incident reports.
   sendDefaultPii: !isProd,
 
-  // Don't trip on the throws we use as control-flow inside webhook retries.
-  ignoreErrors: ['MaxAttemptsExceededError', 'SentryExampleAPIError'],
+  ignoreErrors: SENTRY_IGNORE_ERRORS,
+  denyUrls: SENTRY_DENY_URLS,
+  beforeSend(event) {
+    if (shouldIgnoreSentryMessage(sentryEventMessage(event))) return null;
+    return event;
+  },
 });

@@ -1,6 +1,6 @@
 import { AppShell } from "@/components/layout/AppShell";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { getOrCreateUser } from "@/lib/getOrCreateUser";
+import { requireProfessor } from "@/lib/auth";
 import { withBasePath } from "@/lib/basePath";
 import { listProfessorApiTokens } from "@/lib/professorApiTokens";
 
@@ -9,10 +9,7 @@ import AgentAccessClient from "./AgentAccessClient";
 export const dynamic = "force-dynamic";
 
 export default async function ProfessorAgentAccessPage() {
-  const user = await getOrCreateUser();
-  if (!user || (user.role !== "PROFESSOR" && user.role !== "ADMIN")) {
-    return null;
-  }
+  const user = await requireProfessor();
 
   let tokens: Awaited<ReturnType<typeof listProfessorApiTokens>> = [];
   try {

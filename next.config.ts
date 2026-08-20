@@ -27,7 +27,7 @@ const nextConfig: NextConfig = {
       // Production drops 'unsafe-eval'; Next.js production bundles do not
       // require it. Dev keeps eval for webpack/HMR.
       [
-        `script-src 'self' 'unsafe-inline'${process.env.NODE_ENV === 'production' ? '' : " 'unsafe-eval'"}`,
+        `script-src 'self' 'unsafe-inline' blob:${process.env.NODE_ENV === 'production' ? '' : " 'unsafe-eval'"}`,
         'https://*.clerk.accounts.dev',
         'https://*.clerk.com',
         clerkFrontendApi,

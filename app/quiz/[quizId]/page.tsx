@@ -9,22 +9,50 @@ import {
   quizzes,
   sections,
 } from '@/app/db/schema';
+import { AppShell } from '@/components/layout/AppShell';
 import { QuizTakeForm } from '@/components/quiz/QuizTakeForm';
+import { QuizUnavailable } from '@/components/quiz/QuizUnavailable';
 import { activeOnly } from '@/lib/db/filters';
 import { isStudentEntitled } from '@/lib/featureFlags';
-import { getOrCreateUser } from '@/lib/getOrCreateUser';
+import { getOrCreateUser, type UserData } from '@/lib/getOrCreateUser';
 import { getQuizAvailability } from '@/lib/quizAvailability';
+import {
+  availabilityReasonToBlockCode,
+  type QuizBlockCode,
+} from '@/lib/quizBlockCopy';
 import { assertStudentCanOpenQuiz } from '@/lib/quizEnrollment';
 import { resolveAttemptSectionId } from '@/lib/resolveAttemptSection';
-import {
-  isSectionConcluded,
-  SECTION_CONCLUDED_MESSAGE,
-} from '@/lib/sectionAvailability';
+import { isSectionConcluded } from '@/lib/sectionAvailability';
 import { appRedirect } from '@/lib/serverRedirect';
-import { cleanQuizDescription, normalizeDatabaseDate } from '@/lib/utils';
+import {
+  cleanQuizDescription,
+  formatDateTimeStable,
+  normalizeDatabaseDate,
+} from '@/lib/utils';
 
 interface QuizPageProps {
   params: Promise<{ quizId: string }>;
+}
+
+function blocked(
+  user: UserData,
+  props: {
+    code: QuizBlockCode;
+    quizTitle?: string | null;
+    opensAtLabel?: string | null;
+    closedAtLabel?: string | null;
+  },
+) {
+  return (
+    <AppShell
+      role="student"
+      user={user}
+      topbarEyebrow="Learner"
+      topbarTitle={props.quizTitle || 'Quiz'}
+    >
+      <QuizUnavailable {...props} />
+    </AppShell>
+  );
 }
 
 export default async function QuizPage(props: QuizPageProps) {
@@ -36,28 +64,29 @@ export default async function QuizPage(props: QuizPageProps) {
   if (user.role !== 'STUDENT') appRedirect('/payment');
   if (!isStudentEntitled(user)) appRedirect('/payment');
 
-  // Fetch quiz details. Soft-deleted (deletedAt set) quizzes are treated as
-  // not found to keep the redirect behavior identical for students.
+  // Soft-deleted quizzes are treated as unavailable (do not dump to home).
   const quiz = await db.query.quizzes.findFirst({
     where: and(eq(quizzes.id, quizId), activeOnly(quizzes.deletedAt)),
   });
-  if (!quiz) appRedirect('/dashboard/student');
+  if (!quiz) return blocked(user, { code: 'quiz_unavailable' });
 
-  // Validate quiz availability dates
-  // Normalize dates to ensure correct UTC comparison
   const now = new Date();
   const startDate = normalizeDatabaseDate(quiz.startDate);
   const endDate = normalizeDatabaseDate(quiz.endDate);
 
   if (startDate && now < startDate) {
-    appRedirect(
-      `/dashboard/student?error=quiz_not_started&quizId=${quizId}&message=${encodeURIComponent('This quiz has not started yet.')}`,
-    );
+    return blocked(user, {
+      code: 'quiz_not_started',
+      quizTitle: quiz.title,
+      opensAtLabel: formatDateTimeStable(startDate),
+    });
   }
   if (endDate && now > endDate) {
-    appRedirect(
-      `/dashboard/student?error=quiz_ended&quizId=${quizId}&message=${encodeURIComponent('This quiz has ended.')}`,
-    );
+    return blocked(user, {
+      code: 'quiz_ended',
+      quizTitle: quiz.title,
+      closedAtLabel: formatDateTimeStable(endDate),
+    });
   }
 
   // Enrollment before questions — unenrolled students must not see the bank
@@ -71,7 +100,9 @@ export default async function QuizPage(props: QuizPageProps) {
     quizSectionIds,
   );
   const open = assertStudentCanOpenQuiz(resolvedSectionId);
-  if (!open.allowed) appRedirect('/dashboard/student');
+  if (!open.allowed) {
+    return blocked(user, { code: 'not_enrolled', quizTitle: quiz.title });
+  }
   const sectionId = open.sectionId;
 
   // Fetch or create assignment (upsert-safe for concurrent page loads in dev).
@@ -98,7 +129,7 @@ export default async function QuizPage(props: QuizPageProps) {
     });
   }
   if (!assignment) {
-    appRedirect('/dashboard/student');
+    return blocked(user, { code: 'quiz_unavailable', quizTitle: quiz.title });
   }
 
   const [quizQuestions, inProgressAttempt, section] = await Promise.all([
@@ -119,27 +150,20 @@ export default async function QuizPage(props: QuizPageProps) {
   ]);
 
   if (isSectionConcluded(section, now) && !inProgressAttempt) {
-    appRedirect(
-      `/dashboard/student?error=section_concluded&quizId=${quizId}&message=${encodeURIComponent(SECTION_CONCLUDED_MESSAGE)}`,
-    );
+    return blocked(user, {
+      code: 'section_concluded',
+      quizTitle: quiz.title,
+    });
   }
 
   const availability = getQuizAvailability(quiz, assignment, now);
   if (!availability.allowed && !inProgressAttempt) {
-    const messages = {
-      quizNotStarted: 'This quiz has not started yet.',
-      quizEnded: 'This quiz has ended.',
-      dueDatePassed: 'The due date for this assignment has passed.',
-    } as const;
-    const errorParam =
-      availability.reason === 'quizNotStarted'
-        ? 'quiz_not_started'
-        : availability.reason === 'quizEnded'
-          ? 'quiz_ended'
-          : 'due_date_passed';
-    appRedirect(
-      `/dashboard/student?error=${errorParam}&quizId=${quizId}&message=${encodeURIComponent(messages[availability.reason])}`,
-    );
+    return blocked(user, {
+      code: availabilityReasonToBlockCode(availability.reason),
+      quizTitle: quiz.title,
+      opensAtLabel: startDate ? formatDateTimeStable(startDate) : null,
+      closedAtLabel: endDate ? formatDateTimeStable(endDate) : null,
+    });
   }
 
   const quizEndDate = normalizeDatabaseDate(quiz.endDate);

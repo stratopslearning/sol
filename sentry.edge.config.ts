@@ -3,6 +3,13 @@
 
 import * as Sentry from '@sentry/nextjs';
 
+import {
+  SENTRY_DENY_URLS,
+  SENTRY_IGNORE_ERRORS,
+  sentryEventMessage,
+  shouldIgnoreSentryMessage,
+} from '@/lib/sentryIgnore';
+
 const isProd = process.env.NODE_ENV === 'production';
 
 Sentry.init({
@@ -14,4 +21,10 @@ Sentry.init({
   tracesSampleRate: isProd ? 0.1 : 1,
   enableLogs: !isProd,
   sendDefaultPii: !isProd,
+  ignoreErrors: SENTRY_IGNORE_ERRORS,
+  denyUrls: SENTRY_DENY_URLS,
+  beforeSend(event) {
+    if (shouldIgnoreSentryMessage(sentryEventMessage(event))) return null;
+    return event;
+  },
 });

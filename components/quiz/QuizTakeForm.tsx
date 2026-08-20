@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
+import { QuizUnavailable } from "@/components/quiz/QuizUnavailable";
 import { QuizTimer } from "@/components/quiz/QuizTimer";
 import { Clock } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -18,6 +19,10 @@ import { useRef, useEffect, useCallback } from "react";
 import { getRemainingSeconds } from "@/lib/quizTimeLimit";
 import { formatDateTimeUTC, shouldHideFeedbackForStudent, cleanQuizDescription } from "@/lib/utils";
 import { apiUrl, withBasePath } from "@/lib/basePath";
+import {
+  startApiErrorToBlockCode,
+  type QuizBlockCode,
+} from "@/lib/quizBlockCopy";
 
 interface QuizTakeFormProps {
   quiz: {
@@ -61,6 +66,7 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
   const [timerInitialSeconds, setTimerInitialSeconds] = useState<number | null>(null);
   const [showResumeWarning, setShowResumeWarning] = useState(false);
   const [quizStarted, setQuizStarted] = useState(false);
+  const [startBlock, setStartBlock] = useState<QuizBlockCode | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
 
   const router = useRouter();
@@ -134,11 +140,14 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
           setQuizStarted(true);
         } else {
           const error = await res.json();
-          toast.error("Failed to start quiz", { description: error.error });
-          // Redirect back if quiz can't be started
-          if (error.quizNotStarted || error.quizEnded || error.dueDatePassed) {
-            router.push('/dashboard/student');
+          const block = startApiErrorToBlockCode(error);
+          if (block) {
+            setStartBlock(block);
+            return;
           }
+          toast.error("Failed to start quiz", {
+            description: error.error || "Please try again in a moment.",
+          });
         }
       } catch (err) {
         console.error('Error starting quiz:', err);
@@ -362,6 +371,20 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
   };
 
   // --- UI ---
+  if (startBlock) {
+    return (
+      <div className="bg-paper text-ink min-h-screen flex items-center justify-center px-4">
+        <div className="w-full max-w-lg">
+          <QuizUnavailable
+            code={startBlock}
+            quizTitle={quiz.title}
+            closedAtLabel={quiz.endDate ? formatDateTimeUTC(quiz.endDate) : null}
+          />
+        </div>
+      </div>
+    );
+  }
+
   if (submitted) {
     const totalPoints = questions.reduce((a, q) => a + q.points, 0);
     return (
