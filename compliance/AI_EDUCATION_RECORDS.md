@@ -20,6 +20,27 @@ Complete in the OpenAI organization that holds the production `OPENAI_API_KEY`:
 - **Access:** AI feedback (`gptFeedback`) is part of the education record and is role-gated via [`lib/quizAccess.ts`](../lib/quizAccess.ts).
 - **Integrity:** scores are computed in TypeScript from rubric matches; model output alone is not trusted as a raw numeric grade.
 
+## Braintrust (LLM/agent observability + evals)
+
+SOL may send minimized education-record text (student answers, discussion messages) to **Braintrust** for production tracing and synthetic regression evals. MCP traces log tool names and outcome classes only — not gradebook rows, attempt payloads, or discussion transcripts.
+
+### Production configuration checklist
+
+Complete before enabling production tracing (`BRAINTRUST_API_KEY` in Vercel Production):
+
+1. Execute Braintrust **DPA** / subprocessor terms suitable for FERPA education records.
+2. Disable **training** on customer content for the Braintrust project/org.
+3. Set **retention** to the shortest practical window (align with OpenAI ZDR posture).
+4. Configure **`BRAINTRUST_SAMPLE_RATE`** (default `0.2` in production) — failures are always logged.
+5. Never attach profile PII in trace metadata (Clerk IDs, emails, names, token IDs). Application code enforces this in [`lib/ai/tracing.ts`](../lib/ai/tracing.ts).
+6. Run synthetic evals via `npm run eval` / [`.github/workflows/evals.yml`](../.github/workflows/evals.yml) — eval datasets contain **no live student data**.
+
+### Application controls
+
+- **Sampling:** [`lib/ai/tracing.ts`](../lib/ai/tracing.ts) no-ops when `BRAINTRUST_API_KEY` is unset (same pattern as optional Sentry).
+- **OpenAI wrapping:** [`lib/ai/openai.ts`](../lib/ai/openai.ts) uses `wrapOpenAI` only when Braintrust is enabled.
+- **MCP:** tool argument values and return payloads are **not** sent to Braintrust; audit attribution stays in [`audit_log`](../app/db/schema.ts).
+
 ## Incident note
 
 If OpenAI retention or training settings drift, treat as a potential unauthorized redisclosure: follow [`policies/INCIDENT_RESPONSE.md`](./policies/INCIDENT_RESPONSE.md) and notify institutional contacts per the FERPA rider.

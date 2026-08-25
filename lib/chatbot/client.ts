@@ -1,9 +1,8 @@
-import OpenAI from 'openai';
+import { createOpenAIClient } from '@/lib/ai/openai';
 
 import { CHATBOT_MODEL } from '@/lib/chatbot/constants';
 
-export const chatbotOpenAI = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+export const chatbotOpenAI = createOpenAIClient({
   maxRetries: 2,
   timeout: 20_000,
 });

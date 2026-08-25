@@ -16,6 +16,10 @@ import ws from 'ws';
 loadEnv({ path: '.env', quiet: true });
 loadEnv({ path: '.env.local', override: true, quiet: true });
 
+// Unit tests mock the OpenAI SDK; Braintrust's wrapOpenAI cannot proxy those
+// mocks. Keep tracing off in Vitest regardless of a local .env key.
+delete process.env.BRAINTRUST_API_KEY;
+
 const DEFAULT_ENV: Record<string, string> = {
   NODE_ENV: 'test',
   CLERK_SECRET_KEY: 'sk_test_dummy',

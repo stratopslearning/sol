@@ -16,4 +16,4 @@ Default classification: **education record** (not directory information) for all
 | Agent tokens | `professor_api_tokens` | Token hash, prefix, scopes, usage timestamps (no plaintext) | Credential / security | Owner professor; see [MCP_AGENT_ACCESS.md](./MCP_AGENT_ACCESS.md) |
 | Payments | `stripe_events`, Stripe | Payment metadata | Financial (linked to user) | System / ADMIN ops |
 
-**Outbound processors:** OpenAI receives minimized student answer text and discussion messages for grading/Socratic chat — see [`AI_EDUCATION_RECORDS.md`](./AI_EDUCATION_RECORDS.md).
+**Outbound processors:** OpenAI receives minimized student answer text and discussion messages for grading/Socratic chat — see [`AI_EDUCATION_RECORDS.md`](./AI_EDUCATION_RECORDS.md). Braintrust (when enabled) receives the same minimized LLM prompt/completion traces plus MCP tool metadata — see Braintrust section in that doc.

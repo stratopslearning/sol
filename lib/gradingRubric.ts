@@ -9,19 +9,19 @@
  * `questions.rubric_version` (done by the quiz update routes when the
  * question text or reference answer changes).
  */
-import OpenAI from 'openai';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { db } from '@/app/db';
 import { questions } from '@/app/db/schema';
+import { createOpenAIClient } from '@/lib/ai/openai';
+import { hashId, logAiSpan } from '@/lib/ai/tracing';
 import { detectRequiredMatchCount } from '@/lib/gradingQuestionIntent';
 import { GRADING_MODEL_VERSION, type RubricCriterion } from '@/lib/gradingTypes';
 
 const RUBRIC_DERIVATION_TIMEOUT_MS = 20_000;
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+const openai = createOpenAIClient({
   maxRetries: 2,
   timeout: RUBRIC_DERIVATION_TIMEOUT_MS,
 });
@@ -317,6 +317,17 @@ export async function getOrDeriveRubric(
 
   try {
     const rubric = await callRubricModel(question.question, correctAnswer);
+    void logAiSpan(
+      'deriveRubric',
+      'rubric',
+      {
+        model: GRADING_MODEL_VERSION,
+        questionIdHash: hashId(question.id),
+        criterionCount: rubric.length,
+        status: 'derived',
+      },
+      { isFailure: false },
+    );
     try {
       await db
         .update(questions)
@@ -332,6 +343,17 @@ export async function getOrDeriveRubric(
     };
   } catch (error) {
     console.warn('rubric derivation failed; using fallback:', error);
+    void logAiSpan(
+      'deriveRubric',
+      'rubric',
+      {
+        model: GRADING_MODEL_VERSION,
+        questionIdHash: hashId(question.id),
+        status: 'fallback',
+        error: error instanceof Error ? error.message : String(error),
+      },
+      { isFailure: true },
+    );
     return {
       rubric: fallbackRubric(),
       rubricVersion: question.rubricVersion,

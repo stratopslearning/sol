@@ -8,6 +8,10 @@
  */
 import { ApiError } from '@/lib/api/errors';
 import type { ProfessorApiAuth } from '@/lib/api/professorAuth';
+import {
+  classifyMcpToolResponse,
+  logAiSpan,
+} from '@/lib/ai/tracing';
 import { zodToJsonSchema } from '@/lib/mcp/jsonSchema';
 import { MCP_TOOLS, MCP_TOOLS_BY_NAME } from '@/lib/mcp/tools';
 
@@ -99,8 +103,41 @@ async function handleToolsCall(
 ): Promise<JsonRpcResponse> {
   const name = params?.name;
   if (typeof name !== 'string') {
-    return rpcError(id, INVALID_PARAMS, 'Missing tool name');
+    const response = rpcError(id, INVALID_PARAMS, 'Missing tool name');
+    void logAiSpan(
+      'mcp.tools.call',
+      'mcp',
+      {
+        toolName: 'unknown',
+        authVia: auth.viaOAuth ? 'oauth' : 'pat',
+        outcome: 'missing_tool_name',
+      },
+      { isFailure: true },
+    );
+    return response;
   }
+
+  const response = await handleToolsCallInner(id, params, auth, name);
+  const outcome = classifyMcpToolResponse(response);
+  void logAiSpan(
+    'mcp.tools.call',
+    'mcp',
+    {
+      toolName: name,
+      authVia: auth.viaOAuth ? 'oauth' : 'pat',
+      outcome,
+    },
+    { isFailure: outcome !== 'success' },
+  );
+  return response;
+}
+
+async function handleToolsCallInner(
+  id: string | number | null,
+  params: Record<string, unknown> | undefined,
+  auth: ProfessorApiAuth,
+  name: string,
+): Promise<JsonRpcResponse> {
   const tool = MCP_TOOLS_BY_NAME.get(name);
   if (!tool) {
     return rpcError(id, INVALID_PARAMS, `Unknown tool: ${name}`);

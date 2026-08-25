@@ -15,6 +15,7 @@
     "db:backfill-stripe-customer": "tsx scripts/backfill-stripe-customer.ts",
     "test": "vitest run",
     "test:watch": "vitest",
+    "eval": "tsx evals/run.ts",
     "load-test:seed": "tsx scripts/load-test/seed.ts",
     "load-test:cleanup": "tsx scripts/load-test/cleanup.ts",
     "load-test:k6": "bash load-test/k6/run.sh"
@@ -57,6 +58,7 @@
     "@types/ws": "^8.18.1",
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.38.0",
+    "braintrust": "^3.28.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",

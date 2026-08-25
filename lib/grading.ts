@@ -16,10 +16,10 @@
  * (submit / regrade / cron worker) writes a StoredFeedback with that status
  * and excludes the question from `attempts.score` until it resolves.
  */
-import OpenAI from 'openai';
-import { z } from 'zod';
-
+import { createOpenAIClient } from '@/lib/ai/openai';
 import { minimizeStudentTextForAi } from '@/lib/ai/minimizeEducationPayload';
+import { hashId, logAiSpan } from '@/lib/ai/tracing';
+import { z } from 'zod';
 import {
   cachedPayloadToFeedback,
   lookupCachedGrading,
@@ -51,11 +51,7 @@ export {
 } from '@/lib/gradingTypes';
 export { computeScoreFromRubric } from '@/lib/gradingRubric';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-  maxRetries: 2,
-  timeout: 25_000,
-});
+const openai = createOpenAIClient({ maxRetries: 2, timeout: 25_000 });
 
 const MAX_FIELD_LENGTH = 8_000;
 
@@ -338,6 +334,19 @@ function logGradingFailure(
     maxPoints: request.maxPoints,
     answerLength: request.studentAnswer?.length ?? 0,
   });
+  void logAiSpan(
+    'gradeShortAnswer',
+    'grading',
+    {
+      model: GRADING_MODEL_VERSION,
+      questionIdHash: hashId(request.questionId),
+      maxPoints: request.maxPoints,
+      status: 'pending',
+      failureReason,
+      detail,
+    },
+    { isFailure: true },
+  );
 }
 
 /**
@@ -403,7 +412,7 @@ export async function gradeShortAnswer(
       modelVersion: GRADING_MODEL_VERSION,
     });
     if (cached) {
-      return {
+      const cachedOutcome: GradedOutcome = {
         status: 'graded',
         score: cached.score,
         feedback: cached.feedback,
@@ -416,6 +425,20 @@ export async function gradeShortAnswer(
         requiredMatchCount: cached.requiredMatchCount ?? requiredMatchCount,
         cached: true,
       };
+      void logAiSpan(
+        'gradeShortAnswer',
+        'grading',
+        {
+          model: GRADING_MODEL_VERSION,
+          questionIdHash: hashId(request.questionId),
+          maxPoints,
+          status: 'graded',
+          cached: true,
+          score: cachedOutcome.score,
+        },
+        { isFailure: false },
+      );
+      return cachedOutcome;
     }
   }
 
@@ -502,7 +525,7 @@ export async function gradeShortAnswer(
     });
   }
 
-  return {
+  const gradedOutcome: GradedOutcome = {
     status: 'graded',
     score,
     feedback,
@@ -514,6 +537,22 @@ export async function gradeShortAnswer(
     maxPoints,
     requiredMatchCount,
   };
+
+  void logAiSpan(
+    'gradeShortAnswer',
+    'grading',
+    {
+      model: GRADING_MODEL_VERSION,
+      questionIdHash: hashId(request.questionId),
+      maxPoints,
+      status: 'graded',
+      cached: false,
+      score,
+    },
+    { isFailure: false },
+  );
+
+  return gradedOutcome;
 }
 
 /**
