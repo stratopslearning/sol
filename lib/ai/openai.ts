@@ -20,7 +20,9 @@ export function createOpenAIClient(
     timeout: options.timeout ?? 25_000,
   });
 
-  if (isBraintrustEnabled()) {
+  // Skip wrapping in Vitest / when Braintrust is unset. wrapOpenAI expects a
+  // real OpenAI SDK instance and breaks on vi.mock('openai') constructors.
+  if (isBraintrustEnabled() && process.env.NODE_ENV !== 'test') {
     initBraintrustLogger();
     return wrapOpenAI(client);
   }
