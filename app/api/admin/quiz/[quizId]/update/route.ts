@@ -7,6 +7,10 @@ import { db } from '@/app/db';
 import { quizSections, quizzes, users } from '@/app/db/schema';
 import { upsertQuizQuestions } from '@/lib/quizQuestionUpsert';
 import {
+  isoDateTimeRequired,
+  quizWindowSuperRefine,
+} from '@/lib/quizSchemas';
+import {
   buildQuizDescriptionWithMetadata,
   extractQuizMetadata,
 } from '@/lib/utils';
@@ -14,20 +18,15 @@ import { readJsonBody } from '@/lib/api/readJsonBody';
 
 export const dynamic = 'force-dynamic';
 
-const isoDateString = z
-  .string()
-  .refine((v) => !Number.isNaN(new Date(v).getTime()), {
-    message: 'Invalid date string',
-  });
-
-const adminQuizUpdateSchema = z.object({
+const adminQuizUpdateSchema = z
+  .object({
   title: z.string().min(1).max(200),
   description: z.string().max(8_000).optional().nullable(),
   maxAttempts: z.number().int().min(1).max(20),
   timeLimit: z.number().int().min(1).max(24 * 60).optional().nullable(),
   passingScore: z.number().int().min(0).max(100).default(60),
-  startDate: isoDateString.optional().nullable(),
-  endDate: isoDateString.optional().nullable(),
+  startDate: isoDateTimeRequired,
+  endDate: isoDateTimeRequired,
   isActive: z.boolean().default(true),
   questions: z
     .array(
@@ -44,7 +43,8 @@ const adminQuizUpdateSchema = z.object({
   sectionIds: z
     .array(z.string().uuid())
     .min(1, 'At least one section must be assigned to the quiz.'),
-});
+})
+  .superRefine(quizWindowSuperRefine);
 
 export async function PUT(
   request: NextRequest,
@@ -93,8 +93,8 @@ export async function PUT(
           maxAttempts: data.maxAttempts,
           timeLimit: data.timeLimit ?? null,
           passingScore: data.passingScore,
-          startDate: data.startDate ? new Date(data.startDate) : null,
-          endDate: data.endDate ? new Date(data.endDate) : null,
+          startDate: new Date(data.startDate),
+          endDate: new Date(data.endDate),
           isActive: data.isActive,
           updatedAt: new Date(),
         })

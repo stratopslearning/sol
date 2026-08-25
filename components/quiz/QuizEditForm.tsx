@@ -134,6 +134,7 @@ export function QuizEditForm({ quiz, courses, apiEndpoint = `/api/professor/quiz
     hideFeedbackAfterDue: quizMetadata.hideFeedbackAfterDue,
   });
   const [passingScoreError, setPassingScoreError] = useState<string | null>(null);
+  const [windowError, setWindowError] = useState<string | null>(null);
 
   const [questions, setQuestions] = useState<Question[]>(
     (quiz.questions || []).map(normalizeQuestion),
@@ -201,6 +202,16 @@ export function QuizEditForm({ quiz, courses, apiEndpoint = `/api/professor/quiz
     }
     setPassingScoreError(null);
 
+    if (
+      !formData.startDate ||
+      !formData.startTime ||
+      !formData.endDate ||
+      !formData.endTime
+    ) {
+      setWindowError('Start and end date and time are required.');
+      return;
+    }
+
     // Combine date and time into ISO strings
     // The user enters time in their local timezone (e.g., "2:00 PM")
     // We need to store it as UTC, but interpret the input as local time
@@ -227,15 +238,18 @@ export function QuizEditForm({ quiz, courses, apiEndpoint = `/api/professor/quiz
     const startDateTime = combineDateTime(formData.startDate, formData.startTime);
     const endDateTime = combineDateTime(formData.endDate, formData.endTime);
 
-    // Validate that end date/time is after start date/time
-    if (startDateTime && endDateTime) {
-      const start = new Date(startDateTime);
-      const end = new Date(endDateTime);
-      if (end <= start) {
-        alert('End date and time must be after start date and time');
-        return;
-      }
+    if (!startDateTime || !endDateTime) {
+      setWindowError('Start and end date and time are required.');
+      return;
     }
+
+    const start = new Date(startDateTime);
+    const end = new Date(endDateTime);
+    if (end <= start) {
+      setWindowError('End date and time must be after start date and time');
+      return;
+    }
+    setWindowError(null);
 
     setIsSubmitting(true);
     try {
@@ -506,26 +520,29 @@ export function QuizEditForm({ quiz, courses, apiEndpoint = `/api/professor/quiz
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="flex flex-col gap-2">
-              <Label htmlFor="startDate">Start date & time</Label>
+              <Label htmlFor="startDate">Start date & time *</Label>
               <Input
                 id="startDate"
                 type="date"
+                required
                 value={formData.startDate}
                 onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
               />
               <Input
                 id="startTime"
                 type="time"
+                required
                 value={formData.startTime}
                 onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
               />
             </div>
 
             <div className="flex flex-col gap-2">
-              <Label htmlFor="endDate">End date & time (due)</Label>
+              <Label htmlFor="endDate">End date & time (due) *</Label>
               <Input
                 id="endDate"
                 type="date"
+                required
                 value={formData.endDate}
                 min={formData.startDate || undefined}
                 onChange={(e) => {
@@ -540,6 +557,7 @@ export function QuizEditForm({ quiz, courses, apiEndpoint = `/api/professor/quiz
               <Input
                 id="endTime"
                 type="time"
+                required
                 value={formData.endTime}
                 onChange={(e) => {
                   const newEndTime = e.target.value;
@@ -556,6 +574,9 @@ export function QuizEditForm({ quiz, courses, apiEndpoint = `/api/professor/quiz
                 <p className="text-xs text-ink-faint">
                   Same day: end time must be after {formData.startTime}.
                 </p>
+              )}
+              {windowError && (
+                <p className="text-sm text-red-600 md:col-span-2">{windowError}</p>
               )}
             </div>
           </div>

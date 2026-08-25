@@ -51,6 +51,7 @@ import {
   updateQuiz,
 } from '@/lib/professor/mutations';
 import { getAttentionItemsForProfessor } from '@/lib/professorAttention';
+import { isoDateTimeRequired, quizWindowSuperRefine } from '@/lib/quizSchemas';
 
 export interface McpToolContext {
   auth: ProfessorApiAuth;
@@ -251,7 +252,8 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     name: 'create_quiz',
     description:
       'Create a quiz with questions and assign it to sections I teach. Supports MULTIPLE_CHOICE, TRUE_FALSE, and SHORT_ANSWER (AI-graded against the reference answer).',
-    schema: z.object({
+    schema: z
+      .object({
       title: z.string().min(1),
       description: z.string().optional(),
       sectionIds: z
@@ -267,10 +269,13 @@ export const MCP_TOOLS: McpToolDefinition[] = [
         .max(100)
         .default(60)
         .describe('Passing percentage threshold'),
-      startDate: z.string().optional().describe('ISO datetime quiz opens'),
-      endDate: z.string().optional().describe('ISO datetime quiz closes (due date)'),
+      startDate: isoDateTimeRequired.describe('ISO datetime quiz opens'),
+      endDate: isoDateTimeRequired.describe(
+        'ISO datetime quiz closes (due date)',
+      ),
       questions: z.array(questionSchema).min(1),
-    }),
+    })
+      .superRefine(quizWindowSuperRefine),
     scope: 'quizzes:write',
     handler: (args, ctx) =>
       createQuiz(
@@ -282,7 +287,8 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     name: 'update_quiz',
     description:
       'Update a quiz I own. Replaces title, settings, questions, and section assignments with the provided values (fetch with get_quiz first, then send the full updated definition).',
-    schema: z.object({
+    schema: z
+      .object({
       quizId: z.string().uuid(),
       title: z.string().min(1),
       description: z.string().optional(),
@@ -290,11 +296,14 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       maxAttempts: z.number().int().min(1).max(10).default(1),
       timeLimit: z.number().int().min(1).optional(),
       passingScore: z.number().int().min(0).max(100).default(60),
-      startDate: z.string().optional(),
-      endDate: z.string().optional(),
+      startDate: isoDateTimeRequired.describe('ISO datetime quiz opens'),
+      endDate: isoDateTimeRequired.describe(
+        'ISO datetime quiz closes (due date)',
+      ),
       isActive: z.boolean().default(true),
       questions: z.array(questionSchema).min(1),
-    }),
+    })
+      .superRefine(quizWindowSuperRefine),
     scope: 'quizzes:write',
     handler: (args, ctx) => {
       const { quizId, ...rest } = args as { quizId: string } & Parameters<

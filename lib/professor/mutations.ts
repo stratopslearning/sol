@@ -55,6 +55,20 @@ async function enrolledSectionIds(userId: string): Promise<string[]> {
   return rows.map((r) => r.sectionId);
 }
 
+function requiredQuizWindow(startDate: string, endDate: string) {
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    throw ApiError.badRequest('Invalid date format');
+  }
+  if (end <= start) {
+    throw ApiError.badRequest(
+      'End date and time must be after start date and time',
+    );
+  }
+  return { start, end };
+}
+
 /** Mirrors POST /api/professor/enroll (PROFESSOR only). */
 export async function enrollInSection(
   user: ProfessorUser,
@@ -185,8 +199,8 @@ export async function createQuiz(
     maxAttempts: number;
     timeLimit?: number;
     passingScore: number;
-    startDate?: string;
-    endDate?: string;
+    startDate: string;
+    endDate: string;
     questions: QuizQuestionInput[];
   },
 ): Promise<{ id: string; title: string; sectionIds: string[] }> {
@@ -205,6 +219,8 @@ export async function createQuiz(
     );
   }
 
+  const { start, end } = requiredQuizWindow(input.startDate, input.endDate);
+
   const created = await db.transaction(async (tx) => {
     const [quiz] = await tx
       .insert(quizzes)
@@ -215,8 +231,8 @@ export async function createQuiz(
         maxAttempts: input.maxAttempts,
         timeLimit: input.timeLimit,
         passingScore: input.passingScore,
-        startDate: input.startDate ? new Date(input.startDate) : null,
-        endDate: input.endDate ? new Date(input.endDate) : null,
+        startDate: start,
+        endDate: end,
         isActive: true,
       })
       .returning();
@@ -260,8 +276,8 @@ export async function updateQuiz(
     maxAttempts: number;
     timeLimit?: number;
     passingScore: number;
-    startDate?: string;
-    endDate?: string;
+    startDate: string;
+    endDate: string;
     isActive: boolean;
     questions: QuizQuestionInput[];
   },
@@ -286,18 +302,7 @@ export async function updateQuiz(
     }
   }
 
-  if (input.startDate && input.endDate) {
-    const start = new Date(input.startDate);
-    const end = new Date(input.endDate);
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-      throw ApiError.badRequest('Invalid date format');
-    }
-    if (end <= start) {
-      throw ApiError.badRequest(
-        'End date and time must be after start date and time',
-      );
-    }
-  }
+  const { start, end } = requiredQuizWindow(input.startDate, input.endDate);
 
   await db.transaction(async (tx) => {
     await tx
@@ -308,8 +313,8 @@ export async function updateQuiz(
         maxAttempts: input.maxAttempts,
         timeLimit: input.timeLimit,
         passingScore: input.passingScore,
-        startDate: input.startDate ? new Date(input.startDate) : null,
-        endDate: input.endDate ? new Date(input.endDate) : null,
+        startDate: start,
+        endDate: end,
         isActive: input.isActive,
         updatedAt: new Date(),
       })

@@ -18,6 +18,7 @@ import { StatCard } from '@/components/patterns/StatCard';
 import { activeOnly } from '@/lib/db/filters';
 import { requireStudent } from '@/lib/auth';
 import { partitionEnrollmentsByConclusion } from '@/lib/sectionAvailability';
+import { isQuizListedForStudents } from '@/lib/quizAvailability';
 
 export default async function StudentDashboard() {
   const user = await requireStudent();
@@ -52,7 +53,9 @@ export default async function StudentDashboard() {
         })
       : [];
 
-  const activeQuizzes = availableQuizzes.filter((quiz) => quiz.isActive);
+  const activeQuizzes = availableQuizzes.filter((quiz) =>
+    isQuizListedForStudents(quiz),
+  );
   const uniqueActiveQuizzes = activeQuizzes.filter(
     (quiz, index, self) =>
       index === self.findIndex((q) => q.id === quiz.id),

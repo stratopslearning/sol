@@ -212,6 +212,8 @@ async function main() {
       sectionIds: [sectionId],
       maxAttempts: 1,
       passingScore: 70,
+      startDate: '2026-08-25T14:00:00.000Z',
+      endDate: '2026-12-31T23:59:00.000Z',
       questions: [
         {
           type: 'MULTIPLE_CHOICE',
@@ -269,6 +271,8 @@ async function main() {
       sectionIds: [sectionId!],
       maxAttempts: 2,
       passingScore: 60,
+      startDate: '2026-08-25T14:00:00.000Z',
+      endDate: '2026-12-31T23:59:00.000Z',
       isActive: true,
       questions: [
         {

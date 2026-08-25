@@ -55,8 +55,8 @@ export async function POST(req: NextRequest) {
         maxAttempts: validatedData.maxAttempts,
         timeLimit: validatedData.timeLimit,
         passingScore: validatedData.passingScore,
-        startDate: validatedData.startDate ? new Date(validatedData.startDate) : null,
-        endDate: validatedData.endDate ? new Date(validatedData.endDate) : null,
+        startDate: new Date(validatedData.startDate),
+        endDate: new Date(validatedData.endDate),
         isActive: true,
       }).returning();
 

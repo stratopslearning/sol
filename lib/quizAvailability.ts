@@ -41,6 +41,28 @@ export function getQuizAvailability(
   return { allowed: true };
 }
 
+/**
+ * Whether a published quiz should appear in student lists (dashboard, My
+ * quizzes). Taking is gated separately by `getQuizAvailability`.
+ *
+ * Hidden until `startDate` so a later chapter does not show up as "Not open
+ * yet" — it simply is not offered yet.
+ */
+export function isQuizListedForStudents(
+  quiz: {
+    isActive?: boolean | null;
+    deletedAt?: Date | string | null;
+    startDate?: Date | string | null;
+  },
+  now: Date = new Date(),
+): boolean {
+  if (quiz.deletedAt != null) return false;
+  if (!quiz.isActive) return false;
+  const startDate = normalizeDatabaseDate(quiz.startDate);
+  if (startDate && now < startDate) return false;
+  return true;
+}
+
 /** Whether the quiz window has closed (due date / end date), not "not started yet". */
 export function isQuizWindowClosed(
   quiz: {

@@ -14,17 +14,40 @@ export const quizQuestionInputSchema = z.object({
   order: z.number().min(0).max(500),
 });
 
-export const quizCreateBaseSchema = z.object({
-  title: z.string().min(1).max(200),
-  description: z.string().max(8_000).optional(),
-  sectionIds: z
-    .array(z.string().min(1))
-    .min(1, 'Select at least one section')
-    .max(50),
-  maxAttempts: z.number().min(1).max(10).default(1),
-  timeLimit: z.number().min(1).max(24 * 60).optional(),
-  passingScore: z.number().int().min(0).max(100).default(60),
-  startDate: z.string().optional(),
-  endDate: z.string().optional(),
-  questions: z.array(quizQuestionInputSchema).max(200),
-});
+export const isoDateTimeRequired = z
+  .string({ required_error: 'This date is required' })
+  .min(1, 'This date is required')
+  .refine((v) => !Number.isNaN(Date.parse(v)), { message: 'Invalid date' });
+
+export function quizWindowSuperRefine(
+  data: { startDate: string; endDate: string } & Record<string, unknown>,
+  ctx: z.RefinementCtx,
+) {
+  const start = new Date(data.startDate);
+  const end = new Date(data.endDate);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return;
+  if (end <= start) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['endDate'],
+      message: 'End date and time must be after start date and time',
+    });
+  }
+}
+
+export const quizCreateBaseSchema = z
+  .object({
+    title: z.string().min(1).max(200),
+    description: z.string().max(8_000).optional(),
+    sectionIds: z
+      .array(z.string().min(1))
+      .min(1, 'Select at least one section')
+      .max(50),
+    maxAttempts: z.number().min(1).max(10).default(1),
+    timeLimit: z.number().min(1).max(24 * 60).optional(),
+    passingScore: z.number().int().min(0).max(100).default(60),
+    startDate: isoDateTimeRequired,
+    endDate: isoDateTimeRequired,
+    questions: z.array(quizQuestionInputSchema).max(200),
+  })
+  .superRefine(quizWindowSuperRefine);

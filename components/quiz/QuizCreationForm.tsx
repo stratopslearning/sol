@@ -53,6 +53,16 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { SectionMultiSelect } from '@/components/ui/SectionMultiSelect';
 
+const quizDateWindow = {
+  startDate: z.date({ required_error: 'Start date is required' }),
+  endDate: z.date({ required_error: 'End date is required' }),
+};
+
+const quizWindowRefine = {
+  message: 'End date and time must be after start date and time',
+  path: ['endDate'],
+};
+
 // Form validation schemas
 const quizBasicSchema = z.object({
   title: z.string().min(1, 'Quiz title is required').max(100, 'Title must be less than 100 characters'),
@@ -64,19 +74,9 @@ const quizBasicSchema = z.object({
     .int('Passing score must be a whole number')
     .min(0, 'Passing score must be 0 or higher')
     .max(100, 'Passing score cannot exceed 100'),
-  startDate: z.date().optional(),
-  endDate: z.date().optional(),
+  ...quizDateWindow,
   hideFeedbackAfterDue: z.boolean(),
-}).refine((data) => {
-  if (data.startDate && data.endDate) {
-    // Allow same day, but end date/time must be after start date/time
-    return data.endDate >= data.startDate;
-  }
-  return true;
-}, {
-  message: "End date and time must be on or after start date and time",
-  path: ["endDate"],
-});
+}).refine((data) => data.endDate > data.startDate, quizWindowRefine);
 
 const questionSchema = z.object({
   question: z.string().min(1, 'Question text is required'),
@@ -96,20 +96,10 @@ const quizSchema = z.object({
     .int('Passing score must be a whole number')
     .min(0, 'Passing score must be 0 or higher')
     .max(100, 'Passing score cannot exceed 100'),
-  startDate: z.date().optional(),
-  endDate: z.date().optional(),
+  ...quizDateWindow,
   hideFeedbackAfterDue: z.boolean(),
   questions: z.array(questionSchema).min(1, 'At least one question is required'),
-}).refine((data) => {
-  if (data.startDate && data.endDate) {
-    // Allow same day, but end date/time must be after start date/time
-    return data.endDate >= data.startDate;
-  }
-  return true;
-}, {
-  message: "End date and time must be on or after start date and time",
-  path: ["endDate"],
-});
+}).refine((data) => data.endDate > data.startDate, quizWindowRefine);
 
 type QuizFormData = z.infer<typeof quizSchema>;
 
@@ -314,8 +304,8 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
         },
         body: JSON.stringify({
           ...data,
-          startDate: data.startDate ? data.startDate.toISOString() : undefined,
-          endDate: data.endDate ? data.endDate.toISOString() : undefined,
+          startDate: data.startDate.toISOString(),
+          endDate: data.endDate.toISOString(),
           description: buildQuizDescriptionWithMetadata(
             data.description,
             data.hideFeedbackAfterDue,
@@ -343,7 +333,30 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
     }
   };
 
-  const nextStep = () => {
+  const nextStep = async () => {
+    if (currentStep === 1) {
+      const parsed = quizBasicSchema.safeParse(form.getValues());
+      if (!parsed.success) {
+        for (const issue of parsed.error.issues) {
+          const path = issue.path[0];
+          if (typeof path === 'string') {
+            form.setError(path as keyof QuizFormData, {
+              type: 'manual',
+              message: issue.message,
+            });
+          }
+        }
+        await form.trigger([
+          'title',
+          'maxAttempts',
+          'timeLimit',
+          'passingScore',
+          'startDate',
+          'endDate',
+        ]);
+        return;
+      }
+    }
     if (currentStep < 3) {
       setCurrentStep(currentStep + 1);
     }
@@ -579,7 +592,7 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
                     name="startDate"
                     render={({ field }) => (
                       <FormItem className="flex flex-col">
-                        <FormLabel>Start date & time</FormLabel>
+                        <FormLabel>Start date & time *</FormLabel>
                         <p className="text-xs text-ink-faint mb-2">When learners can begin taking this quiz</p>
                         <div className="space-y-2">
                           <Popover>
@@ -627,7 +640,7 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
                               }
                             }}
                             defaultValue={field.value ? format(field.value, 'HH:mm') : ''}
-                            required={!!field.value}
+                            required
                           />
                         </div>
                         <FormMessage />
@@ -640,7 +653,7 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
                     name="endDate"
                     render={({ field }) => (
                       <FormItem className="flex flex-col">
-                        <FormLabel>End date & time (due date)</FormLabel>
+                        <FormLabel>End date & time (due date) *</FormLabel>
                         <p className="text-xs text-ink-faint mb-2">The submission deadline</p>
                         <div className="space-y-2">
                           <Popover>
@@ -710,7 +723,7 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
                               }
                             }}
                             defaultValue={field.value ? format(field.value, 'HH:mm') : ''}
-                            required={!!field.value}
+                            required
                           />
                         </div>
                         <FormMessage />
@@ -952,8 +965,8 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
                     <div className="flex gap-2"><dt className="text-ink-muted w-32 shrink-0">Max attempts</dt><dd className="text-ink tnum">{form.getValues('maxAttempts')}</dd></div>
                     <div className="flex gap-2"><dt className="text-ink-muted w-32 shrink-0">Time limit</dt><dd className="text-ink tnum">{form.getValues('timeLimit')} min</dd></div>
                     <div className="flex gap-2"><dt className="text-ink-muted w-32 shrink-0">Passing score</dt><dd className="text-ink tnum">{form.getValues('passingScore')}%</dd></div>
-                    <div className="flex gap-2"><dt className="text-ink-muted w-32 shrink-0">Start</dt><dd className="text-ink">{form.getValues('startDate') ? format(form.getValues('startDate')!, 'PPP') : '—'}</dd></div>
-                    <div className="flex gap-2"><dt className="text-ink-muted w-32 shrink-0">End</dt><dd className="text-ink">{form.getValues('endDate') ? format(form.getValues('endDate')!, 'PPP') : '—'}</dd></div>
+                    <div className="flex gap-2"><dt className="text-ink-muted w-32 shrink-0">Start</dt><dd className="text-ink">{format(form.getValues('startDate'), 'PPP p')}</dd></div>
+                    <div className="flex gap-2"><dt className="text-ink-muted w-32 shrink-0">End</dt><dd className="text-ink">{format(form.getValues('endDate'), 'PPP p')}</dd></div>
                     <div className="flex gap-2"><dt className="text-ink-muted w-32 shrink-0">Delay feedback</dt><dd className="text-ink">{form.getValues('hideFeedbackAfterDue') ? 'Yes' : 'No'}</dd></div>
                   </dl>
                 </div>

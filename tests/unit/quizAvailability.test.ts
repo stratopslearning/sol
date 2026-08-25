@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { getQuizAvailability } from '@/lib/quizAvailability';
+import {
+  getQuizAvailability,
+  isQuizListedForStudents,
+} from '@/lib/quizAvailability';
 
 describe('getQuizAvailability', () => {
   const now = new Date('2026-06-15T18:00:00.000Z');
@@ -45,5 +48,50 @@ describe('getQuizAvailability', () => {
         now,
       ),
     ).toEqual({ allowed: true });
+  });
+});
+
+describe('isQuizListedForStudents', () => {
+  const now = new Date('2026-06-15T18:00:00.000Z');
+
+  it('hides unpublished, archived, and not-yet-open quizzes', () => {
+    expect(
+      isQuizListedForStudents({ isActive: false, deletedAt: null, startDate: null }, now),
+    ).toBe(false);
+    expect(
+      isQuizListedForStudents(
+        { isActive: true, deletedAt: now, startDate: null },
+        now,
+      ),
+    ).toBe(false);
+    expect(
+      isQuizListedForStudents(
+        {
+          isActive: true,
+          deletedAt: null,
+          startDate: '2026-06-16T00:00:00.000Z',
+        },
+        now,
+      ),
+    ).toBe(false);
+  });
+
+  it('lists a published quiz once the start date has arrived', () => {
+    expect(
+      isQuizListedForStudents(
+        {
+          isActive: true,
+          deletedAt: null,
+          startDate: '2026-06-15T18:00:00.000Z',
+        },
+        now,
+      ),
+    ).toBe(true);
+    expect(
+      isQuizListedForStudents(
+        { isActive: true, deletedAt: null, startDate: null },
+        now,
+      ),
+    ).toBe(true);
   });
 });

@@ -124,7 +124,13 @@ describe('tools/list', () => {
     expect(createQuiz).toBeDefined();
     expect(createQuiz!.inputSchema).toMatchObject({
       type: 'object',
-      required: expect.arrayContaining(['title', 'sectionIds', 'questions']),
+      required: expect.arrayContaining([
+        'title',
+        'sectionIds',
+        'questions',
+        'startDate',
+        'endDate',
+      ]),
     });
     const visibility = tools.find((t) => t.name === 'set_quiz_visibility');
     expect(visibility).toBeDefined();

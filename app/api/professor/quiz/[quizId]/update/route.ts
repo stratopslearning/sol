@@ -14,11 +14,16 @@ import { activeOnly } from '@/lib/db/filters';
 import { upsertQuizQuestions } from '@/lib/quizQuestionUpsert';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
 import { readJsonBody } from '@/lib/api/readJsonBody';
-import { quizQuestionInputSchema } from '@/lib/quizSchemas';
+import {
+  isoDateTimeRequired,
+  quizQuestionInputSchema,
+  quizWindowSuperRefine,
+} from '@/lib/quizSchemas';
 
 export const dynamic = 'force-dynamic';
 
-const updateQuizSchema = z.object({
+const updateQuizSchema = z
+  .object({
   title: z.string().min(1).max(200),
   description: z.string().max(8_000).optional(),
   sectionIds: z
@@ -27,12 +32,13 @@ const updateQuizSchema = z.object({
     .max(50),
   maxAttempts: z.number().min(1).max(10).default(1),
   timeLimit: z.number().min(1).max(24 * 60).optional(),
-  startDate: z.string().optional(),
-  endDate: z.string().optional(),
+  startDate: isoDateTimeRequired,
+  endDate: isoDateTimeRequired,
   isActive: z.boolean().default(true),
   passingScore: z.number().int().min(0).max(100).default(60),
   questions: z.array(quizQuestionInputSchema).max(200),
-});
+})
+  .superRefine(quizWindowSuperRefine);
 
 export async function PUT(
   req: NextRequest,
@@ -90,31 +96,10 @@ export async function PUT(
       }
     }
 
-    // Validate date/time: end date must be after start date, or same day with end time after start time
-    if (validatedData.startDate && validatedData.endDate) {
-      const startDate = new Date(validatedData.startDate);
-      const endDate = new Date(validatedData.endDate);
-      
-      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-        return NextResponse.json({ 
-          error: 'Invalid date format' 
-        }, { status: 400 });
-      }
-
-      // Check if end date is before start date
-      if (endDate < startDate) {
-        return NextResponse.json({ 
-          error: 'End date and time must be after start date and time' 
-        }, { status: 400 });
-      }
-
-      // If same day, end time must be after start time (already handled by date comparison if times are included)
-      // The dates include time, so this check is sufficient
-      if (endDate <= startDate) {
-        return NextResponse.json({ 
-          error: 'End date and time must be after start date and time' 
-        }, { status: 400 });
-      }
+    const startDate = new Date(validatedData.startDate);
+    const endDate = new Date(validatedData.endDate);
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+      return NextResponse.json({ error: 'Invalid date format' }, { status: 400 });
     }
 
     // Atomic edit: quiz row + questions + section assignments all in one
@@ -129,10 +114,8 @@ export async function PUT(
           maxAttempts: validatedData.maxAttempts,
           timeLimit: validatedData.timeLimit,
           passingScore: validatedData.passingScore,
-          startDate: validatedData.startDate
-            ? new Date(validatedData.startDate)
-            : null,
-          endDate: validatedData.endDate ? new Date(validatedData.endDate) : null,
+          startDate: startDate,
+          endDate: endDate,
           isActive: validatedData.isActive,
           updatedAt: new Date(),
         })

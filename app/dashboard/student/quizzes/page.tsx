@@ -8,6 +8,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { withBasePath } from '@/lib/basePath';
 import { requireStudent } from '@/lib/auth';
 import { partitionEnrollmentsByConclusion } from '@/lib/sectionAvailability';
+import { isQuizListedForStudents } from '@/lib/quizAvailability';
 import {
   formatDateTimeStable,
   normalizeDatabaseDate,
@@ -44,6 +45,10 @@ export default async function StudentQuizzesPage() {
 
   const assignedQuizzes = quizAssignments
     .map((qa) => qa.quiz)
+    .filter(
+      (quiz): quiz is NonNullable<typeof quiz> =>
+        quiz != null && isQuizListedForStudents(quiz),
+    )
     .filter(
       (quiz, index, self) =>
         index === self.findIndex((q) => q.id === quiz.id),
@@ -134,7 +139,7 @@ export default async function StudentQuizzesPage() {
         ]}
         eyebrow="Coursework"
         title="Your assigned quizzes."
-        description="Everything published to your enrolled sections — sortable, searchable, with attempt tracking."
+        description="Quizzes that are open in your enrolled sections — searchable, with attempt tracking. Later chapters stay hidden until their start date."
       />
       <div className="mt-10">
         <StudentQuizzesTableClient
