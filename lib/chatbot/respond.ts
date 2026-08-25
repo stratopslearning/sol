@@ -1,4 +1,5 @@
 import type { ChatbotMessage } from '@/app/db/schema';
+import { logAiSpan } from '@/lib/ai/tracing';
 import { chatbotOpenAI, CHATBOT_MODEL } from '@/lib/chatbot/client';
 import {
   assembleSystemPrompt,
@@ -85,15 +86,47 @@ export async function generateChatbotReply(opts: {
 
     const text = completion.choices[0]?.message?.content?.trim();
     if (!text) {
+      void logAiSpan(
+        'chatbotReply',
+        'chatbot',
+        {
+          model: opts.model ?? CHATBOT_MODEL,
+          stream: false,
+          status: 'empty_response',
+        },
+        { isFailure: true },
+      );
       return {
         ok: false,
         reason: 'empty_response',
         message: 'The assistant returned an empty reply. Please try again.',
       };
     }
-    return { ok: true, text: scrubAssistantReply(text) };
+    const scrubbed = scrubAssistantReply(text);
+    void logAiSpan(
+      'chatbotReply',
+      'chatbot',
+      {
+        model: opts.model ?? CHATBOT_MODEL,
+        stream: false,
+        status: 'ok',
+        leakScrubApplied: scrubbed !== text,
+      },
+      { isFailure: false },
+    );
+    return { ok: true, text: scrubbed };
   } catch (err: unknown) {
     const mapped = mapOpenAiError(err);
+    void logAiSpan(
+      'chatbotReply',
+      'chatbot',
+      {
+        model: opts.model ?? CHATBOT_MODEL,
+        stream: false,
+        status: mapped.reason,
+      },
+      { isFailure: true },
+    );
     return { ok: false, ...mapped };
   }
 }
@@ -140,6 +173,16 @@ export async function streamChatbotReply(opts: {
     return { ok: true, stream: deltas() };
   } catch (err: unknown) {
     const mapped = mapOpenAiError(err);
+    void logAiSpan(
+      'chatbotReply',
+      'chatbot',
+      {
+        model: opts.model ?? CHATBOT_MODEL,
+        stream: true,
+        status: mapped.reason,
+      },
+      { isFailure: true },
+    );
     return { ok: false, ...mapped };
   }
 }

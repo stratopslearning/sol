@@ -52,6 +52,14 @@ const baseSchema = z.object({
   NEXT_PUBLIC_SENTRY_DSN: z.string().url().optional(),
   SENTRY_DSN: z.string().url().optional(),
 
+  // Braintrust — optional LLM/agent tracing + evals (no-op when unset).
+  BRAINTRUST_API_KEY: z.string().min(1).optional(),
+  BRAINTRUST_PROJECT: z.string().min(1).optional().default('sol'),
+  BRAINTRUST_SAMPLE_RATE: z
+    .string()
+    .regex(/^(0(\.\d+)?|1(\.0+)?)$/)
+    .optional(),
+
   // Rate limiting (Upstash). Optional in development (in-memory fallback).
   // Required in production — see invariants below.
   UPSTASH_REDIS_REST_URL: z.string().url().optional(),

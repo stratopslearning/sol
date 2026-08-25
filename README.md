@@ -30,7 +30,7 @@ SOL turns long-form course content into structured, auto-graded coursework. Facu
 | Database | Neon Postgres + Drizzle ORM (Pool driver for transactions) |
 | AI | OpenAI (gpt-class models with structured-output Zod validation) |
 | Payments | Stripe Checkout + webhooks (idempotency via dedicated `stripe_events` table) |
-| Observability | Sentry (server + edge + browser), structured audit log |
+| Observability | Sentry (server + edge + browser), Braintrust (optional LLM/agent traces + evals), structured audit log |
 | Rate limiting | Upstash Redis with in-memory fallback |
 | Tests | Vitest (unit + integration against a Neon test branch) |
 | Hosting | Vercel |

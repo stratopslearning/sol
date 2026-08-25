@@ -4,7 +4,7 @@ Internal FERPA + SOC 2–style binder (no third-party audit).
 
 | Doc | Purpose |
 | --- | --- |
-| [HECVAT_LITE_ANSWERS.md](./HECVAT_LITE_ANSWERS.md) | HECVAT Lite answer pack for university reviews (incl. FGCU) |
+| [HECVAT_LITE_ANSWERS.md](./HECVAT_LITE_ANSWERS.md) | Complete standalone HECVAT Lite 3.06 vendor response (plus FERPA/AI addendum); copy into the official workbook |
 | [CONTROL_MATRIX.md](./CONTROL_MATRIX.md) | Self-audit control matrix |
 | [SELF_AUDIT.md](./SELF_AUDIT.md) | Type I / Type II cadence |
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | Data-flow diagram |

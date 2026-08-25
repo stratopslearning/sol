@@ -11,5 +11,6 @@ Vendors that may process SOL data, including education records, on behalf of the
 | Stripe | Payments (if enabled) | Email, customer id, payment metadata | Live keys only in prod |
 | Upstash | Rate limiting | Opaque rate-limit keys (user/IP ids) | Required in production |
 | Sentry | Error monitoring | Stack traces; **default PII off in prod** | Review scrubbing rules |
+| Braintrust | LLM/agent observability + evals | Minimized answer/transcript text in traces; MCP tool names and outcome classes only (no gradebook payloads) | DPA required before prod tracing; no-train; retention cap — see AI_EDUCATION_RECORDS.md |
 
 Update this list before onboarding a new vendor. Institution-facing contracts should incorporate [`FERPA_RIDER.md`](./FERPA_RIDER.md).

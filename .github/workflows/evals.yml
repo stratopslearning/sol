@@ -1,0 +1,38 @@
+name: Evals
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Nightly at 06:00 UTC
+    - cron: '0 6 * * *'
+
+concurrency:
+  group: evals-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  eval:
+    name: Braintrust LLM evals
+    runs-on: ubuntu-latest
+    if: ${{ secrets.OPENAI_API_KEY != '' && secrets.BRAINTRUST_API_KEY != '' }}
+    env:
+      NODE_ENV: test
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
+      BRAINTRUST_PROJECT: "My Project"
+      BRAINTRUST_SAMPLE_RATE: '1'
+      EVAL_GRADING_BAND_FLOOR: '0.8'
+      EVAL_CHATBOT_FLOOR: '0.75'
+      EVAL_MCP_FLOOR: '0.7'
+      DATABASE_URL: https://example.com
+      CLERK_SECRET_KEY: test_clerk_secret
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: test_clerk_pub
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Run Braintrust evals
+        run: npm run eval
