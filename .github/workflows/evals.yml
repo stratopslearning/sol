@@ -14,7 +14,6 @@ jobs:
   eval:
     name: Braintrust LLM evals
     runs-on: ubuntu-latest
-    if: ${{ secrets.OPENAI_API_KEY != '' && secrets.BRAINTRUST_API_KEY != '' }}
     env:
       NODE_ENV: test
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
