@@ -67,7 +67,7 @@ export function shouldSampleTrace(
 export function initBraintrustLogger(): void {
   if (!isBraintrustEnabled() || loggerInitialized) return;
   initLogger({
-    projectName: process.env.BRAINTRUST_PROJECT?.trim() || 'sol',
+    projectName: process.env.BRAINTRUST_PROJECT?.trim() || 'SOL',
     apiKey: process.env.BRAINTRUST_API_KEY,
   });
   loggerInitialized = true;

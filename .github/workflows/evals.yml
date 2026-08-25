@@ -18,7 +18,7 @@ jobs:
       NODE_ENV: test
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
-      BRAINTRUST_PROJECT: "My Project"
+      BRAINTRUST_PROJECT: "SOL"
       BRAINTRUST_SAMPLE_RATE: '1'
       EVAL_GRADING_BAND_FLOOR: '0.8'
       EVAL_CHATBOT_FLOOR: '0.75'

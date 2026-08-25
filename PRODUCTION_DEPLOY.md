@@ -31,7 +31,7 @@ the corresponding test credentials.)
 | `NEXT_PUBLIC_BASE_URL`            | yes       | Absolute https URL, no trailing slash. Used for Stripe redirects and canonical links. |
 | `SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN` | optional | Match the Sentry project's prod DSN.                          |
 | `BRAINTRUST_API_KEY`              | optional  | Enables LLM/agent tracing + eval logging. **Do not set in Production until Braintrust DPA/retention checklist in AI_EDUCATION_RECORDS.md is complete.** |
-| `BRAINTRUST_PROJECT`              | optional  | Braintrust project name (default `sol`).                         |
+| `BRAINTRUST_PROJECT`              | optional  | Braintrust project name (default `SOL`).                         |
 | `BRAINTRUST_SAMPLE_RATE`          | optional  | Production trace sampling 0–1 (default `0.2` in prod, `1` otherwise). Failures always logged. |
 | `UPSTASH_REDIS_REST_URL`          | **yes (prod)** | Required in production — app refuses to boot without it. Distributed rate limiting. |
 | `UPSTASH_REDIS_REST_TOKEN`        | **yes (prod)** | Required with the URL above.                       |

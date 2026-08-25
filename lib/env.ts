@@ -54,7 +54,7 @@ const baseSchema = z.object({
 
   // Braintrust — optional LLM/agent tracing + evals (no-op when unset).
   BRAINTRUST_API_KEY: z.string().min(1).optional(),
-  BRAINTRUST_PROJECT: z.string().min(1).optional().default('sol'),
+  BRAINTRUST_PROJECT: z.string().min(1).optional().default('SOL'),
   BRAINTRUST_SAMPLE_RATE: z
     .string()
     .regex(/^(0(\.\d+)?|1(\.0+)?)$/)

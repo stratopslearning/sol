@@ -10,7 +10,7 @@ loadEnv({ path: '.env', quiet: true });
 loadEnv({ path: '.env.local', override: true, quiet: true });
 loadEnv({ path: '.env.braintrust', override: true, quiet: true });
 
-const PROJECT = process.env.BRAINTRUST_PROJECT?.trim() || 'sol';
+const PROJECT = process.env.BRAINTRUST_PROJECT?.trim() || 'SOL';
 const GRADING_BAND_FLOOR = Number(process.env.EVAL_GRADING_BAND_FLOOR ?? '0.8');
 const CHATBOT_FLOOR = Number(process.env.EVAL_CHATBOT_FLOOR ?? '0.75');
 const MCP_FLOOR = Number(process.env.EVAL_MCP_FLOOR ?? '0.7');
