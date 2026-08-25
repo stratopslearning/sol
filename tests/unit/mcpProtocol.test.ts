@@ -126,6 +126,11 @@ describe('tools/list', () => {
       type: 'object',
       required: expect.arrayContaining(['title', 'sectionIds', 'questions']),
     });
+    const visibility = tools.find((t) => t.name === 'set_quiz_visibility');
+    expect(visibility).toBeDefined();
+    expect(
+      MCP_TOOLS.find((t) => t.name === 'set_quiz_visibility')?.destructive,
+    ).toBeFalsy();
   });
 });
 

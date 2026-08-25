@@ -34,8 +34,11 @@ export async function POST(
       return NextResponse.json({ error: 'Quiz not found' }, { status: 404 });
     }
 
-    // Archiving deactivates the quiz across *all* sections including ones the
-    // caller doesn't teach. Restrict it to the quiz owner (or an admin).
+    // Soft-delete. The professor library Hide/Publish control uses
+    // POST .../visibility (isActive only). Do not wire that toggle here —
+    // a second click 404s because this path sets deletedAt.
+    // Archiving applies across *all* sections including ones the caller
+    // doesn't teach. Restrict it to the quiz owner (or an admin).
     const isAdmin = user.role === 'ADMIN';
     const isOwner = existingQuiz.professorId === user.id;
     if (!isAdmin && !isOwner) {

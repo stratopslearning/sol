@@ -34,6 +34,7 @@ import { upsertQuizQuestions } from '@/lib/quizQuestionUpsert';
 import { regradeAttempt } from '@/lib/regradeAttempt';
 import { parseOptionalEndsAt } from '@/lib/sectionAvailability';
 import { assertTeachesSection } from '@/lib/professor/sections';
+import { quizVisibilityFields } from '@/lib/professor/quizLibrary';
 
 type ProfessorUser = Pick<UserData, 'id' | 'role' | 'clerkId'>;
 
@@ -424,6 +425,30 @@ export async function archiveQuiz(
     .returning();
 
   return { id: archived.id };
+}
+
+/** Mirrors POST /api/professor/quiz/[quizId]/visibility (owner or admin). */
+export async function setQuizVisibility(
+  user: ProfessorUser,
+  quizId: string,
+  isActive: boolean,
+): Promise<{ id: string; isActive: boolean }> {
+  const existing = await db.query.quizzes.findFirst({
+    where: eq(quizzes.id, quizId),
+  });
+  if (!existing) throw ApiError.notFound('Quiz not found');
+
+  if (user.role !== 'ADMIN' && existing.professorId !== user.id) {
+    throw ApiError.forbidden('Only the quiz owner can change visibility');
+  }
+
+  const [updated] = await db
+    .update(quizzes)
+    .set(quizVisibilityFields(isActive))
+    .where(eq(quizzes.id, quizId))
+    .returning();
+
+  return { id: updated.id, isActive: updated.isActive };
 }
 
 /**

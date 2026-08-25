@@ -32,6 +32,7 @@ import {
 } from '@/lib/professor/discussions';
 import {
   archiveQuiz,
+  setQuizVisibility,
   assignDiscussion,
   assignQuizSections,
   createDiscussion,
@@ -310,6 +311,22 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     scope: 'quizzes:write',
     handler: (args, ctx) =>
       duplicateQuiz(ctx.auth.user, args.quizId as string),
+  },
+  {
+    name: 'set_quiz_visibility',
+    description:
+      'Publish or hide a quiz I own. Hidden quizzes stay in the library as drafts; students cannot start them. This is not archive (soft-delete).',
+    schema: z.object({
+      quizId: z.string().uuid(),
+      isActive: z.boolean().describe('true = visible to students, false = draft'),
+    }),
+    scope: 'quizzes:write',
+    handler: (args, ctx) =>
+      setQuizVisibility(
+        ctx.auth.user,
+        args.quizId as string,
+        args.isActive as boolean,
+      ),
   },
   {
     name: 'archive_quiz',

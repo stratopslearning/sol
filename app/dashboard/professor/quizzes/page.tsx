@@ -12,6 +12,7 @@ import { withBasePath } from "@/lib/basePath";
 import { getOrCreateUser } from "@/lib/getOrCreateUser";
 import { formatDateStable } from "@/lib/utils";
 import { partitionEnrollmentsByConclusion } from "@/lib/sectionAvailability";
+import { uniqueVisibleLibraryQuizzes } from "@/lib/professor/quizLibrary";
 
 import ProfessorQuizzesTableClient from "./ProfessorQuizzesTableClient";
 
@@ -45,14 +46,9 @@ export default async function ProfessorQuizzesPage() {
         })
       : [];
 
-  const seenQuizIds = new Set<string>();
-  const uniqueQuizzes = sectionQuizzes
-    .map((qs) => qs.quiz)
-    .filter((quiz) => {
-      if (seenQuizIds.has(quiz.id)) return false;
-      seenQuizIds.add(quiz.id);
-      return true;
-    });
+  const uniqueQuizzes = uniqueVisibleLibraryQuizzes(
+    sectionQuizzes.map((qs) => qs.quiz),
+  );
 
   const quizIds = uniqueQuizzes.map((q) => q.id);
   const submittedRows =

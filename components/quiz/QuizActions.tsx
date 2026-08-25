@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactElement } from "react";
 import { useRouter } from "next/navigation";
 import {
   Archive,
@@ -16,9 +16,35 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Tooltip,
   TooltipContent,
+  TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { apiUrl, withBasePath } from "@/lib/basePath";
+import {
+  quizLibraryActionLabels,
+  quizVisibilityApiPath,
+} from "@/lib/professor/quizLibrary";
+
+function ActionTip({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactElement;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent
+        side="top"
+        sideOffset={8}
+        className="z-[200] max-w-56 bg-ink text-paper"
+      >
+        {label}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
 
 interface QuizActionsProps {
   quizId: string;
@@ -78,108 +104,110 @@ export function QuizActions({
     }
   };
 
-  const handleArchive = async () => {
+  const handleVisibility = async () => {
+    const nextActive = !isActive;
     if (
       !confirm(
-        `Are you sure you want to ${isActive ? "archive" : "activate"} this quiz?`,
+        nextActive
+          ? "Publish this quiz so students can take it?"
+          : "Hide this quiz from students? It will stay in your library as a draft.",
       )
     )
       return;
     try {
       const response = await fetch(
-        apiUrl(`/api/professor/quiz/${quizId}/archive`),
-        { method: "POST" },
+        apiUrl(quizVisibilityApiPath(quizId)),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ isActive: nextActive }),
+        },
       );
       if (response.ok) window.location.reload();
-      else alert("Failed to update quiz");
+      else {
+        const data = (await response.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        alert(data?.error || "Failed to update quiz");
+      }
     } catch (error) {
-      console.error("Error archiving quiz:", error);
+      console.error("Error updating quiz visibility:", error);
       alert("Failed to update quiz");
     }
   };
 
+  const labels = quizLibraryActionLabels({
+    isActive,
+    isOwner: isCreatedByProfessor,
+  });
+
   return (
-    <div className="inline-flex min-w-max items-center justify-end gap-1">
-      <Tooltip>
-        <TooltipTrigger asChild>
+    <TooltipProvider delayDuration={150}>
+      <div className="inline-flex min-w-max items-center justify-end gap-1">
+        <ActionTip label={labels.results}>
           <a
             href={withBasePath(`/dashboard/professor/quiz/${quizId}/results`)}
             className={buttonVariants({ size: "iconSm", variant: "ghost" })}
-            aria-label="View results"
+            aria-label={labels.results}
           >
             <Eye className="h-4 w-4" />
           </a>
-        </TooltipTrigger>
-        <TooltipContent side="top">View results</TooltipContent>
-      </Tooltip>
+        </ActionTip>
 
-      {isCreatedByProfessor ? (
-        <Tooltip>
-          <TooltipTrigger asChild>
+        {isCreatedByProfessor ? (
+          <ActionTip label={labels.edit}>
             <a
               href={withBasePath(`/dashboard/professor/quiz/${quizId}/edit`)}
               className={buttonVariants({ size: "iconSm", variant: "ghost" })}
-              aria-label="Edit quiz"
+              aria-label={labels.edit}
             >
               <Edit className="h-4 w-4" />
             </a>
-          </TooltipTrigger>
-          <TooltipContent side="top">Edit quiz</TooltipContent>
-        </Tooltip>
-      ) : (
-        <Tooltip>
-          <TooltipTrigger asChild>
+          </ActionTip>
+        ) : (
+          <ActionTip label={labels.edit}>
             <Button
               size="iconSm"
               variant="ghost"
-              aria-label="Edit"
+              aria-label={labels.edit}
               onClick={handleCreateEditableCopy}
               disabled={copyingForEdit}
             >
               <Edit className="h-4 w-4" />
             </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top">Edit</TooltipContent>
-        </Tooltip>
-      )}
+          </ActionTip>
+        )}
 
-      <Tooltip>
-        <TooltipTrigger asChild>
+        <ActionTip label={labels.discussion}>
           <a
             href={withBasePath(
               `/dashboard/professor/discussions/new?quizId=${quizId}`,
             )}
             className={buttonVariants({ size: "iconSm", variant: "ghost" })}
-            aria-label="Create discussion from quiz"
+            aria-label={labels.discussion}
           >
             <MessagesSquare className="h-4 w-4" />
           </a>
-        </TooltipTrigger>
-        <TooltipContent side="top">Create discussion</TooltipContent>
-      </Tooltip>
+        </ActionTip>
 
-      <Tooltip>
-        <TooltipTrigger asChild>
+        <ActionTip label={labels.duplicate}>
           <Button
             size="iconSm"
             variant="ghost"
-            aria-label="Duplicate quiz"
+            aria-label={labels.duplicate}
             onClick={handleDuplicate}
           >
             <Copy className="h-4 w-4" />
           </Button>
-        </TooltipTrigger>
-        <TooltipContent side="top">Duplicate quiz</TooltipContent>
-      </Tooltip>
+        </ActionTip>
 
-      {isCreatedByProfessor ? (
-        <Tooltip>
-          <TooltipTrigger asChild>
+        {isCreatedByProfessor ? (
+          <ActionTip label={labels.visibility}>
             <Button
               size="iconSm"
               variant="ghost"
-              aria-label={isActive ? "Archive quiz" : "Activate quiz"}
-              onClick={handleArchive}
+              aria-label={labels.visibility}
+              onClick={handleVisibility}
             >
               {isActive ? (
                 <Archive className="h-4 w-4" />
@@ -187,15 +215,11 @@ export function QuizActions({
                 <ArchiveRestore className="h-4 w-4" />
               )}
             </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top">
-            {isActive ? "Archive quiz" : "Activate quiz"}
-          </TooltipContent>
-        </Tooltip>
-      ) : (
-        // Keep icon columns aligned when archive is unavailable (shared quizzes).
-        <span className="inline-flex size-8 shrink-0" aria-hidden />
-      )}
-    </div>
+          </ActionTip>
+        ) : (
+          <span className="inline-flex size-8 shrink-0" aria-hidden />
+        )}
+      </div>
+    </TooltipProvider>
   );
 }
