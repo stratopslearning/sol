@@ -20,7 +20,10 @@ import { requireAdmin } from '@/lib/auth';
 import { appPath, withBasePath } from '@/lib/basePath';
 import { activeOnly } from '@/lib/db/filters';
 import { partitionBySectionConclusion } from '@/lib/sectionAvailability';
-import { LocalDateTime } from '@/components/timezone/LocalDateTime';
+import {
+  LocalDateTime,
+  TIMESTAMP_CELL_CLASS,
+} from '@/components/timezone/LocalDateTime';
 
 export default async function AdminArchivedSectionsPage() {
   await requireAdmin();
@@ -78,7 +81,7 @@ export default async function AdminArchivedSectionsPage() {
                 <TableRow>
                   <TableHead>Section</TableHead>
                   <TableHead>Course</TableHead>
-                  <TableHead>Ended</TableHead>
+                  <TableHead className="min-w-[13rem]">Ended</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -90,9 +93,9 @@ export default async function AdminArchivedSectionsPage() {
                     <TableCell className="text-ink-muted">
                       {section.course?.title ?? '—'}
                     </TableCell>
-                    <TableCell className="text-ink-muted">
+                    <TableCell className={`text-ink-muted ${TIMESTAMP_CELL_CLASS}`}>
                         {section.endsAt
-                          ? <LocalDateTime value={section.endsAt} />
+                          ? <LocalDateTime stacked value={section.endsAt} />
                           : '—'}
                     </TableCell>
                     <TableCell>

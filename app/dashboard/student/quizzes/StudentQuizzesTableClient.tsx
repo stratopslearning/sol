@@ -32,7 +32,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/patterns/EmptyState";
-import { LocalDateTime } from "@/components/timezone/LocalDateTime";
+import {
+  LocalDateTime,
+  TIMESTAMP_CELL_CLASS,
+} from "@/components/timezone/LocalDateTime";
 import { useDisplayTimeZone } from "@/components/timezone/TimeZoneProvider";
 import { getQuizBlockCopy } from "@/lib/quizBlockCopy";
 import { getBrowserTimeZone } from "@/lib/displayTimeZone";
@@ -183,25 +186,16 @@ export default function StudentQuizzesTableClient({
 
       <div className="paper paper-shadow overflow-hidden">
         <div className="overflow-x-auto">
-          <Table className="table-fixed min-w-[1120px]">
-            <colgroup>
-              <col className="w-[200px]" />
-              <col className="w-[240px]" />
-              <col className="w-[80px]" />
-              <col className="w-[120px]" />
-              <col className="w-[200px]" />
-              <col className="w-[100px]" />
-              <col className="w-[120px]" />
-            </colgroup>
+          <Table className="min-w-[1080px]">
             <TableHeader>
               <TableRow>
                 <TableHead>Quiz title</TableHead>
                 <TableHead>Section</TableHead>
                 <TableHead>Best</TableHead>
                 <TableHead>Attempts</TableHead>
-                <TableHead>Due</TableHead>
+                <TableHead className="min-w-[13rem]">Due</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="sticky right-0 z-10 bg-surface-sunken/95 px-3 text-right">
+                <TableHead className="sticky right-0 z-10 border-l border-rule bg-surface-sunken/95 px-3 text-right">
                   Action
                 </TableHead>
               </TableRow>
@@ -338,7 +332,7 @@ export default function StudentQuizzesTableClient({
                     ) : null}
                   </TableCell>
                   <TableCell
-                    className={`align-top whitespace-normal overflow-hidden ${isOverdue ? "text-danger" : "text-ink-muted"}`}
+                    className={`${TIMESTAMP_CELL_CLASS} ${isOverdue ? "text-danger" : "text-ink-muted"}`}
                   >
                     {quiz.endDate ? (
                       <LocalDateTime stacked value={quiz.endDate} />
@@ -347,7 +341,7 @@ export default function StudentQuizzesTableClient({
                     )}
                   </TableCell>
                   <TableCell className="align-top">{statusBadge}</TableCell>
-                  <TableCell className="sticky right-0 z-10 bg-paper px-3 text-right align-top">
+                  <TableCell className="sticky right-0 z-10 border-l border-rule bg-paper px-3 text-right align-top">
                     <div className="flex min-w-max items-center justify-end">
                       {actionButton}
                     </div>

@@ -6,6 +6,7 @@ import { AlertCircle, Award, Clock, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { LoadingState } from "@/components/patterns/LoadingState";
+import { LocalDateTime } from "@/components/timezone/LocalDateTime";
 import { apiUrl } from "@/lib/basePath";
 
 interface Attempt {
@@ -135,9 +136,9 @@ export function AttemptHistory({
                   <Badge variant={isBest ? "default" : "outline"}>
                     Attempt {attempt.attemptNumber}
                   </Badge>
-                  <span className="inline-flex items-center gap-1.5 text-xs text-ink-faint">
-                    <Clock className="h-3 w-3" />
-                    {new Date(attempt.submittedAt).toLocaleDateString()}
+                  <span className="inline-flex items-center gap-1.5 text-xs text-ink-faint whitespace-normal min-w-0">
+                    <Clock className="h-3 w-3 shrink-0" />
+                    <LocalDateTime stacked value={attempt.submittedAt} />
                   </span>
                 </div>
                 <div className="text-right">

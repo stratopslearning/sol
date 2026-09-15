@@ -39,7 +39,10 @@ import {
 } from "@/components/ui/table";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { LoadingState } from "@/components/patterns/LoadingState";
-import { LocalDateTime } from "@/components/timezone/LocalDateTime";
+import {
+  LocalDateTime,
+  TIMESTAMP_CELL_CLASS,
+} from "@/components/timezone/LocalDateTime";
 import { apiUrl, withBasePath } from "@/lib/basePath";
 import { cleanQuizDescription } from "@/lib/utils";
 
@@ -269,21 +272,12 @@ export default function AdminQuizzesPageClient({
         ) : (
           <div className="paper paper-shadow overflow-hidden">
             <div className="overflow-x-auto">
-              <Table className="table-fixed min-w-[1180px]">
-                <colgroup>
-                  <col className="w-[22%]" />
-                  <col className="w-[16%]" />
-                  <col className="w-[20%]" />
-                  <col className="w-[8%]" />
-                  <col className="w-[11%]" />
-                  <col className="w-[8%]" />
-                  <col className="w-[15%]" />
-                </colgroup>
+              <Table className="min-w-[1180px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Title</TableHead>
                     <TableHead>Sections</TableHead>
-                    <TableHead>Due</TableHead>
+                    <TableHead className="min-w-[13rem]">Due</TableHead>
                     <TableHead className="tnum">Attempts</TableHead>
                     <TableHead className="tnum">Time limit</TableHead>
                     <TableHead className="tnum">Questions</TableHead>
@@ -333,7 +327,7 @@ export default function AdminQuizzesPageClient({
                               {sectionsLabel}
                             </span>
                           </TableCell>
-                          <TableCell className="text-sm text-ink-muted align-top whitespace-normal overflow-hidden">
+                          <TableCell className={`text-sm text-ink-muted ${TIMESTAMP_CELL_CLASS}`}>
                             {quiz.endDate ? (
                               <LocalDateTime stacked value={quiz.endDate} />
                             ) : (

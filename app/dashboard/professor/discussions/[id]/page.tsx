@@ -23,7 +23,10 @@ import {
 import { appPath, withBasePath } from '@/lib/basePath';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import { appRedirect } from '@/lib/serverRedirect';
-import { LocalDateTime } from '@/components/timezone/LocalDateTime';
+import {
+  LocalDateTime,
+  TIMESTAMP_CELL_CLASS,
+} from '@/components/timezone/LocalDateTime';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -114,7 +117,7 @@ export default async function DiscussionSessionsPage(props: PageProps) {
               <TableRow>
                 <TableHead>Student</TableHead>
                 <TableHead>Section</TableHead>
-                <TableHead>Completed</TableHead>
+                <TableHead className="min-w-[13rem]">Completed</TableHead>
                 <TableHead>Messages</TableHead>
                 <TableHead className="text-right">Action</TableHead>
               </TableRow>
@@ -128,9 +131,9 @@ export default async function DiscussionSessionsPage(props: PageProps) {
                       .join(' ') || s.student.email}
                   </TableCell>
                   <TableCell>{s.section.name}</TableCell>
-                  <TableCell>
+                  <TableCell className={TIMESTAMP_CELL_CLASS}>
                     {s.completedAt
-                      ? <LocalDateTime value={s.completedAt} />
+                      ? <LocalDateTime stacked value={s.completedAt} />
                       : '—'}
                   </TableCell>
                   <TableCell>

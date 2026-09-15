@@ -4,6 +4,7 @@ import { db } from "@/app/db";
 import { attempts } from "@/app/db/schema";
 import { AppShell } from "@/components/layout/AppShell";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { LocalDateTime } from "@/components/timezone/LocalDateTime";
 import { Button } from "@/components/ui/button";
 import { withBasePath } from "@/lib/basePath";
 import { appRedirect } from "@/lib/serverRedirect";
@@ -100,8 +101,12 @@ export default async function ResultsPage({
             <dl className="flex flex-col sm:flex-row gap-6 text-sm text-ink-muted">
               <div className="flex flex-col items-center gap-1">
                 <dt className="eyebrow text-ink-faint">Submitted</dt>
-                <dd className="tnum text-ink">
-                  {new Date(attempt.submittedAt!).toLocaleString()}
+                <dd className="tnum text-ink whitespace-normal">
+                  {attempt.submittedAt ? (
+                    <LocalDateTime stacked value={attempt.submittedAt} />
+                  ) : (
+                    "—"
+                  )}
                 </dd>
               </div>
               <div className="flex flex-col items-center gap-1">

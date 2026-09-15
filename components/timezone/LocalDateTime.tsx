@@ -8,6 +8,10 @@ import {
   normalizeDatabaseDate,
 } from '@/lib/utils';
 
+/** Table cells that show a timestamp — keeps labels from clipping under sticky columns. */
+export const TIMESTAMP_CELL_CLASS =
+  'align-top whitespace-normal min-w-[13rem] overflow-visible';
+
 export function LocalDateTime({
   value,
   fallback = '—',

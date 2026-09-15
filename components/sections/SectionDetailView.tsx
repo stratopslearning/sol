@@ -8,7 +8,7 @@ import { SectionRosterTable } from '@/components/sections/SectionRosterTable';
 import { SectionHeading } from '@/components/layout/SectionHeading';
 import { EmptyState } from '@/components/patterns/EmptyState';
 import { StatCard } from '@/components/patterns/StatCard';
-import { LocalDateTime } from '@/components/timezone/LocalDateTime';
+import { LocalDateTime, TIMESTAMP_CELL_CLASS } from '@/components/timezone/LocalDateTime';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -227,7 +227,7 @@ export function SectionDetailView({
                           ) : null}
                         </div>
                       </TableCell>
-                      <TableCell className="text-sm text-ink-muted whitespace-normal">
+                      <TableCell className={`text-sm text-ink-muted ${TIMESTAMP_CELL_CLASS}`}>
                         {quiz.endDate
                           ? <LocalDateTime stacked value={quiz.endDate} />
                           : '—'}
