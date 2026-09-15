@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/table";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { LoadingState } from "@/components/patterns/LoadingState";
+import { LocalDateTime } from "@/components/timezone/LocalDateTime";
 import { apiUrl, withBasePath } from "@/lib/basePath";
 import { cleanQuizDescription } from "@/lib/utils";
 
@@ -307,7 +308,6 @@ export default function AdminQuizzesPageClient({
                         quiz.assignedSectionNames.length > 0
                           ? quiz.assignedSectionNames.join(", ")
                           : "Unassigned";
-                      const dueDate = quiz.dueDateLabel as string | null;
                       return (
                         <TableRow key={quiz.id}>
                           <TableCell className="font-medium align-top">
@@ -334,7 +334,11 @@ export default function AdminQuizzesPageClient({
                             </span>
                           </TableCell>
                           <TableCell className="text-sm text-ink-muted tnum align-top">
-                            {dueDate ?? "—"}
+                            {quiz.endDate ? (
+                              <LocalDateTime value={quiz.endDate} />
+                            ) : (
+                              "—"
+                            )}
                           </TableCell>
                           <TableCell className="tnum text-ink-muted align-top">
                             {quiz.maxAttempts ?? "—"}

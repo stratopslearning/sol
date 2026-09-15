@@ -34,6 +34,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/patterns/EmptyState";
+import { LocalDateTime } from "@/components/timezone/LocalDateTime";
 import { cn } from "@/lib/utils";
 
 type AttemptRow = {
@@ -44,7 +45,6 @@ type AttemptRow = {
   quizTitle: string;
   courseTitle: string | null;
   submittedAt: string | null;
-  submittedAtLabel: string | null;
   score: number | null;
   maxScore: number | null;
   percentage: number | null;
@@ -372,7 +372,11 @@ function SectionGradebook({ section }: { section: SectionGroup }) {
                           {quiz.quizTitle}
                         </TableCell>
                         <TableCell className="text-sm text-ink-muted align-top">
-                          {attempt.submittedAtLabel ?? "—"}
+                          {attempt.submittedAt ? (
+                            <LocalDateTime value={attempt.submittedAt} />
+                          ) : (
+                            "—"
+                          )}
                         </TableCell>
                         <TableCell className="tnum align-top">
                           {formatScore(attempt)}
@@ -426,7 +430,11 @@ function SectionGradebook({ section }: { section: SectionGroup }) {
                           </span>
                         </TableCell>
                         <TableCell className="text-ink-muted align-top">
-                          {attempt.submittedAtLabel ?? "—"}
+                          {attempt.submittedAt ? (
+                            <LocalDateTime value={attempt.submittedAt} />
+                          ) : (
+                            "—"
+                          )}
                         </TableCell>
                         <TableCell className="tnum align-top">
                           {formatScore(attempt)}

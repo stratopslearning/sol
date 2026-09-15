@@ -128,9 +128,11 @@ export function formatDateTimeUTC(date: Date | string | null | undefined): strin
 }
 
 /**
- * SSR-safe date/time formatting with an explicit IANA timezone.
- * Produces identical output in Node (SSR) and the browser — use for props
- * passed into client components to avoid hydration mismatches.
+ * Format a timestamp in an explicit IANA timezone, including a short zone
+ * name so a 11:59 PM deadline is unambiguous across campuses.
+ *
+ * Pass the viewer's timezone (browser / request cookie). Default UTC is only
+ * for tests and callers that have not resolved a zone yet.
  */
 export function formatDateTimeStable(
   date: Date | string | null | undefined,
@@ -138,17 +140,7 @@ export function formatDateTimeStable(
 ): string {
   const dateObj = normalizeDatabaseDate(date);
   if (!dateObj || isNaN(dateObj.getTime())) return 'Invalid date';
-
-  const hasTime =
-    dateObj.getUTCHours() !== 0 ||
-    dateObj.getUTCMinutes() !== 0 ||
-    dateObj.getUTCSeconds() !== 0 ||
-    dateObj.getUTCMilliseconds() !== 0;
-
-  if (hasTime) {
-    return formatInTimeZone(dateObj, timeZone, 'MMM d, yyyy, h:mm aa');
-  }
-  return formatInTimeZone(dateObj, timeZone, 'MMM d, yyyy');
+  return formatInTimeZone(dateObj, timeZone, 'MMM d, yyyy, h:mm aa zzz');
 }
 
 /** SSR-safe date-only formatting (explicit timezone). */

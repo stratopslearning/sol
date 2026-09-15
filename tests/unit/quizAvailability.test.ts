@@ -32,6 +32,24 @@ describe('getQuizAvailability', () => {
     ).toEqual({ allowed: false, reason: 'quizEnded' });
   });
 
+  it('closes at the stored UTC instant, not a local clock string', () => {
+    const endDate = '2026-09-16T03:59:00.000Z';
+    expect(
+      getQuizAvailability(
+        { startDate: null, endDate },
+        { dueDate: null },
+        new Date('2026-09-16T03:58:00.000Z'),
+      ),
+    ).toEqual({ allowed: true });
+    expect(
+      getQuizAvailability(
+        { startDate: null, endDate },
+        { dueDate: null },
+        new Date('2026-09-16T04:00:00.000Z'),
+      ),
+    ).toEqual({ allowed: false, reason: 'quizEnded' });
+  });
+
   it('uses assignment dueDate only when quiz endDate is unset', () => {
     expect(
       getQuizAvailability(

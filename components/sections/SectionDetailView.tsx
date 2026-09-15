@@ -8,6 +8,7 @@ import { SectionRosterTable } from '@/components/sections/SectionRosterTable';
 import { SectionHeading } from '@/components/layout/SectionHeading';
 import { EmptyState } from '@/components/patterns/EmptyState';
 import { StatCard } from '@/components/patterns/StatCard';
+import { LocalDateTime } from '@/components/timezone/LocalDateTime';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -19,7 +20,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { isSectionConcluded } from '@/lib/sectionAvailability';
-import { cleanQuizDescription, formatDateStable, formatDateTimeStable } from '@/lib/utils';
+import { cleanQuizDescription } from '@/lib/utils';
 import type { SectionDetailData } from '@/lib/sectionDetailData';
 
 type SectionDetailViewProps = {
@@ -75,7 +76,7 @@ export function SectionDetailView({
           label="Section end"
           value={
             section.endsAt
-              ? (formatDateStable(section.endsAt) ?? '—')
+              ? <LocalDateTime value={section.endsAt} dateOnly />
               : 'Open'
           }
           icon={<Calendar className="h-4 w-4" />}
@@ -83,7 +84,7 @@ export function SectionDetailView({
             concluded
               ? 'Concluded for students'
               : section.endsAt
-                ? (formatDateTimeStable(section.endsAt) ?? 'Scheduled')
+                ? <LocalDateTime value={section.endsAt} />
                 : 'No end date set'
           }
         />
@@ -228,7 +229,7 @@ export function SectionDetailView({
                       </TableCell>
                       <TableCell className="text-sm text-ink-muted">
                         {quiz.endDate
-                          ? formatDateStable(quiz.endDate) ?? '—'
+                          ? <LocalDateTime value={quiz.endDate} dateOnly />
                           : '—'}
                       </TableCell>
                       <TableCell className="tnum">{quiz.submissionCount}</TableCell>

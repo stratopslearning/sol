@@ -8,9 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { LocalDateTime } from "@/components/timezone/LocalDateTime";
 import { apiUrl } from "@/lib/basePath";
 import { isSectionConcluded } from "@/lib/sectionAvailability";
-import { formatDateTimeStable } from "@/lib/utils";
 
 function extractLocalDateAndTime(
   date: Date | string | null | undefined,
@@ -127,7 +127,7 @@ export function SectionEndsAtEditor({
         <p className="text-sm text-ink">
           Current end:{" "}
           <span className="font-medium">
-            {formatDateTimeStable(endsAt) ?? "—"}
+            <LocalDateTime value={endsAt} />
           </span>
         </p>
       ) : null}

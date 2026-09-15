@@ -46,7 +46,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { format } from 'date-fns';
-import { cn, formatDateTimeUTC, fromUTC, buildQuizDescriptionWithMetadata } from '@/lib/utils';
+import { cn, buildQuizDescriptionWithMetadata } from '@/lib/utils';
 import CourseMultiSelect from '@/components/CourseMultiSelect';
 import { toast } from 'sonner';
 import { Label } from '@/components/ui/label';

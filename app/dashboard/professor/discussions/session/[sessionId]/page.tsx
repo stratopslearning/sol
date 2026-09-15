@@ -8,7 +8,7 @@ import { TranscriptDownloadButton } from '@/components/chatbot/TranscriptDownloa
 import { withBasePath } from '@/lib/basePath';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import { appRedirect } from '@/lib/serverRedirect';
-import { formatDateTimeStable } from '@/lib/utils';
+import { LocalDateTime } from '@/components/timezone/LocalDateTime';
 
 interface PageProps {
   params: Promise<{ sessionId: string }>;
@@ -72,11 +72,17 @@ export default async function ProfessorSessionReviewPage(props: PageProps) {
         ]}
         eyebrow="Transcript"
         title={studentName}
-        description={`${session.chatbot.title} · ${session.section.name}${
-          session.completedAt
-            ? ` · ${formatDateTimeStable(session.completedAt)}`
-            : ''
-        }`}
+        description={
+          <>
+            {session.chatbot.title} · {session.section.name}
+            {session.completedAt ? (
+              <>
+                {' · '}
+                <LocalDateTime value={session.completedAt} />
+              </>
+            ) : null}
+          </>
+        }
         actions={
           <TranscriptDownloadButton
             title={session.chatbot.title}

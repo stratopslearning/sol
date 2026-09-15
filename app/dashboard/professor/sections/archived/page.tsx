@@ -20,7 +20,7 @@ import {
 import { appPath, withBasePath } from "@/lib/basePath";
 import { getOrCreateUser } from "@/lib/getOrCreateUser";
 import { partitionEnrollmentsByConclusion } from "@/lib/sectionAvailability";
-import { formatDateTimeStable } from "@/lib/utils";
+import { LocalDateTime } from "@/components/timezone/LocalDateTime";
 
 export default async function ProfessorArchivedSectionsPage() {
   const user = await getOrCreateUser();
@@ -98,9 +98,9 @@ export default async function ProfessorArchivedSectionsPage() {
                       {section.course?.title ?? "—"}
                     </TableCell>
                     <TableCell className="text-ink-muted">
-                      {section.endsAt
-                        ? formatDateTimeStable(section.endsAt)
-                        : "—"}
+                        {section.endsAt
+                          ? <LocalDateTime value={section.endsAt} />
+                          : "—"}
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline">Concluded</Badge>

@@ -24,11 +24,7 @@ import { assertStudentCanOpenQuiz } from '@/lib/quizEnrollment';
 import { resolveAttemptSectionId } from '@/lib/resolveAttemptSection';
 import { isSectionConcluded } from '@/lib/sectionAvailability';
 import { appRedirect } from '@/lib/serverRedirect';
-import {
-  cleanQuizDescription,
-  formatDateTimeStable,
-  normalizeDatabaseDate,
-} from '@/lib/utils';
+import { cleanQuizDescription, normalizeDatabaseDate } from '@/lib/utils';
 
 interface QuizPageProps {
   params: Promise<{ quizId: string }>;
@@ -39,8 +35,8 @@ function blocked(
   props: {
     code: QuizBlockCode;
     quizTitle?: string | null;
-    opensAtLabel?: string | null;
-    closedAtLabel?: string | null;
+    opensAt?: Date | string | null;
+    closedAt?: Date | string | null;
   },
 ) {
   return (
@@ -78,14 +74,14 @@ export default async function QuizPage(props: QuizPageProps) {
     return blocked(user, {
       code: 'quiz_not_started',
       quizTitle: quiz.title,
-      opensAtLabel: formatDateTimeStable(startDate),
+      opensAt: startDate,
     });
   }
   if (endDate && now > endDate) {
     return blocked(user, {
       code: 'quiz_ended',
       quizTitle: quiz.title,
-      closedAtLabel: formatDateTimeStable(endDate),
+      closedAt: endDate,
     });
   }
 
@@ -161,8 +157,8 @@ export default async function QuizPage(props: QuizPageProps) {
     return blocked(user, {
       code: availabilityReasonToBlockCode(availability.reason),
       quizTitle: quiz.title,
-      opensAtLabel: startDate ? formatDateTimeStable(startDate) : null,
-      closedAtLabel: endDate ? formatDateTimeStable(endDate) : null,
+      opensAt: startDate,
+      closedAt: endDate,
     });
   }
 
