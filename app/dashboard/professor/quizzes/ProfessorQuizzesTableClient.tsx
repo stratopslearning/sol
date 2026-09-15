@@ -170,16 +170,16 @@ export default function ProfessorQuizzesTableClient({
       </div>
 
       <div className="paper paper-shadow overflow-hidden">
-        <Table className="table-fixed min-w-[1310px]">
+        <Table className="table-fixed min-w-[1420px]">
             <colgroup>
               <col className="w-[240px]" />
               <col className="w-[110px]" />
-              <col className="w-[220px]" />
+              <col className="w-[200px]" />
               <col className="w-[100px]" />
               <col className="w-[100px]" />
               <col className="w-[100px]" />
               <col className="w-[110px]" />
-              <col className="w-[170px]" />
+              <col className="w-[240px]" />
               <col className="w-[220px]" />
             </colgroup>
             <TableHeader>
@@ -266,19 +266,23 @@ export default function ProfessorQuizzesTableClient({
                           {quiz.averageScore}%
                         </span>
                       </TableCell>
-                      <TableCell className="text-sm align-top">
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-ink tnum">
+                      <TableCell className="text-sm align-top whitespace-normal overflow-hidden">
+                        <div className="flex flex-col gap-2">
+                          <span className="text-ink">
                             {quiz.endDate ? (
                               <>
-                                Due <LocalDateTime value={quiz.endDate} />
+                                <span className="block text-xs text-ink-faint">
+                                  Due
+                                </span>
+                                <LocalDateTime stacked value={quiz.endDate} />
                               </>
                             ) : (
                               "No due date"
                             )}
                           </span>
-                          <span className="text-xs text-ink-faint tnum">
-                            Created <LocalDateTime value={quiz.createdAt} />
+                          <span className="text-ink-faint">
+                            <span className="block text-xs">Created</span>
+                            <LocalDateTime stacked value={quiz.createdAt} />
                           </span>
                         </div>
                       </TableCell>

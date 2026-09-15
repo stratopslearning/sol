@@ -340,10 +340,10 @@ function SectionGradebook({ section }: { section: SectionGroup }) {
 
         <CollapsibleContent>
           <div className="border-t border-rule overflow-x-auto">
-            <Table className="table-fixed min-w-[880px]">
+            <Table className="table-fixed min-w-[960px]">
               <colgroup>
-                <col className="w-[240px]" />
-                <col className="w-[180px]" />
+                <col className="w-[220px]" />
+                <col className="w-[220px]" />
                 <col className="w-[100px]" />
                 <col className="w-[120px]" />
                 <col className="w-[120px]" />
@@ -371,9 +371,9 @@ function SectionGradebook({ section }: { section: SectionGroup }) {
                         <TableCell className="font-medium align-top">
                           {quiz.quizTitle}
                         </TableCell>
-                        <TableCell className="text-sm text-ink-muted align-top">
+                        <TableCell className="text-sm text-ink-muted align-top whitespace-normal overflow-hidden">
                           {attempt.submittedAt ? (
-                            <LocalDateTime value={attempt.submittedAt} />
+                            <LocalDateTime stacked value={attempt.submittedAt} />
                           ) : (
                             "—"
                           )}
@@ -429,9 +429,9 @@ function SectionGradebook({ section }: { section: SectionGroup }) {
                             Attempt {quiz.attempts.length - idx}
                           </span>
                         </TableCell>
-                        <TableCell className="text-ink-muted align-top">
+                        <TableCell className="text-ink-muted align-top whitespace-normal overflow-hidden">
                           {attempt.submittedAt ? (
-                            <LocalDateTime value={attempt.submittedAt} />
+                            <LocalDateTime stacked value={attempt.submittedAt} />
                           ) : (
                             "—"
                           )}

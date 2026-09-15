@@ -4,7 +4,7 @@ import {
   getBrowserTimeZone,
   sanitizeTimeZone,
 } from '@/lib/displayTimeZone';
-import { formatDateStable, formatDateTimeStable } from '@/lib/utils';
+import { formatDateStable, formatDateTimeStable, formatTimeStable } from '@/lib/utils';
 
 describe('formatDateTimeStable', () => {
   it('formats with explicit UTC timezone consistently', () => {
@@ -53,6 +53,14 @@ describe('formatDateStable', () => {
     expect(
       formatDateStable('2026-09-16T03:59:00.000Z', 'America/New_York'),
     ).toBe('Sep 15, 2026');
+  });
+});
+
+describe('formatTimeStable', () => {
+  it('formats time and zone without the calendar date', () => {
+    expect(formatTimeStable('2026-09-16T03:59:00.000Z', 'America/Phoenix')).toBe(
+      '8:59 PM MST',
+    );
   });
 });
 

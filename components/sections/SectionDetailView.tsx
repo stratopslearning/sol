@@ -227,9 +227,9 @@ export function SectionDetailView({
                           ) : null}
                         </div>
                       </TableCell>
-                      <TableCell className="text-sm text-ink-muted">
+                      <TableCell className="text-sm text-ink-muted whitespace-normal">
                         {quiz.endDate
-                          ? <LocalDateTime value={quiz.endDate} dateOnly />
+                          ? <LocalDateTime stacked value={quiz.endDate} />
                           : '—'}
                       </TableCell>
                       <TableCell className="tnum">{quiz.submissionCount}</TableCell>

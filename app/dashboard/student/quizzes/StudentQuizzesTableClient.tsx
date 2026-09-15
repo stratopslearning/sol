@@ -183,13 +183,13 @@ export default function StudentQuizzesTableClient({
 
       <div className="paper paper-shadow overflow-hidden">
         <div className="overflow-x-auto">
-          <Table className="table-fixed min-w-[1020px]">
+          <Table className="table-fixed min-w-[1120px]">
             <colgroup>
-              <col className="w-[220px]" />
-              <col className="w-[280px]" />
+              <col className="w-[200px]" />
+              <col className="w-[240px]" />
               <col className="w-[80px]" />
               <col className="w-[120px]" />
-              <col className="w-[160px]" />
+              <col className="w-[200px]" />
               <col className="w-[100px]" />
               <col className="w-[120px]" />
             </colgroup>
@@ -338,10 +338,10 @@ export default function StudentQuizzesTableClient({
                     ) : null}
                   </TableCell>
                   <TableCell
-                    className={`align-top ${isOverdue ? "text-danger" : "text-ink-muted"}`}
+                    className={`align-top whitespace-normal overflow-hidden ${isOverdue ? "text-danger" : "text-ink-muted"}`}
                   >
                     {quiz.endDate ? (
-                      <LocalDateTime value={quiz.endDate} />
+                      <LocalDateTime stacked value={quiz.endDate} />
                     ) : (
                       "—"
                     )}

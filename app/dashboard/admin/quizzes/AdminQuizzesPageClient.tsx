@@ -269,15 +269,15 @@ export default function AdminQuizzesPageClient({
         ) : (
           <div className="paper paper-shadow overflow-hidden">
             <div className="overflow-x-auto">
-              <Table className="table-fixed min-w-[1020px]">
+              <Table className="table-fixed min-w-[1180px]">
                 <colgroup>
-                  <col className="w-[24%]" />
+                  <col className="w-[22%]" />
+                  <col className="w-[16%]" />
                   <col className="w-[20%]" />
-                  <col className="w-[12%]" />
-                  <col className="w-[9%]" />
+                  <col className="w-[8%]" />
                   <col className="w-[11%]" />
                   <col className="w-[8%]" />
-                  <col className="w-[16%]" />
+                  <col className="w-[15%]" />
                 </colgroup>
                 <TableHeader>
                   <TableRow>
@@ -333,9 +333,9 @@ export default function AdminQuizzesPageClient({
                               {sectionsLabel}
                             </span>
                           </TableCell>
-                          <TableCell className="text-sm text-ink-muted tnum align-top">
+                          <TableCell className="text-sm text-ink-muted align-top whitespace-normal overflow-hidden">
                             {quiz.endDate ? (
-                              <LocalDateTime value={quiz.endDate} />
+                              <LocalDateTime stacked value={quiz.endDate} />
                             ) : (
                               "—"
                             )}
