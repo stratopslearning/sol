@@ -278,24 +278,21 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
   };
 
   const onSubmit = async (data: QuizFormData) => {
-    console.log('Quiz form submitted!', data);
-    setIsSubmitting(true);
-    
-    // Check if professor has any sections available
     if (courses.length === 0) {
       toast.error('You need to be enrolled in at least one section to create quizzes.');
-      setIsSubmitting(false);
+      setCurrentStep(1);
       return;
     }
-    
+
     if (sectionIds.length === 0) {
       setSectionError('Please assign the quiz to at least one section.');
-      setIsSubmitting(false);
+      toast.error('Assign this quiz to at least one section.');
+      setCurrentStep(1);
       return;
     }
     setSectionError(null);
+    setIsSubmitting(true);
     try {
-      // Add 'order' to each question
       const questionsWithOrder = data.questions.map((q, idx) => ({ ...q, order: idx }));
       const response = await fetch(apiUrl(apiEndpoint || '/api/professor/quiz/create'), {
         method: 'POST',
@@ -310,7 +307,7 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
             data.description,
             data.hideFeedbackAfterDue,
           ),
-          sectionIds: sectionIds, // for admin endpoint compatibility
+          sectionIds: sectionIds,
           questions: questionsWithOrder,
         }),
       });
@@ -322,12 +319,16 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
         } else {
           router.push('/dashboard/professor/quizzes');
         }
-      } else {
-        throw new Error('Failed to create quiz');
+        return;
       }
+
+      const payload = (await response.json().catch(() => null)) as
+        | { error?: string }
+        | null;
+      throw new Error(payload?.error || 'Failed to create quiz');
     } catch (error) {
       console.error('Error creating quiz:', error);
-      toast.error('Failed to create quiz');
+      toast.error(error instanceof Error ? error.message : 'Failed to create quiz');
     } finally {
       setIsSubmitting(false);
     }
@@ -354,6 +355,26 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
           'startDate',
           'endDate',
         ]);
+        toast.error(parsed.error.issues[0]?.message ?? 'Complete the required fields to continue.');
+        return;
+      }
+      if (courses.length === 0) {
+        toast.error('You need to be enrolled in at least one section to create quizzes.');
+        return;
+      }
+      if (sectionIds.length === 0) {
+        setSectionError('Please assign the quiz to at least one section.');
+        toast.error('Assign this quiz to at least one section.');
+        return;
+      }
+      setSectionError(null);
+    }
+    if (currentStep === 2) {
+      const parsed = z
+        .object({ questions: z.array(questionSchema).min(1, 'Add at least one question') })
+        .safeParse({ questions: form.getValues('questions') });
+      if (!parsed.success) {
+        toast.error(parsed.error.issues[0]?.message ?? 'Fix the questions before continuing.');
         return;
       }
     }
@@ -422,15 +443,12 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
       </nav>
 
       <Form {...form}>
-        <form 
-          onSubmit={e => { 
-            form.handleSubmit(onSubmit, (errors) => {
-              console.log('Validation errors:', errors);
-            })(e); 
-          }} 
+        <form
+          onSubmit={form.handleSubmit(onSubmit, () => {
+            toast.error('Please fix the highlighted fields and try again.');
+          })}
           className="flex flex-col gap-6"
         >
-          <button type="submit" style={{ display: 'none' }}>Test Submit</button>
           {currentStep === 1 && (
             <section className="paper paper-shadow p-6 md:p-8 flex flex-col gap-6">
               <header>
@@ -597,10 +615,10 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
                         <div className="space-y-2">
                           <Popover>
                             <PopoverTrigger asChild>
-                              <FormControl>
-                                <Button
-                                  variant="outline"
-                                  className={cn(
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className={cn(
                                     "w-full pl-3 text-left font-normal",
                                     !field.value && "text-ink-faint"
                                   )}
@@ -612,13 +630,29 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
                                   )}
                                   <CalendarIcon className="ml-auto h-4 w-4 opacity-60" />
                                 </Button>
-                              </FormControl>
                             </PopoverTrigger>
                             <PopoverContent className="w-auto p-0" align="start">
                               <Calendar
                                 mode="single"
                                 selected={field.value}
-                                onSelect={field.onChange}
+                                onSelect={(date) => {
+                                  if (!date) {
+                                    field.onChange(date);
+                                    return;
+                                  }
+                                  const next = new Date(date);
+                                  if (field.value) {
+                                    next.setHours(
+                                      field.value.getHours(),
+                                      field.value.getMinutes(),
+                                      0,
+                                      0,
+                                    );
+                                  } else {
+                                    next.setHours(0, 0, 0, 0);
+                                  }
+                                  field.onChange(next);
+                                }}
                                 disabled={(date) => {
                                   const today = new Date();
                                   today.setHours(0, 0, 0, 0);
@@ -631,16 +665,14 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
                           <Input
                             type="time"
                             placeholder="00:00"
+                            value={field.value ? format(field.value, 'HH:mm') : ''}
                             onChange={(e) => {
-                              if (field.value && e.target.value) {
-                                const [hours, minutes] = e.target.value.split(':');
-                                const newDate = new Date(field.value);
-                                newDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-                                field.onChange(newDate);
-                              }
+                              if (!e.target.value) return;
+                              const [hours, minutes] = e.target.value.split(':');
+                              const base = field.value ? new Date(field.value) : new Date();
+                              base.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
+                              field.onChange(base);
                             }}
-                            defaultValue={field.value ? format(field.value, 'HH:mm') : ''}
-                            required
                           />
                         </div>
                         <FormMessage />
@@ -658,10 +690,10 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
                         <div className="space-y-2">
                           <Popover>
                             <PopoverTrigger asChild>
-                              <FormControl>
-                                <Button
-                                  variant="outline"
-                                  className={cn(
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className={cn(
                                     "w-full pl-3 text-left font-normal",
                                     !field.value && "text-ink-faint"
                                   )}
@@ -673,13 +705,29 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
                                   )}
                                   <CalendarIcon className="ml-auto h-4 w-4 opacity-60" />
                                 </Button>
-                              </FormControl>
                             </PopoverTrigger>
                             <PopoverContent className="w-auto p-0" align="start">
                               <Calendar
                                 mode="single"
                                 selected={field.value}
-                                onSelect={field.onChange}
+                                onSelect={(date) => {
+                                  if (!date) {
+                                    field.onChange(date);
+                                    return;
+                                  }
+                                  const next = new Date(date);
+                                  if (field.value) {
+                                    next.setHours(
+                                      field.value.getHours(),
+                                      field.value.getMinutes(),
+                                      0,
+                                      0,
+                                    );
+                                  } else {
+                                    next.setHours(23, 59, 0, 0);
+                                  }
+                                  field.onChange(next);
+                                }}
                                 disabled={(date) => {
                                   const today = new Date();
                                   today.setHours(0, 0, 0, 0);
@@ -698,32 +746,24 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
                           <Input
                             type="time"
                             placeholder="23:59"
+                            value={field.value ? format(field.value, 'HH:mm') : ''}
                             onChange={(e) => {
-                              if (field.value && e.target.value) {
-                                const [hours, minutes] = e.target.value.split(':');
-                                const newDate = new Date(field.value);
-                                newDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-                                field.onChange(newDate);
-                                
-                                // Validate that end time is after start time if same day
-                                const startDate = form.getValues('startDate');
-                                if (startDate && field.value) {
-                                  const start = new Date(startDate);
-                                  const end = newDate;
-                                  // Check if same day
-                                  if (start.toDateString() === end.toDateString() && end <= start) {
-                                    form.setError('endDate', {
-                                      type: 'manual',
-                                      message: 'End time must be after start time on the same day'
-                                    });
-                                  } else {
-                                    form.clearErrors('endDate');
-                                  }
-                                }
+                              if (!e.target.value) return;
+                              const [hours, minutes] = e.target.value.split(':');
+                              const base = field.value ? new Date(field.value) : new Date();
+                              base.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
+                              field.onChange(base);
+
+                              const startDate = form.getValues('startDate');
+                              if (startDate && base <= new Date(startDate)) {
+                                form.setError('endDate', {
+                                  type: 'manual',
+                                  message: 'End date and time must be after start date and time',
+                                });
+                              } else {
+                                form.clearErrors('endDate');
                               }
                             }}
-                            defaultValue={field.value ? format(field.value, 'HH:mm') : ''}
-                            required
                           />
                         </div>
                         <FormMessage />
@@ -1008,7 +1048,7 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
             ) : (
               <Button
                 type="submit"
-                disabled={isSubmitting || sectionIds.length === 0 || courses.length === 0}
+                disabled={isSubmitting}
                 loading={isSubmitting}
               >
                 <Save className="h-4 w-4" />

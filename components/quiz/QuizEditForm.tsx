@@ -181,12 +181,14 @@ export function QuizEditForm({ quiz, courses, apiEndpoint = `/api/professor/quiz
   const onSubmit = async () => {
     // Check if professor has any sections available
     if (courses.length === 0) {
-      // Show error message
+      toast.error('You need to be enrolled in at least one section to save this quiz.');
       return;
     }
-    
+
     if (sectionIds.length === 0) {
       setSectionError('Please assign the quiz to at least one section.');
+      toast.error('Assign this quiz to at least one section.');
+      setCurrentStep(1);
       return;
     }
     setSectionError(null);
@@ -198,6 +200,8 @@ export function QuizEditForm({ quiz, courses, apiEndpoint = `/api/professor/quiz
       formData.passingScore > 100
     ) {
       setPassingScoreError('Passing score must be a whole number between 0 and 100.');
+      toast.error('Passing score must be a whole number between 0 and 100.');
+      setCurrentStep(1);
       return;
     }
     setPassingScoreError(null);
@@ -209,6 +213,8 @@ export function QuizEditForm({ quiz, courses, apiEndpoint = `/api/professor/quiz
       !formData.endTime
     ) {
       setWindowError('Start and end date and time are required.');
+      toast.error('Start and end date and time are required.');
+      setCurrentStep(1);
       return;
     }
 
@@ -240,6 +246,8 @@ export function QuizEditForm({ quiz, courses, apiEndpoint = `/api/professor/quiz
 
     if (!startDateTime || !endDateTime) {
       setWindowError('Start and end date and time are required.');
+      toast.error('Start and end date and time are required.');
+      setCurrentStep(1);
       return;
     }
 
@@ -310,9 +318,14 @@ export function QuizEditForm({ quiz, courses, apiEndpoint = `/api/professor/quiz
   const nextStep = () => {
     if (currentStep === 1 && sectionIds.length === 0) {
       setSectionError('Please assign the quiz to at least one section.');
+      toast.error('Assign this quiz to at least one section.');
       return;
     }
     setSectionError(null);
+    if (currentStep === 2 && questions.length === 0) {
+      toast.error('Add at least one question.');
+      return;
+    }
     if (currentStep < 3) {
       setCurrentStep(currentStep + 1);
     }
@@ -786,15 +799,12 @@ export function QuizEditForm({ quiz, courses, apiEndpoint = `/api/professor/quiz
       )}
 
       <div className="flex justify-between">
-        <Button variant="outline" onClick={prevStep} disabled={currentStep === 1}>
+        <Button type="button" variant="outline" onClick={prevStep} disabled={currentStep === 1}>
           Previous
         </Button>
 
         {currentStep < 3 ? (
-          <Button
-            onClick={nextStep}
-            disabled={questions.length === 0 || sectionIds.length === 0 || courses.length === 0}
-          >
+          <Button type="button" onClick={nextStep}>
             {questions.length === 0
               ? 'Add questions first'
               : courses.length === 0
@@ -803,8 +813,9 @@ export function QuizEditForm({ quiz, courses, apiEndpoint = `/api/professor/quiz
           </Button>
         ) : (
           <Button
+            type="button"
             onClick={onSubmit}
-            disabled={isSubmitting || sectionIds.length === 0 || courses.length === 0}
+            disabled={isSubmitting}
             loading={isSubmitting}
           >
             <Save className="h-4 w-4" />
