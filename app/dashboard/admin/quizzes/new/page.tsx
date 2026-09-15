@@ -5,7 +5,6 @@ import { sections } from "@/app/db/schema";
 import { AppShell } from "@/components/layout/AppShell";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { QuizCreationForm } from "@/components/quiz/QuizCreationForm";
-import { Toaster } from "@/components/ui/sonner";
 import { activeOnly } from "@/lib/db/filters";
 import { withBasePath } from "@/lib/basePath";
 import { requireAdmin } from "@/lib/auth";
@@ -26,7 +25,6 @@ export default async function AdminQuizNewPage() {
 
   return (
     <AppShell role="admin" active="quizzes" maxWidth="wide">
-      <Toaster />
       <PageHeader
         eyebrow="New quiz"
         title="Create a quiz"

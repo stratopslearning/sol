@@ -64,6 +64,7 @@ function Button({
   loading = false,
   disabled,
   children,
+  type,
   ...props
 }: ButtonProps) {
   const Comp = asChild ? Slot : "button"
@@ -78,6 +79,7 @@ function Button({
       className={cn(buttonVariants({ variant, size, className }))}
       disabled={disabled || loading}
       {...props}
+      type={asChild ? type : type ?? "button"}
     >
       {asChild ? (
         children
