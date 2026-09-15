@@ -143,6 +143,16 @@ export function formatDateTimeStable(
   return formatInTimeZone(dateObj, timeZone, 'MMM d, yyyy, h:mm aa zzz');
 }
 
+/** Time + short zone, for stacked table labels. */
+export function formatTimeStable(
+  date: Date | string | null | undefined,
+  timeZone = 'UTC',
+): string {
+  const dateObj = normalizeDatabaseDate(date);
+  if (!dateObj || isNaN(dateObj.getTime())) return 'Invalid date';
+  return formatInTimeZone(dateObj, timeZone, 'h:mm aa zzz');
+}
+
 /** SSR-safe date-only formatting (explicit timezone). */
 export function formatDateStable(
   date: Date | string | null | undefined,

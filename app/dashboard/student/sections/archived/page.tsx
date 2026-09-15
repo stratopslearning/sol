@@ -21,7 +21,10 @@ import {
 import { appPath, withBasePath } from "@/lib/basePath";
 import { requireStudent } from "@/lib/auth";
 import { partitionEnrollmentsByConclusion } from "@/lib/sectionAvailability";
-import { LocalDateTime } from "@/components/timezone/LocalDateTime";
+import {
+  LocalDateTime,
+  TIMESTAMP_CELL_CLASS,
+} from "@/components/timezone/LocalDateTime";
 
 export default async function StudentArchivedSectionsPage() {
   const user = await requireStudent();
@@ -92,7 +95,7 @@ export default async function StudentArchivedSectionsPage() {
                   <TableRow>
                     <TableHead>Section</TableHead>
                     <TableHead>Course</TableHead>
-                    <TableHead>Ended</TableHead>
+                    <TableHead className="min-w-[13rem]">Ended</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Grades</TableHead>
                   </TableRow>
@@ -106,9 +109,9 @@ export default async function StudentArchivedSectionsPage() {
                       <TableCell className="text-ink-muted">
                         {section.course?.title ?? "—"}
                       </TableCell>
-                      <TableCell className="text-ink-muted">
+                      <TableCell className={`text-ink-muted ${TIMESTAMP_CELL_CLASS}`}>
                         {section.endsAt
-                          ? <LocalDateTime value={section.endsAt} />
+                          ? <LocalDateTime stacked value={section.endsAt} />
                           : "—"}
                       </TableCell>
                       <TableCell>

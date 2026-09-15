@@ -34,7 +34,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/patterns/EmptyState";
-import { LocalDateTime } from "@/components/timezone/LocalDateTime";
+import {
+  LocalDateTime,
+  TIMESTAMP_CELL_CLASS,
+} from "@/components/timezone/LocalDateTime";
 import { cn } from "@/lib/utils";
 
 type AttemptRow = {
@@ -340,21 +343,14 @@ function SectionGradebook({ section }: { section: SectionGroup }) {
 
         <CollapsibleContent>
           <div className="border-t border-rule overflow-x-auto">
-            <Table className="table-fixed min-w-[880px]">
-              <colgroup>
-                <col className="w-[240px]" />
-                <col className="w-[180px]" />
-                <col className="w-[100px]" />
-                <col className="w-[120px]" />
-                <col className="w-[120px]" />
-              </colgroup>
+            <Table className="min-w-[960px]">
               <TableHeader>
                 <TableRow>
                   <TableHead>Quiz / attempt</TableHead>
-                  <TableHead>Submitted</TableHead>
+                  <TableHead className="min-w-[13rem]">Submitted</TableHead>
                   <TableHead className="tnum">Score</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="sticky right-0 z-10 bg-surface-sunken/95 px-3 text-right">
+                  <TableHead className="sticky right-0 z-10 border-l border-rule bg-surface-sunken/95 px-3 text-right">
                     Action
                   </TableHead>
                 </TableRow>
@@ -371,9 +367,9 @@ function SectionGradebook({ section }: { section: SectionGroup }) {
                         <TableCell className="font-medium align-top">
                           {quiz.quizTitle}
                         </TableCell>
-                        <TableCell className="text-sm text-ink-muted align-top">
+                        <TableCell className={`text-sm text-ink-muted ${TIMESTAMP_CELL_CLASS}`}>
                           {attempt.submittedAt ? (
-                            <LocalDateTime value={attempt.submittedAt} />
+                            <LocalDateTime stacked value={attempt.submittedAt} />
                           ) : (
                             "—"
                           )}
@@ -384,7 +380,7 @@ function SectionGradebook({ section }: { section: SectionGroup }) {
                         <TableCell className="align-top">
                           <StatusBadge passed={attempt.passed} />
                         </TableCell>
-                        <TableCell className="sticky right-0 z-10 bg-paper px-3 text-right align-top">
+                        <TableCell className="sticky right-0 z-10 border-l border-rule bg-paper px-3 text-right align-top">
                           <div className="flex min-w-max items-center justify-end">
                             <ReviewButton attempt={attempt} />
                           </div>
@@ -414,7 +410,7 @@ function SectionGradebook({ section }: { section: SectionGroup }) {
                       <TableCell className="align-top">
                         {best ? <StatusBadge passed={best.passed} /> : "—"}
                       </TableCell>
-                      <TableCell className="sticky right-0 z-10 bg-surface-sunken/95 px-3 text-right align-top">
+                      <TableCell className="sticky right-0 z-10 border-l border-rule bg-surface-sunken/95 px-3 text-right align-top">
                         {best ? (
                           <div className="flex min-w-max items-center justify-end">
                             <ReviewButton attempt={best} />
@@ -429,9 +425,9 @@ function SectionGradebook({ section }: { section: SectionGroup }) {
                             Attempt {quiz.attempts.length - idx}
                           </span>
                         </TableCell>
-                        <TableCell className="text-ink-muted align-top">
+                        <TableCell className={`text-ink-muted ${TIMESTAMP_CELL_CLASS}`}>
                           {attempt.submittedAt ? (
-                            <LocalDateTime value={attempt.submittedAt} />
+                            <LocalDateTime stacked value={attempt.submittedAt} />
                           ) : (
                             "—"
                           )}
@@ -442,7 +438,7 @@ function SectionGradebook({ section }: { section: SectionGroup }) {
                         <TableCell className="align-top">
                           <StatusBadge passed={attempt.passed} />
                         </TableCell>
-                        <TableCell className="sticky right-0 z-10 bg-paper px-3 text-right align-top">
+                        <TableCell className="sticky right-0 z-10 border-l border-rule bg-paper px-3 text-right align-top">
                           <div className="flex min-w-max items-center justify-end">
                             <ReviewButton attempt={attempt} />
                           </div>

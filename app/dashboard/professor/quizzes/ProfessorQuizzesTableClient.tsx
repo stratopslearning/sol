@@ -6,7 +6,10 @@ import { FileText, Plus, TrendingUp, Users } from "lucide-react";
 
 import { QuizActions } from "@/components/quiz/QuizActions";
 import { EmptyState } from "@/components/patterns/EmptyState";
-import { LocalDateTime } from "@/components/timezone/LocalDateTime";
+import {
+  LocalDateTime,
+  TIMESTAMP_CELL_CLASS,
+} from "@/components/timezone/LocalDateTime";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -170,18 +173,8 @@ export default function ProfessorQuizzesTableClient({
       </div>
 
       <div className="paper paper-shadow overflow-hidden">
-        <Table className="table-fixed min-w-[1310px]">
-            <colgroup>
-              <col className="w-[240px]" />
-              <col className="w-[110px]" />
-              <col className="w-[220px]" />
-              <col className="w-[100px]" />
-              <col className="w-[100px]" />
-              <col className="w-[100px]" />
-              <col className="w-[110px]" />
-              <col className="w-[170px]" />
-              <col className="w-[220px]" />
-            </colgroup>
+        <div className="overflow-x-auto">
+        <Table className="min-w-[1280px]">
             <TableHeader>
               <TableRow>
                 <TableHead>Title</TableHead>
@@ -191,7 +184,7 @@ export default function ProfessorQuizzesTableClient({
                 <TableHead className="tnum">Learners</TableHead>
                 <TableHead className="tnum">Attempts</TableHead>
                 <TableHead className="tnum">Average</TableHead>
-                <TableHead>Dates</TableHead>
+                <TableHead className="min-w-[13rem]">Dates</TableHead>
                 <TableHead className="sticky right-0 z-10 border-l border-rule bg-surface-sunken px-4 text-right">
                   Actions
                 </TableHead>
@@ -266,19 +259,23 @@ export default function ProfessorQuizzesTableClient({
                           {quiz.averageScore}%
                         </span>
                       </TableCell>
-                      <TableCell className="text-sm align-top">
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-ink tnum">
+                      <TableCell className={TIMESTAMP_CELL_CLASS}>
+                        <div className="flex flex-col gap-2">
+                          <span className="text-ink">
                             {quiz.endDate ? (
                               <>
-                                Due <LocalDateTime value={quiz.endDate} />
+                                <span className="block text-xs text-ink-faint">
+                                  Due
+                                </span>
+                                <LocalDateTime stacked value={quiz.endDate} />
                               </>
                             ) : (
                               "No due date"
                             )}
                           </span>
-                          <span className="text-xs text-ink-faint tnum">
-                            Created <LocalDateTime value={quiz.createdAt} />
+                          <span className="text-ink-faint">
+                            <span className="block text-xs">Created</span>
+                            <LocalDateTime stacked value={quiz.createdAt} />
                           </span>
                         </div>
                       </TableCell>
@@ -297,6 +294,7 @@ export default function ProfessorQuizzesTableClient({
               )}
             </TableBody>
           </Table>
+        </div>
       </div>
 
       {totalPages > 1 ? (

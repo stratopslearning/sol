@@ -533,8 +533,11 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
         <div className="mt-6 flex flex-wrap gap-2">
           <Badge variant="outline">{questions.length} questions</Badge>
           {quiz.endDate ? (
-            <Badge variant="outline">
-              Due <LocalDateTime value={quiz.endDate} />
+            <Badge variant="outline" className="whitespace-normal h-auto py-1.5">
+              <span className="inline-flex flex-col items-start gap-0.5 text-left">
+                <span>Due</span>
+                <LocalDateTime stacked value={quiz.endDate} />
+              </span>
             </Badge>
           ) : null}
           {quiz.timeLimit ? (
