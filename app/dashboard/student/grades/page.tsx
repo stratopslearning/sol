@@ -7,7 +7,6 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { withBasePath } from "@/lib/basePath";
 import { requireStudent } from "@/lib/auth";
 import { isSectionConcluded } from "@/lib/sectionAvailability";
-import { formatDateTimeStable } from "@/lib/utils";
 
 import StudentGradesTableClient from "./StudentGradesTableClient";
 
@@ -37,9 +36,6 @@ export default async function StudentGradesPage({
     courseTitle: a.section?.course?.title ?? null,
     submittedAt: a.submittedAt
       ? new Date(a.submittedAt).toISOString()
-      : null,
-    submittedAtLabel: a.submittedAt
-      ? formatDateTimeStable(a.submittedAt)
       : null,
     score: a.score,
     maxScore: a.maxScore,

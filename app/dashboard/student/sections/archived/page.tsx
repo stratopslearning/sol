@@ -21,7 +21,7 @@ import {
 import { appPath, withBasePath } from "@/lib/basePath";
 import { requireStudent } from "@/lib/auth";
 import { partitionEnrollmentsByConclusion } from "@/lib/sectionAvailability";
-import { formatDateTimeStable } from "@/lib/utils";
+import { LocalDateTime } from "@/components/timezone/LocalDateTime";
 
 export default async function StudentArchivedSectionsPage() {
   const user = await requireStudent();
@@ -108,7 +108,7 @@ export default async function StudentArchivedSectionsPage() {
                       </TableCell>
                       <TableCell className="text-ink-muted">
                         {section.endsAt
-                          ? formatDateTimeStable(section.endsAt)
+                          ? <LocalDateTime value={section.endsAt} />
                           : "—"}
                       </TableCell>
                       <TableCell>

@@ -10,7 +10,6 @@ import { StatCard } from "@/components/patterns/StatCard";
 import { Button } from "@/components/ui/button";
 import { withBasePath } from "@/lib/basePath";
 import { getOrCreateUser } from "@/lib/getOrCreateUser";
-import { formatDateStable } from "@/lib/utils";
 import { partitionEnrollmentsByConclusion } from "@/lib/sectionAvailability";
 import { uniqueVisibleLibraryQuizzes } from "@/lib/professor/quizLibrary";
 
@@ -107,8 +106,6 @@ export default async function ProfessorQuizzesPage() {
       totalAttempts,
       uniqueStudents,
       averageScore,
-      dueDateLabel: formatDateStable(quiz.endDate),
-      createdDateLabel: formatDateStable(quiz.createdAt),
     };
   });
 

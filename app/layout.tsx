@@ -5,6 +5,7 @@ import { ClerkProvider } from "@clerk/nextjs";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme/theme-provider";
 import { authLocalization } from "@/components/auth/auth-localization";
+import { TimeZoneProvider } from "@/components/timezone/TimeZoneProvider";
 import { withBasePath } from "@/lib/basePath";
 
 const fraunces = Fraunces({
@@ -52,7 +53,7 @@ export const metadata: Metadata = {
   },
 };
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
@@ -69,13 +70,15 @@ export default async function RootLayout({
         className={`${fraunces.variable} ${instrumentSans.variable} ${jetbrainsMono.variable}`}
       >
         <body className="font-sans antialiased min-h-screen bg-paper text-ink">
-          <ThemeProvider>
-            <a href="#main" className="skip-to-main">
-              Skip to main content
-            </a>
-            {children}
-            <Toaster position="top-right" richColors closeButton />
-          </ThemeProvider>
+          <TimeZoneProvider>
+            <ThemeProvider>
+              <a href="#main" className="skip-to-main">
+                Skip to main content
+              </a>
+              {children}
+              <Toaster position="top-right" richColors closeButton />
+            </ThemeProvider>
+          </TimeZoneProvider>
         </body>
       </html>
     </ClerkProvider>

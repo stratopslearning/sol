@@ -4,7 +4,6 @@ import { AppShell } from "@/components/layout/AppShell";
 import { activeOnly } from "@/lib/db/filters";
 import { requireAdmin } from "@/lib/auth";
 import { partitionBySectionConclusion } from "@/lib/sectionAvailability";
-import { formatDateStable } from "@/lib/utils";
 
 import AdminQuizzesPageClient from "./AdminQuizzesPageClient";
 
@@ -19,10 +18,6 @@ export default async function AdminQuizzesPage() {
   const allQuizzesRaw = await db.query.quizzes.findMany({
     where: activeOnly(quizzes.deletedAt),
   });
-  const allQuizzes = allQuizzesRaw.map((quiz) => ({
-    ...quiz,
-    dueDateLabel: formatDateStable(quiz.endDate),
-  }));
   const ongoingIds = new Set(ongoingSections.map((s) => s.id));
   const allQuizSections = (await db.query.quizSections.findMany()).filter(
     (qs) => ongoingIds.has(qs.sectionId),
@@ -32,7 +27,7 @@ export default async function AdminQuizzesPage() {
     <AppShell role="admin" active="quizzes" topbarEyebrow="Administration" topbarTitle="Quizzes">
       <AdminQuizzesPageClient
         allSections={ongoingSections}
-        allQuizzes={allQuizzes}
+        allQuizzes={allQuizzesRaw}
         allQuizSections={allQuizSections}
       />
     </AppShell>

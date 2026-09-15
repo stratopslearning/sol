@@ -16,8 +16,9 @@ import { QuizTimer } from "@/components/quiz/QuizTimer";
 import { Clock } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useRef, useEffect, useCallback } from "react";
+import { LocalDateTime } from "@/components/timezone/LocalDateTime";
 import { getRemainingSeconds } from "@/lib/quizTimeLimit";
-import { formatDateTimeUTC, shouldHideFeedbackForStudent, cleanQuizDescription } from "@/lib/utils";
+import { shouldHideFeedbackForStudent, cleanQuizDescription } from "@/lib/utils";
 import { apiUrl, withBasePath } from "@/lib/basePath";
 import {
   startApiErrorToBlockCode,
@@ -378,7 +379,7 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
           <QuizUnavailable
             code={startBlock}
             quizTitle={quiz.title}
-            closedAtLabel={quiz.endDate ? formatDateTimeUTC(quiz.endDate) : null}
+            closedAt={quiz.endDate}
           />
         </div>
       </div>
@@ -532,7 +533,9 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
         <div className="mt-6 flex flex-wrap gap-2">
           <Badge variant="outline">{questions.length} questions</Badge>
           {quiz.endDate ? (
-            <Badge variant="outline">Due {formatDateTimeUTC(quiz.endDate)}</Badge>
+            <Badge variant="outline">
+              Due <LocalDateTime value={quiz.endDate} />
+            </Badge>
           ) : null}
           {quiz.timeLimit ? (
             <Badge variant="outline">{quiz.timeLimit} min</Badge>

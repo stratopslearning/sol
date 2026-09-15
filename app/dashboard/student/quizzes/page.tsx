@@ -9,10 +9,7 @@ import { withBasePath } from '@/lib/basePath';
 import { requireStudent } from '@/lib/auth';
 import { partitionEnrollmentsByConclusion } from '@/lib/sectionAvailability';
 import { isQuizListedForStudents } from '@/lib/quizAvailability';
-import {
-  formatDateTimeStable,
-  normalizeDatabaseDate,
-} from '@/lib/utils';
+import { normalizeDatabaseDate } from '@/lib/utils';
 
 export default async function StudentQuizzesPage() {
   const user = await requireStudent();
@@ -98,8 +95,6 @@ export default async function StudentQuizzesPage() {
   const latestAttemptIdByQuizId: Record<string, string> = {};
   const isOverdueByQuizId: Record<string, boolean> = {};
   const isNotStartedByQuizId: Record<string, boolean> = {};
-  const dueDateLabelByQuizId: Record<string, string> = {};
-  const opensAtLabelByQuizId: Record<string, string> = {};
   const now = new Date();
   assignedQuizzes.forEach((quiz) => {
     const list = attemptsByQuiz[quiz.id] ?? [];
@@ -122,12 +117,6 @@ export default async function StudentQuizzesPage() {
     const endDate = normalizeDatabaseDate(quiz.endDate);
     isNotStartedByQuizId[quiz.id] = startDate ? startDate > now : false;
     isOverdueByQuizId[quiz.id] = endDate ? endDate < now : false;
-    if (quiz.startDate) {
-      opensAtLabelByQuizId[quiz.id] = formatDateTimeStable(quiz.startDate);
-    }
-    if (quiz.endDate) {
-      dueDateLabelByQuizId[quiz.id] = formatDateTimeStable(quiz.endDate);
-    }
   });
 
   return (
@@ -150,8 +139,6 @@ export default async function StudentQuizzesPage() {
           latestAttemptIdByQuizId={latestAttemptIdByQuizId}
           isOverdueByQuizId={isOverdueByQuizId}
           isNotStartedByQuizId={isNotStartedByQuizId}
-          dueDateLabelByQuizId={dueDateLabelByQuizId}
-          opensAtLabelByQuizId={opensAtLabelByQuizId}
         />
       </div>
     </AppShell>

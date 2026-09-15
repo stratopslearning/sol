@@ -6,6 +6,7 @@ import { FileText, Plus, TrendingUp, Users } from "lucide-react";
 
 import { QuizActions } from "@/components/quiz/QuizActions";
 import { EmptyState } from "@/components/patterns/EmptyState";
+import { LocalDateTime } from "@/components/timezone/LocalDateTime";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -215,8 +216,6 @@ export default function ProfessorQuizzesTableClient({
                           .filter(Boolean)
                           .join(", ")
                       : "—";
-                  const dueDate = quiz.dueDateLabel as string | null;
-                  const createdDate = quiz.createdDateLabel as string | null;
                   return (
                     <TableRow key={quiz.id}>
                       <TableCell className="align-top">
@@ -270,10 +269,16 @@ export default function ProfessorQuizzesTableClient({
                       <TableCell className="text-sm align-top">
                         <div className="flex flex-col gap-0.5">
                           <span className="text-ink tnum">
-                            {dueDate ? `Due ${dueDate}` : "No due date"}
+                            {quiz.endDate ? (
+                              <>
+                                Due <LocalDateTime value={quiz.endDate} />
+                              </>
+                            ) : (
+                              "No due date"
+                            )}
                           </span>
                           <span className="text-xs text-ink-faint tnum">
-                            {createdDate ? `Created ${createdDate}` : "Created —"}
+                            Created <LocalDateTime value={quiz.createdAt} />
                           </span>
                         </div>
                       </TableCell>

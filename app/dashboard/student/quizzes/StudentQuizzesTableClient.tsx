@@ -32,8 +32,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/patterns/EmptyState";
+import { LocalDateTime } from "@/components/timezone/LocalDateTime";
+import { useDisplayTimeZone } from "@/components/timezone/TimeZoneProvider";
 import { getQuizBlockCopy } from "@/lib/quizBlockCopy";
-import { normalizeDatabaseDate } from "@/lib/utils";
+import { getBrowserTimeZone } from "@/lib/displayTimeZone";
+import { formatDateTimeStable, normalizeDatabaseDate } from "@/lib/utils";
 
 const ROWS_PER_PAGE = 15;
 type SortMode = "DEFAULT" | "DUE_ASC" | "DUE_DESC";
@@ -73,8 +76,6 @@ export default function StudentQuizzesTableClient({
   latestAttemptIdByQuizId,
   isOverdueByQuizId,
   isNotStartedByQuizId,
-  dueDateLabelByQuizId,
-  opensAtLabelByQuizId,
 }: {
   quizzes: QuizRow[];
   submittedCountByQuizId: Record<string, number>;
@@ -83,9 +84,8 @@ export default function StudentQuizzesTableClient({
   latestAttemptIdByQuizId: Record<string, string>;
   isOverdueByQuizId: Record<string, boolean>;
   isNotStartedByQuizId: Record<string, boolean>;
-  dueDateLabelByQuizId: Record<string, string>;
-  opensAtLabelByQuizId: Record<string, string>;
 }) {
+  const timeZone = useDisplayTimeZone();
   const [search, setSearch] = useState("");
   const [sectionFilter, setSectionFilter] = useState<string>("ALL");
   const [sortMode, setSortMode] = useState<SortMode>("DEFAULT");
@@ -217,7 +217,6 @@ export default function StudentQuizzesTableClient({
               const canRetake = submittedCount < maxAttempts;
               const isOverdue = isOverdueByQuizId[quiz.id] ?? false;
               const isNotStarted = isNotStartedByQuizId[quiz.id] ?? false;
-              const opensAtLabel = opensAtLabelByQuizId[quiz.id];
 
               let statusBadge: React.ReactNode;
               if (isNotStarted) {
@@ -233,9 +232,14 @@ export default function StudentQuizzesTableClient({
               }
 
               const toastBlockedStart = (code: "quiz_not_started" | "quiz_ended") => {
+                const zone = timeZone ?? getBrowserTimeZone();
                 const copy = getQuizBlockCopy(code, {
-                  opensAtLabel,
-                  closedAtLabel: dueDateLabelByQuizId[quiz.id],
+                  opensAtLabel: quiz.startDate
+                    ? formatDateTimeStable(quiz.startDate, zone)
+                    : undefined,
+                  closedAtLabel: quiz.endDate
+                    ? formatDateTimeStable(quiz.endDate, zone)
+                    : undefined,
                 });
                 if (code === "quiz_not_started") {
                   toast.info(copy.title, {
@@ -336,7 +340,11 @@ export default function StudentQuizzesTableClient({
                   <TableCell
                     className={`align-top ${isOverdue ? "text-danger" : "text-ink-muted"}`}
                   >
-                    {dueDateLabelByQuizId[quiz.id] ?? "—"}
+                    {quiz.endDate ? (
+                      <LocalDateTime value={quiz.endDate} />
+                    ) : (
+                      "—"
+                    )}
                   </TableCell>
                   <TableCell className="align-top">{statusBadge}</TableCell>
                   <TableCell className="sticky right-0 z-10 bg-paper px-3 text-right align-top">

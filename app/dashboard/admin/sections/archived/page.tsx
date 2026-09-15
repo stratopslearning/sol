@@ -20,7 +20,7 @@ import { requireAdmin } from '@/lib/auth';
 import { appPath, withBasePath } from '@/lib/basePath';
 import { activeOnly } from '@/lib/db/filters';
 import { partitionBySectionConclusion } from '@/lib/sectionAvailability';
-import { formatDateTimeStable } from '@/lib/utils';
+import { LocalDateTime } from '@/components/timezone/LocalDateTime';
 
 export default async function AdminArchivedSectionsPage() {
   await requireAdmin();
@@ -91,9 +91,9 @@ export default async function AdminArchivedSectionsPage() {
                       {section.course?.title ?? '—'}
                     </TableCell>
                     <TableCell className="text-ink-muted">
-                      {section.endsAt
-                        ? formatDateTimeStable(section.endsAt)
-                        : '—'}
+                        {section.endsAt
+                          ? <LocalDateTime value={section.endsAt} />
+                          : '—'}
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline">Concluded</Badge>

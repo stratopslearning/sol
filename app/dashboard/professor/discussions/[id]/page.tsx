@@ -23,7 +23,7 @@ import {
 import { appPath, withBasePath } from '@/lib/basePath';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import { appRedirect } from '@/lib/serverRedirect';
-import { formatDateTimeStable } from '@/lib/utils';
+import { LocalDateTime } from '@/components/timezone/LocalDateTime';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -130,7 +130,7 @@ export default async function DiscussionSessionsPage(props: PageProps) {
                   <TableCell>{s.section.name}</TableCell>
                   <TableCell>
                     {s.completedAt
-                      ? formatDateTimeStable(s.completedAt)
+                      ? <LocalDateTime value={s.completedAt} />
                       : '—'}
                   </TableCell>
                   <TableCell>

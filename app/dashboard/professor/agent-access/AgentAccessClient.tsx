@@ -11,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiUrl } from "@/lib/basePath";
-import { formatDateTimeStable } from "@/lib/utils";
+import { LocalDateTime } from "@/components/timezone/LocalDateTime";
 
 const SCOPE_OPTIONS: { id: string; label: string; hint: string }[] = [
   { id: "read", label: "Read", hint: "Sections, quizzes, gradebook, discussions" },
@@ -290,12 +290,12 @@ export default function AgentAccessClient({
                     ))}
                   </div>
                   <span className="text-xs text-ink-muted">
-                    Created {formatDateTimeStable(t.createdAt) ?? "—"}
+                    Created <LocalDateTime value={t.createdAt} />
                     {t.lastUsedAt
-                      ? ` · Last used ${formatDateTimeStable(t.lastUsedAt)}`
+                      ? <> · Last used <LocalDateTime value={t.lastUsedAt} /></>
                       : " · Never used"}
                     {t.expiresAt
-                      ? ` · Expires ${formatDateTimeStable(t.expiresAt)}`
+                      ? <> · Expires <LocalDateTime value={t.expiresAt} /></>
                       : ""}
                   </span>
                 </div>
