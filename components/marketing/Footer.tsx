@@ -112,7 +112,7 @@ export function Footer() {
             © {year} SOL Learning. All rights reserved.
           </p>
           <p className="text-sm text-ink-faint">
-            Developed and made by{" "}
+            Made by{" "}
             <a
               href="https://www.yashsawant.dev/"
               target="_blank"
