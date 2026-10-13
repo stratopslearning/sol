@@ -111,6 +111,17 @@ export function Footer() {
           <p className="text-sm text-ink-faint">
             © {year} SOL Learning. All rights reserved.
           </p>
+          <p className="text-sm text-ink-faint">
+            Developed and made by{" "}
+            <a
+              href="https://www.yashsawant.dev/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-ink/85 underline-offset-4 transition-colors duration-200 hover:text-brand hover:underline"
+            >
+              Yash Ajay Sawant
+            </a>
+          </p>
         </div>
       </div>
 
