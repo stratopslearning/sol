@@ -26,12 +26,16 @@ const productLinks = [
 const companyLinks = [
   { title: "Docs", href: withBasePath("/docs") },
   { title: "About SOL", href: withBasePath("/docs/about-sol") },
+  { title: "Security", href: withBasePath("/security") },
   { title: "Sign in", href: withBasePath("/login") },
 ] as const;
 
 const legalLinks = [
   { title: "Terms", href: withBasePath("/terms") },
   { title: "Privacy", href: withBasePath("/privacy") },
+  { title: "Security", href: withBasePath("/security") },
+  { title: "DMCA", href: withBasePath("/dmca") },
+  { title: "Unsubscribe", href: withBasePath("/unsubscribe") },
 ] as const;
 
 /** Closing CTA + footer as one painting band (Vestris-style). */
@@ -174,7 +178,7 @@ export function Footer() {
               </a>
               <p className="text-sm leading-relaxed text-[#f4f1e8]/70">
                 The AI teaching layer for the LMS you already use. The operating
-                system for learning.
+                system for teaching.
               </p>
             </div>
 

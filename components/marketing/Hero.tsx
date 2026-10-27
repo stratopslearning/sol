@@ -124,8 +124,8 @@ export function Hero() {
   return (
     <section
       ref={rootRef}
-      aria-label="SOL. The operating system for learning."
-      className="relative isolate min-h-[100svh] overflow-hidden"
+      aria-label="SOL. The operating system for teaching."
+      className="mkt-hero relative isolate overflow-hidden"
     >
       <div className="absolute inset-0" aria-hidden data-hero="bg">
         <Image
@@ -133,14 +133,14 @@ export function Hero() {
           alt=""
           fill
           priority
-          className="object-cover object-[center_42%]"
+          className="object-cover object-[center_40%] sm:object-[center_42%]"
           sizes="100vw"
         />
         <div className="absolute inset-0 bg-[linear-gradient(180deg,color-mix(in_oklch,var(--paper)_55%,transparent)_0%,color-mix(in_oklch,var(--paper)_18%,transparent)_36%,transparent_58%,color-mix(in_oklch,var(--paper)_25%,transparent)_100%)]" />
       </div>
 
-      <div className="relative z-10 mx-auto flex min-h-[100svh] max-w-[920px] flex-col items-center px-4 pb-16 pt-28 text-center md:px-8 md:pt-36">
-        <div className="relative mt-10 flex w-full items-center justify-center px-2">
+      <div className="relative z-10 mx-auto flex h-full max-w-[920px] flex-col items-center px-4 pb-10 pt-[max(5.5rem,calc(env(safe-area-inset-top)+4.25rem))] text-center md:px-8 md:pb-16 md:pt-36">
+        <div className="relative mt-[min(8vh,3.5rem)] flex w-full items-center justify-center px-2">
           <h1
             data-hero="headline"
             className="max-w-[14ch] font-display text-ink text-balance"
@@ -151,7 +151,7 @@ export function Hero() {
             }}
           >
             The operating system{" "}
-            <em className="mkt-italic">for learning.</em>
+            <em className="mkt-italic">for teaching.</em>
           </h1>
         </div>
 
@@ -189,7 +189,8 @@ export function Hero() {
           )}
         </div>
 
-        <div className="mt-auto min-h-[28vh] w-full" aria-hidden />
+        {/* flex-1 keeps copy in the upper band without growing past the viewport */}
+        <div className="mt-auto min-h-0 w-full flex-1" aria-hidden />
       </div>
     </section>
   );

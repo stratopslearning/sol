@@ -66,11 +66,11 @@ export const metadata: Metadata = {
     template: "%s · SOL",
   },
   description:
-    "The AI teaching layer for the LMS you already use. The operating system for learning. Build courses from your materials, tutor from your course only, assess with integrity, and see what to reteach.",
+    "The AI teaching layer for the LMS you already use. The operating system for teaching. Build courses from your materials, tutor from your course only, assess with integrity, and see what to reteach.",
   openGraph: {
     title: "SOL",
     description:
-      "The AI teaching layer for the LMS you already use. The operating system for learning.",
+      "The AI teaching layer for the LMS you already use. The operating system for teaching.",
     siteName: "SOL",
     type: "website",
     locale: "en_US",
@@ -79,7 +79,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "SOL",
     description:
-      "The AI teaching layer for the LMS you already use. The operating system for learning.",
+      "The AI teaching layer for the LMS you already use. The operating system for teaching.",
   },
 };
 
