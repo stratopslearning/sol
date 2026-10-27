@@ -20,7 +20,7 @@ export interface NavItem {
   href: string;
   label: string;
   icon: LucideIcon;
-  /** Match key — also used for legacy `active` prop on old sidebars. */
+  /** Match key: also used for legacy `active` prop on old sidebars. */
   key: string;
   /** Optional description shown only at top of sidebar group, not in row. */
   description?: string;
@@ -36,6 +36,11 @@ export interface RoleConfig {
   items: NavItem[];
 }
 
+/**
+ * Production route map for the UI refresh.
+ * New module routes (assignments / materials / authoring / LTI / analytics)
+ * intentionally stay off this list until those features ship.
+ */
 export const ROLE_CONFIG: Record<AppRole, RoleConfig> = {
   admin: {
     role: "admin",
@@ -93,13 +98,13 @@ export const ROLE_CONFIG: Record<AppRole, RoleConfig> = {
       },
       {
         href: withBasePath("/dashboard/professor/sections"),
-        label: "My Sections",
+        label: "Sections",
         icon: Layers,
         key: "sections",
       },
       {
         href: withBasePath("/dashboard/professor/quizzes"),
-        label: "My Quizzes",
+        label: "Quizzes",
         icon: FileText,
         key: "quizzes",
       },
@@ -110,20 +115,20 @@ export const ROLE_CONFIG: Record<AppRole, RoleConfig> = {
         key: "discussions",
       },
       {
-        href: withBasePath("/dashboard/professor/quiz-results"),
-        label: "All Results",
-        icon: TrendingUp,
-        key: "quiz-results",
-      },
-      {
         href: withBasePath("/dashboard/professor/attention"),
         label: "Attention",
         icon: AlertTriangle,
         key: "attention",
       },
       {
+        href: withBasePath("/dashboard/professor/quiz-results"),
+        label: "Results",
+        icon: TrendingUp,
+        key: "quiz-results",
+      },
+      {
         href: withBasePath("/dashboard/professor/agent-access"),
-        label: "Agent Access",
+        label: "Agent access",
         icon: KeyRound,
         key: "agent-access",
       },
@@ -142,25 +147,25 @@ export const ROLE_CONFIG: Record<AppRole, RoleConfig> = {
       },
       {
         href: withBasePath("/dashboard/student/sections"),
-        label: "My Sections",
+        label: "Sections",
         icon: Layers,
         key: "sections",
       },
       {
         href: withBasePath("/dashboard/student/quizzes"),
-        label: "My Quizzes",
+        label: "Quizzes",
         icon: FileText,
         key: "quizzes",
       },
       {
         href: withBasePath("/dashboard/student/discussions"),
-        label: "My Discussions",
+        label: "Discussions",
         icon: MessagesSquare,
         key: "discussions",
       },
       {
         href: withBasePath("/dashboard/student/grades"),
-        label: "My Grades",
+        label: "Grades",
         icon: CheckCircle,
         key: "grades",
       },

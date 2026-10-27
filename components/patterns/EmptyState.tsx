@@ -13,7 +13,7 @@ interface EmptyStateProps {
   description?: React.ReactNode;
   /** Primary CTA(s) below the description. */
   actions?: React.ReactNode;
-  /** Visual style — bordered paper card or bare. */
+  /** Visual style: bordered paper card or bare. */
   variant?: "card" | "bare";
   className?: string;
 }

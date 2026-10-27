@@ -34,10 +34,9 @@ export function SectionHeading({
             style={
               serif
                 ? {
-                    fontSize: "clamp(1.375rem, 2vw, 1.625rem)",
+                    fontSize: "clamp(1.35rem, 0.6vw + 1.1rem, 1.75rem)",
                     lineHeight: 1.2,
-                    letterSpacing: "-0.015em",
-                    fontVariationSettings: '"opsz" 36',
+                    letterSpacing: "-0.02em",
                   }
                 : undefined
             }

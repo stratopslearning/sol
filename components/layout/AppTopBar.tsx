@@ -1,29 +1,20 @@
 "use client";
 
-import * as React from "react";
-import { UserButton } from "@clerk/nextjs";
+import { Menu } from "lucide-react";
 
+import { useMobileNav } from "@/components/layout/mobile-nav";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { cn } from "@/lib/utils";
 
 interface AppTopBarProps {
-  /** Optional eyebrow/section label rendered on the left (e.g. "Faculty"). */
-  eyebrow?: string;
   /** Page title slot (typically just plain text or a small node). */
   title?: React.ReactNode;
   /** Right-side custom slot (e.g. quick actions). */
   actions?: React.ReactNode;
 }
 
-export function AppTopBar({ eyebrow, title, actions }: AppTopBarProps) {
-  // Clerk's <UserButton> renders different markup during SSR vs after the
-  // client-side ClerkJS script hydrates, which trips React #418 hydration
-  // mismatches. Render a size-matched placeholder until mount, then swap in
-  // the real button on the client. Same pattern as ThemeToggle.
-  const [mounted, setMounted] = React.useState(false);
-  React.useEffect(() => {
-    setMounted(true);
-  }, []);
+export function AppTopBar({ title, actions }: AppTopBarProps) {
+  const mobileNav = useMobileNav();
 
   return (
     <header
@@ -33,40 +24,34 @@ export function AppTopBar({ eyebrow, title, actions }: AppTopBarProps) {
         "border-b border-rule",
       )}
     >
-      <div className="flex h-14 items-center gap-4 px-4 md:px-8">
-        <div className="flex-1 min-w-0 flex items-baseline gap-3 md:pl-0 pl-12">
-          {eyebrow ? (
-            <span className="hidden md:inline eyebrow">{eyebrow}</span>
-          ) : null}
-          {eyebrow && title ? (
-            <span className="hidden md:inline text-ink-faint">/</span>
-          ) : null}
+      <div className="flex h-14 items-center gap-3 px-4 md:gap-4 md:px-8">
+        {mobileNav ? (
+          <button
+            type="button"
+            onClick={mobileNav.open}
+            aria-label="Open navigation"
+            className={cn(
+              "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full md:hidden",
+              "border border-rule bg-surface text-ink-muted",
+              "hover:border-rule-strong hover:bg-surface-sunken hover:text-ink",
+              "transition-colors",
+            )}
+          >
+            <Menu className="h-4 w-4" strokeWidth={2} aria-hidden />
+          </button>
+        ) : null}
+
+        <div className="min-w-0 flex-1">
           {title ? (
-            <span className="text-sm font-medium text-ink truncate">
+            <span className="block truncate text-sm font-medium text-ink">
               {title}
             </span>
           ) : null}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           {actions}
           <ThemeToggle />
-          <div className="ml-1 flex items-center">
-            {mounted ? (
-              <UserButton
-                appearance={{
-                  elements: {
-                    avatarBox: "h-8 w-8 border border-rule",
-                  },
-                }}
-              />
-            ) : (
-              <div
-                aria-hidden
-                className="h-8 w-8 rounded-full border border-rule bg-surface-sunken"
-              />
-            )}
-          </div>
         </div>
       </div>
     </header>

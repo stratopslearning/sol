@@ -4,8 +4,8 @@
 @custom-variant dark (&:is(.dark *));
 
 /* ============================================================================
-   Refined Calm — Editorial LMS Design System
-   Paper, ink, forest green. Hairlines over shadows. Serif over sans for voice.
+   SOL Design — Academic cream paper, olive brand, Instrument Serif display
+   Shared by marketing (.mkt) and product (dashboard). See content/brand/design.md
 ============================================================================ */
 
 @theme inline {
@@ -75,44 +75,52 @@
   --color-chart-4: var(--success);
   --color-chart-5: var(--warning);
 
-  /* Typography */
-  --font-sans: var(--font-instrument-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-fraunces), ui-serif, Georgia, serif;
+  /* Typography — academic (Instrument Serif + Geist), shared with marketing */
+  --font-sans: var(--font-geist-sans), var(--font-inter), var(--font-manrope),
+    var(--font-instrument-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-instrument-serif), ui-serif, Georgia, serif;
   --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+  --font-serif-mkt: var(--font-instrument-serif), ui-serif, Georgia, serif;
+  --font-sans-mkt: var(--font-geist-sans), var(--font-inter), var(--font-manrope),
+    ui-sans-serif, system-ui, sans-serif;
 
-  /* Radius — editorial restraint */
-  --radius: 0.375rem;
-  --radius-sm: 0.25rem;
-  --radius-md: 0.375rem;
-  --radius-lg: 0.5rem;
-  --radius-xl: 0.75rem;
-  --radius-2xl: 1rem;
+  /* Radius — soft academic */
+  --radius: 0.75rem;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.35rem;
+  --radius-2xl: 1.65rem;
 }
 
 /* ============================================================================
-   Light theme — Warm paper
+   Light theme — Academic cream paper (design.md)
 ============================================================================ */
 :root {
-  --paper: oklch(0.985 0.004 85);
-  --surface: oklch(1 0 0);
-  --surface-sunken: oklch(0.965 0.006 85);
-  --surface-elevated: oklch(1 0 0);
+  --paper: #f4f1e8;
+  --surface: #fbfaf6;
+  --surface-sunken: #ebe6da;
+  --surface-elevated: #fffcf6;
 
-  --ink: oklch(0.22 0.012 60);
-  --ink-muted: oklch(0.45 0.01 60);
-  --ink-faint: oklch(0.65 0.008 60);
+  --ink: #1c1b17;
+  --ink-muted: #5c5a52;
+  --ink-faint: #8a877c;
 
-  --rule: oklch(0.9 0.006 85);
-  --rule-strong: oklch(0.82 0.008 85);
+  --rule: #ddd6c6;
+  --rule-strong: #c9c0ad;
 
-  --brand: oklch(0.42 0.075 162);
-  --brand-hover: oklch(0.36 0.08 162);
-  --brand-soft: oklch(0.94 0.025 162);
-  --brand-fg: oklch(0.985 0.004 85);
+  --brand: #4a5240;
+  --brand-hover: #3b4234;
+  --brand-soft: #e4e7dc;
+  --brand-fg: #f7f4ec;
 
-  --accent: oklch(0.62 0.135 38);
-  --accent-soft: oklch(0.94 0.04 38);
-  --accent-fg: oklch(0.985 0.004 85);
+  --accent: #c47a3a;
+  --accent-soft: #f3e6d6;
+  --accent-fg: #1c1b17;
+
+  --mkt-leaf: #6d7f5c;
+  --mkt-sky: #c5d5e0;
+  --mkt-haze: #e7eef3;
 
   --success: oklch(0.55 0.11 150);
   --success-soft: oklch(0.94 0.04 150);
@@ -125,36 +133,40 @@
 
   --shadow-paper:
     0 1px 0 oklch(0 0 0 / 0.02),
-    0 1px 2px oklch(0 0 0 / 0.04);
+    0 8px 28px -12px oklch(0.35 0.02 80 / 0.14);
   --shadow-paper-lg:
     0 1px 0 oklch(0 0 0 / 0.02),
-    0 8px 24px -8px oklch(0 0 0 / 0.10);
+    0 18px 48px -16px oklch(0.35 0.02 80 / 0.22);
 }
 
 /* ============================================================================
-   Dark theme — Deliberate, warm-undertone ink (not just inverted)
+   Dark theme — Warm academic ink (product pages keep theme toggle)
 ============================================================================ */
 .dark {
-  --paper: oklch(0.16 0.008 70);
-  --surface: oklch(0.20 0.01 70);
-  --surface-sunken: oklch(0.13 0.008 70);
-  --surface-elevated: oklch(0.23 0.01 70);
+  --paper: #171612;
+  --surface: #1f1d18;
+  --surface-sunken: #12110e;
+  --surface-elevated: #26231c;
 
-  --ink: oklch(0.95 0.006 85);
-  --ink-muted: oklch(0.7 0.008 70);
-  --ink-faint: oklch(0.5 0.008 70);
+  --ink: #f4f1e8;
+  --ink-muted: #b0ab9c;
+  --ink-faint: #8a877c;
 
-  --rule: oklch(0.30 0.01 70);
-  --rule-strong: oklch(0.40 0.012 70);
+  --rule: #353128;
+  --rule-strong: #4a453a;
 
-  --brand: oklch(0.72 0.09 162);
-  --brand-hover: oklch(0.78 0.095 162);
-  --brand-soft: oklch(0.28 0.05 162);
-  --brand-fg: oklch(0.16 0.008 70);
+  --brand: #b8c4a6;
+  --brand-hover: #c9d4ba;
+  --brand-soft: #2a2e24;
+  --brand-fg: #171612;
 
-  --accent: oklch(0.7 0.12 38);
-  --accent-soft: oklch(0.28 0.06 38);
-  --accent-fg: oklch(0.16 0.008 70);
+  --accent: #d4924f;
+  --accent-soft: #3a2a1c;
+  --accent-fg: #171612;
+
+  --mkt-leaf: #8fa37a;
+  --mkt-sky: #3a4a56;
+  --mkt-haze: #1c242a;
 
   --success: oklch(0.7 0.11 150);
   --success-soft: oklch(0.28 0.05 150);
@@ -166,11 +178,11 @@
   --info-soft: oklch(0.28 0.04 220);
 
   --shadow-paper:
-    0 1px 0 oklch(0 0 0 / 0.4),
-    0 1px 2px oklch(0 0 0 / 0.3);
+    0 1px 0 oklch(0 0 0 / 0.35),
+    0 8px 28px -12px oklch(0 0 0 / 0.45);
   --shadow-paper-lg:
-    0 1px 0 oklch(0 0 0 / 0.4),
-    0 8px 24px -8px oklch(0 0 0 / 0.6);
+    0 1px 0 oklch(0 0 0 / 0.35),
+    0 18px 48px -16px oklch(0 0 0 / 0.55);
 }
 
 /* ============================================================================
@@ -187,6 +199,12 @@
     text-rendering: optimizeLegibility;
     scroll-behavior: smooth;
     color-scheme: light;
+    /* Gentle fluid root so rem-based UI scales up on large monitors
+       without shrinking phones. ~16px → ~18px from laptop → desktop. */
+    font-size: clamp(16px, 0.2vw + 14.4px, 18px);
+    background-color: var(--paper);
+    /* Kill macOS/Chrome rubber-band overscroll that flashes a gap above the page */
+    overscroll-behavior: none;
   }
 
   .dark {
@@ -199,44 +217,53 @@
     font-family: var(--font-sans);
     font-feature-settings: "ss01", "cv11", "cv05", "kern";
     font-synthesis: none;
+    overscroll-behavior: none;
+    overflow-x: hidden;
   }
 
-  /* ----- Display headings — Fraunces serif with optical sizing ----- */
-  h1, h2, h3, h4, .font-display {
+  /* ----- Display headings — Instrument Serif on page titles only -----
+     Product chrome (panel h2/h3 labels) stays Geist Sans. Marketing
+     re-applies serif to h2/h3 under .mkt. Opt in with .font-display. */
+  h1, .font-display {
     font-family: var(--font-display);
-    font-feature-settings: "ss01", "ss02", "kern", "liga";
-    letter-spacing: -0.015em;
+    font-weight: 400;
+    font-feature-settings: "kern", "liga";
+    letter-spacing: -0.02em;
     color: var(--ink);
   }
 
   h1 {
-    font-size: clamp(2.25rem, 4.5vw, 3.75rem);
+    font-size: clamp(2.1rem, 3.5vw + 1rem, 3.25rem);
     font-weight: 400;
-    font-variation-settings: "opsz" 96, "SOFT" 30;
-    line-height: 1.05;
+    line-height: 1.08;
     letter-spacing: -0.025em;
   }
 
   h2 {
-    font-size: clamp(1.75rem, 3vw, 2.5rem);
-    font-weight: 400;
-    font-variation-settings: "opsz" 60, "SOFT" 30;
+    font-family: var(--font-sans);
+    font-size: clamp(1.6rem, 2vw + 1rem, 2.35rem);
+    font-weight: 600;
     line-height: 1.15;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.015em;
+    color: var(--ink);
   }
 
   h3 {
-    font-size: clamp(1.375rem, 2vw, 1.75rem);
-    font-weight: 500;
-    font-variation-settings: "opsz" 36;
+    font-family: var(--font-sans);
+    font-size: clamp(1.25rem, 1.2vw + 0.9rem, 1.6rem);
+    font-weight: 600;
     line-height: 1.25;
+    letter-spacing: -0.01em;
+    color: var(--ink);
   }
 
   h4 {
-    font-size: 1.25rem;
-    font-weight: 500;
-    font-variation-settings: "opsz" 24;
+    font-family: var(--font-sans);
+    font-size: 1.15rem;
+    font-weight: 600;
     line-height: 1.35;
+    letter-spacing: -0.01em;
+    color: var(--ink);
   }
 
   h5 {
@@ -266,21 +293,30 @@
     color: var(--ink);
   }
 
-  /* ----- Scrollbar (desktop) ----- */
+  /* ----- Scrollbar — floating thin pill (track invisible) ----- */
+  html {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklch, var(--ink-faint) 45%, transparent)
+      transparent;
+  }
   ::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
+    width: 11px;
+    height: 11px;
   }
   ::-webkit-scrollbar-track {
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: var(--rule);
+    background-color: color-mix(in oklch, var(--ink-faint) 42%, transparent);
     border-radius: 999px;
-    border: 2px solid var(--paper);
+    border: 3px solid transparent;
+    background-clip: content-box;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: var(--rule-strong);
+    background-color: color-mix(in oklch, var(--ink-muted) 55%, transparent);
+  }
+  ::-webkit-scrollbar-corner {
+    background: transparent;
   }
 
   /* ----- Focus rings — brand green, 2px offset 2px ----- */
@@ -359,7 +395,8 @@
   font-family: var(--font-display);
   font-size: 1.5rem;
   line-height: 1.25;
-  font-variation-settings: "opsz" 36, "SOFT" 30;
+  font-weight: 400;
+  letter-spacing: -0.02em;
   margin-top: 2.5rem;
   margin-bottom: 0.75rem;
   color: var(--ink);
@@ -369,10 +406,16 @@
   font-family: var(--font-display);
   font-size: 1.125rem;
   line-height: 1.3;
-  font-variation-settings: "opsz" 28, "SOFT" 30;
+  font-weight: 400;
+  letter-spacing: -0.015em;
   margin-top: 1.75rem;
   margin-bottom: 0.5rem;
   color: var(--ink);
+}
+
+.mkt .docs-prose h2,
+.mkt .docs-prose h3 {
+  font-variation-settings: normal;
 }
 
 .docs-prose p,
@@ -491,6 +534,55 @@
    Editorial primitives (used by PageHeader, SectionHeading, StatCard, etc.)
 ============================================================================ */
 
+/* Content rail — widens on large monitors so dashboards/marketing don't look zoomed-out */
+.page-rail {
+  width: 100%;
+  max-width: 75rem; /* 1200px at 16px root */
+  margin-inline: auto;
+}
+
+@media (min-width: 1280px) {
+  .page-rail {
+    max-width: 87.5rem; /* 1400px */
+  }
+}
+
+@media (min-width: 1536px) {
+  .page-rail {
+    max-width: 100rem; /* 1600px */
+  }
+}
+
+.page-rail-wide {
+  width: 100%;
+  max-width: 87.5rem;
+  margin-inline: auto;
+}
+
+@media (min-width: 1280px) {
+  .page-rail-wide {
+    max-width: 100rem;
+  }
+}
+
+@media (min-width: 1536px) {
+  .page-rail-wide {
+    max-width: 112.5rem; /* 1800px */
+  }
+}
+
+.page-rail-narrow {
+  width: 100%;
+  max-width: 48rem;
+  margin-inline: auto;
+}
+
+@media (min-width: 1280px) {
+  .page-rail-narrow {
+    max-width: 56rem;
+  }
+}
+
 /* Eyebrow — small caps tracked label above a section */
 .eyebrow {
   font-family: var(--font-sans);
@@ -559,12 +651,11 @@
   font-variant-numeric: tabular-nums lining-nums;
 }
 
-/* Stat numeral — Fraunces big, tabular */
+/* Stat numeral — Instrument Serif, tabular */
 .stat-numeral {
   font-family: var(--font-display);
-  font-variation-settings: "opsz" 144;
   font-weight: 400;
-  letter-spacing: -0.04em;
+  letter-spacing: -0.03em;
   font-feature-settings: "tnum", "lnum";
   color: var(--ink);
   line-height: 0.95;
@@ -573,7 +664,6 @@
 /* Drop cap — for hero copy & lesson intros */
 .dropcap::first-letter {
   font-family: var(--font-display);
-  font-variation-settings: "opsz" 144, "SOFT" 30;
   font-weight: 400;
   float: left;
   font-size: 4.5em;
@@ -665,37 +755,20 @@
 }
 
 /* ============================================================================
-   Auth — centered card + flush Clerk embed
+   Auth — symmetrical painting + centered paper card (matches marketing)
 ============================================================================ */
 .auth-page {
-  background:
-    radial-gradient(ellipse 80% 60% at 50% -10%, oklch(0.94 0.02 162 / 0.35), transparent),
-    var(--surface-sunken);
-}
-
-.dark .auth-page {
-  background:
-    radial-gradient(ellipse 80% 60% at 50% -10%, oklch(0.28 0.04 162 / 0.4), transparent),
-    var(--surface-sunken);
+  background: var(--paper);
+  font-family: var(--font-sans-mkt, var(--font-sans));
 }
 
 .auth-card {
   background: var(--surface);
-  border: 1px solid var(--rule);
-  border-radius: 1.25rem;
-  box-shadow:
-    0 0 0 1px oklch(0 0 0 / 0.02),
-    0 1px 2px oklch(0 0 0 / 0.04),
-    0 16px 48px -20px oklch(0 0 0 / 0.14);
+  border: 1px solid color-mix(in oklch, var(--rule) 85%, transparent);
+  border-radius: 1.5rem;
+  box-shadow: var(--shadow-paper-lg, 0 18px 48px -16px oklch(0.35 0.02 80 / 0.18));
   /* Must stay visible — Clerk label rows clip under overflow:hidden */
   overflow: visible;
-}
-
-.dark .auth-card {
-  box-shadow:
-    0 0 0 1px oklch(1 0 0 / 0.04),
-    0 1px 2px oklch(0 0 0 / 0.2),
-    0 16px 48px -20px oklch(0 0 0 / 0.45);
 }
 
 .auth-card-header {
@@ -790,9 +863,10 @@
 /* Clerk injects light-theme text colors — force theme tokens (especially dark mode) */
 .auth-clerk-host .cl-socialButtonsBlockButton,
 .auth-clerk-host .cl-socialButtonsIconButton {
-  background-color: var(--surface) !important;
+  background-color: var(--paper) !important;
   border-color: var(--rule) !important;
   color: var(--ink) !important;
+  border-radius: 999px !important;
 }
 
 .auth-clerk-host .cl-socialButtonsBlockButton:hover,
@@ -888,7 +962,9 @@
   width: 100% !important;
   max-width: 100% !important;
   min-width: 0 !important;
-  background-color: var(--surface-sunken) !important;
+  background-color: var(--paper) !important;
+  border: 1px solid var(--rule) !important;
+  border-radius: 999px !important;
   color: var(--ink) !important;
   box-sizing: border-box !important;
   margin: 0 !important;
@@ -970,6 +1046,7 @@
 .auth-clerk-host .cl-formButtonPrimary {
   background-color: var(--brand) !important;
   color: var(--brand-fg) !important;
+  border-radius: 999px !important;
 }
 
 .auth-clerk-host .cl-formButtonPrimary:hover {
@@ -994,6 +1071,49 @@
   to {
     opacity: 1;
   }
+}
+
+/* ============================================================================
+   Clerk UserButton — academic olive / cream (not purple default)
+============================================================================ */
+.sol-clerk-user-btn .cl-userButtonAvatarBox,
+.sol-clerk-user-btn .cl-avatarBox {
+  width: 2rem !important;
+  height: 2rem !important;
+  border-radius: 999px !important;
+  border: 1px solid var(--rule) !important;
+  background-color: var(--brand-soft) !important;
+  box-shadow: none !important;
+}
+
+.sol-clerk-user-btn .cl-userButtonTrigger {
+  border-radius: 999px !important;
+}
+
+.sol-clerk-user-btn .cl-userButtonPopoverCard {
+  background: var(--surface) !important;
+  border: 1px solid var(--rule) !important;
+  border-radius: 1rem !important;
+  box-shadow: var(--shadow-paper-lg) !important;
+}
+
+/* No custom photo — replace Clerk’s purple silhouette with brand mark */
+.sol-clerk-user-btn--fallback .cl-avatarImage {
+  opacity: 0 !important;
+}
+
+.sol-clerk-user-btn--fallback .cl-userButtonAvatarBox,
+.sol-clerk-user-btn--fallback .cl-avatarBox {
+  background-color: var(--brand-soft) !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%234a5240'%3E%3Cpath d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center 58%;
+  background-size: 58%;
+}
+
+.dark .sol-clerk-user-btn--fallback .cl-userButtonAvatarBox,
+.dark .sol-clerk-user-btn--fallback .cl-avatarBox {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23b8c4a6'%3E%3Cpath d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/%3E%3C/svg%3E");
 }
 
 @keyframes auth-skeleton-pulse {
@@ -1022,29 +1142,119 @@
 }
 
 /* ============================================================================
-   404 — hero mesh field with ghost numeral
+   Marketing surface — keeps light academic palette over paintings
 ============================================================================ */
-.not-found-watermark {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: clamp(11rem, 42vw, 26rem);
-  font-weight: 600;
-  line-height: 1;
-  letter-spacing: -0.045em;
-  color: color-mix(in oklch, var(--ink) 8%, transparent);
-  user-select: none;
-  pointer-events: none;
-  font-variation-settings: "opsz" 144, "SOFT" 40;
+.mkt {
+  --paper: #f4f1e8;
+  --surface: #fbfaf6;
+  --surface-sunken: #ebe6da;
+  --surface-elevated: #fffcf6;
+  --ink: #1c1b17;
+  --ink-muted: #5c5a52;
+  --ink-faint: #8a877c;
+  --rule: #ddd6c6;
+  --rule-strong: #c9c0ad;
+  /* Olive / moss primary (Vestris-like) */
+  --brand: #4a5240;
+  --brand-hover: #3b4234;
+  --brand-soft: #e4e7dc;
+  --brand-fg: #f7f4ec;
+  --accent: #c47a3a;
+  --accent-soft: #f3e6d6;
+  --accent-fg: #1c1b17;
+  --mkt-leaf: #6d7f5c;
+  --mkt-sky: #c5d5e0;
+  --mkt-haze: #e7eef3;
+  --shadow-paper:
+    0 1px 0 oklch(0 0 0 / 0.02),
+    0 8px 28px -12px oklch(0.35 0.02 80 / 0.14);
+  --shadow-paper-lg:
+    0 1px 0 oklch(0 0 0 / 0.02),
+    0 18px 48px -16px oklch(0.35 0.02 80 / 0.22);
+  --radius: 0.85rem;
+  --radius-sm: 0.55rem;
+  --radius-md: 0.85rem;
+  --radius-lg: 1.15rem;
+  --radius-xl: 1.5rem;
+  --radius-2xl: 1.85rem;
+  --font-sans: var(--font-sans-mkt);
+  --font-display: var(--font-serif-mkt);
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
 }
 
-.dark .not-found-watermark {
-  color: color-mix(in oklch, var(--ink) 12%, transparent);
+.mkt .font-display,
+.mkt h1,
+.mkt h2,
+.mkt h3 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+}
+
+.mkt .mkt-italic {
+  font-style: italic;
+  font-weight: 400;
+}
+
+.mkt .mkt-card {
+  border-radius: var(--radius-xl);
+  background: var(--surface);
+  border: 1px solid color-mix(in oklch, var(--rule) 80%, transparent);
+  box-shadow: var(--shadow-paper);
+}
+
+.mkt .mkt-pill {
+  border-radius: 999px;
+}
+
+.mkt .mkt-haze {
+  background:
+    radial-gradient(
+      120% 80% at 50% 0%,
+      color-mix(in oklch, var(--mkt-sky) 55%, transparent) 0%,
+      transparent 55%
+    ),
+    radial-gradient(
+      90% 60% at 50% 100%,
+      color-mix(in oklch, var(--mkt-leaf) 18%, transparent) 0%,
+      transparent 50%
+    ),
+    var(--paper);
+}
+
+/*
+  Marketing follows the same warm academic dark as product.
+  Painting overlays use var(--paper) / var(--ink) so type stays readable.
+*/
+.dark .mkt {
+  --paper: #171612;
+  --surface: #1f1d18;
+  --surface-sunken: #12110e;
+  --surface-elevated: #26231c;
+  --ink: #f4f1e8;
+  --ink-muted: #b0ab9c;
+  --ink-faint: #8a877c;
+  --rule: #353128;
+  --rule-strong: #4a453a;
+  --brand: #b8c4a6;
+  --brand-hover: #c9d4ba;
+  --brand-soft: #2a2e24;
+  --brand-fg: #171612;
+  --accent: #d4924f;
+  --accent-soft: #3a2a1c;
+  --accent-fg: #171612;
+  --mkt-leaf: #8fa37a;
+  --mkt-sky: #3a4a56;
+  --mkt-haze: #1c242a;
+  --shadow-paper:
+    0 1px 0 oklch(1 0 0 / 0.03),
+    0 8px 28px -12px oklch(0 0 0 / 0.45);
+  --shadow-paper-lg:
+    0 1px 0 oklch(1 0 0 / 0.03),
+    0 18px 48px -16px oklch(0 0 0 / 0.55);
+  color-scheme: dark;
 }
 
 /* ============================================================================

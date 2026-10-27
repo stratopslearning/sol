@@ -4,7 +4,7 @@ import * as React from "react";
 
 import { cn } from "@/lib/utils";
 
-/** Only hide Clerk chrome nodes — never walk text content (that hid the whole form). */
+/** Only hide Clerk chrome nodes: never walk text content (that hid the whole form). */
 const CHROME_SELECTORS = [
   '[class*="footerPages"]',
   '[class*="developmentMode"]',

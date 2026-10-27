@@ -57,7 +57,7 @@ function AccordionContent({
       data-slot="accordion-content"
       className={cn(
         "overflow-hidden text-sm",
-        // Short height tween — default accordion-up/down keyframes feel sticky
+        // Short height tween: default accordion-up/down keyframes feel sticky
         // when a page has heavy backdrop layers.
         "data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up",
         "data-[state=open]:[animation-duration:160ms] data-[state=closed]:[animation-duration:140ms]",

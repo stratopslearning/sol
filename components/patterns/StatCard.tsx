@@ -24,7 +24,7 @@ interface StatCardProps {
   value: React.ReactNode;
   /** Caption shown below the value (e.g. "across 12 courses"). */
   hint?: React.ReactNode;
-  /** Trend delta — small icon + percent. */
+  /** Trend delta: small icon + percent. */
   delta?: {
     value: string;
     direction: "up" | "down" | "flat";

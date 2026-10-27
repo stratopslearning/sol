@@ -1,5 +1,15 @@
 import type { Metadata } from "next";
-import { Fraunces, Instrument_Sans, JetBrains_Mono } from "next/font/google";
+// Fonts via next/font: files are downloaded at build and self-hosted from our
+// origin at runtime (no fonts.googleapis.com requests from browsers).
+import {
+  Fraunces,
+  Instrument_Sans,
+  Instrument_Serif,
+  Inter,
+  JetBrains_Mono,
+  Manrope,
+} from "next/font/google";
+import { GeistSans } from "geist/font/sans";
 import "./globals.css";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Toaster } from "@/components/ui/sonner";
@@ -21,6 +31,26 @@ const instrumentSans = Instrument_Sans({
   display: "swap",
 });
 
+const instrumentSerif = Instrument_Serif({
+  variable: "--font-instrument-serif",
+  subsets: ["latin"],
+  weight: "400",
+  style: ["normal", "italic"],
+  display: "swap",
+});
+
+const inter = Inter({
+  variable: "--font-inter",
+  subsets: ["latin"],
+  display: "swap",
+});
+
+const manrope = Manrope({
+  variable: "--font-manrope",
+  subsets: ["latin"],
+  display: "swap",
+});
+
 const jetbrainsMono = JetBrains_Mono({
   variable: "--font-jetbrains-mono",
   subsets: ["latin"],
@@ -36,11 +66,11 @@ export const metadata: Metadata = {
     template: "%s · SOL",
   },
   description:
-    "Quizzes, feedback, and discussion for faculty and students — with clear scoring on subjective work you can review together.",
+    "The AI teaching layer for the LMS you already use. The operating system for learning. Build courses from your materials, tutor from your course only, assess with integrity, and see what to reteach.",
   openGraph: {
     title: "SOL",
     description:
-      "Coursework for everyone at the table. Clear quizzes, visible feedback, shared progress.",
+      "The AI teaching layer for the LMS you already use. The operating system for learning.",
     siteName: "SOL",
     type: "website",
     locale: "en_US",
@@ -49,7 +79,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "SOL",
     description:
-      "Coursework for everyone at the table. Clear quizzes, visible feedback, shared progress.",
+      "The AI teaching layer for the LMS you already use. The operating system for learning.",
   },
 };
 
@@ -67,7 +97,7 @@ export default function RootLayout({
       <html
         lang="en"
         suppressHydrationWarning
-        className={`${fraunces.variable} ${instrumentSans.variable} ${jetbrainsMono.variable}`}
+        className={`${fraunces.variable} ${instrumentSans.variable} ${instrumentSerif.variable} ${GeistSans.variable} ${inter.variable} ${manrope.variable} ${jetbrainsMono.variable}`}
       >
         <body className="font-sans antialiased min-h-screen bg-paper text-ink">
           <TimeZoneProvider>

@@ -8,9 +8,11 @@ export const metadata = {
 export default function LoginPage() {
   return (
     <AuthShell
-      title="Back to your quizzes"
-      description="Sign in to review attempts, publish quizzes, and clear the grading queue."
-      footnote="Sessions are scoped to one device. Sign out by closing your browser when you are done."
+      title="Welcome back"
+      description="Sign in to open your desk, review work, and keep teaching moving."
+      footnote="Sessions are scoped to one device. Sign out when you are done on a shared computer."
+      paintingSrc="/marketing/auth-sealed-journal.jpg"
+      paintingAlt="Oil painting of a leather-bound journal with a red wax seal on a sunlit desk"
     >
       <AuthSignInLazy />
     </AuthShell>

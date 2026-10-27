@@ -2,7 +2,7 @@ import type { MeshGradientProps } from "@paper-design/shaders-react";
 
 type MeshProps = Partial<MeshGradientProps>;
 
-/** Soft paper-tinted mesh — forest, terracotta, sand (editorial, not neon). */
+/** Soft paper-tinted mesh: forest, terracotta, sand (editorial, not neon). */
 const MESH_LIGHT = [
   "#f7f4ef", // paper
   "#3a6b58", // brand

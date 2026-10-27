@@ -3,7 +3,7 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 /**
- * DataTable — editorial table presentation.
+ * DataTable: editorial table presentation.
  *
  * This is a presentational wrapper, not a fully featured table primitive.
  * Use it as a container around `<table>` or as a stylistic guide for ad-hoc

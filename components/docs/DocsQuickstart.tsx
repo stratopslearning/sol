@@ -49,22 +49,18 @@ export function DocsQuickstart({
   };
 
   return (
-    <div className="relative mt-10">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -inset-6 bg-[radial-gradient(60%_80%_at_50%_40%,color-mix(in_oklch,var(--brand)_20%,transparent),transparent)] blur-2xl"
-      />
-      <div className="relative overflow-hidden rounded-lg border border-rule bg-paper paper-shadow-lg">
-        <div className="flex items-center gap-1 border-b border-rule px-2 pt-2">
+    <div className="mt-10">
+      <div className="mkt-card overflow-hidden bg-surface">
+        <div className="flex items-center gap-1 border-b border-rule/80 px-2 pt-2">
           {tabs.map((item) => (
             <button
               key={item.id}
               type="button"
               onClick={() => setTab(item.id)}
               className={cn(
-                "rounded-t-md px-3 py-2 text-xs font-medium transition-colors",
+                "rounded-t-lg px-3 py-2 text-xs font-medium transition-colors",
                 tab === item.id
-                  ? "bg-surface-sunken text-ink"
+                  ? "bg-paper text-ink"
                   : "text-ink-muted hover:text-ink",
               )}
             >
@@ -72,7 +68,7 @@ export function DocsQuickstart({
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-3 px-4 py-3.5">
+        <div className="flex items-center gap-3 bg-paper px-4 py-3.5">
           <code className="min-w-0 flex-1 truncate font-mono text-[13px] text-ink">
             {current.value}
           </code>
@@ -80,7 +76,7 @@ export function DocsQuickstart({
             type="button"
             onClick={copy}
             aria-label={copied ? "Copied" : "Copy"}
-            className="shrink-0 rounded-md p-1.5 text-ink-muted transition-colors hover:bg-surface-sunken hover:text-ink"
+            className="shrink-0 rounded-full p-1.5 text-ink-muted transition-colors hover:bg-surface-sunken hover:text-ink"
           >
             {copied ? (
               <Check className="h-4 w-4 text-success" />

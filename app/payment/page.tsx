@@ -43,7 +43,9 @@ export default async function PaymentPage() {
       <AuthShell
         title="You're in. Welcome."
         description="Your enrolment is on file. Every course, every quiz, every attempt is now available to you."
-        footnote="If you ever need a receipt or refund, write to enrolment@SOLexample — institutional billing teams respond within one business day."
+        footnote="If you ever need a receipt or refund, write to enrolment@SOLexample. Institutional billing teams respond within one business day."
+        paintingSrc="/marketing/auth-sealed-journal.jpg"
+        paintingAlt="Oil painting of a leather-bound journal with a red wax seal on a sunlit desk"
       >
         <div className="flex flex-col gap-6">
           <div className="flex items-start gap-3">
@@ -58,7 +60,7 @@ export default async function PaymentPage() {
             </div>
           </div>
           <div className="hairline" />
-          <Button asChild size="lg">
+          <Button asChild size="lg" className="mkt-pill w-full shadow-none">
             <a href={withBasePath('/dashboard/student')}>
               Open your dashboard
             </a>
@@ -73,7 +75,7 @@ export default async function PaymentPage() {
     productData?.product?.name || 'SOL Learning · Term Access';
   const productDescription: string =
     productData?.product?.description ||
-    'A single-term enrolment that opens every course, every quiz, every attempt — for as long as you study.';
+    'A single-term enrolment that opens every course, every quiz, every attempt, for as long as you study.';
   const formattedPrice: string =
     productData?.price?.formatted_amount || '$0.00';
 
@@ -81,7 +83,9 @@ export default async function PaymentPage() {
     <AuthShell
       title="Complete your enrolment"
       description="One payment unlocks the term. No recurring charges, no surprise upgrades."
-      footnote="Payments are processed by Stripe. SOL never stores your card details. Institutional billing is available — ask your faculty lead."
+      footnote="Payments are processed by Stripe. SOL never stores your card details. Institutional billing is available. Ask your faculty lead."
+      paintingSrc="/marketing/auth-inkpot.jpg"
+      paintingAlt="Oil painting of an ink pot and fountain pen on parchment"
     >
       <div className="flex flex-col gap-6">
         <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -127,7 +131,20 @@ export default async function PaymentPage() {
           method="POST"
           className="flex flex-col gap-3"
         >
-          <Button type="submit" size="lg" className="w-full">
+          <p className="rounded-lg border border-rule bg-surface/50 px-3.5 py-3 text-xs leading-relaxed text-ink-muted">
+            By clicking Pay, you agree to a <strong className="font-medium text-ink">one-time charge</strong> of{' '}
+            {formattedPrice} for term access. There is{' '}
+            <strong className="font-medium text-ink">no automatic renewal</strong> and no recurring
+            subscription. Refunds within 14 days are handled as described in our{' '}
+            <a
+              href={withBasePath('/terms')}
+              className="underline decoration-rule underline-offset-2 hover:text-brand"
+            >
+              Terms of Use
+            </a>
+            .
+          </p>
+          <Button type="submit" size="lg" className="mkt-pill w-full shadow-none">
             <Lock className="h-4 w-4" />
             Pay {formattedPrice} securely
           </Button>
