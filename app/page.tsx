@@ -21,7 +21,7 @@ export default async function Home() {
             name: "SOL",
             url: homeUrl,
             description:
-              "The AI teaching layer for the LMS you already use. The operating system for learning.",
+              "The AI teaching layer for the LMS you already use. The operating system for teaching.",
           },
           {
             "@context": "https://schema.org",

@@ -10,7 +10,7 @@ The idea behind the name: Sol means sun. A sun doesn’t do the work for you; it
 
 **Positioning line:** The AI teaching layer for the LMS you already use.
 
-**Tagline (canonical):** The operating system for learning.
+**Tagline (canonical):** The operating system for teaching.
 
 **Brand phrase (warm / display):** Teaching, in a better light.
 

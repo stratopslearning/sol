@@ -124,7 +124,7 @@ export function Hero() {
   return (
     <section
       ref={rootRef}
-      aria-label="SOL. The operating system for learning."
+      aria-label="SOL. The operating system for teaching."
       className="mkt-hero relative isolate overflow-hidden"
     >
       <div className="absolute inset-0" aria-hidden data-hero="bg">
@@ -151,7 +151,7 @@ export function Hero() {
             }}
           >
             The operating system{" "}
-            <em className="mkt-italic">for learning.</em>
+            <em className="mkt-italic">for teaching.</em>
           </h1>
         </div>
 
