@@ -52,7 +52,6 @@ export function LoopSteps() {
   const step = STEPS[active];
   const rootRef = useRef<HTMLElement>(null);
   const paintingRef = useRef<HTMLDivElement>(null);
-  const bodyRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   useGSAP(
     () => {
@@ -62,10 +61,11 @@ export function LoopSteps() {
         if (!items.length) return;
         gsap.from(items, {
           autoAlpha: 0,
-          x: -14,
-          duration: 0.55,
-          stagger: 0.07,
+          y: 12,
+          duration: 0.5,
+          stagger: 0.06,
           ease: "power3.out",
+          clearProps: "transform",
           scrollTrigger: {
             trigger: rootRef.current,
             start: "top 75%",
@@ -76,63 +76,6 @@ export function LoopSteps() {
       return () => mm.revert();
     },
     { scope: rootRef },
-  );
-
-  useGSAP(
-    () => {
-      const reduce = window.matchMedia(
-        "(prefers-reduced-motion: reduce)",
-      ).matches;
-
-      bodyRefs.current.forEach((el, index) => {
-        if (!el) return;
-        const open = index === active;
-        gsap.killTweensOf(el);
-
-        if (reduce) {
-          gsap.set(el, {
-            height: open ? "auto" : 0,
-            autoAlpha: open ? 1 : 0,
-          });
-          return;
-        }
-
-        if (open) {
-          gsap.set(el, { height: "auto" });
-          const h = el.offsetHeight;
-          gsap.fromTo(
-            el,
-            { height: 0, autoAlpha: 0 },
-            {
-              height: h,
-              autoAlpha: 1,
-              duration: 0.4,
-              ease: "power3.out",
-              onComplete: () => gsap.set(el, { height: "auto" }),
-            },
-          );
-          const checks = el.querySelectorAll("[data-step-check]");
-          if (checks.length) {
-            gsap.from(checks, {
-              autoAlpha: 0,
-              x: -6,
-              stagger: 0.05,
-              duration: 0.35,
-              delay: 0.08,
-              ease: "power2.out",
-            });
-          }
-        } else {
-          gsap.to(el, {
-            height: 0,
-            autoAlpha: 0,
-            duration: 0.28,
-            ease: "power2.inOut",
-          });
-        }
-      });
-    },
-    { scope: rootRef, dependencies: [active], revertOnUpdate: true },
   );
 
   useGSAP(
@@ -153,6 +96,7 @@ export function LoopSteps() {
             y: 0,
             duration: 0.5,
             ease: "power3.out",
+            clearProps: "transform",
           },
         );
       });
@@ -167,7 +111,7 @@ export function LoopSteps() {
       id="product"
       className="relative overflow-hidden border-t border-rule/60"
     >
-      <div className="page-rail relative z-10 px-4 py-20 md:px-8 md:py-28">
+      <div className="page-rail relative z-10 px-4 py-16 md:px-8 md:py-28">
         <ScrollReveal>
           <div className="mx-auto max-w-[40rem] text-center">
             <p className="eyebrow text-ink-faint">How it works</p>
@@ -188,80 +132,11 @@ export function LoopSteps() {
           </div>
         </ScrollReveal>
 
-        <div className="mt-14 grid gap-10 lg:grid-cols-12 lg:items-start lg:gap-12">
-          <ScrollReveal className="lg:col-span-5">
-            <ol className="flex flex-col gap-2">
-              {STEPS.map((item, index) => {
-                const open = index === active;
-                return (
-                  <li key={item.n} data-step-item>
-                    <button
-                      type="button"
-                      onClick={() => setActive(index)}
-                      className={cn(
-                        "w-full rounded-[1.15rem] border px-4 py-4 text-left transition-colors",
-                        open
-                          ? "border-rule bg-surface shadow-paper"
-                          : "border-transparent hover:bg-surface/70",
-                      )}
-                    >
-                      <div className="flex items-baseline gap-3">
-                        <span className="font-mono text-[0.7rem] tracking-[0.14em] text-ink-faint">
-                          {item.n}
-                        </span>
-                        <span
-                          className={cn(
-                            "font-display text-ink",
-                            open
-                              ? "text-[1.2rem]"
-                              : "text-[1.05rem] text-ink-muted",
-                          )}
-                        >
-                          {item.title}
-                        </span>
-                      </div>
-                      <div
-                        ref={(el) => {
-                          bodyRefs.current[index] = el;
-                        }}
-                        className="overflow-hidden"
-                        style={{
-                          height: index === 0 ? "auto" : 0,
-                          opacity: index === 0 ? 1 : 0,
-                        }}
-                        aria-hidden={!open}
-                      >
-                        <div className="mt-3 pl-9">
-                          <p className="text-sm leading-relaxed text-ink-muted">
-                            {item.body}
-                          </p>
-                          <ul className="mt-3 space-y-1.5">
-                            {item.checks.map((check) => (
-                              <li
-                                key={check}
-                                data-step-check
-                                className="flex items-start gap-2 text-sm text-ink"
-                              >
-                                <span
-                                  className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-brand"
-                                  aria-hidden
-                                />
-                                {check}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      </div>
-                    </button>
-                  </li>
-                );
-              })}
-            </ol>
-          </ScrollReveal>
-
-          <ScrollReveal className="lg:col-span-7" delay={0.08}>
+        <div className="mt-10 grid gap-8 lg:mt-14 lg:grid-cols-12 lg:items-start lg:gap-12">
+          {/* Painting first on mobile so the loop reads as image + steps */}
+          <ScrollReveal className="order-1 lg:order-2 lg:col-span-7" delay={0.08}>
             <div className="relative overflow-hidden rounded-[1.5rem] bg-surface-sunken shadow-paper">
-              <div className="relative h-[min(34rem,72vw)] w-full">
+              <div className="relative aspect-[4/3] w-full sm:aspect-auto sm:h-[min(34rem,72vw)]">
                 <div ref={paintingRef} className="absolute inset-0">
                   <Image
                     key={step.n}
@@ -275,6 +150,75 @@ export function LoopSteps() {
                 </div>
               </div>
             </div>
+          </ScrollReveal>
+
+          <ScrollReveal className="order-2 lg:order-1 lg:col-span-5">
+            <ol className="flex flex-col gap-1.5">
+              {STEPS.map((item, index) => {
+                const open = index === active;
+                return (
+                  <li key={item.n} data-step-item>
+                    <button
+                      type="button"
+                      onClick={() => setActive(index)}
+                      aria-expanded={open}
+                      className={cn(
+                        "w-full rounded-[1.15rem] border px-4 py-3.5 text-left transition-colors sm:py-4",
+                        open
+                          ? "border-rule bg-surface shadow-paper"
+                          : "border-transparent hover:bg-surface/70",
+                      )}
+                    >
+                      <div className="flex items-baseline gap-3">
+                        <span className="shrink-0 font-mono text-[0.7rem] tracking-[0.14em] text-ink-faint">
+                          {item.n}
+                        </span>
+                        <span
+                          className={cn(
+                            "min-w-0 font-display text-ink text-balance",
+                            open
+                              ? "text-[1.15rem] leading-snug sm:text-[1.2rem]"
+                              : "text-[1.05rem] leading-snug text-ink-muted",
+                          )}
+                        >
+                          {item.title}
+                        </span>
+                      </div>
+                      {/* CSS grid rows: avoids GSAP height leftovers that blow out mobile spacing */}
+                      <div
+                        className={cn(
+                          "grid transition-[grid-template-rows] duration-300 ease-out",
+                          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+                        )}
+                        aria-hidden={!open}
+                      >
+                        <div className="min-h-0 overflow-hidden">
+                          <div className="mt-3 pl-0 sm:pl-9">
+                            <p className="text-sm leading-relaxed text-ink-muted">
+                              {item.body}
+                            </p>
+                            <ul className="mt-3 space-y-1.5">
+                              {item.checks.map((check) => (
+                                <li
+                                  key={check}
+                                  className="flex items-start gap-2 text-sm text-ink"
+                                >
+                                  <span
+                                    className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-brand"
+                                    aria-hidden
+                                  />
+                                  {check}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
+                    </button>
+                  </li>
+                );
+              })}
+            </ol>
           </ScrollReveal>
         </div>
       </div>
