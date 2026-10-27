@@ -1,77 +1,45 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useRef } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight } from "lucide-react";
-import { MeshGradient } from "@paper-design/shaders-react";
-import { useTheme } from "next-themes";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
 
+import { SolMark } from "@/components/brand/SolMark";
 import { Button } from "@/components/ui/button";
-import { appPath } from "@/lib/basePath";
-import { getSolMeshHeroProps } from "@/lib/heroShaderColors";
-import { cn } from "@/lib/utils";
+import { appPath, withBasePath } from "@/lib/basePath";
+
+const GROVE = withBasePath("/marketing/hero-grove.jpg");
 
 gsap.registerPlugin(useGSAP);
 
 export default function NotFound() {
   const rootRef = useRef<HTMLElement>(null);
-  const { resolvedTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-  const [reducedMotion, setReducedMotion] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const update = () => setReducedMotion(mq.matches);
-    update();
-    mq.addEventListener("change", update);
-    return () => mq.removeEventListener("change", update);
-  }, []);
-
-  const dark = mounted && resolvedTheme === "dark";
-  const shaderProps = useMemo(
-    () => getSolMeshHeroProps({ reducedMotion, dark }),
-    [reducedMotion, dark],
-  );
 
   useGSAP(
     () => {
       const mm = gsap.matchMedia();
       mm.add("(prefers-reduced-motion: no-preference)", () => {
         const tl = gsap.timeline({ defaults: { ease: "power3.out" } });
-        tl.from('[data-nf="watermark"]', {
-          opacity: 0,
-          scale: 0.92,
-          duration: 1.1,
-        })
-          .from(
-            '[data-nf="brand"]',
-            { opacity: 0, y: 12, duration: 0.45 },
-            "-=0.55",
-          )
+        tl.from('[data-nf="brand"]', { opacity: 0, y: 10, duration: 0.45 })
           .from(
             '[data-nf="title"]',
-            { opacity: 0, y: 22, duration: 0.55 },
-            "-=0.25",
+            { opacity: 0, y: 18, duration: 0.55 },
+            "-=0.2",
           )
           .from(
             '[data-nf="copy"]',
-            { opacity: 0, y: 16, duration: 0.45 },
-            "-=0.28",
+            { opacity: 0, y: 14, duration: 0.45 },
+            "-=0.25",
           )
           .from(
             '[data-nf="actions"]',
-            { opacity: 0, y: 14, duration: 0.45 },
-            "-=0.22",
+            { opacity: 0, y: 12, duration: 0.4 },
+            "-=0.2",
           );
-        return () => {
-          tl.kill();
-        };
+        return () => tl.kill();
       });
       return () => mm.revert();
     },
@@ -81,84 +49,70 @@ export default function NotFound() {
   return (
     <main
       ref={rootRef}
-      className="relative isolate flex min-h-[100svh] overflow-hidden bg-paper"
+      className="mkt relative isolate flex min-h-[100svh] overflow-hidden bg-paper text-ink"
     >
-      <div className="pointer-events-none absolute inset-0" aria-hidden>
-        <MeshGradient
-          className="absolute inset-0 h-full w-full"
-          {...shaderProps.mesh}
+      <div className="absolute inset-0" aria-hidden>
+        <Image
+          src={GROVE}
+          alt=""
+          fill
+          priority
+          className="object-cover object-[center_40%]"
+          sizes="100vw"
         />
-        <MeshGradient
-          className="absolute inset-0 h-full w-full"
-          {...shaderProps.meshAccent}
-        />
-        <div
-          className={cn(
-            "absolute inset-0",
-            "bg-[radial-gradient(ellipse_at_center,color-mix(in_oklch,var(--paper)_82%,transparent)_0%,color-mix(in_oklch,var(--paper)_45%,transparent)_48%,transparent_78%)]",
-          )}
-        />
-        <div className="absolute inset-x-0 top-0 h-28 bg-[linear-gradient(to_bottom,color-mix(in_oklch,var(--paper)_70%,transparent),transparent)]" />
-        <div className="absolute inset-x-0 bottom-0 h-32 bg-[linear-gradient(to_top,color-mix(in_oklch,var(--paper)_55%,transparent),transparent)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,color-mix(in_oklch,var(--paper)_72%,transparent)_0%,color-mix(in_oklch,var(--paper)_35%,transparent)_42%,color-mix(in_oklch,var(--paper)_70%,transparent)_100%)]" />
       </div>
 
-      <p data-nf="watermark" className="not-found-watermark" aria-hidden>
-        404
-      </p>
-
-      <div className="relative z-10 mx-auto flex w-full max-w-[1200px] flex-1 flex-col justify-center px-4 py-24 md:px-8">
+      <div className="relative z-10 page-rail flex flex-1 flex-col items-center justify-center px-4 py-24 md:px-8">
         <div className="mx-auto flex max-w-xl flex-col items-center text-center">
-          <p
+          <a
             data-nf="brand"
-            className="font-display text-brand"
-            style={{
-              fontSize: "clamp(1.35rem, 2.5vw, 1.75rem)",
-              letterSpacing: "-0.03em",
-              fontVariationSettings: '"opsz" 36, "SOFT" 50',
-            }}
+            href={appPath("/")}
+            className="inline-flex items-center gap-2 text-ink"
+            aria-label="SOL home"
           >
-            SOL
-          </p>
+            <SolMark className="h-8 w-8" />
+            <span className="font-display text-[1.35rem] leading-none tracking-tight">
+              SOL
+            </span>
+          </a>
 
           <h1
             data-nf="title"
-            className="mt-5 font-display text-ink text-balance"
+            className="mt-8 font-display text-ink text-balance"
             style={{
-              fontSize: "clamp(2.5rem, 6vw, 4rem)",
-              lineHeight: 1.05,
-              letterSpacing: "-0.035em",
-              fontVariationSettings: '"opsz" 96, "SOFT" 40',
+              fontSize: "clamp(2.4rem, 5.5vw, 3.75rem)",
+              lineHeight: 1.08,
             }}
           >
-            This page
-            <br />
-            <span
-              className="text-brand"
-              style={{ fontVariationSettings: '"opsz" 96, "SOFT" 60' }}
-            >
-              isn’t on the syllabus.
-            </span>
+            This page{" "}
+            <em className="mkt-italic text-ink-muted">isn’t here.</em>
           </h1>
 
           <p
             data-nf="copy"
-            className="mt-5 max-w-[38ch] text-base leading-relaxed text-ink-muted text-balance md:text-lg"
+            className="mt-5 max-w-[36ch] text-base leading-relaxed text-ink-muted text-balance md:text-lg"
           >
-            The link may be outdated, mistyped, or the course material moved.
-            Head home and pick up where you left off.
+            The link may be outdated or mistyped. Head home and pick up where
+            you left off.
           </p>
 
           <div
             data-nf="actions"
             className="mt-10 flex flex-col items-center gap-3 sm:flex-row"
           >
-            <Button asChild size="lg">
+            <Button asChild size="lg" className="mkt-pill px-7 shadow-none">
               <Link href={appPath("/")}>
                 <ArrowLeft className="h-4 w-4" />
                 Back to homepage
               </Link>
             </Button>
-            <Button asChild size="lg" variant="ghost">
+            <Button
+              asChild
+              size="lg"
+              variant="outline"
+              className="mkt-pill border-rule bg-surface/80 px-7 backdrop-blur-sm"
+            >
               <Link href={appPath("/login")}>
                 Sign in
                 <ArrowRight className="h-4 w-4" />

@@ -1,5 +1,6 @@
 import { ChevronRight } from 'lucide-react';
 
+import { SolMark } from '@/components/brand/SolMark';
 import { withBasePath } from '@/lib/basePath';
 import type { DocMeta } from '@/lib/docs';
 import { cn } from '@/lib/utils';
@@ -18,12 +19,7 @@ export function DocsNav({
   return (
     <nav aria-label="Documentation" className="flex flex-col gap-6">
       <a href={withBasePath('/docs')} className="flex items-center gap-2.5 text-ink">
-        <span
-          className="font-display text-lg tracking-tight"
-          style={{ fontVariationSettings: '"opsz" 36, "SOFT" 30' }}
-        >
-          SOL
-        </span>
+        <SolMark className="h-7 w-7" />
         <span className="rounded-md border border-rule bg-surface-sunken px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-muted">
           Docs
         </span>
@@ -34,7 +30,7 @@ export function DocsNav({
         <a
           href={withBasePath('/docs')}
           className={cn(
-            'flex items-center justify-between rounded-md px-2.5 py-2 text-sm transition-colors',
+            'flex items-center justify-between rounded-xl px-2.5 py-2 text-sm transition-colors',
             onIndex
               ? 'bg-surface-sunken font-medium text-ink'
               : 'text-ink-muted hover:bg-surface-sunken/70 hover:text-ink',
@@ -81,9 +77,9 @@ function NavGroup({
               <a
                 href={withBasePath(`/docs/${doc.slug}`)}
                 className={cn(
-                  'flex items-center justify-between gap-2 rounded-md px-2.5 py-2 text-sm leading-snug transition-colors',
+                  'flex items-center justify-between gap-2 rounded-xl px-2.5 py-2 text-sm leading-snug transition-colors',
                   active
-                    ? 'bg-brand-soft/60 font-medium text-ink'
+                    ? 'bg-brand-soft/70 font-medium text-ink'
                     : 'text-ink-muted hover:bg-surface-sunken/70 hover:text-ink',
                 )}
                 aria-current={active ? 'page' : undefined}
@@ -109,7 +105,7 @@ function RefLink({ href, label }: { href: string; label: string }) {
     <li>
       <a
         href={href}
-        className="flex items-center justify-between rounded-md px-2.5 py-2 text-sm text-ink-muted transition-colors hover:bg-surface-sunken/70 hover:text-ink"
+        className="flex items-center justify-between rounded-xl px-2.5 py-2 text-sm text-ink-muted transition-colors hover:bg-surface-sunken/70 hover:text-ink"
       >
         {label}
         <ChevronRight className="h-3.5 w-3.5 text-ink-faint" />

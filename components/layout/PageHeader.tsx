@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 interface PageHeaderProps {
   /** Small caps eyebrow shown above the title. */
   eyebrow?: string;
-  /** The page title — rendered in Fraunces serif. */
+  /** The page title: rendered in Instrument Serif. */
   title: React.ReactNode;
   /** A short paragraph beneath the title (~ 60-80ch). */
   description?: React.ReactNode;
@@ -34,12 +34,11 @@ export function PageHeader({
         <div className="flex flex-col gap-2 max-w-3xl">
           {eyebrow ? <span className="eyebrow">{eyebrow}</span> : null}
           <h1
-            className="font-display text-ink"
+            className="font-display text-ink text-balance"
             style={{
-              fontSize: "clamp(2rem, 3.5vw, 2.75rem)",
-              lineHeight: 1.05,
-              letterSpacing: "-0.025em",
-              fontVariationSettings: '"opsz" 96, "SOFT" 30',
+              fontSize: "clamp(1.9rem, 1.4vw + 1.2rem, 2.85rem)",
+              lineHeight: 1.1,
+              letterSpacing: "-0.02em",
             }}
           >
             {title}

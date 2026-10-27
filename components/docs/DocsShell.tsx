@@ -1,16 +1,16 @@
-import type { ReactNode } from 'react';
+import type { ReactNode } from "react";
 
-import { Footer } from '@/components/marketing/Footer';
-import { Navbar } from '@/components/frontend/Navbar';
+import { Navbar } from "@/components/frontend/Navbar";
+import { Footer } from "@/components/marketing/Footer";
 
 export function DocsShell({ children }: { children: ReactNode }) {
   return (
-    <>
-      <Navbar />
-      <main id="main" className="min-h-[70vh] pt-16 bg-[color-mix(in_oklch,var(--surface-sunken)_40%,transparent)]">
+    <div className="mkt flex min-h-screen flex-col bg-paper text-ink">
+      <Navbar variant="solid" />
+      <main id="main" className="flex-1 pt-20 md:pt-24">
         {children}
       </main>
       <Footer />
-    </>
+    </div>
   );
 }

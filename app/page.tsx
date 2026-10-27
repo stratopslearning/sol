@@ -1,11 +1,9 @@
 import { Navbar } from "@/components/frontend/Navbar";
-import { Hero } from "@/components/marketing/Hero";
-import { FeatureGrid } from "@/components/marketing/FeatureGrid";
-import { ProductTour } from "@/components/marketing/ProductTour";
-import { Approach } from "@/components/marketing/Approach";
-import { Comparison } from "@/components/marketing/Comparison";
-import { Faq } from "@/components/marketing/Faq";
 import { Footer } from "@/components/marketing/Footer";
+import { Hero } from "@/components/marketing/Hero";
+import { HumanSafety } from "@/components/marketing/HumanSafety";
+import { LoopSteps } from "@/components/marketing/LoopSteps";
+import { MarketingFaq } from "@/components/marketing/MarketingFaq";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { MARKETING_FAQS } from "@/lib/marketingFaq";
 import { absoluteUrl } from "@/lib/siteUrl";
@@ -23,7 +21,7 @@ export default async function Home() {
             name: "SOL",
             url: homeUrl,
             description:
-              "An academic learning management system for faculty and students — quizzes, feedback, and discussion with auditable AI-assisted grading.",
+              "The AI teaching layer for the LMS you already use. The operating system for learning.",
           },
           {
             "@context": "https://schema.org",
@@ -33,14 +31,14 @@ export default async function Home() {
             operatingSystem: "Web",
             url: homeUrl,
             description:
-              "Coursework platform for instructors and learners: quizzes and discussions with reviewable AI-assisted scoring for subjective answers.",
+              "Turns instructor materials into courses, practice, and quizzes; tutors from the course only; assesses in ways that are hard to game; grades with auditable rubrics; shows concept-level gaps. Built for Canvas.",
             offers: {
               "@type": "Offer",
               availability: "https://schema.org/InStock",
               price: "0",
               priceCurrency: "USD",
               description:
-                "Institutional deployments; student payments are feature-flagged per campus.",
+                "Free pilot for one course. Department plans on request.",
             },
           },
           {
@@ -57,16 +55,16 @@ export default async function Home() {
           },
         ]}
       />
-      <Navbar />
-      <main id="main">
-        <Hero />
-        <FeatureGrid />
-        <ProductTour />
-        <Comparison />
-        <Approach />
-        <Faq />
-        <Footer />
-      </main>
+      <div className="mkt min-h-screen">
+        <Navbar />
+        <main id="main">
+          <Hero />
+          <LoopSteps />
+          <MarketingFaq />
+          <HumanSafety />
+          <Footer />
+        </main>
+      </div>
     </>
   );
 }

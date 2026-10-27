@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils"
 const buttonVariants = cva(
   [
     "inline-flex items-center justify-center gap-2 whitespace-nowrap select-none",
-    "rounded-md text-sm font-medium font-sans",
+    "rounded-lg text-sm font-medium font-sans",
     "transition-all duration-150 ease-out",
     "disabled:pointer-events-none disabled:opacity-50",
     "[&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0",
@@ -37,7 +37,7 @@ const buttonVariants = cva(
       },
       size: {
         default: "h-9 px-4 py-2 has-[>svg]:px-3",
-        sm: "h-8 rounded-md gap-1.5 px-3 has-[>svg]:px-2.5 text-xs",
+        sm: "h-8 rounded-lg gap-1.5 px-3 has-[>svg]:px-2.5 text-xs",
         lg: "h-11 rounded-md px-6 text-base has-[>svg]:px-5",
         xl: "h-12 rounded-md px-8 text-base has-[>svg]:px-6",
         icon: "size-9",

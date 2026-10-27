@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 interface LoadingStateProps {
   label?: string;
   className?: string;
-  /** Variant — full-page centered or inline. */
+  /** Variant: full-page centered or inline. */
   variant?: "page" | "inline";
 }
 

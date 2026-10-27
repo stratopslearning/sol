@@ -1,20 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import { useUser } from "@clerk/nextjs";
-import { useTheme } from "next-themes";
-import { MeshGradient } from "@paper-design/shaders-react";
-import { motion, useReducedMotion as useFramerReducedMotion } from "framer-motion";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
 import { SplitText } from "gsap/SplitText";
 
 import { Button } from "@/components/ui/button";
 import { apiUrl, withBasePath } from "@/lib/basePath";
+import { CAL_BOOKING_URL } from "@/lib/calBooking";
 import { paymentsEnabled } from "@/lib/featureFlags";
-import { getSolMeshHeroProps } from "@/lib/heroShaderColors";
-import { cn } from "@/lib/utils";
+
+const CLASSROOM_BG = withBasePath("/marketing/classroom-morning.jpg");
 
 gsap.registerPlugin(useGSAP, SplitText);
 
@@ -26,15 +24,7 @@ interface DbUser {
 export function Hero() {
   const { isSignedIn } = useUser();
   const [dbUser, setDbUser] = useState<DbUser | null>(null);
-  const { resolvedTheme } = useTheme();
-  const [reducedMotion, setReducedMotion] = useState(false);
-  const framerReduce = useFramerReducedMotion();
   const rootRef = useRef<HTMLElement>(null);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   useEffect(() => {
     if (!isSignedIn) return;
@@ -43,14 +33,6 @@ export function Hero() {
       .then((data) => setDbUser(data.user))
       .catch((err) => console.error("Error fetching user:", err));
   }, [isSignedIn]);
-
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const update = () => setReducedMotion(mq.matches);
-    update();
-    mq.addEventListener("change", update);
-    return () => mq.removeEventListener("change", update);
-  }, []);
 
   const studentEntitled = !paymentsEnabled() || Boolean(dbUser?.paid);
   const primaryHref =
@@ -69,43 +51,70 @@ export function Hero() {
       ? "Complete enrolment"
       : "Open your dashboard";
 
-  const dark = mounted && resolvedTheme === "dark";
-  const shaderProps = useMemo(
-    () =>
-      getSolMeshHeroProps({
-        reducedMotion,
-        dark,
-      }),
-    [reducedMotion, dark],
-  );
-
-  const motionOk = !reducedMotion && !framerReduce;
-
   useGSAP(
     () => {
-      const headline = rootRef.current?.querySelector<HTMLElement>(
-        '[data-hero="headline"]',
-      );
-      if (!headline) return;
-
       const mm = gsap.matchMedia();
-      mm.add("(prefers-reduced-motion: no-preference)", () => {
-        const split = SplitText.create(headline, {
-          type: "words",
-          autoSplit: true,
-          wordsClass: "hero-word",
-          onSplit(self) {
-            return gsap.from(self.words, {
-              opacity: 0,
-              yPercent: 30,
-              stagger: 0.08,
-              duration: 0.6,
-              ease: "power3.out",
-            });
-          },
-        });
-        return () => split.revert();
-      });
+
+      mm.add(
+        {
+          reduceMotion: "(prefers-reduced-motion: reduce)",
+          motionOk: "(prefers-reduced-motion: no-preference)",
+        },
+        (context) => {
+          const { reduceMotion } = context.conditions!;
+          if (reduceMotion) return;
+
+          const bg = rootRef.current?.querySelector<HTMLElement>(
+            '[data-hero="bg"]',
+          );
+          const headline = rootRef.current?.querySelector<HTMLElement>(
+            '[data-hero="headline"]',
+          );
+          const fade = rootRef.current?.querySelectorAll("[data-hero-fade]");
+          if (!headline) return;
+
+          const tl = gsap.timeline({
+            defaults: { ease: "power3.out" },
+          });
+
+          if (bg) {
+            tl.from(
+              bg,
+              { scale: 1.06, autoAlpha: 0.85, duration: 1.35 },
+              0,
+            );
+          }
+
+          const split = SplitText.create(headline, {
+            type: "words",
+            autoSplit: true,
+            onSplit(self) {
+              return tl.from(
+                self.words,
+                {
+                  autoAlpha: 0,
+                  yPercent: 24,
+                  stagger: 0.055,
+                  duration: 0.7,
+                },
+                0.08,
+              );
+            },
+          });
+
+          if (fade?.length) {
+            tl.from(
+              fade,
+              { autoAlpha: 0, y: 16, stagger: 0.1, duration: 0.7 },
+              "-=0.35",
+            );
+          }
+
+          return () => {
+            split.revert();
+          };
+        },
+      );
 
       return () => mm.revert();
     },
@@ -115,81 +124,72 @@ export function Hero() {
   return (
     <section
       ref={rootRef}
-      aria-label="SOL Coursework platform for faculty and students."
-      className="relative isolate min-h-[100svh] overflow-hidden bg-paper"
+      aria-label="SOL. The operating system for learning."
+      className="relative isolate min-h-[100svh] overflow-hidden"
     >
-      {/* Full-bleed mesh — dominant visual plane */}
-      <div className="pointer-events-none absolute inset-0" aria-hidden>
-        <MeshGradient
-          className="absolute inset-0 h-full w-full"
-          {...shaderProps.mesh}
+      <div className="absolute inset-0" aria-hidden data-hero="bg">
+        <Image
+          src={CLASSROOM_BG}
+          alt=""
+          fill
+          priority
+          className="object-cover object-[center_42%]"
+          sizes="100vw"
         />
-        <MeshGradient
-          className="absolute inset-0 h-full w-full"
-          {...shaderProps.meshAccent}
-        />
-        {/* Readability scrims — ink type + fixed nav stay crisp over the mesh */}
-        <div
-          className={cn(
-            "absolute inset-0",
-            "bg-[linear-gradient(105deg,color-mix(in_oklch,var(--paper)_88%,transparent)_0%,color-mix(in_oklch,var(--paper)_55%,transparent)_42%,transparent_78%)]",
-          )}
-        />
-        <div className="absolute inset-x-0 top-0 h-28 bg-[linear-gradient(to_bottom,color-mix(in_oklch,var(--paper)_70%,transparent),transparent)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,color-mix(in_oklch,var(--paper)_55%,transparent)_0%,color-mix(in_oklch,var(--paper)_18%,transparent)_36%,transparent_58%,color-mix(in_oklch,var(--paper)_25%,transparent)_100%)]" />
       </div>
 
-      <div className="relative z-10 mx-auto flex min-h-[100svh] max-w-[1200px] flex-col justify-end px-4 pb-16 pt-28 md:px-8 md:pb-20 md:pt-32 lg:pb-24">
-        <div className="max-w-2xl">
-          
+      <div className="relative z-10 mx-auto flex min-h-[100svh] max-w-[920px] flex-col items-center px-4 pb-16 pt-28 text-center md:px-8 md:pt-36">
+        <div className="relative mt-10 flex w-full items-center justify-center px-2">
           <h1
             data-hero="headline"
-            className="font-display text-ink"
+            className="max-w-[14ch] font-display text-ink text-balance"
             style={{
-              fontSize: "clamp(2.75rem, 7vw, 5.5rem)",
-              lineHeight: 1.0,
-              letterSpacing: "-0.035em",
-              fontVariationSettings: '"opsz" 144, "SOFT" 40',
+              fontSize: "clamp(2.6rem, 7vw, 4.75rem)",
+              lineHeight: 1.05,
+              fontWeight: 400,
             }}
           >
-            Coursework for everyone
-            <br />
-            <span
-              className="text-brand"
-              style={{
-                fontVariationSettings: '"opsz" 144, "SOFT" 60',
-              }}
-            >
-              at the table.
-            </span>
+            The operating system{" "}
+            <em className="mkt-italic">for learning.</em>
           </h1>
-
-
-          <motion.div
-            className="mt-8 flex flex-col items-start gap-3 sm:flex-row sm:items-center"
-            initial={motionOk ? { opacity: 0, y: 14 } : false}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.55, delay: 0.5 }}
-          >
-            {isSignedIn && primaryHref ? (
-              <Button asChild size="lg">
-                <a href={primaryHref}>
-                  {primaryLabel}
-                  <ArrowRight className="h-4 w-4" />
-                </a>
-              </Button>
-            ) : (
-              <Button asChild size="lg">
-                <a href={withBasePath("/signup")}>
-                  Sign Up
-                  <ArrowRight className="h-4 w-4" />
-                </a>
-              </Button>
-            )}
-            <Button asChild size="lg" variant="ghost">
-              <a href="#approach">Why we built it this way</a>
-            </Button>
-          </motion.div>
         </div>
+
+        <p
+          data-hero-fade
+          className="mt-6 max-w-[36ch] text-[0.95rem] leading-relaxed text-[#1c1b17] md:text-base"
+        >
+          An AI teaching layer that turns your materials into courses, practice,
+          and tutoring.
+        </p>
+
+        <div data-hero-fade className="mt-8">
+          {isSignedIn && primaryHref ? (
+            <Button
+              asChild
+              size="lg"
+              className="h-12 rounded-xl px-8 text-[0.95rem] shadow-none"
+            >
+              <a href={primaryHref}>{primaryLabel}</a>
+            </Button>
+          ) : (
+            <Button
+              asChild
+              size="lg"
+              className="h-12 rounded-xl px-8 text-[0.95rem] shadow-none"
+            >
+              <a
+                href={CAL_BOOKING_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Book a demo
+              </a>
+            </Button>
+          )}
+        </div>
+
+        <div className="mt-auto min-h-[28vh] w-full" aria-hidden />
       </div>
     </section>
   );
