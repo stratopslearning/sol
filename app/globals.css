@@ -1198,6 +1198,23 @@
   font-weight: 400;
 }
 
+/*
+  Full-bleed first viewport on phones (esp. Safari):
+  svh for initial chrome, dvh to track the live viewport, -webkit-fill-available
+  for older iOS. Lock height so the next section cannot peek under the fold.
+*/
+.mkt-hero {
+  box-sizing: border-box;
+  min-height: 100vh;
+  min-height: 100svh;
+  min-height: 100dvh;
+  min-height: -webkit-fill-available;
+  height: 100vh;
+  height: 100svh;
+  height: 100dvh;
+  height: -webkit-fill-available;
+}
+
 .mkt .mkt-card {
   border-radius: var(--radius-xl);
   background: var(--surface);
