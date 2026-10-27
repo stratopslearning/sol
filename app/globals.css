@@ -1199,20 +1199,28 @@
 }
 
 /*
-  Full-bleed first viewport on phones (esp. Safari):
-  svh for initial chrome, dvh to track the live viewport, -webkit-fill-available
-  for older iOS. Lock height so the next section cannot peek under the fold.
+  Full-bleed first viewport on all breakpoints.
+  Use dvh/svh — do NOT end with -webkit-fill-available globally; on desktop
+  Chrome that value is often shorter than the layout viewport and leaves a
+  paper gap under the hero. iOS Safari gets fill-available only in the
+  touch-callout support block below.
 */
 .mkt-hero {
   box-sizing: border-box;
+  width: 100%;
   min-height: 100vh;
   min-height: 100svh;
   min-height: 100dvh;
-  min-height: -webkit-fill-available;
   height: 100vh;
   height: 100svh;
   height: 100dvh;
-  height: -webkit-fill-available;
+}
+
+@supports (-webkit-touch-callout: none) {
+  .mkt-hero {
+    min-height: -webkit-fill-available;
+    height: -webkit-fill-available;
+  }
 }
 
 .mkt .mkt-card {
