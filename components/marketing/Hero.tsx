@@ -127,7 +127,7 @@ export function Hero() {
       aria-label="SOL. The operating system for teaching."
       className="mkt-hero relative isolate overflow-hidden"
     >
-      <div className="absolute inset-0" aria-hidden data-hero="bg">
+      <div className="absolute inset-0 h-full w-full" aria-hidden data-hero="bg">
         <Image
           src={CLASSROOM_BG}
           alt=""
@@ -139,7 +139,7 @@ export function Hero() {
         <div className="absolute inset-0 bg-[linear-gradient(180deg,color-mix(in_oklch,var(--paper)_55%,transparent)_0%,color-mix(in_oklch,var(--paper)_18%,transparent)_36%,transparent_58%,color-mix(in_oklch,var(--paper)_25%,transparent)_100%)]" />
       </div>
 
-      <div className="relative z-10 mx-auto flex h-full max-w-[920px] flex-col items-center px-4 pb-10 pt-[max(5.5rem,calc(env(safe-area-inset-top)+4.25rem))] text-center md:px-8 md:pb-16 md:pt-36">
+      <div className="relative z-10 mx-auto flex h-full min-h-0 w-full max-w-[920px] flex-col items-center px-4 pb-10 pt-[max(5.5rem,calc(env(safe-area-inset-top)+4.25rem))] text-center md:px-8 md:pb-16 md:pt-36">
         <div className="relative mt-[min(8vh,3.5rem)] flex w-full items-center justify-center px-2">
           <h1
             data-hero="headline"

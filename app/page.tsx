@@ -55,9 +55,9 @@ export default async function Home() {
           },
         ]}
       />
-      <div className="mkt min-h-screen">
+      <div className="mkt min-h-dvh">
         <Navbar />
-        <main id="main">
+        <main id="main" className="min-h-dvh">
           <Hero />
           <LoopSteps />
           <MarketingFaq />
