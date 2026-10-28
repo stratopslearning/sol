@@ -8,6 +8,48 @@ Run through them top-to-bottom; each section depends on the previous one.
 
 ---
 
+## 0. Dual deploy (StratOps + teachwithsol) — parallel run
+
+Until semester cutover, run **two Vercel projects** from the same Git repo:
+
+| | StratOps (current) | Sol (new brand) |
+| --- | --- | --- |
+| Domains | `www.strat-ops.net` | `teachwithsol.com`, `www`, `app`, `docs`, `trust` |
+| `NEXT_PUBLIC_BASE_PATH` | unset or `/learning` | **empty string** (no `/learning`) |
+| `NEXT_PUBLIC_BASE_URL` | `https://www.strat-ops.net` | `https://app.teachwithsol.com` |
+| Clerk sign-in/up URLs | `/learning/login`, `/learning/signup` | `/login`, `/signup` |
+| Crons | **yes** (`prebuild` writes `/learning/api/cron/…`) | **none** (same DB — avoid double jobs) |
+| Host routing | off | on via `NEXT_PUBLIC_SOL_*_HOST` |
+
+Sol host map (middleware + `lib/solHosts.ts`):
+
+| Host | Role |
+| --- | --- |
+| `teachwithsol.com` / `www.teachwithsol.com` | Marketing `/` |
+| `app.teachwithsol.com` | Product (login, dashboard, APIs) |
+| `docs.teachwithsol.com` | `/docs` |
+| `trust.teachwithsol.com` | `/security`, `/privacy`, `/terms`, `/dmca` |
+
+Sol-only env (in addition to shared secrets from §1):
+
+| Variable | Example |
+| --- | --- |
+| `NEXT_PUBLIC_BASE_PATH` | *(empty)* |
+| `NEXT_PUBLIC_SOL_MARKETING_HOST` | `www.teachwithsol.com` |
+| `NEXT_PUBLIC_SOL_APP_HOST` | `app.teachwithsol.com` |
+| `NEXT_PUBLIC_SOL_DOCS_HOST` | `docs.teachwithsol.com` |
+| `NEXT_PUBLIC_SOL_TRUST_HOST` | `trust.teachwithsol.com` |
+
+**Cloudflare DNS** (zone `teachwithsol.com`): CNAME `www`, `app`, `docs`, `trust` (and apex CNAME flattening) to the target Vercel shows after you add each domain. Do not redirect `strat-ops.net` yet.
+
+**Clerk Production:** *add* redirect / allowlist URLs for `https://app.teachwithsol.com/login` (and signup); keep all existing `https://www.strat-ops.net/learning/…` entries. Webhooks can stay on StratOps during parallel run.
+
+`prebuild` runs `scripts/write-vercel-json.mjs` so each project’s `NEXT_PUBLIC_BASE_PATH` emits the right `vercel.json`.
+
+**Ops helper:** after `npx vercel login`, run [`scripts/setup-sol-dual-domain.sh`](./scripts/setup-sol-dual-domain.sh) to create/link the Sol project, set Sol-specific env, and print Cloudflare + Clerk checklist. Env template: [`scripts/sol-dual-domain.env.example`](./scripts/sol-dual-domain.env.example).
+
+---
+
 ## 1. Vercel environment variables
 
 Set these in the Vercel project settings, scoped to the `Production`
@@ -27,7 +69,7 @@ the corresponding test credentials.)
 | `STRIPE_PRICE_ID`                 | when paywall on | The price you actually charge in production.                |
 | `STRIPE_PRODUCT_ID`               | optional  | Only needed if you want fallback when `STRIPE_PRICE_ID` is unset.  |
 | `OPENAI_API_KEY`                  | yes       | Required in production — app refuses to boot without it (short-answer grading). |
-| `CRON_SECRET`                     | **yes (prod)** | Bearer for `/api/cron/grade-pending`. Vercel Cron sends `Authorization: Bearer`. |
+| `CRON_SECRET`                     | **yes (prod)** | Bearer for `/learning/api/cron/*`. Vercel Cron sends `Authorization: Bearer`. |
 | `NEXT_PUBLIC_BASE_URL`            | yes       | Absolute https URL, no trailing slash. Used for Stripe redirects and canonical links. |
 | `SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN` | optional | Match the Sentry project's prod DSN.                          |
 | `BRAINTRUST_API_KEY`              | optional  | Enables LLM/agent tracing + eval logging. **Do not set in Production until Braintrust DPA/retention checklist in AI_EDUCATION_RECORDS.md is complete.** |
@@ -69,7 +111,8 @@ traffic instead of failing per-request later.
 
 1. In the Stripe **Live** dashboard, go to *Developers → Webhooks → Add
    endpoint*.
-2. Endpoint URL: `https://<your-domain>/api/stripe/webhook`.
+2. Endpoint URL: `https://<your-domain>/learning/api/stripe/webhook`
+   (include the `/learning` basePath).
 3. Subscribe to (at minimum) these events:
    - `checkout.session.completed`
    - `charge.refunded`
@@ -106,11 +149,12 @@ npm run db:reconcile-history
 
 # 4. Apply pending migrations. Prefer apply-migration.ts until Drizzle
 #    journal history is fully reconciled (missing 0000 makes `npm run migrate`
-#    unreliable). Newest additive migration:
-npx tsx scripts/apply-migration.ts drizzle/0012_clerk_events.sql
+#    unreliable). Newest additive migrations (local/dev first, then prod):
+# npx tsx scripts/apply-migration.ts drizzle/0019_scale_and_session_indexes.sql
+# npx tsx scripts/apply-migration.ts drizzle/0020_embedding_hnsw.sql
 #    Earlier examples:
+# npx tsx scripts/apply-migration.ts drizzle/0012_clerk_events.sql
 # npx tsx scripts/apply-migration.ts drizzle/0007_attempts_one_open.sql
-# npx tsx scripts/apply-migration.ts drizzle/0006_chatbots.sql
 #    Do not regenerate historical 0003–0006 kit snapshots casually.
 
 # 5. Backfill stripe_customer_id for users who paid before we started

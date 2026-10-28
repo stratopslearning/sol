@@ -3,7 +3,8 @@ import type { NextConfig } from "next";
 import { BASE_PATH } from "./lib/basePath";
 
 const nextConfig: NextConfig = {
-  basePath: BASE_PATH,
+  // Empty string = Sol (no prefix). Unset env defaults to `/learning` in lib/basePath.
+  ...(BASE_PATH ? { basePath: BASE_PATH } : {}),
   env: {
     NEXT_PUBLIC_BASE_PATH: BASE_PATH,
   },

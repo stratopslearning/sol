@@ -7,7 +7,7 @@
  * carries cookies cannot mutate state from a foreign origin.
  *
  * Bearer-authenticated paths (PAT, MCP OAuth, cron, Stripe/Clerk webhooks)
- * must stay exempt — they have no cookies and authenticating callers are
+ * must stay exempt: they have no cookies and authenticating callers are
  * not browsers on our origin.
  */
 
@@ -15,6 +15,27 @@ const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 /** Default max Content-Length for /api/* mutations checked at the edge. */
 export const MIDDLEWARE_MAX_BODY_BYTES = 1_048_576; // 1 MB
+
+/**
+ * Multipart upload routes that accept larger bodies (materials / H5P).
+ * Must stay aligned with `MAX_UPLOAD_BYTES` in lib/knowledge/constants.ts.
+ */
+export const MIDDLEWARE_UPLOAD_MAX_BODY_BYTES = 10 * 1024 * 1024; // 10 MB
+
+/** Paths that may receive multipart file uploads up to the upload budget. */
+export function isLargeUploadApiPath(appPath: string): boolean {
+  if (appPath === '/api/professor/materials') return true;
+  if (appPath.startsWith('/api/professor/materials/')) return true;
+  if (appPath === '/api/professor/interactive/import') return true;
+  if (appPath.startsWith('/api/professor/interactive/import/')) return true;
+  return false;
+}
+
+export function middlewareBodyLimitBytes(appPath: string): number {
+  return isLargeUploadApiPath(appPath)
+    ? MIDDLEWARE_UPLOAD_MAX_BODY_BYTES
+    : MIDDLEWARE_MAX_BODY_BYTES;
+}
 
 export function isMutatingMethod(method: string): boolean {
   return MUTATING.has(method.toUpperCase());
@@ -29,6 +50,8 @@ export function isOriginExemptPath(appPath: string): boolean {
   if (appPath.startsWith('/api/clerk/webhook')) return true;
   if (appPath === '/api/cron' || appPath.startsWith('/api/cron/')) return true;
   if (appPath === '/api/mcp' || appPath.startsWith('/api/mcp/')) return true;
+  // Canvas LTI OIDC form_post + tool JWKS (no browser cookie session yet).
+  if (appPath === '/api/lti' || appPath.startsWith('/api/lti/')) return true;
   return false;
 }
 
@@ -47,6 +70,22 @@ export function allowedOrigins(): string[] {
     origins.add(
       vercel.startsWith('http') ? vercel : `https://${vercel}`,
     );
+  }
+
+  // Sol multi-host deploy: cookie mutations may originate from www/app/docs/trust.
+  for (const key of [
+    'NEXT_PUBLIC_SOL_MARKETING_HOST',
+    'NEXT_PUBLIC_SOL_APP_HOST',
+    'NEXT_PUBLIC_SOL_DOCS_HOST',
+    'NEXT_PUBLIC_SOL_TRUST_HOST',
+  ] as const) {
+    const host = process.env[key]?.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    if (host) {
+      origins.add(`https://${host}`);
+      if (host.startsWith('www.')) {
+        origins.add(`https://${host.slice(4)}`);
+      }
+    }
   }
 
   if (process.env.NODE_ENV !== 'production') {
@@ -69,7 +108,7 @@ function originFromReferer(referer: string | null): string | null {
 /**
  * Returns true when the request Origin (or Referer origin) is in the
  * allowlist. Missing both headers fails closed for mutating cookie requests
- * — legitimate same-origin fetches from modern browsers always send Origin
+ *. legitimate same-origin fetches from modern browsers always send Origin
  * on POST/PUT/PATCH/DELETE.
  */
 export function isSameOrigin(req: {
@@ -77,7 +116,7 @@ export function isSameOrigin(req: {
 }): boolean {
   const allowed = allowedOrigins();
   if (allowed.length === 0) {
-    // Misconfigured deploy with no base URL — fail closed in production,
+    // Misconfigured deploy with no base URL: fail closed in production,
     // allow in test/dev so unit tests and local tools still work.
     return process.env.NODE_ENV !== 'production';
   }
@@ -116,7 +155,7 @@ export function shouldEnforceSameOrigin(
     !authHeader.startsWith('Bearer sol_pat_') &&
     appPath.startsWith('/api/professor/')
   ) {
-    // Could be a Clerk session JWT sent as Bearer — still cookie-primary for
+    // Could be a Clerk session JWT sent as Bearer: still cookie-primary for
     // dashboard. Only skip when it looks like a PAT (handled above). Keep
     // enforcing for cookie sessions; Bearer without sol_pat_ still goes
     // through Clerk cookie path in practice. Do not exempt.

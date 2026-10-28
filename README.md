@@ -67,13 +67,15 @@ npm run migrate
 npm run dev
 ```
 
-The app is mounted at **`/learning`** (Next.js `basePath`). Local dev URL:
+Local / StratOps production use Next.js **`basePath` `/learning`** (default when `NEXT_PUBLIC_BASE_PATH` is unset):
 
 ```
 http://localhost:3000/learning
 ```
 
-> Anything that builds an absolute path for plain `<a href>` / `fetch` must go through `withBasePath()` / `apiUrl()` from [`lib/basePath.ts`](./lib/basePath.ts). Server `redirect()` already receives `basePath` from Next.js 15.3+ — use [`appRedirect()`](./lib/serverRedirect.ts) with **app-relative** paths (`/dashboard/...`), not pre-prefixed ones.
+The parallel **teachwithsol.com** Vercel project sets `NEXT_PUBLIC_BASE_PATH` to empty (no `/learning`) and enables the www / app / docs / trust host map. See [`PRODUCTION_DEPLOY.md`](./PRODUCTION_DEPLOY.md) §0.
+
+> Anything that builds an absolute path for plain `<a href>` / `fetch` must go through `withBasePath()` / `apiUrl()` from [`lib/basePath.ts`](./lib/basePath.ts) (or `solHref()` from [`lib/solHosts.ts`](./lib/solHosts.ts) for cross-host Sol links). Server `redirect()` already receives `basePath` from Next.js 15.3+ — use [`appRedirect()`](./lib/serverRedirect.ts) with **app-relative** paths (`/dashboard/...`), not pre-prefixed ones.
 
 ---
 
@@ -87,16 +89,20 @@ Validated at boot via Zod in [`lib/env.ts`](./lib/env.ts). The full production c
 | `DATABASE_MIGRATE_URL` | Optional; migrator role URL for drizzle-kit / migrate scripts. |
 | `CLERK_SECRET_KEY` | Clerk server key (dev or prod). |
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk publishable key. |
-| `NEXT_PUBLIC_CLERK_SIGN_IN_URL` | `/learning/login` |
-| `NEXT_PUBLIC_CLERK_SIGN_UP_URL` | `/learning/signup` |
-| `NEXT_PUBLIC_BASE_URL` | Absolute origin (e.g. `https://www.strat-ops.net`), no trailing slash, no basePath. |
+| `NEXT_PUBLIC_BASE_PATH` | Default `/learning` when unset. Sol deploy: empty string. |
+| `NEXT_PUBLIC_CLERK_SIGN_IN_URL` | `/learning/login` (StratOps) or `/login` (Sol) |
+| `NEXT_PUBLIC_CLERK_SIGN_UP_URL` | `/learning/signup` (StratOps) or `/signup` (Sol) |
+| `NEXT_PUBLIC_BASE_URL` | Absolute origin (e.g. `https://www.strat-ops.net` or `https://app.teachwithsol.com`), no trailing slash, no basePath. |
+| `NEXT_PUBLIC_SOL_*_HOST` | Optional Sol multi-host map (`MARKETING` / `APP` / `DOCS` / `TRUST`). |
 | `OPENAI_API_KEY` | Optional in dev; **required in production** (boot fails without it). |
 | `CRON_SECRET` | Optional in dev; **required in production** (Vercel Cron `Authorization` bearer). |
 | `CLERK_WEBHOOK_SIGNING_SECRET` | Optional in dev; **required in production** (Clerk session → audit_log webhook). |
 | `NEXT_PUBLIC_PAYMENTS_ENABLED` | `false` (default) keeps the Stripe paywall off. Set to `true` only after Stripe keys + webhook are wired. |
 | `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / `STRIPE_PRICE_ID` | Required only when payments are enabled. |
 | `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | Optional in dev (in-memory rate limit). **Required in production.** |
-| `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN` | Optional but recommended in production. |
+| `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN` | Optional but recommended in production. Session replay is disabled in app code. |
+| `NEXT_PUBLIC_LEGAL_STREET` / `NEXT_PUBLIC_LEGAL_CITY_LINE` | Registered U.S. mailing address for footer, privacy, DMCA, and CAN-SPAM email footers. |
+| `NEXT_PUBLIC_LEGAL_DMCA_EMAIL` / `NEXT_PUBLIC_LEGAL_PRIVACY_EMAIL` | Optional overrides (defaults: `dmca@strat-ops.net`, `privacy@strat-ops.net`). |
 
 ---
 

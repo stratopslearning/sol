@@ -2,8 +2,20 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "crons": [
     {
-      "path": "/api/cron/grade-pending",
+      "path": "/learning/api/cron/grade-pending",
       "schedule": "15 9 * * *"
+    },
+    {
+      "path": "/learning/api/cron/process-materials",
+      "schedule": "30 9 * * *"
+    },
+    {
+      "path": "/learning/api/cron/lti-roster",
+      "schedule": "45 9 * * *"
+    },
+    {
+      "path": "/learning/api/cron/lti-passback",
+      "schedule": "20 9 * * *"
     }
   ],
   "rewrites": [

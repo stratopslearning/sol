@@ -11,31 +11,32 @@ import { SolMark } from "@/components/brand/SolMark";
 import { Button } from "@/components/ui/button";
 import { withBasePath } from "@/lib/basePath";
 import { CAL_BOOKING_URL } from "@/lib/calBooking";
+import { solHref } from "@/lib/solHosts";
 
 const PATH_LIGHT = withBasePath("/marketing/path-light.jpg");
 
 gsap.registerPlugin(useGSAP, ScrollTrigger);
 
 const productLinks = [
-  { title: "How it works", href: withBasePath("/#product") },
-  { title: "FAQ", href: withBasePath("/#faq") },
-  { title: "Trust", href: withBasePath("/#trust") },
+  { title: "How it works", href: solHref("/#product") },
+  { title: "FAQ", href: solHref("/#faq") },
+  { title: "Trust", href: solHref("/#trust") },
   { title: "Book a demo", href: CAL_BOOKING_URL, external: true },
 ] as const;
 
 const companyLinks = [
-  { title: "Docs", href: withBasePath("/docs") },
-  { title: "About SOL", href: withBasePath("/docs/about-sol") },
-  { title: "Security", href: withBasePath("/security") },
-  { title: "Sign in", href: withBasePath("/login") },
+  { title: "Docs", href: solHref("/docs") },
+  { title: "About SOL", href: solHref("/docs/about-sol") },
+  { title: "Security", href: solHref("/security") },
+  { title: "Sign in", href: solHref("/login") },
 ] as const;
 
 const legalLinks = [
-  { title: "Terms", href: withBasePath("/terms") },
-  { title: "Privacy", href: withBasePath("/privacy") },
-  { title: "Security", href: withBasePath("/security") },
-  { title: "DMCA", href: withBasePath("/dmca") },
-  { title: "Unsubscribe", href: withBasePath("/unsubscribe") },
+  { title: "Terms", href: solHref("/terms") },
+  { title: "Privacy", href: solHref("/privacy") },
+  { title: "Security", href: solHref("/security") },
+  { title: "DMCA", href: solHref("/dmca") },
+  { title: "Unsubscribe", href: solHref("/unsubscribe") },
 ] as const;
 
 /** Closing CTA + footer as one painting band (Vestris-style). */
@@ -158,7 +159,7 @@ export function Footer() {
                 variant="outline"
                 className="mkt-pill min-w-[12rem] border-rule bg-surface/70 px-7 text-ink shadow-none backdrop-blur-md hover:bg-surface/90"
               >
-                <a href={withBasePath("/docs/about-sol")}>About SOL</a>
+                <a href={solHref("/docs/about-sol")}>About SOL</a>
               </Button>
             </div>
           </div>
@@ -170,7 +171,7 @@ export function Footer() {
           <div className="flex flex-col gap-12 lg:flex-row lg:items-start lg:justify-between lg:gap-16">
             <div className="max-w-[24rem] shrink-0 space-y-4">
               <a
-                href={withBasePath("/")}
+                href={solHref("/")}
                 className="inline-flex items-center gap-2.5 text-[#f4f1e8]"
                 aria-label="SOL home"
               >

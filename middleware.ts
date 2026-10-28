@@ -3,10 +3,20 @@ import { NextResponse } from 'next/server';
 import {
   isBodyTooLarge,
   isSameOrigin,
+  middlewareBodyLimitBytes,
   shouldEnforceSameOrigin,
 } from '@/lib/api/sameOrigin';
 import { BASE_PATH, withBasePath } from '@/lib/basePath';
 import { isLoadTestRequest } from '@/lib/loadTestAuth';
+import {
+  classifySolHost,
+  isDocsPath,
+  isMarketingPath,
+  isTrustPath,
+  solHostsConfigured,
+  solOrigin,
+  type SolHostRole,
+} from '@/lib/solHosts';
 
 /**
  * Clerk middleware runs on Vercel's Edge runtime. That means we CANNOT import
@@ -23,8 +33,80 @@ function redirectWithinApp(path: string, req: Request) {
   return NextResponse.redirect(new URL(withBasePath(p), req.url));
 }
 
+function redirectToSolHost(role: SolHostRole, path: string, search: string) {
+  const origin = solOrigin(role);
+  if (!origin) return null;
+  const url = new URL(`${origin}${path === '/' ? '/' : path}${search}`);
+  return NextResponse.redirect(url);
+}
+
+/**
+ * Sol multi-subdomain map (only when BASE_PATH is empty and SOL_* hosts are set).
+ * StratOps `/learning` skips this entirely.
+ */
+function solHostRedirect(req: {
+  nextUrl: { pathname: string; search: string };
+  headers: { get(name: string): string | null };
+}): NextResponse | null {
+  if (BASE_PATH || !solHostsConfigured()) return null;
+
+  const hostHeader = req.headers.get('host') ?? '';
+  const role = classifySolHost(hostHeader);
+  if (!role) return null;
+
+  const path = req.nextUrl.pathname;
+  const search = req.nextUrl.search;
+
+  // Shared public probes — allow on any Sol host (rewritten below).
+  if (path.startsWith('/.well-known/') || path.startsWith('/well-known/')) {
+    return null;
+  }
+
+  if (role === 'marketing') {
+    if (isMarketingPath(path)) return null;
+    if (isDocsPath(path)) return redirectToSolHost('docs', path, search);
+    if (isTrustPath(path)) return redirectToSolHost('trust', path, search);
+    return redirectToSolHost('app', path, search);
+  }
+
+  if (role === 'docs') {
+    if (isDocsPath(path)) return null;
+    if (path === '/' || path.startsWith('/#')) {
+      return redirectToSolHost('marketing', '/', search);
+    }
+    if (isTrustPath(path)) return redirectToSolHost('trust', path, search);
+    if (isMarketingPath(path)) {
+      return redirectToSolHost('marketing', path, search);
+    }
+    return redirectToSolHost('app', path, search);
+  }
+
+  if (role === 'trust') {
+    if (isTrustPath(path)) return null;
+    if (path === '/' || path.startsWith('/#')) {
+      return redirectToSolHost('marketing', '/', search);
+    }
+    if (isDocsPath(path)) return redirectToSolHost('docs', path, search);
+    if (isMarketingPath(path)) {
+      return redirectToSolHost('marketing', path, search);
+    }
+    return redirectToSolHost('app', path, search);
+  }
+
+  // app.
+  if (path === '/' || path.startsWith('/#')) {
+    return redirectToSolHost('marketing', path === '/' ? '/' : path, search);
+  }
+  if (isDocsPath(path)) return redirectToSolHost('docs', path, search);
+  if (isTrustPath(path)) return redirectToSolHost('trust', path, search);
+  return null;
+}
+
 export default clerkMiddleware(async (auth, req) => {
   const { pathname } = req.nextUrl;
+
+  const hostGate = solHostRedirect(req);
+  if (hostGate) return hostGate;
 
   // OAuth discovery (RFC 8414 / RFC 9728) is probed at the site apex
   // (e.g. /.well-known/oauth-protected-resource/learning/api/mcp) and under
@@ -36,31 +118,32 @@ export default clerkMiddleware(async (auth, req) => {
   // the basePath on serialization.
   if (pathname.startsWith('/.well-known/')) {
     const rest = pathname.slice('/.well-known/'.length);
-    return NextResponse.rewrite(
-      new URL(`${BASE_PATH}/well-known/${rest}${req.nextUrl.search}`, req.url),
-    );
+    const dest = `${BASE_PATH}/well-known/${rest}${req.nextUrl.search}`;
+    return NextResponse.rewrite(new URL(dest, req.url));
   }
 
-  // Recover from accidental double basePath.
-  // Browser: /learning/learning/dashboard/...
-  // nextUrl.pathname has one basePath stripped → /learning/dashboard/...
-  // (Looking for /learning/learning on pathname only works if stripping failed.)
-  const doubleBase = `${BASE_PATH}${BASE_PATH}`;
-  if (pathname.startsWith(doubleBase)) {
-    return NextResponse.redirect(
-      new URL(`${pathname.slice(BASE_PATH.length)}${req.nextUrl.search}`, req.url),
-    );
-  }
-  if (pathname === BASE_PATH || pathname.startsWith(`${BASE_PATH}/`)) {
-    const stripped = pathname.slice(BASE_PATH.length) || '/';
-    return NextResponse.redirect(
-      new URL(`${BASE_PATH}${stripped}${req.nextUrl.search}`, req.url),
-    );
+  // Recover from accidental double basePath (StratOps only — empty BASE_PATH
+  // must not run startsWith("") which matches every pathname).
+  if (BASE_PATH) {
+    const doubleBase = `${BASE_PATH}${BASE_PATH}`;
+    if (pathname.startsWith(doubleBase)) {
+      return NextResponse.redirect(
+        new URL(`${pathname.slice(BASE_PATH.length)}${req.nextUrl.search}`, req.url),
+      );
+    }
+    if (pathname === BASE_PATH || pathname.startsWith(`${BASE_PATH}/`)) {
+      const stripped = pathname.slice(BASE_PATH.length) || '/';
+      return NextResponse.redirect(
+        new URL(`${BASE_PATH}${stripped}${req.nextUrl.search}`, req.url),
+      );
+    }
   }
 
-  const appPath = pathname.startsWith(BASE_PATH)
-    ? pathname.slice(BASE_PATH.length) || '/'
-    : pathname;
+  const appPath =
+    BASE_PATH &&
+    (pathname === BASE_PATH || pathname.startsWith(`${BASE_PATH}/`))
+      ? pathname.slice(BASE_PATH.length) || '/'
+      : pathname;
 
   // Markdown mirrors for public docs (llmstxt.org): /docs.md and /docs/:slug.md
   if (appPath === '/docs.md' || appPath === '/docs/index.md') {
@@ -100,11 +183,14 @@ export default clerkMiddleware(async (auth, req) => {
   }
 
   // Cheap early reject for oversized API bodies (chunked bodies are checked
-  // again in readJsonBody at the route).
+  // again in readJsonBody / route handlers). Materials + H5P allow 10 MB.
   if (
     appPath.startsWith('/api/') &&
     shouldEnforceSameOrigin(req.method, appPath, authHeader || null, loadTest) &&
-    isBodyTooLarge(req.headers.get('content-length'))
+    isBodyTooLarge(
+      req.headers.get('content-length'),
+      middlewareBodyLimitBytes(appPath),
+    )
   ) {
     return NextResponse.json(
       { error: 'Payload too large', code: 'payload_too_large' },
@@ -133,11 +219,19 @@ export default clerkMiddleware(async (auth, req) => {
     appPath.startsWith('/apple-icon/') ||
     appPath === '/icon' ||
     appPath.startsWith('/icon/') ||
+    appPath === '/opengraph-image' ||
+    appPath.startsWith('/opengraph-image/') ||
+    appPath === '/twitter-image' ||
+    appPath.startsWith('/twitter-image/') ||
     appPath === '/docs' ||
     appPath.startsWith('/docs/') ||
     appPath === '/docs.md' ||
     appPath === '/privacy' ||
     appPath === '/terms' ||
+    appPath === '/security' ||
+    appPath === '/dmca' ||
+    appPath === '/unsubscribe' ||
+    appPath === '/api/demo-request' ||
     appPath === '/llms.txt' ||
     appPath === '/robots.txt' ||
     appPath === '/sitemap.xml' ||
@@ -151,6 +245,11 @@ export default clerkMiddleware(async (auth, req) => {
     appPath.startsWith('/api/stripe/product') ||
     appPath.startsWith('/api/stripe/webhook') ||
     appPath.startsWith('/api/clerk/webhook') ||
+    // LTI 1.3 OIDC login/launch/JWKS (Canvas posts cross-site; no Clerk session yet).
+    appPath === '/api/lti' ||
+    appPath.startsWith('/api/lti/') ||
+    appPath === '/lti/bridge' ||
+    appPath.startsWith('/lti/bridge/') ||
     // Cron authenticates with CRON_SECRET in the route handler — must not
     // bounce to /login before that check runs.
     appPath === '/api/cron' ||

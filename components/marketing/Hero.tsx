@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { apiUrl, withBasePath } from "@/lib/basePath";
 import { CAL_BOOKING_URL } from "@/lib/calBooking";
 import { paymentsEnabled } from "@/lib/featureFlags";
+import { solHref } from "@/lib/solHosts";
 
 const CLASSROOM_BG = withBasePath("/marketing/classroom-morning.jpg");
 
@@ -37,13 +38,13 @@ export function Hero() {
   const studentEntitled = !paymentsEnabled() || Boolean(dbUser?.paid);
   const primaryHref =
     dbUser?.role === "ADMIN"
-      ? withBasePath("/dashboard/admin")
+      ? solHref("/dashboard/admin")
       : dbUser?.role === "PROFESSOR"
-        ? withBasePath("/dashboard/professor")
+        ? solHref("/dashboard/professor")
         : dbUser?.role === "STUDENT"
           ? studentEntitled
-            ? withBasePath("/dashboard/student")
-            : withBasePath("/payment")
+            ? solHref("/dashboard/student")
+            : solHref("/payment")
           : null;
 
   const primaryLabel =

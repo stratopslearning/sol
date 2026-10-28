@@ -16,9 +16,10 @@ import { ThemedUserButton } from "@/components/auth/ThemedUserButton";
 import { SolMark } from "@/components/brand/SolMark";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { Button } from "@/components/ui/button";
-import { apiUrl, withBasePath } from "@/lib/basePath";
+import { apiUrl } from "@/lib/basePath";
 import { CAL_BOOKING_URL } from "@/lib/calBooking";
 import { paymentsEnabled } from "@/lib/featureFlags";
+import { solHref } from "@/lib/solHosts";
 
 interface DbUser {
   role?: "STUDENT" | "PROFESSOR" | "ADMIN";
@@ -106,13 +107,13 @@ export function Navbar({ variant = "landing" }: NavbarProps) {
   const studentEntitled = !paymentsEnabled() || Boolean(dbUser?.paid);
   const dashboardHref =
     dbUser?.role === "ADMIN"
-      ? withBasePath("/dashboard/admin")
+      ? solHref("/dashboard/admin")
       : dbUser?.role === "PROFESSOR"
-        ? withBasePath("/dashboard/professor")
+        ? solHref("/dashboard/professor")
         : dbUser?.role === "STUDENT"
           ? studentEntitled
-            ? withBasePath("/dashboard/student")
-            : withBasePath("/payment")
+            ? solHref("/dashboard/student")
+            : solHref("/payment")
           : null;
 
   return (
@@ -137,7 +138,7 @@ export function Navbar({ variant = "landing" }: NavbarProps) {
             }}
           >
             <a
-              href={withBasePath("/")}
+              href={solHref("/")}
               className="flex shrink-0 items-center gap-2 text-ink"
               aria-label="SOL home"
             >
@@ -151,7 +152,7 @@ export function Navbar({ variant = "landing" }: NavbarProps) {
               {LINKS.map((link) => (
                 <a
                   key={link.href}
-                  href={withBasePath(link.href)}
+                  href={solHref(link.href)}
                   className="transition-colors hover:text-ink"
                 >
                   {link.label}
@@ -182,7 +183,7 @@ export function Navbar({ variant = "landing" }: NavbarProps) {
                     variant="ghost"
                     className="rounded-full text-ink-muted hover:text-ink"
                   >
-                    <a href={withBasePath("/login")}>Sign in</a>
+                    <a href={solHref("/login")}>Sign in</a>
                   </Button>
                   <Button
                     asChild
@@ -233,7 +234,7 @@ export function Navbar({ variant = "landing" }: NavbarProps) {
               {LINKS.map((link) => (
                 <a
                   key={link.href}
-                  href={withBasePath(link.href)}
+                  href={solHref(link.href)}
                   className="rounded-lg px-2 py-2.5 text-sm text-ink"
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
@@ -254,7 +255,7 @@ export function Navbar({ variant = "landing" }: NavbarProps) {
                     variant="outline"
                     className="w-full rounded-full"
                   >
-                    <a href={withBasePath("/login")}>Sign in</a>
+                    <a href={solHref("/login")}>Sign in</a>
                   </Button>
                   <Button asChild className="w-full rounded-full">
                     <a

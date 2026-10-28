@@ -3,9 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   allowedOrigins,
   isBodyTooLarge,
+  isLargeUploadApiPath,
   isMutatingMethod,
   isOriginExemptPath,
   isSameOrigin,
+  middlewareBodyLimitBytes,
+  MIDDLEWARE_MAX_BODY_BYTES,
+  MIDDLEWARE_UPLOAD_MAX_BODY_BYTES,
   shouldEnforceSameOrigin,
 } from '@/lib/api/sameOrigin';
 
@@ -60,6 +64,19 @@ describe('allowedOrigins / isSameOrigin', () => {
 
   it('includes NEXT_PUBLIC_BASE_URL', () => {
     expect(allowedOrigins()).toContain('https://www.strat-ops.net');
+  });
+
+  it('includes Sol multi-host origins when configured', () => {
+    process.env.NEXT_PUBLIC_SOL_MARKETING_HOST = 'www.teachwithsol.com';
+    process.env.NEXT_PUBLIC_SOL_APP_HOST = 'app.teachwithsol.com';
+    process.env.NEXT_PUBLIC_SOL_DOCS_HOST = 'docs.teachwithsol.com';
+    process.env.NEXT_PUBLIC_SOL_TRUST_HOST = 'trust.teachwithsol.com';
+    const origins = allowedOrigins();
+    expect(origins).toContain('https://www.teachwithsol.com');
+    expect(origins).toContain('https://teachwithsol.com');
+    expect(origins).toContain('https://app.teachwithsol.com');
+    expect(origins).toContain('https://docs.teachwithsol.com');
+    expect(origins).toContain('https://trust.teachwithsol.com');
   });
 
   it('accepts matching Origin', () => {
@@ -137,5 +154,27 @@ describe('isBodyTooLarge', () => {
     expect(isBodyTooLarge('2000000', 1_048_576)).toBe(true);
     expect(isBodyTooLarge('100', 1_048_576)).toBe(false);
     expect(isBodyTooLarge(null)).toBe(false);
+  });
+});
+
+describe('middleware upload body limits', () => {
+  it('allows 10 MB for materials and H5P import paths', () => {
+    expect(isLargeUploadApiPath('/api/professor/materials')).toBe(true);
+    expect(isLargeUploadApiPath('/api/professor/interactive/import')).toBe(
+      true,
+    );
+    expect(isLargeUploadApiPath('/api/quiz/x/submit')).toBe(false);
+    expect(middlewareBodyLimitBytes('/api/professor/materials')).toBe(
+      MIDDLEWARE_UPLOAD_MAX_BODY_BYTES,
+    );
+    expect(middlewareBodyLimitBytes('/api/quiz/x/submit')).toBe(
+      MIDDLEWARE_MAX_BODY_BYTES,
+    );
+    expect(
+      isBodyTooLarge('5000000', middlewareBodyLimitBytes('/api/professor/materials')),
+    ).toBe(false);
+    expect(
+      isBodyTooLarge('5000000', middlewareBodyLimitBytes('/api/quiz/x/submit')),
+    ).toBe(true);
   });
 });
