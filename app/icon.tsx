@@ -1,15 +1,18 @@
 import { ImageResponse } from "next/og";
 
-import { SOL_BRAND_HEX } from "@/lib/brand/solMark";
-import { solMarkPngDataUri } from "@/lib/brand/solMarkDataUri";
+import {
+  SOL_CREAM_HEX,
+  SOL_MARK_PATH,
+  SOL_MARK_VIEWBOX,
+} from "@/lib/brand/solMark";
 
-// Browser-tab favicon: organic SOL sun mark on brand green.
-// PNG via next/og (SVG favicons are inconsistently supported).
-export const size = { width: 48, height: 48 };
+/** Browser-tab favicon: black SOL mark on paper cream (no brand green). */
+export const size = { width: 64, height: 64 };
 export const contentType = "image/png";
 
-export default async function Icon() {
-  const mark = await solMarkPngDataUri();
+const INK = "#0a0a0a";
+
+export default function Icon() {
   return new ImageResponse(
     (
       <div
@@ -19,17 +22,18 @@ export default async function Icon() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: SOL_BRAND_HEX,
-          borderRadius: 11,
+          background: SOL_CREAM_HEX,
+          borderRadius: 14,
         }}
       >
-        <img
-          src={mark}
-          width={34}
-          height={35}
-          alt=""
-          style={{ objectFit: "contain" }}
-        />
+        <svg
+          width="44"
+          height="45"
+          viewBox={SOL_MARK_VIEWBOX}
+          fill="none"
+        >
+          <path fill={INK} fillRule="evenodd" d={SOL_MARK_PATH} />
+        </svg>
       </div>
     ),
     { ...size },
