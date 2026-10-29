@@ -6,8 +6,11 @@ import {
   SOL_MARK_VIEWBOX,
 } from "@/lib/brand/solMark";
 
-/** Browser-tab favicon: black SOL mark on paper cream (no brand green). */
-export const size = { width: 64, height: 64 };
+/**
+ * Browser-tab favicon: black SOL mark on paper cream (no brand green).
+ * 96×96 so Google Search accepts it (sides must be a multiple of 48).
+ */
+export const size = { width: 96, height: 96 };
 export const contentType = "image/png";
 
 const INK = "#0a0a0a";
@@ -23,12 +26,11 @@ export default function Icon() {
           alignItems: "center",
           justifyContent: "center",
           background: SOL_CREAM_HEX,
-          borderRadius: 14,
         }}
       >
         <svg
-          width="44"
-          height="45"
+          width="72"
+          height="74"
           viewBox={SOL_MARK_VIEWBOX}
           fill="none"
         >

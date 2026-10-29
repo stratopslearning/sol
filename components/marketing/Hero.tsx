@@ -125,13 +125,13 @@ export function Hero() {
   return (
     <section
       ref={rootRef}
-      aria-label="SOL. The operating system for teaching."
+      aria-label="SOL — teach with SOL. The operating system for teaching."
       className="mkt-hero relative isolate overflow-hidden"
     >
       <div className="absolute inset-0 h-full w-full" aria-hidden data-hero="bg">
         <Image
           src={CLASSROOM_BG}
-          alt=""
+          alt="Sunlit empty classroom with wooden desks at morning, suggesting calm teaching space"
           fill
           priority
           className="object-cover object-[center_40%] sm:object-[center_42%]"
@@ -158,10 +158,11 @@ export function Hero() {
 
         <p
           data-hero-fade
-          className="mt-6 max-w-[36ch] text-[0.95rem] leading-relaxed text-[#1c1b17] md:text-base"
+          data-speakable="hero"
+          className="mt-6 max-w-[48ch] text-[0.95rem] leading-relaxed text-[#1c1b17] md:text-base"
         >
-          An AI teaching layer that turns your materials into courses, practice,
-          and tutoring.
+          The AI teaching layer for the LMS you already use. Turn your materials
+          into courses, practice, and tutoring.
         </p>
 
         <div data-hero-fade className="mt-8">

@@ -62,24 +62,24 @@ export const metadata: Metadata = {
     process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000",
   ),
   title: {
-    default: "SOL",
+    default: "SOL · The operating system for teaching",
     template: "%s · SOL",
   },
   description:
-    "The AI teaching layer for the LMS you already use. The operating system for teaching. Build courses from your materials, tutor from your course only, assess with integrity, and see what to reteach.",
+    "SOL is the AI teaching layer for the LMS you already use. Turn your materials into courses, practice, and tutoring.",
   openGraph: {
-    title: "SOL",
+    title: "SOL · The operating system for teaching",
     description:
-      "The AI teaching layer for the LMS you already use. The operating system for teaching.",
+      "SOL is the AI teaching layer for the LMS you already use. Turn your materials into courses, practice, and tutoring.",
     siteName: "SOL",
     type: "website",
     locale: "en_US",
   },
   twitter: {
     card: "summary_large_image",
-    title: "SOL",
+    title: "SOL · The operating system for teaching",
     description:
-      "The AI teaching layer for the LMS you already use. The operating system for teaching.",
+      "SOL is the AI teaching layer for the LMS you already use. Turn your materials into courses, practice, and tutoring.",
   },
 };
 
