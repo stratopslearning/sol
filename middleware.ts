@@ -7,12 +7,14 @@ import {
   shouldEnforceSameOrigin,
 } from '@/lib/api/sameOrigin';
 import { BASE_PATH, withBasePath } from '@/lib/basePath';
+import { CAL_BOOKING_URL } from '@/lib/calBooking';
 import { isLoadTestRequest } from '@/lib/loadTestAuth';
 import {
   classifySolHost,
   isDocsPath,
   isMarketingPath,
   isTrustPath,
+  solDemoOnly,
   solHostsConfigured,
   solOrigin,
   type SolHostRole,
@@ -107,6 +109,17 @@ export default clerkMiddleware(async (auth, req) => {
 
   const hostGate = solHostRedirect(req);
   if (hostGate) return hostGate;
+
+  // teachwithsol: no public auth — send login/signup to Book a demo.
+  if (
+    solDemoOnly() &&
+    (pathname === '/login' ||
+      pathname.startsWith('/login/') ||
+      pathname === '/signup' ||
+      pathname.startsWith('/signup/'))
+  ) {
+    return NextResponse.redirect(CAL_BOOKING_URL);
+  }
 
   // OAuth discovery (RFC 8414 / RFC 9728) is probed at the site apex
   // (e.g. /.well-known/oauth-protected-resource/learning/api/mcp) and under

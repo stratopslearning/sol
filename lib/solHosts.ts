@@ -30,6 +30,32 @@ export function solHost(role: SolHostRole): string | null {
   return raw ? normalizeHost(raw) : null;
 }
 
+function isTeachwithsolMarketingHost(hostname: string | null): boolean {
+  return hostname === 'www.teachwithsol.com' || hostname === 'teachwithsol.com';
+}
+
+/**
+ * teachwithsol: no public login/signup yet — Book a demo only.
+ * StratOps `/learning` leaves Sol hosts unset, so auth UI stays available there.
+ * Local multi-host: set NEXT_PUBLIC_SOL_DEMO_ONLY=false to keep /login working
+ * (ignored on production teachwithsol.com).
+ */
+export function solDemoOnly(): boolean {
+  const marketing = solHost('marketing');
+  const isProdTeachwithsol =
+    process.env.NEXT_PUBLIC_VERCEL_ENV === 'production' &&
+    isTeachwithsolMarketingHost(marketing);
+
+  const override = process.env.NEXT_PUBLIC_SOL_DEMO_ONLY?.trim().toLowerCase();
+  if (override === 'false' || override === '0') {
+    if (isProdTeachwithsol) return true;
+    return false;
+  }
+  if (override === 'true' || override === '1') return true;
+  if (isTeachwithsolMarketingHost(marketing)) return true;
+  return solHostsConfigured();
+}
+
 /** Absolute https origin for a Sol role, or null if not configured. */
 export function solOrigin(role: SolHostRole): string | null {
   const host = solHost(role);
