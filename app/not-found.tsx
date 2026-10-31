@@ -10,6 +10,8 @@ import { useGSAP } from "@gsap/react";
 import { SolMark } from "@/components/brand/SolMark";
 import { Button } from "@/components/ui/button";
 import { appPath, withBasePath } from "@/lib/basePath";
+import { CAL_BOOKING_URL } from "@/lib/calBooking";
+import { solDemoOnly } from "@/lib/solHosts";
 
 const GROVE = withBasePath("/marketing/hero-grove.jpg");
 
@@ -107,17 +109,35 @@ export default function NotFound() {
                 Back to homepage
               </Link>
             </Button>
-            <Button
-              asChild
-              size="lg"
-              variant="outline"
-              className="mkt-pill border-rule bg-surface/80 px-7 backdrop-blur-sm"
-            >
-              <Link href={appPath("/login")}>
-                Sign in
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            </Button>
+            {solDemoOnly() ? (
+              <Button
+                asChild
+                size="lg"
+                variant="outline"
+                className="mkt-pill border-rule bg-surface/80 px-7 backdrop-blur-sm"
+              >
+                <a
+                  href={CAL_BOOKING_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Book a demo
+                  <ArrowRight className="h-4 w-4" />
+                </a>
+              </Button>
+            ) : (
+              <Button
+                asChild
+                size="lg"
+                variant="outline"
+                className="mkt-pill border-rule bg-surface/80 px-7 backdrop-blur-sm"
+              >
+                <Link href={appPath("/login")}>
+                  Sign in
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </Button>
+            )}
           </div>
         </div>
       </div>

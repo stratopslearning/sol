@@ -1,11 +1,19 @@
+import { redirect } from "next/navigation";
+
 import { AuthShell } from "@/components/auth/AuthShell";
 import { AuthSignUpLazy } from "@/components/auth/AuthWidgetsLazy";
+import { CAL_BOOKING_URL } from "@/lib/calBooking";
+import { solDemoOnly } from "@/lib/solHosts";
 
 export const metadata = {
   title: "Sign up",
 };
 
 export default function SignUpPage() {
+  if (solDemoOnly()) {
+    redirect(CAL_BOOKING_URL);
+  }
+
   return (
     <AuthShell
       title="Create your account"

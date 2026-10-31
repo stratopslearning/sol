@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { apiUrl } from "@/lib/basePath";
 import { CAL_BOOKING_URL } from "@/lib/calBooking";
 import { paymentsEnabled } from "@/lib/featureFlags";
-import { solHref } from "@/lib/solHosts";
+import { solDemoOnly, solHref } from "@/lib/solHosts";
 
 interface DbUser {
   role?: "STUDENT" | "PROFESSOR" | "ADMIN";
@@ -162,7 +162,21 @@ export function Navbar({ variant = "landing" }: NavbarProps) {
 
             <div className="hidden items-center gap-2 md:flex">
               <ThemeToggle variant="ghost" />
-              {isSignedIn && dbUser ? (
+              {solDemoOnly() ? (
+                <Button
+                  asChild
+                  size="sm"
+                  className="rounded-full px-4 shadow-none"
+                >
+                  <a
+                    href={CAL_BOOKING_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Book a demo
+                  </a>
+                </Button>
+              ) : isSignedIn && dbUser ? (
                 <>
                   {dashboardHref ? (
                     <Button asChild size="sm" className="rounded-full px-4">
@@ -242,7 +256,17 @@ export function Navbar({ variant = "landing" }: NavbarProps) {
                 </a>
               ))}
               <div className="hairline my-1" />
-              {isSignedIn ? (
+              {solDemoOnly() ? (
+                <Button asChild className="w-full rounded-full">
+                  <a
+                    href={CAL_BOOKING_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Book a demo
+                  </a>
+                </Button>
+              ) : isSignedIn ? (
                 dashboardHref ? (
                   <Button asChild className="w-full rounded-full">
                     <a href={dashboardHref}>Open desk</a>

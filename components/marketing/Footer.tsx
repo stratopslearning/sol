@@ -11,7 +11,7 @@ import { SolMark } from "@/components/brand/SolMark";
 import { Button } from "@/components/ui/button";
 import { withBasePath } from "@/lib/basePath";
 import { CAL_BOOKING_URL } from "@/lib/calBooking";
-import { solHref } from "@/lib/solHosts";
+import { solDemoOnly, solHref } from "@/lib/solHosts";
 
 const PATH_LIGHT = withBasePath("/marketing/path-light.jpg");
 
@@ -24,12 +24,18 @@ const productLinks = [
   { title: "Book a demo", href: CAL_BOOKING_URL, external: true },
 ] as const;
 
-const companyLinks = [
+const companyLinksBase = [
   { title: "Docs", href: solHref("/docs") },
   { title: "About SOL", href: solHref("/docs/about-sol") },
   { title: "Security", href: solHref("/security") },
-  { title: "Sign in", href: solHref("/login") },
 ] as const;
+
+const companyLinks = solDemoOnly()
+  ? companyLinksBase
+  : ([
+      ...companyLinksBase,
+      { title: "Sign in", href: solHref("/login") },
+    ] as const);
 
 const legalLinks = [
   { title: "Terms", href: solHref("/terms") },

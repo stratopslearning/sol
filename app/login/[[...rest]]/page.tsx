@@ -1,11 +1,19 @@
+import { redirect } from "next/navigation";
+
 import { AuthShell } from "@/components/auth/AuthShell";
 import { AuthSignInLazy } from "@/components/auth/AuthWidgetsLazy";
+import { CAL_BOOKING_URL } from "@/lib/calBooking";
+import { solDemoOnly } from "@/lib/solHosts";
 
 export const metadata = {
   title: "Sign in",
 };
 
 export default function LoginPage() {
+  if (solDemoOnly()) {
+    redirect(CAL_BOOKING_URL);
+  }
+
   return (
     <AuthShell
       title="Welcome back"
