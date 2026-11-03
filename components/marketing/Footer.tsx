@@ -21,12 +21,14 @@ const productLinks = [
   { title: "How it works", href: solHref("/#product") },
   { title: "FAQ", href: solHref("/#faq") },
   { title: "Trust", href: solHref("/#trust") },
+  { title: "Blogs", href: solHref("/blog") },
   { title: "Book a demo", href: CAL_BOOKING_URL, external: true },
 ] as const;
 
 const companyLinks = [
   { title: "Docs", href: solHref("/docs") },
   { title: "About SOL", href: solHref("/docs/about-sol") },
+  { title: "Blogs", href: solHref("/blog") },
   { title: "Security", href: solHref("/security") },
   { title: "Sign in", href: solHref("/login") },
 ] as const;

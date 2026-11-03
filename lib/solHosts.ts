@@ -53,6 +53,10 @@ export function solHref(
 
 export function roleForPath(path: string): SolHostRole {
   const p = path.startsWith('/') ? path : `/${path}`;
+  // Blog lives on the marketing host (www), not docs.
+  if (p === '/blog' || p.startsWith('/blog/') || p === '/blog.md') {
+    return 'marketing';
+  }
   if (
     p === '/docs' ||
     p.startsWith('/docs/') ||
@@ -82,6 +86,7 @@ export function roleForPath(path: string): SolHostRole {
 export function isMarketingPath(path: string): boolean {
   const p = path.startsWith('/') ? path : `/${path}`;
   if (p === '/' || p.startsWith('/#')) return true;
+  if (p === '/blog' || p.startsWith('/blog/') || p === '/blog.md') return true;
   if (p === '/unsubscribe' || p.startsWith('/unsubscribe/')) return true;
   if (p === '/api/demo-request') return true;
   if (p === '/robots.txt' || p === '/sitemap.xml') return true;

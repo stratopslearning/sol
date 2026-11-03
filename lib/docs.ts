@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { blogLlmsEntries } from '@/lib/blog';
 import { absoluteUrl } from '@/lib/siteUrl';
 
 export type DocAudience = 'faculty' | 'students';
@@ -185,6 +186,7 @@ export function buildLlmsTxt(options?: { docsScoped?: boolean }): string {
   );
 
   if (!docsScoped) {
+    lines.push(...blogLlmsEntries());
     lines.push(
       `- [Marketing home](${absoluteUrl('/')}): Product overview for humans.`,
       `- [Privacy Policy](${absoluteUrl('/privacy')}): Education records, subprocessors, retention.`,

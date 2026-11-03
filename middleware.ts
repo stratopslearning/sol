@@ -161,6 +161,22 @@ export default clerkMiddleware(async (auth, req) => {
     );
   }
 
+  // Blog markdown mirrors: /blog.md and /blog/:slug.md
+  if (appPath === '/blog.md' || appPath === '/blog/index.md') {
+    return NextResponse.rewrite(
+      new URL(`${BASE_PATH}/blog/md/index${req.nextUrl.search}`, req.url),
+    );
+  }
+  const blogMdMatch = appPath.match(/^\/blog\/([^/]+)\.md$/);
+  if (blogMdMatch) {
+    return NextResponse.rewrite(
+      new URL(
+        `${BASE_PATH}/blog/md/${blogMdMatch[1]}${req.nextUrl.search}`,
+        req.url,
+      ),
+    );
+  }
+
   // Agent access paths authenticate inside the route handler with a personal
   // access token (`sol_pat_…`) instead of a Clerk cookie, so the edge layer
   // must not bounce them to the login page. Every handler on these paths
@@ -226,6 +242,9 @@ export default clerkMiddleware(async (auth, req) => {
     appPath === '/docs' ||
     appPath.startsWith('/docs/') ||
     appPath === '/docs.md' ||
+    appPath === '/blog' ||
+    appPath.startsWith('/blog/') ||
+    appPath === '/blog.md' ||
     appPath === '/privacy' ||
     appPath === '/terms' ||
     appPath === '/security' ||

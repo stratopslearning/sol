@@ -29,7 +29,7 @@ interface DbUser {
 const LINKS = [
   { href: "/#product", label: "Product" },
   { href: "/#faq", label: "FAQ" },
-  { href: "/#trust", label: "Vision" },
+  { href: "/blog", label: "Blogs" },
 ] as const;
 
 /** Scroll distance (px) over which the nav morphs from bare → glass pill. */
