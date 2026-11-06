@@ -1,5 +1,12 @@
 -- Expand workspace DEFINER reads with columns the dashboard pages need.
-CREATE OR REPLACE FUNCTION sol_user_active_memberships_detail(p_user_id uuid)
+-- Postgres cannot change OUT columns via CREATE OR REPLACE — drop first.
+
+DROP FUNCTION IF EXISTS sol_user_active_memberships_detail(uuid);
+DROP FUNCTION IF EXISTS sol_workspace_usage_daily(uuid, integer);
+DROP FUNCTION IF EXISTS sol_workspace_audit_rows(uuid, integer);
+DROP FUNCTION IF EXISTS sol_lti_platforms_for_workspace(uuid);
+
+CREATE FUNCTION sol_user_active_memberships_detail(p_user_id uuid)
 RETURNS TABLE (
   membership_id uuid,
   membership_role text,
@@ -71,7 +78,7 @@ AS $$
   ORDER BY m.created_at DESC;
 $$;
 
-CREATE OR REPLACE FUNCTION sol_workspace_usage_daily(p_workspace_id uuid, p_limit integer DEFAULT 30)
+CREATE FUNCTION sol_workspace_usage_daily(p_workspace_id uuid, p_limit integer DEFAULT 30)
 RETURNS TABLE (
   id uuid,
   day text,
@@ -88,7 +95,7 @@ LANGUAGE sql SECURITY DEFINER SET search_path = public STABLE AS $$
   LIMIT GREATEST(p_limit, 1);
 $$;
 
-CREATE OR REPLACE FUNCTION sol_workspace_audit_rows(p_workspace_id uuid, p_limit integer DEFAULT 50)
+CREATE FUNCTION sol_workspace_audit_rows(p_workspace_id uuid, p_limit integer DEFAULT 50)
 RETURNS TABLE (
   id uuid,
   action text,
@@ -115,7 +122,7 @@ LANGUAGE sql SECURITY DEFINER SET search_path = public STABLE AS $$
   LIMIT GREATEST(p_limit, 1);
 $$;
 
-CREATE OR REPLACE FUNCTION sol_lti_platforms_for_workspace(p_workspace_id uuid)
+CREATE FUNCTION sol_lti_platforms_for_workspace(p_workspace_id uuid)
 RETURNS TABLE (
   id uuid,
   issuer text,
@@ -139,4 +146,23 @@ LANGUAGE sql SECURITY DEFINER SET search_path = public STABLE AS $$
   FROM lti_platforms p
   WHERE p.tenant_id = p_workspace_id
   ORDER BY p.created_at DESC;
+$$;
+
+DO $$
+DECLARE
+  fn text;
+BEGIN
+  FOREACH fn IN ARRAY ARRAY[
+    'sol_user_active_memberships_detail(uuid)',
+    'sol_workspace_usage_daily(uuid, integer)',
+    'sol_workspace_audit_rows(uuid, integer)',
+    'sol_lti_platforms_for_workspace(uuid)'
+  ]
+  LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC', fn);
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'sol_app') THEN
+      EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO sol_app', fn);
+    END IF;
+  END LOOP;
+END
 $$;
