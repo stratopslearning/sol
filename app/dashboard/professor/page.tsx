@@ -10,7 +10,6 @@ import {
   TrendingUp,
 } from '@/components/icons';
 
-import { CreatorUnverifiedBadge } from '@/components/professor/CreatorUnverifiedBadge';
 import { TeacherHomeChecklist } from '@/components/professor/TeacherHomeChecklist';
 import ExportResultsWrapper from '@/components/ExportResultsWrapper';
 import ProfessorEnrollForm from '@/components/ProfessorEnrollForm';
@@ -25,7 +24,6 @@ import { appPath, withBasePath } from '@/lib/basePath';
 import { requireTeachingAccess } from '@/lib/authz/gates';
 import { getAttentionItemsForProfessor } from '@/lib/professorAttention';
 import { partitionEnrollmentsByConclusion } from '@/lib/sectionAvailability';
-import { isCreatorWorkspaceUnverified } from '@/lib/onboarding/workspaceSettings';
 import { getTeacherHomeChecklistSteps } from '@/lib/professor/teacherHomeChecklist';
 import {
   getActiveWorkspaceId,
@@ -120,7 +118,6 @@ export default async function ProfessorDashboard() {
     facultyMemberships.find((m) => m.workspaceId === activeWorkspaceId) ??
     facultyMemberships[0];
   const activeWorkspace = activeMembership?.workspace;
-  const showUnverifiedBadge = isCreatorWorkspaceUnverified(activeWorkspace);
   const checklistSteps = activeWorkspace
     ? await getTeacherHomeChecklistSteps(activeWorkspace.id)
     : [];
@@ -162,7 +159,6 @@ export default async function ProfessorDashboard() {
           <>
             {firstName}
             <span className="text-ink-muted font-normal">’s desk</span>
-            <CreatorUnverifiedBadge show={showUnverifiedBadge} />
           </>
         }
         description="Use Knowledge, Authoring, and Assignments from the sidebar. Open a course for sections, analytics, and insights. Attention and results stay global."

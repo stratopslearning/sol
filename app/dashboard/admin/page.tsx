@@ -13,19 +13,15 @@ import { AppShell } from '@/components/layout/AppShell';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { StatCard } from '@/components/patterns/StatCard';
 import { Button } from '@/components/ui/button';
-import {
-  fetchAdminOverviewStats,
-  fetchAdminWorkspaceDirectory,
-} from '@/lib/admin/platformReads';
+import { fetchAdminOverviewStats } from '@/lib/admin/platformReads';
 import { withBasePath } from '@/lib/basePath';
 import { requireAdmin } from '@/lib/auth';
 
 export default async function AdminDashboardPage() {
   const admin = await requireAdmin();
 
-  const [stats, workspaces, allUsers] = await Promise.all([
+  const [stats, allUsers] = await Promise.all([
     fetchAdminOverviewStats(),
-    fetchAdminWorkspaceDirectory(),
     db.query.users.findMany(),
   ]);
 
@@ -116,22 +112,6 @@ export default async function AdminDashboardPage() {
             accent
           />
         </div>
-        {workspaces.length > 0 ? (
-          <ul className="mt-4 flex flex-wrap gap-2 text-sm">
-            {workspaces.map((w) => (
-              <li key={w.id}>
-                <Link
-                  href={withBasePath(
-                    `/dashboard/admin/courses?workspaceId=${encodeURIComponent(w.id)}`,
-                  )}
-                  className="text-brand underline underline-offset-4 decoration-brand-soft hover:decoration-brand"
-                >
-                  {w.name}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        ) : null}
       </AdminSection>
 
       <AdminSection eyebrow="Quick actions" title="What needs doing">

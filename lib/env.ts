@@ -62,8 +62,15 @@ const baseSchema = z.object({
 
   // Rate limiting (Upstash). Optional in development (in-memory fallback).
   // Required in production: see invariants below.
-  UPSTASH_REDIS_REST_URL: z.string().url().optional(),
-  UPSTASH_REDIS_REST_TOKEN: z.string().min(1).optional(),
+  // Empty strings from Vercel/misconfig must not fail as "Invalid url".
+  UPSTASH_REDIS_REST_URL: z.preprocess(
+    (v) => (typeof v === 'string' && v.trim() === '' ? undefined : v),
+    z.string().url().optional(),
+  ),
+  UPSTASH_REDIS_REST_TOKEN: z.preprocess(
+    (v) => (typeof v === 'string' && v.trim() === '' ? undefined : v),
+    z.string().min(1).optional(),
+  ),
 
   // Background jobs: `after` (default) or `inngest` (durable queue).
   // Local: JOBS_BACKEND=inngest + `npm run jobs:dev`. Optional Inngest keys

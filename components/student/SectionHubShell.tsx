@@ -3,7 +3,6 @@ import type { ReactNode } from 'react';
 
 import { AppShell } from '@/components/layout/AppShell';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { CreatorUnverifiedBadge } from '@/components/professor/CreatorUnverifiedBadge';
 import { withBasePath } from '@/lib/basePath';
 import { cn } from '@/lib/utils';
 
@@ -24,7 +23,6 @@ export function SectionHubShell({
   activeTab,
   actions,
   user,
-  instructorUnverified,
   children,
 }: {
   sectionId: string;
@@ -33,6 +31,7 @@ export function SectionHubShell({
   description?: string;
   activeTab: SectionHubTab;
   actions?: ReactNode;
+  /** @deprecated Unused — kept optional so call sites can drop it gradually. */
   instructorUnverified?: boolean;
   user?: {
     firstName?: string | null;
@@ -65,12 +64,6 @@ export function SectionHubShell({
         ]}
         actions={actions}
       />
-
-      {instructorUnverified ? (
-        <div className="mt-4">
-          <CreatorUnverifiedBadge show variant="student" />
-        </div>
-      ) : null}
 
       <nav
         className="mt-6 flex flex-wrap gap-1 border-b border-rule/70"
