@@ -3,8 +3,7 @@
  * Emit vercel.json for the current deploy's BASE_PATH.
  *
  * - StratOps / local (default `/learning`): crons + apex rewrites under /learning
- * - Sol (`NEXT_PUBLIC_BASE_PATH=` empty): no crons (avoid double-firing vs StratOps);
- *   apex rewrites without /learning prefix
+ * - teachwithsol (`NEXT_PUBLIC_BASE_PATH=` empty): root `/api/cron/…` + apex rewrites
  *
  * Run from prebuild so each Vercel project gets the right file from the same repo.
  */
@@ -47,31 +46,30 @@ const rewrites = [
   },
 ];
 
-/** Only StratOps runs crons while dual-hosting the same DB. */
-const crons = basePath
-  ? [
-      {
-        path: `${basePath}/api/cron/grade-pending`,
-        schedule: '15 9 * * *',
-      },
-      {
-        path: `${basePath}/api/cron/process-materials`,
-        schedule: '30 9 * * *',
-      },
-      {
-        path: `${basePath}/api/cron/lti-roster`,
-        schedule: '45 9 * * *',
-      },
-      {
-        path: `${basePath}/api/cron/lti-passback`,
-        schedule: '20 9 * * *',
-      },
-      {
-        path: `${basePath}/api/cron/access-request-digest`,
-        schedule: '0 10 * * *',
-      },
-    ]
-  : [];
+/** Cron paths follow BASE_PATH (StratOps `/learning/…`, teachwithsol `/api/…`). */
+const cronPrefix = basePath; // '' or '/learning'
+const crons = [
+  {
+    path: `${cronPrefix}/api/cron/grade-pending`,
+    schedule: '15 9 * * *',
+  },
+  {
+    path: `${cronPrefix}/api/cron/process-materials`,
+    schedule: '30 9 * * *',
+  },
+  {
+    path: `${cronPrefix}/api/cron/lti-roster`,
+    schedule: '45 9 * * *',
+  },
+  {
+    path: `${cronPrefix}/api/cron/lti-passback`,
+    schedule: '20 9 * * *',
+  },
+  {
+    path: `${cronPrefix}/api/cron/access-request-digest`,
+    schedule: '0 10 * * *',
+  },
+];
 
 const config = {
   $schema: 'https://openapi.vercel.sh/vercel.json',

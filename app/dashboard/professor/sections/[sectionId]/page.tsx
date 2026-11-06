@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { listCourseActivities } from '@/lib/assignments';
 import { requireTeachingAccess } from '@/lib/authz/gates';
 import { withBasePath } from '@/lib/basePath';
-import { entityIdForActivity } from '@/lib/professor/setActivitySections';
+import { entityIdForActivity } from '@/lib/professor/activityEntity';
 import { assertTeachesSection } from '@/lib/professor/sections';
 import { loadSectionDetailData } from '@/lib/sectionDetailData';
 

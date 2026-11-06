@@ -36,7 +36,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { ActivityListItem, ActivityType } from "@/lib/assignments";
 import { apiUrl, appPath } from "@/lib/basePath";
-import { entityIdForActivity } from "@/lib/professor/setActivitySections";
+import { entityIdForActivity } from "@/lib/professor/activityEntity";
 import { cn } from "@/lib/utils";
 
 const FILTERS: Array<{ id: "ALL" | ActivityType; label: string }> = [

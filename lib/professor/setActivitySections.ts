@@ -175,23 +175,4 @@ export async function addActivityToSection(
   throw ApiError.badRequest('Cannot assign this activity type here');
 }
 
-export function entityIdForActivity(item: {
-  type: ActivityType;
-  quizId: string | null;
-  chatbotId: string | null;
-  interactiveId: string | null;
-  lessonId: string | null;
-}): string | null {
-  switch (item.type) {
-    case 'QUIZ':
-      return item.quizId;
-    case 'DISCUSSION':
-      return item.chatbotId;
-    case 'INTERACTIVE':
-      return item.interactiveId;
-    case 'LESSON':
-      return item.lessonId;
-    default:
-      return null;
-  }
-}
+export { entityIdForActivity } from '@/lib/professor/activityEntity';
