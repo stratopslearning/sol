@@ -117,7 +117,7 @@ export default clerkMiddleware(async (auth, req) => {
   const hostGate = solHostRedirect(req);
   if (hostGate) return hostGate;
 
-  // teachwithsol marketing: no public auth — send login/signup to Book a demo.
+  // Soft launch: when DEMO_ONLY, send login/signup to Book a demo.
   if (
     solDemoOnly() &&
     (pathname === '/login' ||

@@ -47,14 +47,26 @@ describe('lib/solHosts', () => {
     expect(classifySolHost('app.teachwithsol.com')).toBe('app');
   });
 
-  it('keeps production teachwithsol demo-only even when override is false', async () => {
+  it('exposes auth on production teachwithsol by default', async () => {
     vi.stubEnv('NEXT_PUBLIC_BASE_PATH', '');
     vi.stubEnv('NEXT_PUBLIC_SOL_MARKETING_HOST', 'www.teachwithsol.com');
     vi.stubEnv('NEXT_PUBLIC_SOL_APP_HOST', 'app.teachwithsol.com');
     vi.stubEnv('NEXT_PUBLIC_SOL_DOCS_HOST', 'docs.teachwithsol.com');
     vi.stubEnv('NEXT_PUBLIC_SOL_TRUST_HOST', 'trust.teachwithsol.com');
     vi.stubEnv('NEXT_PUBLIC_VERCEL_ENV', 'production');
-    vi.stubEnv('NEXT_PUBLIC_SOL_DEMO_ONLY', 'false');
+    delete process.env.NEXT_PUBLIC_SOL_DEMO_ONLY;
+    const { solDemoOnly } = await import('@/lib/solHosts');
+    expect(solDemoOnly()).toBe(false);
+  });
+
+  it('honors NEXT_PUBLIC_SOL_DEMO_ONLY=true on production teachwithsol', async () => {
+    vi.stubEnv('NEXT_PUBLIC_BASE_PATH', '');
+    vi.stubEnv('NEXT_PUBLIC_SOL_MARKETING_HOST', 'www.teachwithsol.com');
+    vi.stubEnv('NEXT_PUBLIC_SOL_APP_HOST', 'app.teachwithsol.com');
+    vi.stubEnv('NEXT_PUBLIC_SOL_DOCS_HOST', 'docs.teachwithsol.com');
+    vi.stubEnv('NEXT_PUBLIC_SOL_TRUST_HOST', 'trust.teachwithsol.com');
+    vi.stubEnv('NEXT_PUBLIC_VERCEL_ENV', 'production');
+    vi.stubEnv('NEXT_PUBLIC_SOL_DEMO_ONLY', 'true');
     const { solDemoOnly } = await import('@/lib/solHosts');
     expect(solDemoOnly()).toBe(true);
   });

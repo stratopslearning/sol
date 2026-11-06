@@ -16,7 +16,7 @@ export default function robots(): MetadataRoute.Robots {
     '/terms',
     '/dmca',
   ];
-  // StratOps still exposes auth routes; teachwithsol is demo-only.
+  // When demo-only, hide auth routes from crawlers.
   if (!solDemoOnly()) {
     allow.push('/login', '/signup');
   }

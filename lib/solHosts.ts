@@ -81,26 +81,15 @@ export function solHostsConfigured(): boolean {
 }
 
 /**
- * teachwithsol: no public login/signup yet — Book a demo only.
- * StratOps `/learning` leaves Sol hosts unset, so auth UI stays available there.
- * Local multi-host: set NEXT_PUBLIC_SOL_DEMO_ONLY=false to keep /login working
- * (ignored on production teachwithsol.com).
+ * Soft-launch gate: when true, hide Sign in / Sign up and redirect those
+ * routes to Book a demo. Opt-in via NEXT_PUBLIC_SOL_DEMO_ONLY=true|1.
+ * Default is false so teachwithsol production exposes auth.
  */
 export function solDemoOnly(): boolean {
-  const marketing = solHost('marketing');
-  const isProdTeachwithsol =
-    process.env.NEXT_PUBLIC_VERCEL_ENV === 'production' &&
-    isTeachwithsolMarketingHost(marketing);
-
   const override = process.env.NEXT_PUBLIC_SOL_DEMO_ONLY?.trim().toLowerCase();
-  if (override === 'false' || override === '0') {
-    // Production teachwithsol stays demo-only even if someone flips the flag.
-    if (isProdTeachwithsol) return true;
-    return false;
-  }
+  if (override === 'false' || override === '0') return false;
   if (override === 'true' || override === '1') return true;
-  if (isTeachwithsolMarketingHost(marketing)) return true;
-  return solHostsConfigured();
+  return false;
 }
 
 /** Hostname only (no port), for comparisons. */
