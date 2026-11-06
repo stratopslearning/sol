@@ -1531,15 +1531,15 @@ export default function AuthoringClient({
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
       {warningChecks.length > 0 ? (
-        <div className="absolute left-4 right-4 top-3 z-20 rounded-2xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm shadow-sm">
-          <p className="font-medium text-foreground">
+        <div className="mx-4 mt-3 shrink-0 rounded-2xl border border-amber-500/40 bg-surface px-4 py-3 text-sm shadow-sm">
+          <p className="font-medium text-ink">
             Before you publish — {warningChecks.length} check
             {warningChecks.length === 1 ? "" : "s"}
           </p>
-          <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+          <ul className="mt-2 max-h-28 space-y-1 overflow-y-auto text-xs text-ink-muted">
             {warningChecks.slice(0, 5).map((c, i) => (
               <li key={`${c.code}-${i}`}>
-                <span className="text-foreground">{c.title}</span> — {c.detail}
+                <span className="text-ink">{c.title}</span> — {c.detail}
               </li>
             ))}
           </ul>
