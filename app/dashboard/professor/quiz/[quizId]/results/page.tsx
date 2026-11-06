@@ -82,6 +82,7 @@ export default async function QuizResultsPage({
   const quizAttempts = await fetchSubmittedAttemptsForProfessorSections({
     quizId,
     professorSectionIds: enrolledSectionIds,
+    includePayloads: true,
   });
 
   const bestPerStudent: Record<string, number> = {};
@@ -110,7 +111,10 @@ export default async function QuizResultsPage({
 
   const questionStats = computeQuestionStatsForAttempts(
     quiz.questions,
-    quizAttempts,
+    quizAttempts.map((a) => ({
+      answers: 'answers' in a ? a.answers : undefined,
+      gptFeedback: 'gptFeedback' in a ? a.gptFeedback : undefined,
+    })),
   );
 
   return (

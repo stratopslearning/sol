@@ -21,8 +21,8 @@ import {
   listTeachableSectionsForCourse,
 } from '@/lib/interactives/access';
 
-type AuthUser = Pick<UserData, 'id' | 'platformStaff' | 'clerkId'> & {
-  platformStaff?: boolean;
+type AuthUser = Pick<UserData, 'id' | 'clerkId'> & {
+  platformStaff?: boolean | null;
 };
 
 export async function createInteractive(

@@ -31,7 +31,7 @@ import { assertCanManageCourse } from '@/lib/knowledge/access';
 import type { UserData } from '@/lib/getOrCreateUser';
 import type { OutlineSnapshot } from '@/lib/authoring/revisions';
 
-type AuthUser = Pick<UserData, 'id' | 'platformStaff' | 'clerkId'>;
+type AuthUser = Pick<UserData, 'id' | 'clerkId'> & { platformStaff?: boolean | null };
 
 export type AuthoringSessionSummary = {
   id: string;

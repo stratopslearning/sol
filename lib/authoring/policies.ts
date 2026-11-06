@@ -8,7 +8,7 @@ import { assertCanManageCourse } from '@/lib/knowledge/access';
 import { assertWorkspaceFaculty } from '@/lib/knowledge/workspaceAccess';
 import type { UserData } from '@/lib/getOrCreateUser';
 
-type AuthUser = Pick<UserData, 'id' | 'platformStaff' | 'clerkId'>;
+type AuthUser = Pick<UserData, 'id' | 'clerkId'> & { platformStaff?: boolean | null };
 
 export type AuthoringPolicy = {
   id: string;

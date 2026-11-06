@@ -19,8 +19,8 @@ import {
 } from '@/lib/chatbot/access';
 import type { UserData } from '@/lib/getOrCreateUser';
 
-type ProfessorUser = Pick<UserData, 'id' | 'platformStaff' | 'clerkId'> & {
-  platformStaff?: boolean;
+type ProfessorUser = Pick<UserData, 'id' | 'clerkId'> & {
+  platformStaff?: boolean | null;
 };
 
 export type DiscussionSummary = {

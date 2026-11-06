@@ -22,7 +22,7 @@ import { fetchOfferingCourseId } from '@/lib/workspace/workspaceScopedReads';
 import type { UserData } from '@/lib/getOrCreateUser';
 
 type OfferingRow = typeof courseOfferings.$inferSelect;
-type AuthUser = Pick<UserData, 'id' | 'platformStaff' | 'clerkId'>;
+type AuthUser = Pick<UserData, 'id' | 'clerkId'> & { platformStaff?: boolean | null };
 
 async function loadOfferingForCopy(
   offeringId: string,

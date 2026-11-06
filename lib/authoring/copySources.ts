@@ -7,7 +7,7 @@ import { assertCanManageCourse } from '@/lib/knowledge/access';
 import type { UserData } from '@/lib/getOrCreateUser';
 import { getCourseWorkspaceId } from '@/lib/workspace';
 
-type AuthUser = Pick<UserData, 'id' | 'platformStaff' | 'clerkId'>;
+type AuthUser = Pick<UserData, 'id' | 'clerkId'> & { platformStaff?: boolean | null };
 
 export type OfferingCopySource = {
   offeringId: string;

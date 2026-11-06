@@ -17,7 +17,7 @@ import {
   type QuizQuestionForStats,
 } from '@/lib/quizQuestionStats';
 
-type AuthUser = Pick<UserData, 'id' | 'platformStaff' | 'clerkId'>;
+type AuthUser = Pick<UserData, 'id' | 'clerkId'> & { platformStaff?: boolean | null };
 
 export async function getConceptMastery(
   user: AuthUser,

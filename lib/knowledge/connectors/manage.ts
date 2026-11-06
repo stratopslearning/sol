@@ -19,7 +19,7 @@ import {
   assertWorkspaceLibraryAdmin,
 } from '@/lib/knowledge/workspaceAccess';
 
-type AuthUser = Pick<UserData, 'id' | 'platformStaff' | 'clerkId'>;
+type AuthUser = Pick<UserData, 'id' | 'clerkId'> & { platformStaff?: boolean | null };
 
 export type ConnectorSummary = {
   id: string;

@@ -36,14 +36,7 @@ export default async function WorkspaceLtiPage() {
   const platforms = await fetchLtiPlatformsForWorkspace(
     membership.workspace.id,
   );
-  const platform = platforms[0]
-    ? {
-        id: platforms[0].id,
-        issuer: platforms[0].issuer,
-        clientId: platforms[0].clientId,
-        createdAt: platforms[0].createdAt,
-      }
-    : null;
+  const platform = platforms[0] ?? null;
 
   const cfg = getLtiConfig();
 

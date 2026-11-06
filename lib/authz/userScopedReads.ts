@@ -104,6 +104,9 @@ type MembershipDetailRow = {
   license_plan: string | null;
   license_seat_cap: number | null;
   license_status: string | null;
+  license_billing_provider: string | null;
+  license_stripe_subscription_id: string | null;
+  license_period_end: Date | string | null;
 };
 
 function asDate(value: Date | string): Date {
@@ -166,6 +169,13 @@ export async function fetchUserActiveMembershipsDetail(userId: string) {
                 | 'active'
                 | 'past_due'
                 | 'canceled',
+              billingProvider: (r.license_billing_provider ?? 'manual') as
+                | 'manual'
+                | 'stripe',
+              stripeSubscriptionId: r.license_stripe_subscription_id,
+              periodEnd: r.license_period_end
+                ? asDate(r.license_period_end)
+                : null,
             },
           ]
         : [],

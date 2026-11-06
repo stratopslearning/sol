@@ -22,8 +22,8 @@ describe.skipIf(skip)('RLS visibility DEFINER smoke', () => {
       )
       ORDER BY 1
     `);
-    const names = (rows.rows ?? rows).map(
-      (r: { proname: string }) => r.proname,
+    const names = ((rows.rows ?? rows) as { proname: string }[]).map(
+      (r) => r.proname,
     );
     expect(names).toEqual(
       expect.arrayContaining([

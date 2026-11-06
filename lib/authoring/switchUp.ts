@@ -27,7 +27,7 @@ import { validateSwitchUpVariant } from '@/lib/authoring/switchUpValidate';
 import { assertCanManageCourse } from '@/lib/knowledge/access';
 import type { UserData } from '@/lib/getOrCreateUser';
 
-type AuthUser = Pick<UserData, 'id' | 'platformStaff' | 'clerkId'>;
+type AuthUser = Pick<UserData, 'id' | 'clerkId'> & { platformStaff?: boolean | null };
 
 const switchResponseSchema = z.object({
   items: z.array(

@@ -25,7 +25,7 @@ export {
   isBookTitleChapter,
 } from '@/lib/books/frontMatter';
 
-type AuthUser = Pick<UserData, 'id' | 'platformStaff' | 'clerkId'>;
+type AuthUser = Pick<UserData, 'id' | 'clerkId'> & { platformStaff?: boolean | null };
 
 function buildBookAuthoringContext(
   bookTitle: string,

@@ -12,8 +12,8 @@ import { userCanAccessTeachingArea } from '@/lib/authz/gates';
 import { listTeachableSectionIdsForCourse } from '@/lib/authoring/access';
 import type { UserData } from '@/lib/getOrCreateUser';
 
-type AuthUser = Pick<UserData, 'id' | 'platformStaff' | 'clerkId'> & {
-  platformStaff?: boolean;
+type AuthUser = Pick<UserData, 'id' | 'clerkId'> & {
+  platformStaff?: boolean | null;
 };
 
 export type CreateLessonInput = {
@@ -147,7 +147,7 @@ export async function setLessonVisibility(
     .where(eq(lessons.id, lessonId))
     .returning();
 
-  await setActivityActiveByEntity('lesson', lessonId, isActive);
+  await setActivityActiveByEntity({ lessonId }, isActive);
 
   return { id: updated.id, isActive: updated.isActive };
 }

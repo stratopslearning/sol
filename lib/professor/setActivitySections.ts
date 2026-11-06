@@ -22,8 +22,8 @@ import {
   userCanWriteChatbot,
 } from '@/lib/chatbot/access';
 
-type AuthUser = Pick<UserData, 'id' | 'platformStaff' | 'clerkId'> & {
-  platformStaff?: boolean;
+type AuthUser = Pick<UserData, 'id' | 'clerkId'> & {
+  platformStaff?: boolean | null;
 };
 
 function rowsFromExecute<T>(result: unknown): T[] {

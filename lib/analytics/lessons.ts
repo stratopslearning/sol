@@ -10,7 +10,7 @@ import { resolveAnalyticsSectionIds } from '@/lib/analytics/access';
 import { suppressLessonRows } from '@/lib/analytics/kAnonymity';
 import type { UserData } from '@/lib/getOrCreateUser';
 
-type AuthUser = Pick<UserData, 'id' | 'platformStaff' | 'clerkId'>;
+type AuthUser = Pick<UserData, 'id' | 'clerkId'> & { platformStaff?: boolean | null };
 
 export type LessonCompletionRow = {
   lessonId: string;

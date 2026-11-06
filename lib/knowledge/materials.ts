@@ -39,7 +39,7 @@ import { softDeleteMirroredKnowledgeDocs } from '@/lib/knowledge/mirror';
 import type { ZipImportSkip } from '@/lib/knowledge/zipImport';
 import { getCourseWorkspaceId } from '@/lib/workspace';
 
-type AuthUser = Pick<UserData, 'id' | 'platformStaff' | 'clerkId'>;
+type AuthUser = Pick<UserData, 'id' | 'clerkId'> & { platformStaff?: boolean | null };
 
 export type MaterialSummary = {
   id: string;

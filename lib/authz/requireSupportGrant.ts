@@ -8,8 +8,8 @@ import {
 } from '@/lib/authz/supportAccess';
 import type { UserData } from '@/lib/getOrCreateUser';
 
-type StaffUser = Pick<UserData, 'id' | 'platformStaff' | 'clerkId'> & {
-  platformStaff?: boolean;
+type StaffUser = Pick<UserData, 'id' | 'clerkId'> & {
+  platformStaff?: boolean | null;
 };
 
 function isPlatformStaff(user: StaffUser): boolean {

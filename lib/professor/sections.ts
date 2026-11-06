@@ -24,9 +24,9 @@ export type ProfessorSectionSummary = {
   enrolledAt: Date;
 };
 
-type ProfessorUser = Pick<UserData, 'id' | 'platformStaff'> & {
-  platformStaff?: boolean;
-};
+type ProfessorUser = Pick<UserData, 'id'> & {
+  platformStaff?: boolean | null;
+}
 
 /**
  * Sections the user teaches, derived from role_bindings (DEFINER expansion).

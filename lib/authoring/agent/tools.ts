@@ -13,7 +13,7 @@ import type { OutlineDetail, OutlineItemSummary } from '@/lib/authoring/outlines
 import { publishOutlineItems, releaseOutlineItem } from '@/lib/authoring/publish';
 import type { UserData } from '@/lib/getOrCreateUser';
 
-type AuthUser = Pick<UserData, 'id' | 'platformStaff' | 'clerkId'>;
+type AuthUser = Pick<UserData, 'id' | 'clerkId'> & { platformStaff?: boolean | null };
 
 export const TOOL_NAMES = [
   'list_outline',

@@ -22,6 +22,7 @@ export default async function StudentSectionsPage() {
       id: e.section.id,
       name: e.section.name,
       endsAt: e.section.endsAt,
+      courseId: e.section.course.id,
       course: e.section.course,
     },
   }));
@@ -60,7 +61,7 @@ export default async function StudentSectionsPage() {
       </div>
 
       <div className="mt-10">
-        <StudentSectionsPageContentClient sections={sectionsList} />
+        <StudentSectionsPageContentClient sectionsList={sectionsList} />
       </div>
     </AppShell>
   );

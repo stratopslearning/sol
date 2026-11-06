@@ -7,7 +7,7 @@ import type { OutlineItemSummary } from '@/lib/authoring/outlines';
 import { withItemTenant } from '@/lib/authoring/tenant';
 import type { UserData } from '@/lib/getOrCreateUser';
 
-type AuthUser = Pick<UserData, 'id' | 'platformStaff' | 'clerkId'>;
+type AuthUser = Pick<UserData, 'id' | 'clerkId'> & { platformStaff?: boolean | null };
 
 export type ItemPreview = {
   item: OutlineItemSummary;

@@ -37,7 +37,7 @@ import {
 import { assertSafeMaterialUrl } from '@/lib/knowledge/urlSafety';
 import { getCourseWorkspaceId } from '@/lib/workspace';
 
-type AuthUser = Pick<UserData, 'id' | 'platformStaff' | 'clerkId'>;
+type AuthUser = Pick<UserData, 'id' | 'clerkId'> & { platformStaff?: boolean | null };
 
 function toSummary(
   row: typeof hostedBooks.$inferSelect,

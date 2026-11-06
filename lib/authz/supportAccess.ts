@@ -9,9 +9,9 @@ export async function hasActiveSupportAccess(
   return fetchUserHasSupportAccess(userId, tenantId);
 }
 
-type PlatformUser = Pick<UserData, 'id' | 'platformStaff'> & {
-  platformStaff?: boolean;
-};
+type PlatformUser = Pick<UserData, 'id'> & {
+  platformStaff?: boolean | null;
+}
 
 function isPlatformStaff(user: PlatformUser): boolean {
   return Boolean(user.platformStaff);

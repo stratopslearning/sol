@@ -118,7 +118,7 @@ export function getDashboardUrl(role: LegacyDashboardRole): string {
 
 /** Dashboard path from bindings + enrollments (not global users.role). */
 export async function resolveDashboardPath(
-  user: Pick<UserData, 'id' | 'platformStaff'> & { platformStaff?: boolean },
+  user: Pick<UserData, 'id'> & { platformStaff?: boolean | null },
 ): Promise<string> {
   const areas = await getDashboardAreas(user);
   if (areas.platformStaff) return '/dashboard/admin';

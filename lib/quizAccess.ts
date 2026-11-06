@@ -31,7 +31,7 @@ async function resolveQuizTenantId(quizId: string): Promise<string | null> {
  * Access comes from role bindings only.
  */
 export async function professorCanAccessQuiz(
-  user: Pick<UserData, 'id' | 'platformStaff'> & { platformStaff?: boolean },
+  user: Pick<UserData, 'id'> & { platformStaff?: boolean | null },
   quizId: string,
 ): Promise<boolean> {
   const quiz = await fetchQuizById(quizId);
@@ -73,7 +73,7 @@ export async function professorCanAccessQuiz(
  * Sections of this quiz the user may read results for.
  */
 export async function accessibleQuizSectionIds(
-  user: Pick<UserData, 'id' | 'platformStaff'> & { platformStaff?: boolean },
+  user: Pick<UserData, 'id'> & { platformStaff?: boolean | null },
   quizId: string,
 ): Promise<string[]> {
   const links = await fetchQuizSectionIds(quizId);
@@ -88,7 +88,7 @@ export async function accessibleQuizSectionIds(
 
 /** Content-write variant used by authoring surfaces (calibration, edit). */
 export async function userCanWriteQuiz(
-  user: Pick<UserData, 'id' | 'platformStaff'> & { platformStaff?: boolean },
+  user: Pick<UserData, 'id'> & { platformStaff?: boolean | null },
   quizId: string,
 ): Promise<boolean> {
   const quiz = await fetchQuizById(quizId);
@@ -118,7 +118,7 @@ export async function userCanWriteQuiz(
 
 /** Legacy STUDENT/PROFESSOR/ADMIN label for shouldHideFeedbackForStudent only. */
 export async function resolveQuizFeedbackViewerRole(
-  user: Pick<UserData, 'id' | 'platformStaff'>,
+  user: Pick<UserData, 'id'> & { platformStaff?: boolean | null },
   quizId: string,
 ): Promise<string> {
   if (user.platformStaff) return 'ADMIN';

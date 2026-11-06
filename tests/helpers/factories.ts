@@ -154,8 +154,6 @@ export async function makeCourse(
   const [row] = await db
     .insert(courses)
     .values({
-      workspaceId,
-      tenantId,
       title: `Course ${randomSlug()}`,
       ...overrides,
       workspaceId,
@@ -191,10 +189,6 @@ export async function makeSection(
   const [row] = await db
     .insert(sections)
     .values({
-      courseId,
-      workspaceId,
-      tenantId,
-      offeringId,
       name: `Section ${randomSlug()}`,
       professorEnrollmentCode: randomSlug(),
       studentEnrollmentCode: randomSlug(),
@@ -224,8 +218,6 @@ export async function makeQuiz(
     .insert(quizzes)
     .values({
       title: `Quiz ${randomSlug()}`,
-      professorId,
-      tenantId,
       maxAttempts: 1,
       passingScore: 60,
       ...overrides,
@@ -255,8 +247,6 @@ export async function makeQuestion(
   const [row] = await db
     .insert(questions)
     .values({
-      quizId,
-      tenantId,
       type: 'MULTIPLE_CHOICE',
       question: 'A?',
       options: ['a', 'b'],
@@ -338,9 +328,6 @@ export async function makeAssignment(
   const [row] = await db
     .insert(assignments)
     .values({
-      quizId,
-      studentId,
-      tenantId,
       ...overrides,
       quizId,
       studentId,

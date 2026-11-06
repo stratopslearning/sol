@@ -13,7 +13,7 @@ interface Attempt {
     name: string;
   };
   percentage: number | null;
-  passed: boolean | null;
+  passed?: boolean | null;
 }
 
 interface AttemptListProps {

@@ -66,7 +66,7 @@ export type SeedTenantGraphOpts = {
   withStudent?: boolean;
 };
 
-export type TenantGraph = TenantFixture & {
+export type TenantGraph = Omit<TenantFixture, 'studentId'> & {
   ownerId: string;
   leadId: string;
   studentId: string | null;

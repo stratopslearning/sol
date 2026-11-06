@@ -13,7 +13,7 @@ import { TEACHING_ROLES } from '@/lib/authz/permissions';
 import { listTeachableSectionIdsForCourse } from '@/lib/authoring/access';
 import type { UserData } from '@/lib/getOrCreateUser';
 
-type AuthUser = Pick<UserData, 'id' | 'platformStaff'> & { platformStaff?: boolean };
+type AuthUser = Pick<UserData, 'id'> & { platformStaff?: boolean | null };
 
 async function userCanWriteInteractive(
   user: AuthUser,

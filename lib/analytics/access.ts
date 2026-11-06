@@ -3,7 +3,7 @@ import { assertCanManageCourse } from '@/lib/knowledge/access';
 import { ApiError } from '@/lib/api/errors';
 import type { UserData } from '@/lib/getOrCreateUser';
 
-type AuthUser = Pick<UserData, 'id' | 'platformStaff' | 'clerkId'>;
+type AuthUser = Pick<UserData, 'id' | 'clerkId'> & { platformStaff?: boolean | null };
 
 export async function resolveAnalyticsSectionIds(
   user: AuthUser,

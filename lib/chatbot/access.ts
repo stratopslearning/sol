@@ -74,9 +74,9 @@ export async function professorOwnsOrTeachesChatbot(
   return userCanWriteChatbot({ id: professorId }, bot);
 }
 
-type ChatbotActor = Pick<UserData, 'id' | 'platformStaff'> & {
-  platformStaff?: boolean;
-};
+type ChatbotActor = Pick<UserData, 'id'> & {
+  platformStaff?: boolean | null;
+}
 
 /**
  * Binding-based (Wave 2 item 11b): the actor must hold content.write on every

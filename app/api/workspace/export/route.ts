@@ -36,8 +36,9 @@ export async function GET(req: NextRequest) {
   const canExport = await userCanManageWorkspaceBilling(user.id, workspaceId);
   const { authorize } = await import('@/lib/authz');
   const canWorkspaceExport = await authorize(user, 'workspace.export', {
-    type: 'workspace',
-    id: workspaceId,
+    tenantId: workspaceId,
+    scopeType: 'organization',
+    scopeId: workspaceId,
   });
   if (!canExport && !canWorkspaceExport) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -125,7 +126,7 @@ export async function GET(req: NextRequest) {
       status: m.status,
       userId: m.userId,
       email: m.user?.email ?? null,
-      platformRole: m.user?.role ?? null,
+      platformStaff: m.user?.platformStaff ?? false,
       createdAt: m.createdAt,
     })),
     usageDaily: usageRows,

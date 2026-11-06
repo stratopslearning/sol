@@ -267,12 +267,14 @@ export async function fetchWorkspaceUsageDaily(
     grade_units: number;
     tutor_units: number;
     embed_units: number;
+    updated_at: Date | string | null;
   }>(result).map((r) => ({
     id: r.id,
     day: r.day,
     gradeUnits: r.grade_units,
     tutorUnits: r.tutor_units,
     embedUnits: r.embed_units,
+    updatedAt: r.updated_at ? asDate(r.updated_at)! : null,
   }));
 }
 
@@ -291,12 +293,18 @@ export async function fetchWorkspaceAuditRows(
     action: string;
     created_at: Date | string;
     actor_user_id: string | null;
+    actor_clerk_id: string | null;
+    target_type: string | null;
+    target_id: string | null;
     metadata: unknown;
   }>(result).map((r) => ({
     id: r.id,
     action: r.action,
     createdAt: asDate(r.created_at)!,
     actorUserId: r.actor_user_id,
+    actorClerkId: r.actor_clerk_id,
+    targetType: r.target_type,
+    targetId: r.target_id,
     metadata: r.metadata,
   }));
 }
@@ -342,11 +350,19 @@ export async function fetchLtiPlatformsForWorkspace(workspaceId: string) {
     id: string;
     issuer: string;
     client_id: string;
+    auth_login_url: string;
+    auth_token_url: string;
+    key_set_url: string;
+    label: string | null;
     created_at: Date | string;
   }>(result).map((r) => ({
     id: r.id,
     issuer: r.issuer,
     clientId: r.client_id,
+    authLoginUrl: r.auth_login_url,
+    authTokenUrl: r.auth_token_url,
+    keySetUrl: r.key_set_url,
+    label: r.label,
     createdAt: asDate(r.created_at)!,
   }));
 }

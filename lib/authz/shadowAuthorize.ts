@@ -14,10 +14,12 @@ import { authorize, type AuthzResource } from '@/lib/authz/authorize';
 import type { LegacyAuthzAction, Permission } from '@/lib/authz/permissions';
 import type { UserData } from '@/lib/getOrCreateUser';
 
-type ShadowUser = Pick<UserData, 'id' | 'platformStaff'> & {
+type ShadowUser = Pick<UserData, 'id'> & {
+  platformStaff?: boolean | null;
+
   /** Legacy users.role; shadow legacy path only (column dropped after contract). */
   role?: string | null;
-};
+}
 
 export type ShadowEvent = {
   event: 'authz.shadow_mismatch' | 'authz.shadow_error';

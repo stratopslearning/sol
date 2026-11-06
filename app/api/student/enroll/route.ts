@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    let section: typeof sections.$inferSelect | undefined;
+    let section: Awaited<ReturnType<typeof findSectionByStudentCode>>;
     if (workspaceScope.workspaceId) {
       section = await findSectionByStudentCode(
         workspaceScope.workspaceId,

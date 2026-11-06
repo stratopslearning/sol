@@ -43,7 +43,7 @@ import { applyOutlineBuildDefiner } from '@/lib/db/entityScopedReads';
 import { assertCanManageCourse } from '@/lib/knowledge/access';
 import type { UserData } from '@/lib/getOrCreateUser';
 
-type AuthUser = Pick<UserData, 'id' | 'platformStaff' | 'clerkId'>;
+type AuthUser = Pick<UserData, 'id' | 'clerkId'> & { platformStaff?: boolean | null };
 
 const skeletonItemSchema = z.object({
   type: z.enum(['QUIZ', 'DISCUSSION', 'INTERACTIVE']),

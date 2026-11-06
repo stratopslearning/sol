@@ -9,12 +9,15 @@ import {
   fetchOutlineItemById,
   fetchOutlineTreeById,
 } from '@/lib/db/entityScopedReads';
-import { withOutlineTenant } from '@/lib/authoring/tenant';
+import {
+  resolveCourseTenantId,
+  withOutlineTenant,
+} from '@/lib/authoring/tenant';
 import { assertCanManageCourse } from '@/lib/knowledge/access';
 
-type AuthUser = Pick<UserData, 'id' | 'platformStaff'> & {
-  platformStaff?: boolean;
-};
+type AuthUser = Pick<UserData, 'id'> & {
+  platformStaff?: boolean | null;
+}
 
 export async function assertCanManageOutline(
   user: AuthUser,

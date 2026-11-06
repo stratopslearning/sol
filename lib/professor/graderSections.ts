@@ -4,7 +4,7 @@ import {
 } from '@/lib/db/entityScopedReads';
 import type { UserData } from '@/lib/getOrCreateUser';
 
-type AuthUser = Pick<UserData, 'id' | 'platformStaff'>;
+type AuthUser = Pick<UserData, 'id'> & { platformStaff?: boolean | null };
 
 /** Section ids where the user may grade via scoped bindings (DEFINER). */
 export async function listGradeableSectionIdsFromGrants(

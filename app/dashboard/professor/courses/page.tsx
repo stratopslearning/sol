@@ -110,9 +110,11 @@ export default async function ProfessorCoursesPage() {
             description={
               canCreate
                 ? 'Name the course, keep the default section, and you get faculty and learner codes right away.'
-                : entitlement.code === 'billing_required'
+                : !entitlement.ok && entitlement.code === 'billing_required'
                   ? 'Billing for this workspace is not finished yet. Complete it, then you can create courses here.'
-                  : entitlement.reason
+                  : !entitlement.ok
+                    ? entitlement.reason
+                    : 'Create or join a workspace first.'
             }
           />
           {canCreate ? (
@@ -127,7 +129,7 @@ export default async function ProfessorCoursesPage() {
             <div className="mt-8 flex flex-wrap gap-3">
               <Button asChild>
                 <Link href={appPath('/dashboard/workspace')}>
-                  {entitlement.code === 'billing_required'
+                  {!entitlement.ok && entitlement.code === 'billing_required'
                     ? 'Finish billing'
                     : 'Open workspace'}
                 </Link>
@@ -148,7 +150,9 @@ export default async function ProfessorCoursesPage() {
               />
             ) : (
               <p className="rounded-xl border border-rule/80 bg-surface-sunken/40 px-4 py-3 text-sm text-ink-muted">
-                {entitlement.reason}{' '}
+                {!entitlement.ok
+                  ? entitlement.reason
+                  : 'Create or join a workspace first.'}{' '}
                 <Link
                   href={appPath('/dashboard/workspace')}
                   className="font-medium text-ink underline-offset-2 hover:underline"

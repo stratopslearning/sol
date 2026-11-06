@@ -26,9 +26,18 @@ export default async function ProfessorSessionReviewPage(props: PageProps) {
   }
 
   const studentName = session.studentName;
-  const messages = (
+  const rawMessages = (
     Array.isArray(session.messages) ? session.messages : []
   ) as TranscriptMessage[];
+  const messages: Array<{
+    role: 'user' | 'assistant';
+    content: string;
+    at?: string;
+  }> = rawMessages.flatMap((m) => {
+    if (m.role !== 'user' && m.role !== 'assistant') return [];
+    const content = typeof m.content === 'string' ? m.content : '';
+    return [{ role: m.role, content, at: m.at }];
+  });
 
   return (
     <AppShell

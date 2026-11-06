@@ -170,7 +170,7 @@ export async function POST(req: NextRequest) {
     let redirectPath: string;
     if (sectionLink) {
       const { userCanAccessTeachingArea } = await import('@/lib/authz');
-      const teaching = await userCanAccessTeachingArea(user);
+      const teaching = await userCanAccessTeachingArea(user.id);
       if (isInstructorRoleHint(roleHint) || teaching) {
         redirectPath = `/dashboard/professor/sections/${sectionLink.sectionId}`;
       } else {
@@ -189,7 +189,7 @@ export async function POST(req: NextRequest) {
       }
     } else {
       const { userCanAccessTeachingArea } = await import('@/lib/authz');
-      const teaching = await userCanAccessTeachingArea(user);
+      const teaching = await userCanAccessTeachingArea(user.id);
       if (isInstructorRoleHint(roleHint) || teaching) {
         redirectPath = `/dashboard/professor/sections`;
       } else {

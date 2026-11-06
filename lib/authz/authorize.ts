@@ -43,9 +43,9 @@ export type AuthzResource = {
   organizationId?: string | null;
 };
 
-type AuthUser = Pick<UserData, 'id' | 'platformStaff'> & {
-  platformStaff?: boolean;
-};
+type AuthUser = Pick<UserData, 'id'> & {
+  platformStaff?: boolean | null;
+}
 
 type ScopeRef = { scopeType: AuthzScopeType; scopeId: string };
 

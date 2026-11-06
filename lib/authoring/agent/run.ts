@@ -43,7 +43,7 @@ import { buildAuthoringAgentPlannerPrompt } from '@/lib/authoring/prompts';
 import { authoringScheduleContext } from '@/lib/authoring/schedule';
 import type { UserData } from '@/lib/getOrCreateUser';
 
-type AuthUser = Pick<UserData, 'id' | 'platformStaff' | 'clerkId'>;
+type AuthUser = Pick<UserData, 'id' | 'clerkId'> & { platformStaff?: boolean | null };
 
 export type AuthoringAgentResult = {
   assistantMessage: string;

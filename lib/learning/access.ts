@@ -6,7 +6,7 @@ import { ApiError } from '@/lib/api/errors';
 import { assertCanManageCourse } from '@/lib/knowledge/access';
 import type { UserData } from '@/lib/getOrCreateUser';
 
-type AuthUser = Pick<UserData, 'id' | 'platformStaff'>;
+type AuthUser = Pick<UserData, 'id'> & { platformStaff?: boolean | null };
 
 export async function assertCanManageLesson(user: AuthUser, lessonId: string) {
   const lesson = await db.query.lessons.findFirst({

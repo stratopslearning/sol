@@ -42,8 +42,8 @@ import { getAttentionItemsForProfessor } from '@/lib/professorAttention';
 import { regradeAttempt } from '@/lib/regradeAttempt';
 import { parseOptionalEndsAt } from '@/lib/sectionAvailability';
 import { assertTeachesSection } from '@/lib/professor/sections';
-type ProfessorUser = Pick<UserData, 'id' | 'platformStaff' | 'clerkId'> & {
-  platformStaff?: boolean;
+type ProfessorUser = Pick<UserData, 'id' | 'clerkId'> & {
+  platformStaff?: boolean | null;
 };
 
 export type QuizQuestionInput = {

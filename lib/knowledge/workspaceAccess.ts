@@ -2,7 +2,7 @@ import { authorize } from '@/lib/authz/authorize';
 import { ApiError } from '@/lib/api/errors';
 import type { UserData } from '@/lib/getOrCreateUser';
 
-type AuthUser = Pick<UserData, 'id' | 'platformStaff'> & { platformStaff?: boolean };
+type AuthUser = Pick<UserData, 'id'> & { platformStaff?: boolean | null };
 
 export async function assertWorkspaceFaculty(
   user: AuthUser,

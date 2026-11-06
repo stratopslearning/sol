@@ -12,9 +12,9 @@ import {
   userCanCreateCoursesInWorkspace,
 } from '@/lib/workspace';
 
-type AuthUser = Pick<UserData, 'id' | 'platformStaff'> & {
-  platformStaff?: boolean;
-};
+type AuthUser = Pick<UserData, 'id'> & {
+  platformStaff?: boolean | null;
+}
 
 export type CreatedSection = {
   id: string;

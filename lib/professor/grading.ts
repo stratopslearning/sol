@@ -28,7 +28,7 @@ import {
 } from '@/lib/quizAccess';
 import { assertTeachesSection } from '@/lib/professor/sections';
 
-type ProfessorUser = Pick<UserData, 'id' | 'platformStaff' | 'clerkId'>;
+type ProfessorUser = Pick<UserData, 'id' | 'clerkId'> & { platformStaff?: boolean | null };
 
 function personName(p: {
   firstName: string | null;

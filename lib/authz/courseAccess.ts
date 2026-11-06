@@ -20,9 +20,9 @@ import {
 } from '@/lib/db/entityScopedReads';
 import type { UserData } from '@/lib/getOrCreateUser';
 
-export type AuthzUser = Pick<UserData, 'id' | 'platformStaff'> & {
-  platformStaff?: boolean;
-};
+export type AuthzUser = Pick<UserData, 'id'> & {
+  platformStaff?: boolean | null;
+}
 
 export type CourseRef = {
   id: string;

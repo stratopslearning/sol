@@ -7,7 +7,7 @@ import { authorize, tenantIdForSection } from '@/lib/authz';
 import { logAudit } from '@/lib/audit';
 import type { UserData } from '@/lib/getOrCreateUser';
 
-type AuthUser = Pick<UserData, 'id' | 'platformStaff' | 'clerkId'>;
+type AuthUser = Pick<UserData, 'id' | 'clerkId'> & { platformStaff?: boolean | null };
 
 /** Soft-drop a student from a section (status DROPPED). Does not delete the user. */
 export async function dropStudentFromSection(

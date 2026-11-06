@@ -17,7 +17,7 @@ import {
 } from '@/lib/quizAccess';
 import { partitionEnrollmentsByConclusion } from '@/lib/sectionAvailability';
 
-type ProfessorUser = Pick<UserData, 'id' | 'platformStaff'>;
+type ProfessorUser = Pick<UserData, 'id'> & { platformStaff?: boolean | null };
 
 export type ProfessorQuizSummary = {
   id: string;

@@ -27,7 +27,7 @@ import {
 } from '@/lib/interactives';
 import type { UserData } from '@/lib/getOrCreateUser';
 
-type AuthUser = Pick<UserData, 'id' | 'platformStaff' | 'clerkId'>;
+type AuthUser = Pick<UserData, 'id' | 'clerkId'> & { platformStaff?: boolean | null };
 
 function quizWindowIso() {
   const start = new Date();
@@ -60,9 +60,22 @@ function mapQuestions(
   }));
 }
 
-function toSummary(
-  row: typeof outlineItems.$inferSelect,
-): OutlineItemSummary {
+function toSummary(row: {
+  id: string;
+  moduleId: string;
+  type: string;
+  title: string;
+  status: string;
+  body: unknown;
+  sourceMaterialIds?: string[] | null;
+  variantOfItemId?: string | null;
+  faithfulBody?: unknown;
+  publishedQuizId?: string | null;
+  publishedChatbotId?: string | null;
+  publishedLessonId?: string | null;
+  publishedInteractiveId?: string | null;
+  position: number;
+}): OutlineItemSummary {
   return {
     id: row.id,
     moduleId: row.moduleId,
@@ -74,10 +87,10 @@ function toSummary(
     variantOfItemId: row.variantOfItemId ?? null,
     faithfulBody: (row.faithfulBody ??
       null) as OutlineItemSummary['faithfulBody'],
-    publishedQuizId: row.publishedQuizId,
-    publishedChatbotId: row.publishedChatbotId,
-    publishedLessonId: row.publishedLessonId,
-    publishedInteractiveId: row.publishedInteractiveId,
+    publishedQuizId: row.publishedQuizId ?? null,
+    publishedChatbotId: row.publishedChatbotId ?? null,
+    publishedLessonId: row.publishedLessonId ?? null,
+    publishedInteractiveId: row.publishedInteractiveId ?? null,
     position: row.position,
   };
 }

@@ -31,7 +31,7 @@ export type DashboardAreas = {
 };
 
 export async function getDashboardAreas(
-  user: Pick<UserData, 'id' | 'platformStaff'> & { platformStaff?: boolean },
+  user: Pick<UserData, 'id'> & { platformStaff?: boolean | null },
 ): Promise<DashboardAreas> {
   const bindings = await listBindingsForUser(user.id);
   const teaching = bindings.some((b) =>
