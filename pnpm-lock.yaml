@@ -26,6 +26,9 @@ importers:
       '@clerk/nextjs':
         specifier: ^6.23.3
         version: 6.39.8(next@15.3.8(@babel/core@7.29.13)(@opentelemetry/api@1.10.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@clerk/types':
+        specifier: ^4.101.28
+        version: 4.101.28(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       '@gsap/react':
         specifier: ^2.1.2
         version: 2.1.2(gsap@3.15.1)(react@19.3.1)

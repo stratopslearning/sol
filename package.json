@@ -36,6 +36,7 @@
     "@aws-sdk/s3-request-presigner": "^3.1161.0",
     "@clerk/mcp-tools": "^0.3.1",
     "@clerk/nextjs": "^6.23.3",
+    "@clerk/types": "^4.101.28",
     "@gsap/react": "^2.1.2",
     "@hookform/resolvers": "^5.1.1",
     "@neondatabase/serverless": "^1.0.1",
