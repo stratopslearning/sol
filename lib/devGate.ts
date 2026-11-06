@@ -11,7 +11,7 @@ import { getOrCreateUser } from '@/lib/getOrCreateUser';
  * Usage in a route handler:
  *
  *   const gate = await assertDevOrAdmin();
- *   if (gate) return gate; // 404/401/403 response — bail out.
+ *   if (gate) return gate; // 404/401/403 response: bail out.
  *
  * Returns a NextResponse to short-circuit, or `null` if the request is allowed
  * to continue.
@@ -29,7 +29,7 @@ export async function assertDevOrAdmin(): Promise<NextResponse | null> {
     // Pretend the route doesn't exist to avoid leaking its existence.
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
-  if (user.role !== 'ADMIN') {
+  if (!user.platformStaff) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
   return null;
@@ -44,7 +44,7 @@ export async function requireDevOrAdminPage(): Promise<void> {
   if (!isProd) return;
 
   const user = await getOrCreateUser();
-  if (!user || user.role !== 'ADMIN') {
+  if (!user?.platformStaff) {
     notFound();
   }
 }

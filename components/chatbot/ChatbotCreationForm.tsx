@@ -16,7 +16,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SectionMultiSelect } from "@/components/ui/SectionMultiSelect";
+import { TutorPolicySelect } from "@/components/professor/TutorPolicySelect";
 import { apiUrl, appPath } from "@/lib/basePath";
+import {
+  DEFAULT_TUTOR_AI_POLICY,
+  type TutorAiPolicyMode,
+} from "@/lib/chatbot/aiPolicy";
 import {
   SCM3005_CH1_INSTRUCTIONS,
   SCM3005_CH1_SYSTEM_PROMPT,
@@ -41,6 +46,7 @@ export function ChatbotCreationForm({
     systemPrompt?: string;
     relatedQuizId?: string | null;
     sectionIds?: string[];
+    aiPolicyMode?: TutorAiPolicyMode | null;
   };
 }) {
   const router = useRouter();
@@ -63,6 +69,9 @@ export function ChatbotCreationForm({
   const [sectionIds, setSectionIds] = useState<string[]>(
     initial?.sectionIds ?? [],
   );
+  const [aiPolicyMode, setAiPolicyMode] = useState<
+    TutorAiPolicyMode | "inherit"
+  >(initial?.aiPolicyMode ?? "inherit");
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -80,6 +89,10 @@ export function ChatbotCreationForm({
         systemPrompt: systemPrompt.trim(),
         relatedQuizId: relatedQuizId === "none" ? null : relatedQuizId,
         sectionIds,
+        aiPolicy:
+          aiPolicyMode === "inherit"
+            ? null
+            : { mode: aiPolicyMode },
       };
 
       const res = await fetch(
@@ -170,7 +183,7 @@ export function ChatbotCreationForm({
       </div>
 
       <div className="space-y-2">
-        <Label>Link a quiz (optional — learning mode)</Label>
+        <Label>Link a quiz (optional, learning mode)</Label>
         <p className="text-sm text-ink-muted">
           The bot receives question stems only and will guide students without
           revealing answers.
@@ -198,6 +211,13 @@ export function ChatbotCreationForm({
           onChange={setSectionIds}
         />
       </div>
+
+      <TutorPolicySelect
+        value={aiPolicyMode}
+        onChange={setAiPolicyMode}
+        inheritLabel={`Use course default (${DEFAULT_TUTOR_AI_POLICY.mode})`}
+        disabled={saving}
+      />
 
       <div className="flex gap-2">
         <Button type="submit" disabled={saving}>

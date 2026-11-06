@@ -8,7 +8,9 @@ import {
   getActiveChatbot,
   professorCanLinkQuiz,
   professorEnrolledInSections,
+  userCanWriteChatbot,
 } from '@/lib/chatbot/access';
+import { parseAiPolicy } from '@/lib/chatbot/aiPolicy';
 import { ApiError, apiErrorResponse, jsonError } from '@/lib/api/errors';
 import { requireProfessorApi } from '@/lib/api/professorAuth';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
@@ -25,6 +27,12 @@ const updateSchema = z.object({
   relatedQuizId: z.string().uuid().nullable().optional(),
   sectionIds: z.array(z.string().uuid()).optional(),
   isActive: z.boolean().optional(),
+  aiPolicy: z
+    .object({
+      mode: z.enum(['hints', 'guided', 'full_after_submit']),
+    })
+    .nullable()
+    .optional(),
 });
 
 export async function PUT(
@@ -50,14 +58,14 @@ export async function PUT(
     if (!bot || bot.isTemplate) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
-    if (user.role === 'PROFESSOR' && bot.professorId !== user.id) {
+    if (!(await userCanWriteChatbot(user, bot))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const body = updateSchema.parse(await readJsonBody(req));
 
-    if (body.sectionIds && user.role === 'PROFESSOR') {
-      const ok = await professorEnrolledInSections(user.id, body.sectionIds);
+    if (body.sectionIds) {
+      const ok = await professorEnrolledInSections(user, body.sectionIds);
       if (!ok) {
         return NextResponse.json(
           { error: 'You can only assign discussions to sections you teach' },
@@ -66,8 +74,8 @@ export async function PUT(
       }
     }
 
-    if (body.relatedQuizId && user.role === 'PROFESSOR') {
-      const canLink = await professorCanLinkQuiz(user.id, body.relatedQuizId);
+    if (body.relatedQuizId) {
+      const canLink = await professorCanLinkQuiz(user, body.relatedQuizId);
       if (!canLink) {
         return NextResponse.json(
           { error: 'You cannot link that quiz' },
@@ -95,6 +103,13 @@ export async function PUT(
             ? { relatedQuizId: body.relatedQuizId }
             : {}),
           ...(body.isActive != null ? { isActive: body.isActive } : {}),
+          ...(body.aiPolicy !== undefined
+            ? {
+                aiPolicy: body.aiPolicy
+                  ? parseAiPolicy(body.aiPolicy)
+                  : null,
+              }
+            : {}),
           updatedAt: new Date(),
         })
         .where(eq(chatbots.id, id));
@@ -151,11 +166,7 @@ export async function GET(
   if (!bot) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
-  if (
-    user.role === 'PROFESSOR' &&
-    !bot.isTemplate &&
-    bot.professorId !== user.id
-  ) {
+  if (!bot.isTemplate && !(await userCanWriteChatbot(user, bot))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

@@ -3,12 +3,15 @@ import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { db } from '@/app/db';
-import { professorSections, sections } from '@/app/db/schema';
+import { sections } from '@/app/db/schema';
 import { apiErrorResponse } from '@/lib/api/errors';
 import { requireProfessorApi } from '@/lib/api/professorAuth';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
 import { activeOnly } from '@/lib/db/filters';
-import { getProfessorSectionDetail } from '@/lib/professor/sections';
+import {
+  assertTeachesSection,
+  getProfessorSectionDetail,
+} from '@/lib/professor/sections';
 import { parseOptionalEndsAt } from '@/lib/sectionAvailability';
 
 export const dynamic = 'force-dynamic';
@@ -53,20 +56,7 @@ export async function PATCH(
     const auth = await requireProfessorApi(req, { scope: 'sections:write' });
     const user = auth.user;
 
-    if (user.role === 'PROFESSOR') {
-      const enrollment = await db.query.professorSections.findFirst({
-        where: and(
-          eq(professorSections.sectionId, sectionId),
-          eq(professorSections.professorId, user.id),
-        ),
-      });
-      if (!enrollment) {
-        return NextResponse.json(
-          { error: 'You can only update sections you teach' },
-          { status: 403 },
-        );
-      }
-    }
+    await assertTeachesSection(user, sectionId);
 
     const section = await db.query.sections.findFirst({
       where: and(eq(sections.id, sectionId), activeOnly(sections.deletedAt)),

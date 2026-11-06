@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw } from '@/components/icons';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
@@ -56,7 +56,7 @@ export function QuickRegradeButton({
         toast.success('No questions needed re-grading.');
       } else if (stillPending > 0) {
         toast.warning(
-          `Re-graded ${regraded}. ${stillPending} still pending — will retry in background.`,
+          `Re-graded ${regraded}. ${stillPending} still pending. Will retry in background.`,
         );
       } else {
         toast.success(

@@ -1,13 +1,12 @@
-import {
-  outcomeToFeedback,
-  type StoredFeedback,
-} from '@/lib/grading';
+import { outcomeToFeedback, resolveMaterialsContext, type StoredFeedback } from '@/lib/grading';
 import {
   cachedPayloadToFeedback,
+  hashMaterialsContext,
   lookupCachedGrading,
 } from '@/lib/gradingCache';
 import { readRubricFromColumn } from '@/lib/gradingRubric';
 import { GRADING_MODEL_VERSION } from '@/lib/gradingTypes';
+import { getCourseWorkspaceId } from '@/lib/workspace';
 
 export type ScoreableQuestion = {
   id: string;
@@ -28,18 +27,21 @@ export type ScoredSubmission = {
 
 /**
  * In-process scoring for submit. MCQ/TF and empty short answers are final.
- * Short answers with a stored rubric hit `grading_cache` inline; unique
- * answers (or missing rubric) are marked pending for `after()` retry.
- * Does not call OpenAI or rubric derivation.
+ * Short answers with a stored rubric hit `grading_cache` inline when materials
+ * context can be resolved without OpenAI. Unique answers (or missing rubric) are
+ * marked pending for background retry.
  */
 export async function scoreSubmittedQuestions(
   quizQuestions: ScoreableQuestion[],
   answers: Record<string, string>,
+  opts?: { courseId?: string | null },
 ): Promise<ScoredSubmission> {
   let totalScore = 0;
   let maxScore = 0;
   const gptFeedback: Record<string, StoredFeedback> = {};
   const pendingQuestionIds: string[] = [];
+  const courseId = opts?.courseId ?? null;
+  const tenantId = courseId ? await getCourseWorkspaceId(courseId) : null;
 
   for (const question of quizQuestions) {
     const userAnswer = answers[question.id];
@@ -70,11 +72,21 @@ export async function scoreSubmittedQuestions(
 
     const storedRubric = readRubricFromColumn(question.rubric);
     if (storedRubric) {
+      let materialsContextHash = '';
+      if (courseId) {
+        const materialsContext = await resolveMaterialsContext({
+          courseId,
+          question: question.question,
+        });
+        materialsContextHash = hashMaterialsContext(materialsContext);
+      }
       const cached = await lookupCachedGrading({
         questionId: question.id,
         studentAnswer: userAnswer,
         rubricVersion: question.rubricVersion ?? 1,
         modelVersion: GRADING_MODEL_VERSION,
+        tenantId: tenantId ?? undefined,
+        materialsContextHash,
       });
       if (cached) {
         maxScore += question.points;

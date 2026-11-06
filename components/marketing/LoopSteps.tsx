@@ -126,8 +126,8 @@ export function LoopSteps() {
               <em className="mkt-italic text-ink-muted">a course you can stand behind</em>
             </h2>
             <p className="mx-auto mt-4 max-w-[42ch] text-base leading-relaxed text-ink-muted">
-              Upload once. Get a draft course, a course-only tutor, and
-              assessments you can trust. Students see nothing until you say so.
+              Upload your materials once. SOL drafts the course, the tutor, and
+              the assessments.
             </p>
           </div>
         </ScrollReveal>

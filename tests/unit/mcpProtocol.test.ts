@@ -12,6 +12,12 @@ vi.mock('@/app/db', () => ({
   },
 }));
 
+// Section listing is binding-derived (Wave 2); an empty binding set -> no sections.
+vi.mock('@/lib/professor/graderSections', async (orig) => ({
+  ...(await orig<Record<string, unknown>>()),
+  listTeachingSectionIds: async () => [],
+}));
+
 vi.mock('@clerk/nextjs/server', () => ({
   auth: async () => ({ userId: null }),
   clerkClient: async () => ({}),
@@ -35,7 +41,7 @@ function authWith(scopes: ProfessorApiAuth['scopes']): ProfessorApiAuth {
       email: 'prof@example.edu',
       firstName: 'Pat',
       lastName: 'Professor',
-      role: 'PROFESSOR',
+      platformStaff: false,
       paid: false,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -52,6 +58,8 @@ const fullAuth = authWith([
   'quizzes:write',
   'grades:write',
   'discussions:write',
+  'materials:write',
+  'authoring:write',
 ]);
 
 describe('MCP protocol basics', () => {

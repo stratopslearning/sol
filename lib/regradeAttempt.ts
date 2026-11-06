@@ -1,7 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 
 import { db } from '@/app/db';
-import { attempts, questions, quizzes } from '@/app/db/schema';
+import { attempts, questions, quizzes, sections } from '@/app/db/schema';
 import { activeOnly } from '@/lib/db/filters';
 import {
   buildLegacyQuestionKeyMap,
@@ -117,6 +117,15 @@ export async function regradeAttempt(
   const quizQuestions = await db.query.questions.findMany({
     where: eq(questions.quizId, attempt.quizId),
   });
+
+  let courseId: string | undefined;
+  if (attempt.sectionId) {
+    const section = await db.query.sections.findFirst({
+      where: eq(sections.id, attempt.sectionId),
+      columns: { courseId: true },
+    });
+    courseId = section?.courseId;
+  }
 
   const studentAnswers =
     attempt.answers && typeof attempt.answers === 'object'
@@ -239,6 +248,7 @@ export async function regradeAttempt(
         questionId: question.id,
         rubric,
         rubricVersion,
+        courseId,
       },
     });
   }
@@ -303,6 +313,13 @@ export async function regradeAttempt(
       gradingStatus,
     })
     .where(eq(attempts.id, attemptId));
+
+  if (gradingStatus === 'complete') {
+    const { enqueueQuizPassback } = await import('@/lib/lti/passback');
+    void enqueueQuizPassback({ attemptId }).catch((err) =>
+      console.error('LTI quiz passback enqueue failed', err),
+    );
+  }
 
   return {
     attemptId,

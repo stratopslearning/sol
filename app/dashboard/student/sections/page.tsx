@@ -1,14 +1,12 @@
 import Link from "next/link";
-import { eq } from "drizzle-orm";
 
-import { db } from "@/app/db";
-import { studentSections } from "@/app/db/schema";
 import StudentEnrollFormWrapper from "@/components/StudentEnrollFormWrapper";
 import { AppShell } from "@/components/layout/AppShell";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { appPath, withBasePath } from "@/lib/basePath";
 import { requireStudent } from "@/lib/auth";
+import { fetchUserEnrollmentsDetail } from "@/lib/db/facultyStudentReads";
 import { partitionEnrollmentsByConclusion } from "@/lib/sectionAvailability";
 
 import StudentSectionsPageContentClient from "./StudentSectionsPageContentClient";
@@ -16,12 +14,17 @@ import StudentSectionsPageContentClient from "./StudentSectionsPageContentClient
 export default async function StudentSectionsPage() {
   const user = await requireStudent();
 
-  const enrollments = await db.query.studentSections.findMany({
-    where: eq(studentSections.studentId, user.id),
-    with: {
-      section: { with: { course: true } },
+  const enrollmentRows = await fetchUserEnrollmentsDetail(user.id);
+  const enrollments = enrollmentRows.map((e) => ({
+    id: e.id,
+    sectionId: e.sectionId,
+    section: {
+      id: e.section.id,
+      name: e.section.name,
+      endsAt: e.section.endsAt,
+      course: e.section.course,
     },
-  });
+  }));
 
   const { active: activeEnrollments, archived: archivedEnrollments } =
     partitionEnrollmentsByConclusion(enrollments);
@@ -31,7 +34,6 @@ export default async function StudentSectionsPage() {
     <AppShell
       role="student"
       user={user}
-      topbarEyebrow="Learner"
       topbarTitle="My sections"
     >
       <PageHeader
@@ -49,20 +51,16 @@ export default async function StudentSectionsPage() {
                 View past sections ({archivedEnrollments.length})
               </Link>
             </Button>
-          ) : (
-            <Button asChild variant="outline">
-              <Link href={appPath("/dashboard/student/sections/archived")}>
-                View past sections
-              </Link>
-            </Button>
-          )
+          ) : null
         }
       />
-      <div className="mt-10">
+
+      <div className="mt-8">
         <StudentEnrollFormWrapper />
       </div>
+
       <div className="mt-10">
-        <StudentSectionsPageContentClient sectionsList={sectionsList} />
+        <StudentSectionsPageContentClient sections={sectionsList} />
       </div>
     </AppShell>
   );

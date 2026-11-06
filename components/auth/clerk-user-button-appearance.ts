@@ -1,6 +1,6 @@
 import type { Appearance } from "@clerk/types";
 
-/** Shared UserButton / avatar chrome: academic cream + olive. */
+/** Shared UserButton / avatar chrome: academic cream + ink. */
 export const clerkUserButtonAppearance: Appearance = {
   variables: {
     colorPrimary: "var(--brand)",

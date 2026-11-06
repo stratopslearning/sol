@@ -1,4 +1,4 @@
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight } from '@/components/icons';
 
 import { SolMark } from '@/components/brand/SolMark';
 import { withBasePath } from '@/lib/basePath';

@@ -36,7 +36,7 @@ describe.skipIf(skip)('quiz visibility (publish / hide)', () => {
   });
 
   it('hides a quiz without setting deletedAt', async () => {
-    const professor = await makeUser(db, { role: 'PROFESSOR' });
+    const professor = await makeUser(db, {});
     const quiz = await makeQuiz(db, professor.id, { isActive: true });
     cleanup.push(() => db.delete(quizzes).where(eq(quizzes.id, quiz.id)));
     cleanup.push(() => db.delete(users).where(eq(users.id, professor.id)));
@@ -59,7 +59,7 @@ describe.skipIf(skip)('quiz visibility (publish / hide)', () => {
   });
 
   it('publishing restores a soft-deleted quiz', async () => {
-    const professor = await makeUser(db, { role: 'PROFESSOR' });
+    const professor = await makeUser(db, {});
     const quiz = await makeQuiz(db, professor.id, { isActive: false });
     cleanup.push(() => db.delete(quizzes).where(eq(quizzes.id, quiz.id)));
     cleanup.push(() => db.delete(users).where(eq(users.id, professor.id)));

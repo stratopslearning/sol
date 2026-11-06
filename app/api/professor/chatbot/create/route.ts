@@ -7,6 +7,7 @@ import {
   professorCanLinkQuiz,
   professorEnrolledInSections,
 } from '@/lib/chatbot/access';
+import { parseAiPolicy } from '@/lib/chatbot/aiPolicy';
 import { CHATBOT_MODEL } from '@/lib/chatbot/constants';
 import { ApiError, jsonError } from '@/lib/api/errors';
 import { requireProfessorApi } from '@/lib/api/professorAuth';
@@ -41,8 +42,8 @@ export async function POST(req: NextRequest) {
 
     const body = createSchema.parse(await readJsonBody(req));
 
-    if (user.role === 'PROFESSOR') {
-      const ok = await professorEnrolledInSections(user.id, body.sectionIds);
+    {
+      const ok = await professorEnrolledInSections(user, body.sectionIds);
       if (!ok) {
         return NextResponse.json(
           { error: 'You can only assign discussions to sections you teach' },
@@ -50,7 +51,7 @@ export async function POST(req: NextRequest) {
         );
       }
       if (body.relatedQuizId) {
-        const canLink = await professorCanLinkQuiz(user.id, body.relatedQuizId);
+        const canLink = await professorCanLinkQuiz(user, body.relatedQuizId);
         if (!canLink) {
           return NextResponse.json(
             { error: 'You cannot link that quiz' },

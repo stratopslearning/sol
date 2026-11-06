@@ -13,7 +13,7 @@ import {
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function POST(req: NextRequest) {
+export async function POST(_req: NextRequest) {
   if (!paymentsEnabled()) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }

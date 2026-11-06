@@ -7,6 +7,8 @@ import { ApiError, jsonError } from '@/lib/api/errors';
 import { requireProfessorApi } from '@/lib/api/professorAuth';
 import { activeOnly } from '@/lib/db/filters';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
+import { userCanWriteQuiz } from '@/lib/quizAccess';
+import { softDeleteActivityByEntity } from '@/lib/assignments/sync';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,21 +36,10 @@ export async function POST(
       return NextResponse.json({ error: 'Quiz not found' }, { status: 404 });
     }
 
-    // Soft-delete. The professor library Hide/Publish control uses
-    // POST .../visibility (isActive only). Do not wire that toggle here —
-    // a second click 404s because this path sets deletedAt.
-    // Archiving applies across *all* sections including ones the caller
-    // doesn't teach. Restrict it to the quiz owner (or an admin).
-    const isAdmin = user.role === 'ADMIN';
-    const isOwner = existingQuiz.professorId === user.id;
-    if (!isAdmin && !isOwner) {
+    if (!(await userCanWriteQuiz(user, quizId))) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    // Archive sets `deletedAt` in addition to `isActive=false` so it shares
-    // the same soft-delete tombstone as admin DELETE. Read paths filter on
-    // `deletedAt IS NULL`, so archived quizzes drop out of every listing
-    // immediately. They remain in the database for restore/audit/purge.
     const [archivedQuiz] = await db
       .update(quizzes)
       .set({
@@ -58,6 +49,8 @@ export async function POST(
       })
       .where(eq(quizzes.id, quizId))
       .returning();
+
+    await softDeleteActivityByEntity({ quizId });
 
     return NextResponse.json({
       success: true,

@@ -3,6 +3,9 @@
 | Data | Retention | Disposal |
 | --- | --- | --- |
 | Active course enrollments, attempts, discussions | Active term + **3 years** (default; override per institution contract) | Soft-delete then admin purge; audit `*.purge` |
+| Course materials + chunks + S3 objects | Active term + **3 years** (default; override per institution contract) | Soft-delete then admin purge (`/api/admin/materials/[id]/purge`); S3 object deleted with purge |
+| Course authoring outlines + refine messages | Active term + **3 years** (aligned with materials) | Archive outline (`status=ARCHIVED`); soft-delete columns reserved for purge jobs |
+| Lessons + flashcards + lesson progress | Active term + **3 years** (aligned with materials) | Soft-delete lesson; progress rows cascade with lesson purge |
 | Soft-deleted rows | Until purge request or retention expiry | Purge endpoints under `/api/admin/**/purge` |
 | `audit_log` | **≥ 1 year** (prefer 3 years) | Do not delete via app UI; ops-only if legally required |
 | Stripe events | Indefinite for idempotency (no education answers) | N/A |

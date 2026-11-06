@@ -24,6 +24,11 @@ import {
   attemptNeedsBackgroundRetry,
   scheduleAttemptRetry,
 } from "@/lib/backgroundRetry";
+import {
+  listGradeOverrideHistoryForAttempt,
+  quizGradesAreReleased,
+} from "@/lib/professor/overrides";
+import { LocalDateTime } from "@/components/timezone/LocalDateTime";
 
 interface ReviewPageProps {
   params: Promise<{ quizId: string }>;
@@ -72,8 +77,23 @@ export default async function ReviewPage({
 
   const shouldHideFeedback = shouldHideFeedbackForStudent(
     { endDate: quiz.endDate, description: quiz.description },
-    user.role,
+    'STUDENT',
   );
+
+  const gradesReleased = quizGradesAreReleased(quiz);
+  const overrideHistory = gradesReleased
+    ? await listGradeOverrideHistoryForAttempt(attempt.id)
+    : [];
+  const overridesByQuestion = new Map<
+    string,
+    Array<(typeof overrideHistory)[number]>
+  >();
+  for (const entry of overrideHistory) {
+    if (!entry.questionId) continue;
+    const list = overridesByQuestion.get(entry.questionId) ?? [];
+    list.push(entry);
+    overridesByQuestion.set(entry.questionId, list);
+  }
 
   // Self-heal: if any question on this attempt is still pending or in
   // manual_review, kick off a background re-grade so the next refresh
@@ -85,8 +105,7 @@ export default async function ReviewPage({
   return (
     <AppShell
       role="student"
-      active="quizzes"
-      topbarEyebrow="Review"
+      active="assignments"
       topbarTitle={quiz.title}
       maxWidth="narrow"
       user={{
@@ -216,6 +235,29 @@ export default async function ReviewPage({
                       ? "Feedback will be available after the due date."
                       : "Feedback is now available."}
                   </p>
+                </div>
+              ) : null}
+
+              {!shouldHideFeedback &&
+              gradesReleased &&
+              (overridesByQuestion.get(q.id)?.length ?? 0) > 0 ? (
+                <div className="mt-6 border border-border bg-muted/30 rounded-md p-4">
+                  <span className="eyebrow text-ink-faint">
+                    Instructor grade note
+                  </span>
+                  <ul className="mt-2 flex flex-col gap-3 list-none p-0 m-0">
+                    {overridesByQuestion.get(q.id)!.map((entry) => (
+                      <li key={entry.id} className="text-sm text-ink">
+                        <p>{entry.note}</p>
+                        <p className="text-xs text-ink-faint mt-1">
+                          <LocalDateTime stacked value={entry.createdAt} />
+                          {entry.numericScore != null
+                            ? ` · adjusted to ${entry.numericScore} pts`
+                            : null}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               ) : null}
             </article>

@@ -1,16 +1,7 @@
-import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 
 import { db } from '@/app/db';
-import {
-  attempts,
-  chatbotSections,
-  professorSections,
-  quizSections,
-  sections,
-  studentSections,
-} from '@/app/db/schema';
 import { comparePersonsByLastName } from '@/lib/personName';
-import { activeOnly } from '@/lib/db/filters';
 
 export type SectionEnrollmentRow = {
   id: string;
@@ -63,123 +54,125 @@ export type SectionDetailData = {
   discussions: SectionDiscussionRow[];
 };
 
+function rowsFromExecute<T>(result: unknown): T[] {
+  return (
+    (result as { rows?: T[] }).rows ??
+    (Array.isArray(result) ? (result as T[]) : [])
+  );
+}
+
+function asDate(value: Date | string | null | undefined): Date | null {
+  if (value == null) return null;
+  return value instanceof Date ? value : new Date(value);
+}
+
+function asDateRequired(value: Date | string | null | undefined): Date {
+  return asDate(value) ?? new Date(0);
+}
+
+type DetailPayload = {
+  section: {
+    id: string;
+    name: string;
+    courseId: string;
+    professorEnrollmentCode: string;
+    studentEnrollmentCode: string;
+    endsAt: Date | string | null;
+    createdAt: Date | string;
+    updatedAt: Date | string;
+    course: {
+      id: string;
+      title: string;
+      description: string | null;
+    } | null;
+  };
+  learnerEnrollments: Array<{
+    id: string;
+    enrolledAt: Date | string;
+    status: string;
+    person: {
+      id: string;
+      firstName: string | null;
+      lastName: string | null;
+      email: string | null;
+    };
+  }>;
+  facultyEnrollments: Array<{
+    id: string;
+    enrolledAt: Date | string;
+    status: string;
+    person: {
+      id: string;
+      firstName: string | null;
+      lastName: string | null;
+      email: string | null;
+    };
+  }>;
+  quizzes: Array<{
+    id: string;
+    title: string;
+    description: string | null;
+    endDate: Date | string | null;
+    submissionCount: number;
+  }>;
+  discussions: Array<{
+    id: string;
+    title: string;
+    personaName: string;
+    relatedQuizTitle: string | null;
+  }>;
+};
+
+/**
+ * Section detail under FORCE RLS via SECURITY DEFINER (sol_section_detail).
+ * Bare drizzle reads return empty for sol_app without a sticky tenant GUC.
+ */
 export async function loadSectionDetailData(
   sectionId: string,
 ): Promise<SectionDetailData | null> {
-  const section = await db.query.sections.findFirst({
-    where: and(eq(sections.id, sectionId), activeOnly(sections.deletedAt)),
-    with: { course: true },
-  });
-  if (!section) return null;
+  const result = await db.execute(sql`
+    SELECT sol_section_detail(${sectionId}::uuid) AS payload
+  `);
+  const raw = rowsFromExecute<{ payload: unknown }>(result)[0]?.payload;
+  const payload =
+    typeof raw === 'string'
+      ? (JSON.parse(raw) as DetailPayload)
+      : (raw as DetailPayload | null | undefined);
+  if (!payload?.section) return null;
 
-  const studentEnrollments = await db.query.studentSections.findMany({
-    where: eq(studentSections.sectionId, sectionId),
-    with: { student: true },
-  });
-
-  const professorEnrollments = await db.query.professorSections.findMany({
-    where: eq(professorSections.sectionId, sectionId),
-    with: { professor: true },
-  });
-
-  const quizSectionAssignments = await db.query.quizSections.findMany({
-    where: eq(quizSections.sectionId, sectionId),
-    with: { quiz: true },
-  });
-
-  const sectionQuizzes = quizSectionAssignments
-    .map((qs) => qs.quiz)
-    .filter((q): q is NonNullable<(typeof quizSectionAssignments)[0]['quiz']> =>
-      q != null && q.deletedAt == null,
-    );
-
-  const quizIds = sectionQuizzes.map((q) => q.id);
-  const submissionCountByQuizId: Record<string, number> = {};
-
-  if (quizIds.length > 0) {
-    const submissionRows = await db
-      .select({
-        quizId: attempts.quizId,
-        count: sql<number>`count(*)::int`,
-      })
-      .from(attempts)
-      .where(
-        and(
-          eq(attempts.sectionId, sectionId),
-          inArray(attempts.quizId, quizIds),
-          isNotNull(attempts.submittedAt),
-        ),
-      )
-      .groupBy(attempts.quizId);
-
-    for (const row of submissionRows) {
-      submissionCountByQuizId[row.quizId] = row.count;
-    }
-  }
-
-  const discussionAssignments = await db.query.chatbotSections.findMany({
-    where: eq(chatbotSections.sectionId, sectionId),
-    with: { chatbot: { with: { relatedQuiz: true } } },
-  });
-
-  const sectionDiscussions: SectionDiscussionRow[] = discussionAssignments
-    .map((da) => da.chatbot)
-    .filter(
-      (bot): bot is NonNullable<(typeof discussionAssignments)[0]['chatbot']> =>
-        bot != null && bot.deletedAt == null && bot.isActive && !bot.isTemplate,
-    )
-    .map((bot) => ({
-      id: bot.id,
-      title: bot.title,
-      personaName: bot.personaName,
-      relatedQuizTitle: bot.relatedQuiz?.title ?? null,
-    }));
-
-  const learnerEnrollments: SectionEnrollmentRow[] = studentEnrollments
+  const learnerEnrollments: SectionEnrollmentRow[] = (
+    payload.learnerEnrollments ?? []
+  )
     .map((e) => ({
       id: e.id,
-      enrolledAt: e.enrolledAt,
+      enrolledAt: asDateRequired(e.enrolledAt),
       status: e.status,
-      person: {
-        id: e.student.id,
-        firstName: e.student.firstName,
-        lastName: e.student.lastName,
-        email: e.student.email,
-      },
+      person: e.person,
     }))
     .sort((a, b) => comparePersonsByLastName(a.person, b.person));
 
-  const facultyEnrollments: SectionEnrollmentRow[] = professorEnrollments
+  const facultyEnrollments: SectionEnrollmentRow[] = (
+    payload.facultyEnrollments ?? []
+  )
     .map((e) => ({
       id: e.id,
-      enrolledAt: e.enrolledAt,
+      enrolledAt: asDateRequired(e.enrolledAt),
       status: e.status,
-      person: {
-        id: e.professor.id,
-        firstName: e.professor.firstName,
-        lastName: e.professor.lastName,
-        email: e.professor.email,
-      },
+      person: e.person,
     }))
     .sort((a, b) => comparePersonsByLastName(a.person, b.person));
 
   return {
     section: {
-      id: section.id,
-      name: section.name,
-      courseId: section.courseId,
-      professorEnrollmentCode: section.professorEnrollmentCode,
-      studentEnrollmentCode: section.studentEnrollmentCode,
-      endsAt: section.endsAt ?? null,
-      createdAt: section.createdAt,
-      updatedAt: section.updatedAt,
-      course: section.course
-        ? {
-            id: section.course.id,
-            title: section.course.title,
-            description: section.course.description,
-          }
-        : null,
+      id: payload.section.id,
+      name: payload.section.name,
+      courseId: payload.section.courseId,
+      professorEnrollmentCode: payload.section.professorEnrollmentCode,
+      studentEnrollmentCode: payload.section.studentEnrollmentCode,
+      endsAt: asDate(payload.section.endsAt),
+      createdAt: asDateRequired(payload.section.createdAt),
+      updatedAt: asDateRequired(payload.section.updatedAt),
+      course: payload.section.course,
     },
     learnerEnrollments,
     facultyEnrollments,
@@ -187,13 +180,13 @@ export async function loadSectionDetailData(
       .length,
     activeFacultyCount: facultyEnrollments.filter((e) => e.status === 'ACTIVE')
       .length,
-    quizzes: sectionQuizzes.map((quiz) => ({
+    quizzes: (payload.quizzes ?? []).map((quiz) => ({
       id: quiz.id,
       title: quiz.title,
       description: quiz.description,
-      endDate: quiz.endDate,
-      submissionCount: submissionCountByQuizId[quiz.id] ?? 0,
+      endDate: asDate(quiz.endDate),
+      submissionCount: Number(quiz.submissionCount) || 0,
     })),
-    discussions: sectionDiscussions,
+    discussions: payload.discussions ?? [],
   };
 }

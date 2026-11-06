@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { Clock, FileText } from 'lucide-react';
+import { Clock, FileText } from '@/components/icons';
 import { toast } from 'sonner';
 
 import { EmptyState } from '@/components/patterns/EmptyState';
@@ -64,7 +64,7 @@ export function QuizUnavailable({
       description={copy.description}
       actions={
         <Button asChild>
-          <Link href="/dashboard/student/quizzes">Back to my quizzes</Link>
+          <Link href="/dashboard/student/assignments">Back to assignments</Link>
         </Button>
       }
     />

@@ -6,6 +6,7 @@ import { studentSections } from '@/app/db/schema';
 import { ApiError, apiErrorResponse } from '@/lib/api/errors';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
 import { extractRequestMeta, logAudit } from '@/lib/audit';
+import { userCanAccessLearningArea } from '@/lib/authz';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
 
 export const dynamic = 'force-dynamic';
@@ -18,8 +19,11 @@ export async function POST(
     const { sectionId } = await params;
     const user = await getOrCreateUser();
 
-    if (!user || user.role !== 'STUDENT') {
+    if (!user) {
       throw ApiError.unauthorized();
+    }
+    if (!(await userCanAccessLearningArea(user.id))) {
+      throw ApiError.forbidden();
     }
 
     const limited = await enforceRateLimit({

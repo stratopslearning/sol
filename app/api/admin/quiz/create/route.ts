@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/app/db';
-import { quizzes, questions, quizSections, users } from '@/app/db/schema';
-import { eq } from 'drizzle-orm';
+import { quizzes, questions, quizSections, sections, users } from '@/app/db/schema';
+import { eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { auth } from '@clerk/nextjs/server';
 
+import { apiErrorResponse } from '@/lib/api/errors';
 import { readJsonBody } from '@/lib/api/readJsonBody';
+import { requireSupportGrant } from '@/lib/authz/requireSupportGrant';
 import { quizCreateBaseSchema } from '@/lib/quizSchemas';
 
 export const dynamic = 'force-dynamic';
@@ -19,7 +21,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     const user = await db.query.users.findFirst({ where: eq(users.clerkId, userId) });
-    if (!user || user.role !== 'ADMIN') {
+    if (!user || !user.platformStaff) {
       return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
     }
     const body = await readJsonBody(req);
@@ -29,12 +31,45 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'At least one section must be assigned to the quiz.' }, { status: 400 });
     }
 
+    const assignedSections = await db.query.sections.findMany({
+      where: inArray(sections.id, validatedData.sectionIds),
+      columns: { id: true, tenantId: true, workspaceId: true },
+    });
+    if (assignedSections.length !== validatedData.sectionIds.length) {
+      return NextResponse.json({ error: 'One or more sections not found' }, { status: 404 });
+    }
+    const tenantId =
+      assignedSections[0]?.tenantId ?? assignedSections[0]?.workspaceId ?? null;
+    if (!tenantId) {
+      return NextResponse.json({ error: 'Section missing tenant' }, { status: 400 });
+    }
+    if (
+      assignedSections.some(
+        (s) => (s.tenantId ?? s.workspaceId) !== tenantId,
+      )
+    ) {
+      return NextResponse.json(
+        { error: 'All sections must belong to the same tenant' },
+        { status: 400 },
+      );
+    }
+    await requireSupportGrant(
+      {
+        id: user.id,
+        clerkId: user.clerkId,
+        platformStaff: user.platformStaff,
+      },
+      tenantId,
+      { action: 'support.tenant_access', targetType: 'workspace', targetId: tenantId },
+    );
+
     // Atomic creation: quiz + questions + section assignments.
     const newQuiz = await db.transaction(async (tx) => {
       const [created] = await tx.insert(quizzes).values({
         title: validatedData.title,
         description: validatedData.description,
         professorId: user.id,
+        tenantId,
         maxAttempts: validatedData.maxAttempts,
         timeLimit: validatedData.timeLimit,
         passingScore: validatedData.passingScore,
@@ -81,6 +116,6 @@ export async function POST(req: NextRequest) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: 'Invalid data', details: error.errors }, { status: 400 });
     }
-    return NextResponse.json({ error: 'Failed to create quiz' }, { status: 500 });
+    return apiErrorResponse(error);
   }
 } 

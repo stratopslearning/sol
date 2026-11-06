@@ -2,11 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { and, eq } from 'drizzle-orm';
 
 import { db } from '@/app/db';
-import { professorSections, questions, quizSections, quizzes } from '@/app/db/schema';
+import { questions, quizSections, quizzes } from '@/app/db/schema';
 import { ApiError, jsonError } from '@/lib/api/errors';
 import { requireProfessorApi } from '@/lib/api/professorAuth';
+import { adminSupportForTenant } from '@/lib/professor/adminSupport';
+import { authorizeOnSection } from '@/lib/authz/courseAccess';
 import { activeOnly } from '@/lib/db/filters';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
+import { professorCanAccessQuiz } from '@/lib/quizAccess';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,8 +30,6 @@ export async function POST(
     });
     if (limited) return limited;
 
-    // Get the original quiz with questions and section assignments. Cannot
-    // duplicate a soft-deleted quiz.
     const originalQuiz = await db.query.quizzes.findFirst({
       where: and(eq(quizzes.id, quizId), activeOnly(quizzes.deletedAt)),
       with: {
@@ -41,39 +42,28 @@ export async function POST(
       return NextResponse.json({ error: 'Quiz not found' }, { status: 404 });
     }
 
-    // Duplicating creates a new quiz owned by the caller, so we require either
-    // ownership of the original or that the caller co-teaches at least one of
-    // the original's sections (so they have legitimate access to its content).
-    // Admins always pass.
-    const isAdmin = user.role === 'ADMIN';
-    const isOwner = originalQuiz.professorId === user.id;
-    if (!isAdmin && !isOwner) {
-      const professorSectionEnrollments = await db.query.professorSections.findMany({
-        where: eq(professorSections.professorId, user.id),
-      });
-      const allowedSectionIds = professorSectionEnrollments.map((e) => e.sectionId);
-      const isCoTeacher = originalQuiz.sectionAssignments.some((qs) =>
-        allowedSectionIds.includes(qs.sectionId),
-      );
-      if (!isCoTeacher) {
-        return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-      }
+    if (!(await professorCanAccessQuiz(user, quizId))) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    // Resolve which section assignments to copy *before* the transaction so we
-    // can fail fast on permission errors.
+    const adminSupport = await adminSupportForTenant(
+      user,
+      originalQuiz.tenantId,
+    );
+    const authorId = originalQuiz.professorId;
+    const isAuthor = Boolean(authorId && authorId === user.id);
+
     let sectionsToCopy = originalQuiz.sectionAssignments;
-    if (!isAdmin && !isOwner) {
-      const myEnrollments = await db.query.professorSections.findMany({
-        where: eq(professorSections.professorId, user.id),
-      });
-      const mySectionIds = new Set(myEnrollments.map((e) => e.sectionId));
-      sectionsToCopy = originalQuiz.sectionAssignments.filter((sa) =>
-        mySectionIds.has(sa.sectionId),
-      );
+    if (!adminSupport && !isAuthor) {
+      const writable: typeof originalQuiz.sectionAssignments = [];
+      for (const sa of originalQuiz.sectionAssignments) {
+        if (await authorizeOnSection(user, 'content.write', sa.sectionId)) {
+          writable.push(sa);
+        }
+      }
+      sectionsToCopy = writable;
     }
 
-    // Atomic clone: new quiz row + questions + section assignments.
     const newQuiz = await db.transaction(async (tx) => {
       const [created] = await tx
         .insert(quizzes)
@@ -124,10 +114,9 @@ export async function POST(
         title: newQuiz.title,
       },
     });
-
   } catch (error) {
     console.error('Quiz duplication error:', error);
     if (error instanceof ApiError) return jsonError(error);
     return NextResponse.json({ error: 'Failed to duplicate quiz' }, { status: 500 });
   }
-} 
+}

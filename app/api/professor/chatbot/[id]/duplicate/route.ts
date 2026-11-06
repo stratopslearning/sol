@@ -1,5 +1,5 @@
+import { userCanWriteChatbot } from '@/lib/chatbot/access';
 import { NextRequest, NextResponse } from 'next/server';
-import { eq } from 'drizzle-orm';
 
 import { db } from '@/app/db';
 import { chatbots } from '@/app/db/schema';
@@ -33,11 +33,7 @@ export async function POST(
     if (!source) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
-    if (
-      user.role === 'PROFESSOR' &&
-      !source.isTemplate &&
-      source.professorId !== user.id
-    ) {
+    if (!source.isTemplate && !(await userCanWriteChatbot(user, source))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

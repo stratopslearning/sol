@@ -8,20 +8,20 @@ import {
   normalizeDatabaseDate,
 } from '@/lib/utils';
 
-/** Table cells that show a timestamp — keeps labels from clipping under sticky columns. */
+/** Table cells that show a timestamp: keeps labels from clipping under sticky columns. */
 export const TIMESTAMP_CELL_CLASS =
   'align-top whitespace-normal min-w-[13rem] overflow-visible';
 
 export function LocalDateTime({
   value,
-  fallback = '—',
+  fallback = '-',
   dateOnly = false,
   stacked = false,
 }: {
   value: Date | string | null | undefined;
   fallback?: string;
   dateOnly?: boolean;
-  /** Date on the first line, time + zone on the second — use in fixed tables. */
+  /** Date on the first line, time + zone on the second: use in fixed tables. */
   stacked?: boolean;
 }) {
   const timeZone = useDisplayTimeZone();
@@ -33,7 +33,7 @@ export function LocalDateTime({
   if (!timeZone) {
     return (
       <time dateTime={dateObj.toISOString()} className="tnum">
-        {fallback === '—' ? '\u00a0' : fallback}
+        {fallback === '-' ? '\u00a0' : fallback}
       </time>
     );
   }

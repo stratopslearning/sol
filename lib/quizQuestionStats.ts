@@ -11,10 +11,11 @@ export type QuizQuestionForStats = QuizQuestionRef & {
   type: 'MULTIPLE_CHOICE' | 'TRUE_FALSE' | 'SHORT_ANSWER';
   points: number;
   question: string;
+  conceptTags?: string[] | null;
 };
 
 export type AttemptForQuestionStats = {
-  answers: unknown;
+  answers?: unknown;
   gptFeedback?: unknown;
 };
 

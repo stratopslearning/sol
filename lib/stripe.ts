@@ -23,9 +23,15 @@ function getStripe(): Stripe {
 
 export const stripe = new Proxy({} as Stripe, {
   get(_target, prop, _receiver) {
-    const real = getStripe() as unknown as Record<PropertyKey, unknown>;
+    const real = getStripe() as unknown as Record<
+      PropertyKey,
+      unknown | ((...args: unknown[]) => unknown)
+    >;
     const value = real[prop];
-    return typeof value === 'function' ? (value as Function).bind(real) : value;
+    if (typeof value === 'function') {
+      return (value as (...args: unknown[]) => unknown).bind(real);
+    }
+    return value;
   },
 });
 
@@ -58,6 +64,23 @@ export async function resolveCheckoutPrice(): Promise<Stripe.Price> {
     throw new Error('No active price found for STRIPE_PRODUCT_ID.');
   }
   return prices.data[0];
+}
+
+/**
+ * Subscription price for Creator / Business workspace self-serve.
+ * Prefers STRIPE_PRICE_CREATOR / STRIPE_PRICE_BUSINESS, falls back to STRIPE_PRICE_ID.
+ */
+export async function resolveWorkspaceCheckoutPrice(
+  type: 'creator' | 'business',
+): Promise<Stripe.Price> {
+  const pinned =
+    type === 'creator'
+      ? process.env.STRIPE_PRICE_CREATOR
+      : process.env.STRIPE_PRICE_BUSINESS;
+  if (pinned) {
+    return stripe.prices.retrieve(pinned);
+  }
+  return resolveCheckoutPrice();
 }
 
 /**

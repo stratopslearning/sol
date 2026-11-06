@@ -4,8 +4,10 @@ import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { db } from '@/app/db';
-import { sections, users } from '@/app/db/schema';
+import { courses, sections, users } from '@/app/db/schema';
+import { apiErrorResponse } from '@/lib/api/errors';
 import { readJsonBody } from '@/lib/api/readJsonBody';
+import { requireSupportGrant } from '@/lib/authz/requireSupportGrant';
 import { generateEnrollmentCode } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
@@ -22,11 +24,35 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     const user = await db.query.users.findFirst({ where: eq(users.clerkId, userId) });
-    if (!user || user.role !== 'ADMIN') {
+    if (!user || !user.platformStaff) {
       return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
     }
     const body = await readJsonBody(req);
     const validatedData = bulkSectionSchema.parse(body);
+    const course = await db.query.courses.findFirst({
+      where: eq(courses.id, validatedData.courseId),
+      columns: { workspaceId: true, tenantId: true },
+    });
+    if (!course) {
+      return NextResponse.json({ error: 'Course not found' }, { status: 404 });
+    }
+    const tenantId = course.tenantId ?? course.workspaceId;
+    if (!tenantId) {
+      return NextResponse.json({ error: 'Course missing tenant' }, { status: 400 });
+    }
+    await requireSupportGrant(
+      {
+        id: user.id,
+        clerkId: user.clerkId,
+        platformStaff: user.platformStaff,
+      },
+      tenantId,
+      {
+        action: 'support.tenant_access',
+        targetType: 'course',
+        targetId: validatedData.courseId,
+      },
+    );
     const newSections = await db.transaction(async (tx) => {
       const created = [];
       for (const name of validatedData.names) {
@@ -37,6 +63,7 @@ export async function POST(req: NextRequest) {
           .values({
             name,
             courseId: validatedData.courseId,
+            workspaceId: course.workspaceId,
             professorEnrollmentCode,
             studentEnrollmentCode,
           })
@@ -50,6 +77,6 @@ export async function POST(req: NextRequest) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: 'Validation error', details: error.errors }, { status: 400 });
     }
-    return NextResponse.json({ error: 'Failed to create sections' }, { status: 500 });
+    return apiErrorResponse(error);
   }
 }

@@ -7,7 +7,7 @@ import { getSectionGradebook } from '@/lib/professor/grading';
 
 export const dynamic = 'force-dynamic';
 
-/** Section gradebook matrix (best score per learner) — audited disclosure. */
+/** Section gradebook matrix (best score per learner): audited disclosure. */
 export async function GET(
   req: NextRequest,
   context: { params: Promise<{ sectionId: string }> },

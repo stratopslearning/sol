@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { and, eq } from 'drizzle-orm';
 
 import { db } from '@/app/db';
-import { chatbotSections, professorSections } from '@/app/db/schema';
+import { chatbotSections } from '@/app/db/schema';
 import { apiErrorResponse } from '@/lib/api/errors';
 import { requireProfessorApi } from '@/lib/api/professorAuth';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
+import { assertTeachesSection } from '@/lib/professor/sections';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,19 +32,10 @@ export async function POST(
 
   const { sectionId, chatbotId } = await context.params;
 
-  if (user.role === 'PROFESSOR') {
-    const enrollment = await db.query.professorSections.findFirst({
-      where: and(
-        eq(professorSections.sectionId, sectionId),
-        eq(professorSections.professorId, user.id),
-      ),
-    });
-    if (!enrollment) {
-      return NextResponse.json(
-        { error: 'Not enrolled in this section' },
-        { status: 403 },
-      );
-    }
+  try {
+    await assertTeachesSection(user, sectionId);
+  } catch (error) {
+    return apiErrorResponse(error);
   }
 
   await db

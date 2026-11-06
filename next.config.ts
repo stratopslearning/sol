@@ -7,13 +7,63 @@ const nextConfig: NextConfig = {
   ...(BASE_PATH ? { basePath: BASE_PATH } : {}),
   env: {
     NEXT_PUBLIC_BASE_PATH: BASE_PATH,
+    // Same value on server and client. Production teachwithsol is the only
+    // deploy that publishes founders@teachwithsol.com.
+    NEXT_PUBLIC_VERCEL_ENV: process.env.VERCEL_ENV || "development",
   },
+  // Zip packs / book EPUBs can be up to 50 MB. Default Server Action limit is 1 MB;
+  // keep this aligned with MIDDLEWARE_UPLOAD_MAX_BODY_BYTES in lib/api/sameOrigin.ts.
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "51mb",
+    },
+  },
+  // Keep pdf-parse (and its pdf.js worker) out of the app bundle — the package
+  // "browser" export breaks PDF text extraction in the server runtime.
+  // ws + optional natives must stay external — bundling breaks bufferUtil.mask
+  // and Neon WebSocket transactions die with "Connection terminated unexpectedly".
+  serverExternalPackages: ["pdf-parse", "ws", "bufferutil", "utf-8-validate"],
   async headers() {
     // Production uses a Clerk custom Frontend API host (clerk.strat-ops.net).
     // Without it in script/connect/frame-src, clerk-js is blocked by CSP.
     const clerkFrontendApi =
       process.env.NEXT_PUBLIC_CLERK_FRONTEND_API?.replace(/\/$/, '') ||
       'https://clerk.strat-ops.net';
+    // Optional satellite FAPI host (e.g. https://clerk.teachwithsol.com)
+    const clerkSatelliteFrontendApi =
+      process.env.NEXT_PUBLIC_CLERK_SATELLITE_FRONTEND_API?.replace(/\/$/, '') ||
+      '';
+
+    const clerkScriptHosts = [
+      'https://*.clerk.accounts.dev',
+      'https://*.clerk.com',
+      clerkFrontendApi,
+      clerkSatelliteFrontendApi,
+      'https://*.protect.clerk.com',
+    ].filter(Boolean);
+
+    // Clerk bot-protection probes use non-default HTTPS ports. CSP host
+    // sources without a port only allow :443, so those probes get blocked
+    // and sign-up can bounce after OTP.
+    const clerkProtectPorts = [8443, 18443, 2082, 2083, 2086, 2087, 2096, 8443, 8880, 2053, 992];
+    const clerkProtectConnect = [
+      'https://*.protect.clerk.com',
+      ...[...new Set(clerkProtectPorts)].map(
+        (port) => `https://*.protect.clerk.com:${port}`,
+      ),
+    ];
+
+    const clerkConnectHosts = [
+      ...clerkScriptHosts,
+      ...clerkProtectConnect,
+      'wss://*.clerk.accounts.dev',
+      `wss://${clerkFrontendApi.replace(/^https?:\/\//, '')}`,
+      ...(clerkSatelliteFrontendApi
+        ? [`wss://${clerkSatelliteFrontendApi.replace(/^https?:\/\//, '')}`]
+        : []),
+      // Dev telemetry (optional; blocked otherwise under CSP).
+      'https://clerk-telemetry.com',
+    ];
 
     const csp = [
       "default-src 'self'",
@@ -29,10 +79,7 @@ const nextConfig: NextConfig = {
       // require it. Dev keeps eval for webpack/HMR.
       [
         `script-src 'self' 'unsafe-inline' blob:${process.env.NODE_ENV === 'production' ? '' : " 'unsafe-eval'"}`,
-        'https://*.clerk.accounts.dev',
-        'https://*.clerk.com',
-        clerkFrontendApi,
-        'https://*.protect.clerk.com',
+        ...clerkScriptHosts,
         'https://challenges.cloudflare.com',
         'https://js.stripe.com',
         'https://browser.sentry-cdn.com',
@@ -40,12 +87,7 @@ const nextConfig: NextConfig = {
       ].join(' '),
       [
         "connect-src 'self'",
-        'https://*.clerk.accounts.dev',
-        'https://*.clerk.com',
-        clerkFrontendApi,
-        'wss://*.clerk.accounts.dev',
-        `wss://${clerkFrontendApi.replace(/^https?:\/\//, '')}`,
-        'https://*.protect.clerk.com',
+        ...clerkConnectHosts,
         'https://challenges.cloudflare.com',
         'https://api.stripe.com',
         'https://*.sentry.io',
@@ -55,11 +97,13 @@ const nextConfig: NextConfig = {
       [
         "frame-src 'self'",
         'https://js.stripe.com',
-        'https://*.clerk.accounts.dev',
-        'https://*.clerk.com',
-        clerkFrontendApi,
-        'https://*.protect.clerk.com',
+        ...clerkScriptHosts,
         'https://challenges.cloudflare.com',
+        // Book chapter embeds (Pressbooks / EPUB revive)
+        'https://www.youtube.com',
+        'https://youtube.com',
+        'https://www.youtube-nocookie.com',
+        'https://player.vimeo.com',
       ].join(' '),
       "worker-src 'self' blob:",
     ].join('; ');

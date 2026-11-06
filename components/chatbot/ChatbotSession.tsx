@@ -11,7 +11,7 @@ import {
   MessageSquare,
   Send,
   Shield,
-} from "lucide-react";
+} from "@/components/icons";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -51,7 +51,7 @@ export function ChatbotSession({
   initial,
 }: {
   chatbotId: string;
-  /** Server-preloaded session — skips the slow client start round-trip. */
+  /** Server-preloaded session: skips the slow client start round-trip. */
   initial: StudentChatbotPageData;
 }) {
   const router = useRouter();
@@ -321,7 +321,7 @@ export function ChatbotSession({
                 Learning mode
               </p>
               <p className="text-sm text-ink-muted mt-0.5 leading-snug">
-                Guides your thinking — will not give quiz answers.
+                Guides your thinking. Will not give quiz answers.
               </p>
             </div>
           </div>
@@ -532,7 +532,7 @@ export function ChatbotSession({
           />
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs text-ink-faint hidden sm:block">
-              Be detailed — the professor will probe short answers.
+              Be detailed. The professor will probe short answers.
             </p>
             <div className="flex gap-2 ml-auto">
               <Button
@@ -599,7 +599,7 @@ export function ChatbotSession({
         </button>
       </div>
 
-      <div className="flex-1 min-h-0 w-full max-w-[1400px] mx-auto p-3 sm:p-4 lg:p-5">
+      <div className="flex-1 min-h-0 page-rail-wide p-3 sm:p-4 lg:p-5">
         {/* Desktop 3-column */}
         <div className="hidden lg:grid h-full min-h-0 grid-cols-[240px_minmax(0,1fr)_280px] gap-4">
           <div className="min-h-0 overflow-y-auto pr-1">{sessionRail}</div>

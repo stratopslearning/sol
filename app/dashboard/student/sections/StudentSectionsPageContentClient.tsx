@@ -1,11 +1,14 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { Layers } from "lucide-react";
+import Link from "next/link";
+import { Layers } from "@/components/icons";
 
 import LeaveSectionButton from "@/components/LeaveSectionButton";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { withBasePath } from "@/lib/basePath";
 import {
   Pagination,
   PaginationContent,
@@ -148,7 +151,16 @@ export default function StudentSectionsPageContentClient({
             ) : (
               paginatedSections.map((section) => (
                 <TableRow key={section.id}>
-                  <TableCell className="font-medium">{section.name}</TableCell>
+                  <TableCell className="font-medium">
+                    <Link
+                      href={withBasePath(
+                        `/dashboard/student/sections/${section.id}`,
+                      )}
+                      className="text-ink underline-offset-2 hover:underline"
+                    >
+                      {section.name}
+                    </Link>
+                  </TableCell>
                   <TableCell className="text-ink-muted">
                     {section.course?.title || "Unknown"}
                   </TableCell>
@@ -156,10 +168,21 @@ export default function StudentSectionsPageContentClient({
                     <Badge variant="success">Enrolled</Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <LeaveSectionButton
-                      sectionId={section.id}
-                      sectionName={section.name}
-                    />
+                    <div className="inline-flex items-center justify-end gap-1.5">
+                      <Button asChild size="sm">
+                        <Link
+                          href={withBasePath(
+                            `/dashboard/student/sections/${section.id}`,
+                          )}
+                        >
+                          Open
+                        </Link>
+                      </Button>
+                      <LeaveSectionButton
+                        sectionId={section.id}
+                        sectionName={section.name}
+                      />
+                    </div>
                   </TableCell>
                 </TableRow>
               ))

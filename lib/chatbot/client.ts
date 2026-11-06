@@ -1,8 +1,8 @@
-import { createOpenAIClient } from '@/lib/ai/openai';
+import { getAiClient } from '@/lib/ai/gateway';
 
 import { CHATBOT_MODEL } from '@/lib/chatbot/constants';
 
-export const chatbotOpenAI = createOpenAIClient({
+export const chatbotOpenAI = getAiClient('chatbot', {
   maxRetries: 2,
   timeout: 20_000,
 });

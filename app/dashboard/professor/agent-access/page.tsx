@@ -21,7 +21,7 @@ export default async function ProfessorAgentAccessPage() {
   }
 
   // Prefer the public site URL already used elsewhere (layout, Stripe). Avoid
-  // calling env() here — that helper is for boot-time validation in
+  // calling env() here: that helper is for boot-time validation in
   // instrumentation, not page renders.
   const origin = (
     process.env.NEXT_PUBLIC_BASE_URL || "https://www.strat-ops.net"
@@ -32,7 +32,6 @@ export default async function ProfessorAgentAccessPage() {
     <AppShell
       role="professor"
       active="agent-access"
-      topbarEyebrow="Faculty"
       topbarTitle="Agent access"
     >
       <PageHeader

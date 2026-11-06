@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { Calendar, FileText, Users } from 'lucide-react';
+import { Calendar, FileText, Users } from '@/components/icons';
 
 import CopyEnrollmentButton from '@/components/CopyEnrollmentButton';
 import { SectionEndsAtEditor } from '@/components/sections/SectionEndsAtEditor';
@@ -31,6 +31,8 @@ type SectionDetailViewProps = {
   quizRowActions?: (quizId: string) => ReactNode;
   discussionRowActions?: (chatbotId: string) => ReactNode;
   headerActions?: ReactNode;
+  /** e.g. “Assign existing” for professor section detail */
+  courseworkActions?: ReactNode;
 };
 
 export function SectionDetailView({
@@ -41,10 +43,12 @@ export function SectionDetailView({
   quizRowActions,
   discussionRowActions,
   headerActions,
+  courseworkActions,
 }: SectionDetailViewProps) {
   const { section, learnerEnrollments, facultyEnrollments, quizzes, discussions } =
     data;
   const concluded = isSectionConcluded(section);
+  const courseworkCount = quizzes.length + discussions.length;
   const gradebookBase =
     role === 'admin'
       ? `/dashboard/admin/sections/${sectionId}/gradebook`
@@ -67,10 +71,10 @@ export function SectionDetailView({
           hint={`${facultyEnrollments.length} total enrolled`}
         />
         <StatCard
-          label="Quizzes"
-          value={quizzes.length}
+          label="Assignments"
+          value={courseworkCount}
           icon={<FileText className="h-4 w-4" />}
-          hint="Assigned to this section"
+          hint={`${quizzes.length} quiz${quizzes.length === 1 ? '' : 'zes'} · ${discussions.length} discussion${discussions.length === 1 ? '' : 's'}`}
         />
         <StatCard
           label="Section end"
@@ -184,6 +188,8 @@ export function SectionDetailView({
             enrollments={learnerEnrollments}
             emptyTitle="No learners enrolled yet."
             emptyDescription="Share the learner enrolment code with students to get them enrolled."
+            sectionId={sectionId}
+            canRemoveStudents={role === 'professor'}
           />
         </div>
       </section>
@@ -191,32 +197,38 @@ export function SectionDetailView({
       <section className="mt-16">
         <SectionHeading
           eyebrow="Coursework"
-          title="Assigned quizzes"
-          description={`${quizzes.length} ${
-            quizzes.length === 1 ? 'quiz' : 'quizzes'
-          }`}
+          title="Assignments"
+          description={`${courseworkCount} ${
+            courseworkCount === 1 ? 'item' : 'items'
+          } on this section`}
+          actions={courseworkActions}
         />
         <div className="mt-6">
-          {quizzes.length === 0 ? (
+          {courseworkCount === 0 ? (
             <EmptyState
               eyebrow="Empty"
-              title="No quizzes assigned."
-              description="Assign a quiz to this section from the quizzes page."
+              title="No assignments yet."
+              description="Use Assign existing, or create one from Assignments / Authoring."
             />
           ) : (
             <div className="paper paper-shadow overflow-hidden">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Quiz</TableHead>
-                    <TableHead>Due</TableHead>
-                    <TableHead className="tnum">Submissions</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Assignment</TableHead>
+                    <TableHead>Detail</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {quizzes.map((quiz) => (
-                    <TableRow key={quiz.id}>
+                    <TableRow key={`quiz-${quiz.id}`}>
+                      <TableCell>
+                        <Badge variant="outline" className="font-normal">
+                          Quiz
+                        </Badge>
+                      </TableCell>
                       <TableCell>
                         <div className="flex flex-col gap-0.5">
                           <span className="font-medium text-ink">{quiz.title}</span>
@@ -228,11 +240,22 @@ export function SectionDetailView({
                         </div>
                       </TableCell>
                       <TableCell className={`text-sm text-ink-muted ${TIMESTAMP_CELL_CLASS}`}>
-                        {quiz.endDate
-                          ? <LocalDateTime stacked value={quiz.endDate} />
-                          : '—'}
+                        <div className="flex flex-col gap-0.5">
+                          <span>
+                            {quiz.endDate ? (
+                              <>
+                                Due <LocalDateTime value={quiz.endDate} />
+                              </>
+                            ) : (
+                              'No due date'
+                            )}
+                          </span>
+                          <span className="tnum text-xs text-ink-faint">
+                            {quiz.submissionCount} submission
+                            {quiz.submissionCount === 1 ? '' : 's'}
+                          </span>
+                        </div>
                       </TableCell>
-                      <TableCell className="tnum">{quiz.submissionCount}</TableCell>
                       <TableCell className="text-right">
                         <div className="inline-flex items-center gap-2">
                           <Button asChild variant="ghost" size="sm">
@@ -247,48 +270,25 @@ export function SectionDetailView({
                       </TableCell>
                     </TableRow>
                   ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </div>
-      </section>
-
-      <section className="mt-16">
-        <SectionHeading
-          eyebrow="Discussions"
-          title="Assigned discussions"
-          description={`${discussions.length} ${
-            discussions.length === 1 ? 'discussion' : 'discussions'
-          }`}
-        />
-        <div className="mt-6">
-          {discussions.length === 0 ? (
-            <EmptyState
-              eyebrow="Empty"
-              title="No discussions assigned."
-              description="Assign a discussion from the Discussions page."
-            />
-          ) : (
-            <div className="paper paper-shadow overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Discussion</TableHead>
-                    <TableHead>Persona</TableHead>
-                    <TableHead>Linked quiz</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
                   {discussions.map((d) => (
-                    <TableRow key={d.id}>
+                    <TableRow key={`discussion-${d.id}`}>
+                      <TableCell>
+                        <Badge variant="outline" className="font-normal">
+                          Discussion
+                        </Badge>
+                      </TableCell>
                       <TableCell className="font-medium text-ink">
                         {d.title}
                       </TableCell>
-                      <TableCell>{d.personaName}</TableCell>
-                      <TableCell className="text-ink-muted">
-                        {d.relatedQuizTitle ?? '—'}
+                      <TableCell className="text-sm text-ink-muted">
+                        <div className="flex flex-col gap-0.5">
+                          <span>{d.personaName}</span>
+                          {d.relatedQuizTitle ? (
+                            <span className="text-xs text-ink-faint">
+                              Linked quiz · {d.relatedQuizTitle}
+                            </span>
+                          ) : null}
+                        </div>
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="inline-flex items-center gap-2">

@@ -14,6 +14,9 @@ const PROJECT = process.env.BRAINTRUST_PROJECT?.trim() || 'SOL';
 const GRADING_BAND_FLOOR = Number(process.env.EVAL_GRADING_BAND_FLOOR ?? '0.8');
 const CHATBOT_FLOOR = Number(process.env.EVAL_CHATBOT_FLOOR ?? '0.75');
 const MCP_FLOOR = Number(process.env.EVAL_MCP_FLOOR ?? '0.7');
+const AUTHORING_FLOOR = Number(process.env.EVAL_AUTHORING_FLOOR ?? '0.7');
+const SWITCH_UP_FLOOR = Number(process.env.EVAL_SWITCH_UP_FLOOR ?? '0.7');
+const REVIEWER_FLOOR = Number(process.env.EVAL_REVIEWER_FLOOR ?? '0.7');
 
 function averageScorerScore(
   result: { results: Array<{ scores?: Record<string, number | null> }> },
@@ -40,6 +43,11 @@ async function runEvals() {
   const { GRADING_EVAL_DATASET } = await import('./datasets/grading');
   const { MCP_ROUTING_EVAL_DATASET } = await import('./datasets/mcp-routing');
   const {
+    AUTHORING_BUILD_EVAL_DATASET,
+    REVIEWER_EVAL_DATASET,
+    SWITCH_UP_EVAL_DATASET,
+  } = await import('./datasets/authoring');
+  const {
     scoreChatbotContains,
     scoreChatbotNoLeak,
     scoreChatbotSocraticQuestion,
@@ -47,6 +55,11 @@ async function runEvals() {
   const { scoreGradingBand, scoreInjectionCap } = await import(
     './scorers/grading'
   );
+  const {
+    scoreAuthoringBuildCitations,
+    scoreReviewerFlags,
+    scoreSwitchUpKeyCheck,
+  } = await import('./scorers/authoring');
   const { scoreMcpDestructiveConfirm, scoreMcpToolMatch } = await import(
     './scorers/mcp'
   );
@@ -113,9 +126,51 @@ async function runEvals() {
     maxConcurrency: 2,
   });
 
+  const authoringResult = await Eval(PROJECT, {
+    experimentName: 'authoring-build-regression',
+    data: AUTHORING_BUILD_EVAL_DATASET.map((row) => ({
+      input: row,
+      metadata: { caseId: row.id },
+    })),
+    task: async (input) => input,
+    scores: [(args) => scoreAuthoringBuildCitations(args)],
+    maxConcurrency: 4,
+  });
+
+  const switchUpResult = await Eval(PROJECT, {
+    experimentName: 'switch-up-regression',
+    data: SWITCH_UP_EVAL_DATASET.map((row) => ({
+      input: row,
+      metadata: { caseId: row.id },
+    })),
+    task: async (input) => input,
+    scores: [(args) => scoreSwitchUpKeyCheck(args)],
+    maxConcurrency: 4,
+  });
+
+  const reviewerResult = await Eval(PROJECT, {
+    experimentName: 'authoring-reviewer-regression',
+    data: REVIEWER_EVAL_DATASET.map((row) => ({
+      input: row,
+      metadata: { caseId: row.id },
+    })),
+    task: async (input) => input,
+    scores: [(args) => scoreReviewerFlags(args)],
+    maxConcurrency: 4,
+  });
+
   const gradingBand = averageScorerScore(gradingResult, 'score_band_match');
   const chatbotLeak = averageScorerScore(chatbotResult, 'no_leak');
   const mcpMatch = averageScorerScore(mcpResult, 'tool_match');
+  const authoringTrace = averageScorerScore(
+    authoringResult,
+    'build_traceability',
+  );
+  const switchUpScore = averageScorerScore(
+    switchUpResult,
+    'switch_up_key_check',
+  );
+  const reviewerScore = averageScorerScore(reviewerResult, 'reviewer_flags');
 
   console.log('\n--- Eval summary ---');
   console.log(
@@ -126,6 +181,15 @@ async function runEvals() {
   );
   console.log(
     `mcp tool_match:           ${(mcpMatch * 100).toFixed(1)}% (floor ${MCP_FLOOR * 100}%)`,
+  );
+  console.log(
+    `authoring traceability:   ${(authoringTrace * 100).toFixed(1)}% (floor ${AUTHORING_FLOOR * 100}%)`,
+  );
+  console.log(
+    `switch-up key check:      ${(switchUpScore * 100).toFixed(1)}% (floor ${SWITCH_UP_FLOOR * 100}%)`,
+  );
+  console.log(
+    `reviewer flags:           ${(reviewerScore * 100).toFixed(1)}% (floor ${REVIEWER_FLOOR * 100}%)`,
   );
 
   const failures: string[] = [];
@@ -139,6 +203,15 @@ async function runEvals() {
   }
   if (mcpMatch < MCP_FLOOR) {
     failures.push(`mcp routing ${mcpMatch} < ${MCP_FLOOR}`);
+  }
+  if (authoringTrace < AUTHORING_FLOOR) {
+    failures.push(`authoring traceability ${authoringTrace} < ${AUTHORING_FLOOR}`);
+  }
+  if (switchUpScore < SWITCH_UP_FLOOR) {
+    failures.push(`switch-up ${switchUpScore} < ${SWITCH_UP_FLOOR}`);
+  }
+  if (reviewerScore < REVIEWER_FLOOR) {
+    failures.push(`reviewer ${reviewerScore} < ${REVIEWER_FLOOR}`);
   }
 
   if (failures.length > 0) {

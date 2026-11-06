@@ -14,7 +14,8 @@ import { QuizTakeForm } from '@/components/quiz/QuizTakeForm';
 import { QuizUnavailable } from '@/components/quiz/QuizUnavailable';
 import { activeOnly } from '@/lib/db/filters';
 import { isStudentEntitled } from '@/lib/featureFlags';
-import { getOrCreateUser, type UserData } from '@/lib/getOrCreateUser';
+import { requireLearningAccess } from '@/lib/authz/gates';
+import type { UserData } from '@/lib/getOrCreateUser';
 import { getQuizAvailability } from '@/lib/quizAvailability';
 import {
   availabilityReasonToBlockCode,
@@ -43,7 +44,6 @@ function blocked(
     <AppShell
       role="student"
       user={user}
-      topbarEyebrow="Learner"
       topbarTitle={props.quizTitle || 'Quiz'}
     >
       <QuizUnavailable {...props} />
@@ -55,9 +55,7 @@ export default async function QuizPage(props: QuizPageProps) {
   const params = await props.params;
   const quizId = params.quizId;
 
-  const user = await getOrCreateUser();
-  if (!user) appRedirect('/login');
-  if (user.role !== 'STUDENT') appRedirect('/payment');
+  const user = await requireLearningAccess();
   if (!isStudentEntitled(user)) appRedirect('/payment');
 
   // Soft-deleted quizzes are treated as unavailable (do not dump to home).
@@ -85,7 +83,7 @@ export default async function QuizPage(props: QuizPageProps) {
     });
   }
 
-  // Enrollment before questions — unenrolled students must not see the bank
+  // Enrollment before questions: unenrolled students must not see the bank
   // or get a lazy assignment row.
   const quizSectionLinks = await db.query.quizSections.findMany({
     where: eq(quizSections.quizId, quizId),
@@ -192,7 +190,7 @@ export default async function QuizPage(props: QuizPageProps) {
         }))}
         assignmentId={assignment.id}
         userId={user.id}
-        userRole={user.role}
+        userRole="STUDENT"
       />
     </div>
   );

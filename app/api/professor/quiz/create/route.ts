@@ -33,25 +33,34 @@ export async function POST(req: NextRequest) {
     const body = await readJsonBody(req);
     const validatedData = createQuizSchema.parse(body);
 
-    // Verify professor is enrolled in all specified sections
-    const professorEnrollments = await db.query.professorSections.findMany({
-      where: eq(professorSections.professorId, user.id),
-    });
-
-    const enrolledSectionIds = professorEnrollments.map(e => e.sectionId);
-    const invalidSections = validatedData.sectionIds.filter(id => !enrolledSectionIds.includes(id));
-    
-    if (invalidSections.length > 0) {
-      return NextResponse.json({ 
-        error: 'You can only assign quizzes to sections you are enrolled in' 
-      }, { status: 403 });
+    // Binding-based: content.write on every target section.
+    const { authorizeOnSection } = await import('@/lib/authz/courseAccess');
+    for (const id of validatedData.sectionIds) {
+      if (!(await authorizeOnSection(user, 'content.write', id))) {
+        return NextResponse.json(
+          {
+            error: 'You can only assign quizzes to sections you teach',
+          },
+          { status: 403 },
+        );
+      }
     }
 
     const newQuiz = await db.transaction(async (tx) => {
+      const { tenantOfferingFromSection } = await import(
+        '@/lib/db/tenantFromCourse'
+      );
+      const scope = await tenantOfferingFromSection(
+        tx,
+        validatedData.sectionIds[0]!,
+      );
+
       const [created] = await tx.insert(quizzes).values({
         title: validatedData.title,
         description: validatedData.description,
         professorId: user.id,
+        tenantId: scope.tenantId,
+        offeringId: scope.offeringId,
         maxAttempts: validatedData.maxAttempts,
         timeLimit: validatedData.timeLimit,
         passingScore: validatedData.passingScore,
@@ -64,6 +73,8 @@ export async function POST(req: NextRequest) {
         await tx.insert(questions).values(
           validatedData.questions.map((q) => ({
             quizId: created.id,
+            tenantId: scope.tenantId,
+            offeringId: scope.offeringId,
             type: q.type,
             question: q.question,
             options: q.options,
@@ -78,6 +89,8 @@ export async function POST(req: NextRequest) {
         validatedData.sectionIds.map((sectionId: string) => ({
           quizId: created.id,
           sectionId,
+          tenantId: scope.tenantId,
+          offeringId: scope.offeringId,
           assignedBy: user.id,
         })),
       );

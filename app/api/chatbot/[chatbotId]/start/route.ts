@@ -28,7 +28,7 @@ export async function POST(
 ) {
   try {
     const user = await getOrCreateUser();
-    if (!user || user.role !== 'STUDENT') {
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     if (!isStudentEntitled(user)) {
@@ -159,7 +159,7 @@ export async function POST(
       ),
     });
 
-    // Review path: assignment already completed — return latest completed
+    // Review path: assignment already completed: return latest completed
     // transcript instead of opening a blank new session.
     if (!session && assignment.isCompleted) {
       session = await db.query.chatbotSessions.findFirst({

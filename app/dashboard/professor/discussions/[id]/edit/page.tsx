@@ -1,4 +1,5 @@
 import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { requireTeachingAccess } from '@/lib/authz/gates';
 
 import { db } from '@/app/db';
 import {
@@ -23,8 +24,7 @@ interface PageProps {
 }
 
 export default async function EditDiscussionPage(props: PageProps) {
-  const user = await getOrCreateUser();
-  if (!user || user.role !== 'PROFESSOR') return null;
+  const user = await requireTeachingAccess();
 
   const { id } = await props.params;
   const bot = await db.query.chatbots.findFirst({
@@ -39,10 +39,30 @@ export default async function EditDiscussionPage(props: PageProps) {
     appRedirect('/dashboard/professor/discussions');
   }
 
-  const professorSectionsList = await db.query.professorSections.findMany({
-    where: eq(professorSections.professorId, user.id),
-    with: { section: { with: { course: true } } },
-  });
+  const { listTeachingSectionIds } = await import(
+    '@/lib/professor/graderSections'
+  );
+  const { fetchSectionsByIds } = await import('@/lib/db/entityScopedReads');
+  const teachingIds = await listTeachingSectionIds(user);
+  const sectionRows = teachingIds.length
+    ? await fetchSectionsByIds(teachingIds)
+    : [];
+  const professorSectionsList = sectionRows.map((section) => ({
+    section: {
+      id: section.id,
+      name: section.name,
+      endsAt: section.endsAt,
+      createdAt: new Date(),
+      courseId: section.courseId,
+      course: section.course ?? {
+        id: section.courseId,
+        title: 'Course',
+        description: null,
+      },
+    },
+    sectionId: section.id,
+    enrolledAt: new Date(),
+  }));
 
   const assignedIdSet = new Set(
     bot.sectionAssignments.map((s) => s.sectionId),
@@ -87,8 +107,7 @@ export default async function EditDiscussionPage(props: PageProps) {
   return (
     <AppShell
       role="professor"
-      active="discussions"
-      topbarEyebrow="Faculty"
+      active="assignments"
       topbarTitle="Edit discussion"
       maxWidth="narrow"
     >
@@ -96,8 +115,8 @@ export default async function EditDiscussionPage(props: PageProps) {
         breadcrumbs={[
           { label: 'Dashboard', href: withBasePath('/dashboard/professor') },
           {
-            label: 'Discussions',
-            href: withBasePath('/dashboard/professor/discussions'),
+            label: 'Assignments',
+            href: withBasePath('/dashboard/professor/assignments'),
           },
           { label: 'Edit' },
         ]}
@@ -118,6 +137,7 @@ export default async function EditDiscussionPage(props: PageProps) {
             systemPrompt: bot.systemPrompt,
             relatedQuizId: bot.relatedQuizId,
             sectionIds: bot.sectionAssignments.map((s) => s.sectionId),
+            aiPolicyMode: bot.aiPolicy?.mode ?? null,
           }}
         />
       </div>

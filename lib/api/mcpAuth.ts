@@ -8,17 +8,16 @@
  *      (Claude.ai, ChatGPT) after the professor completes the Clerk OAuth
  *      flow advertised via `/.well-known/oauth-protected-resource`.
  *
- * OAuth callers get the full professor scope set — the professor proved who
+ * OAuth callers get the full professor scope set: the professor proved who
  * they are in a browser, exactly like a dashboard session. Least-privilege
  * access remains available through scoped PATs.
  */
 import { auth } from '@clerk/nextjs/server';
 
 import type { ProfessorApiAuth } from '@/lib/api/professorAuth';
-import {
-  extractBearerToken,
-  isProfessorOrAdmin,
-} from '@/lib/api/professorAuth';
+import { extractBearerToken } from '@/lib/api/professorAuth';
+import { userCanAccessTeachingArea } from '@/lib/authz/gates';
+import { effectiveScopesForUser } from '@/lib/authz/tokenScopes';
 import { BASE_PATH } from '@/lib/basePath';
 import { getOrCreateUserByClerkId } from '@/lib/getOrCreateUser';
 import {
@@ -83,14 +82,20 @@ export async function authenticateMcpRequest(
           'Invalid or revoked access token. Mint a new one on the SOL Agent Access page.',
       };
     }
+    // Effective scopes = token scopes ∩ owner's bindings in the token tenant.
+    // (An empty token scope list is NOT widened to "all" any more.)
+    const scopes = await effectiveScopesForUser(
+      verified.user.id,
+      verified.scopes,
+      verified.tenantId,
+    );
     return {
       ok: true,
       auth: {
         user: verified.user,
         viaToken: true,
         tokenId: verified.tokenId,
-        scopes:
-          verified.scopes.length > 0 ? verified.scopes : [...TOKEN_SCOPES],
+        scopes,
       },
     };
   }
@@ -115,13 +120,15 @@ export async function authenticateMcpRequest(
       message: 'Could not resolve the SOL account for this OAuth token.',
     };
   }
-  if (!isProfessorOrAdmin(user)) {
+  if (!(await userCanAccessTeachingArea(user.id))) {
     return {
       ok: false,
       status: 403,
-      message: 'The SOL MCP server is available to professor accounts only.',
+      message: 'The SOL MCP server requires a teaching role binding.',
     };
   }
+  // Connector scopes are capped by the user's bindings across tenants.
+  const oauthScopes = await effectiveScopesForUser(user.id, TOKEN_SCOPES);
 
   return {
     ok: true,
@@ -130,7 +137,7 @@ export async function authenticateMcpRequest(
       viaToken: false,
       viaOAuth: true,
       tokenId: null,
-      scopes: [...TOKEN_SCOPES],
+      scopes: oauthScopes,
     },
   };
 }

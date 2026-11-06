@@ -22,7 +22,7 @@ export async function POST(
 ) {
   try {
     const user = await getOrCreateUser();
-    if (!user || user.role !== 'STUDENT') {
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     if (!isStudentEntitled(user)) {
@@ -69,6 +69,40 @@ export async function POST(
         .set({ isCompleted: true, completedAt: now })
         .where(eq(chatbotAssignments.id, session.assignmentId));
     });
+
+    if (session.sectionId) {
+      const { enqueueCompletionPassback } = await import('@/lib/lti/passback');
+      void enqueueCompletionPassback({
+        ref: { chatbotId },
+        studentId: user.id,
+        sectionId: session.sectionId,
+        completed: true,
+      }).catch((err) =>
+        console.error('LTI discussion completion passback failed', err),
+      );
+    }
+
+    // Async struggle tagger (heuristic fallback if no API key).
+    void (async () => {
+      try {
+        const { sections } = await import('@/app/db/schema');
+        const section = session.sectionId
+          ? await db.query.sections.findFirst({
+              where: eq(sections.id, session.sectionId),
+              columns: { courseId: true },
+            })
+          : null;
+        const { tagSessionStruggles } = await import(
+          '@/lib/chatbot/struggleTagger'
+        );
+        await tagSessionStruggles({
+          sessionId: session.id,
+          courseId: section?.courseId,
+        });
+      } catch (err) {
+        console.warn('[chatbot/complete] struggle tagger skipped', err);
+      }
+    })();
 
     return NextResponse.json({
       success: true,

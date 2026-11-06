@@ -6,15 +6,11 @@ import {
   TrendingUp,
   Users,
   XCircle,
-} from "lucide-react";
+} from "@/components/icons";
 import { notFound } from "next/navigation";
 
 import { db } from "@/app/db";
-import {
-  professorSections,
-  questions,
-  quizSections,
-} from "@/app/db/schema";
+import { questions, quizSections } from "@/app/db/schema";
 import ExportResultsWrapper from "@/components/ExportResultsWrapper";
 import { AppShell } from "@/components/layout/AppShell";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -31,10 +27,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { requireTeachingAccess } from "@/lib/authz/gates";
 import { formatPersonName } from "@/lib/personName";
 import { withBasePath } from "@/lib/basePath";
-import { getOrCreateUser } from "@/lib/getOrCreateUser";
 import { fetchSubmittedAttemptsForProfessorSections } from "@/lib/professorVisibleAttempts";
+import {
+  accessibleQuizSectionIds,
+  professorCanAccessQuiz,
+} from "@/lib/quizAccess";
 import { computeQuestionStatsForAttempts } from "@/lib/quizQuestionStats";
 
 export default async function QuizResultsPage({
@@ -43,22 +43,11 @@ export default async function QuizResultsPage({
   params: Promise<{ quizId: string }>;
 }) {
   const { quizId } = await params;
-  const user = await getOrCreateUser();
-  if (!user || (user.role !== "PROFESSOR" && user.role !== "ADMIN")) return null;
+  const user = await requireTeachingAccess();
 
-  let enrolledSectionIds: string[];
-  if (user.role === "ADMIN") {
-    const assignments = await db.query.quizSections.findMany({
-      where: eq(quizSections.quizId, quizId),
-    });
-    enrolledSectionIds = assignments.map((a) => a.sectionId);
-  } else {
-    const professorSectionsList = await db.query.professorSections.findMany({
-      where: eq(professorSections.professorId, user.id),
-      with: { section: { with: { course: true } } },
-    });
-    enrolledSectionIds = professorSectionsList.map((ps) => ps.section.id);
-  }
+  if (!(await professorCanAccessQuiz(user, quizId))) notFound();
+
+  const enrolledSectionIds = await accessibleQuizSectionIds(user, quizId);
   if (enrolledSectionIds.length === 0) notFound();
 
   const quizAssignment = await db.query.quizSections.findFirst({
@@ -127,8 +116,7 @@ export default async function QuizResultsPage({
   return (
     <AppShell
       role="professor"
-      active="quizzes"
-      topbarEyebrow="Faculty"
+      active="assignments"
       topbarTitle={quiz.title}
       maxWidth="wide"
     >
@@ -136,8 +124,8 @@ export default async function QuizResultsPage({
         breadcrumbs={[
           { label: "Dashboard", href: withBasePath("/dashboard/professor") },
           {
-            label: "My quizzes",
-            href: withBasePath("/dashboard/professor/quizzes"),
+            label: "Assignments",
+            href: withBasePath("/dashboard/professor/assignments"),
           },
           { label: "Results" },
         ]}

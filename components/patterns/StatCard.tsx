@@ -1,5 +1,5 @@
 import * as React from "react";
-import { ArrowDownRight, ArrowUpRight } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight } from "@/components/icons";
 
 import { withBasePath } from "@/lib/basePath";
 import { cn } from "@/lib/utils";

@@ -3,7 +3,7 @@
  * enrolled in multiple sections that share the same quiz.
  *
  * Submit previously used `findFirst`, which returned an arbitrary row and
- * caused attempts to land under the wrong section — hiding them from the
+ * caused attempts to land under the wrong section: hiding them from the
  * professor's results for the section they actually teach.
  */
 import { and, desc, eq, inArray } from 'drizzle-orm';

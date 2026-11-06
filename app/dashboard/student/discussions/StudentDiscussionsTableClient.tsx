@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from "react";
 import Link from "next/link";
-import { MessagesSquare } from "lucide-react";
+import { MessagesSquare } from "@/components/icons";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -131,7 +131,7 @@ export default function StudentDiscussionsTableClient({
                 </TableCell>
                 <TableCell>{d.personaName}</TableCell>
                 <TableCell className="text-ink-muted">
-                  {d.sectionNames.join(", ") || "—"}
+                  {d.sectionNames.join(", ") || "-"}
                 </TableCell>
                 <TableCell>
                   {d.status === "completed" ? (

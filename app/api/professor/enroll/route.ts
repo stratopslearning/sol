@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/app/db';
-import { sections, professorSections } from '@/app/db/schema';
+import { professorSections } from '@/app/db/schema';
 import { eq, and } from 'drizzle-orm';
+import { upsertRoleBinding } from '@/lib/authz/bindings';
+import { findSectionByProfessorCode } from '@/lib/sections/enrollmentLookup';
+import { resolveProfessorEnrollWorkspaceId } from '@/lib/workspace';
 import { ApiError, jsonError } from '@/lib/api/errors';
 import { requireProfessorApi } from '@/lib/api/professorAuth';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
 import { readJsonBody } from '@/lib/api/readJsonBody';
-import { activeOnly } from '@/lib/db/filters';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,19 +28,30 @@ export async function POST(req: NextRequest) {
     });
     if (limited) return limited;
 
-    const body = (await readJsonBody(req)) as { enrollmentCode?: unknown };
+    const body = (await readJsonBody(req)) as {
+      enrollmentCode?: unknown;
+      workspaceId?: unknown;
+    };
     const { enrollmentCode } = body;
     if (!enrollmentCode || typeof enrollmentCode !== 'string') {
       return NextResponse.json({ error: 'Enrollment code is required' }, { status: 400 });
     }
 
-    // Find section by professor enrollment code
-    const section = await db.query.sections.findFirst({
-      where: and(
-        eq(sections.professorEnrollmentCode, enrollmentCode),
-        activeOnly(sections.deletedAt),
-      ),
-    });
+    const workspaceScope = await resolveProfessorEnrollWorkspaceId(
+      user.id,
+      typeof body.workspaceId === 'string' ? body.workspaceId : undefined,
+    );
+    if (!workspaceScope.ok) {
+      return NextResponse.json(
+        { error: workspaceScope.error },
+        { status: workspaceScope.status },
+      );
+    }
+
+    const section = await findSectionByProfessorCode(
+      workspaceScope.workspaceId,
+      enrollmentCode,
+    );
 
     if (!section) {
       return NextResponse.json({ error: 'Invalid enrollment code' }, { status: 404 });
@@ -61,6 +74,24 @@ export async function POST(req: NextRequest) {
       professorId: user.id,
       sectionId: section.id,
     });
+
+    const { ensureWorkspaceMembership, getCourseWorkspaceId } = await import(
+      '@/lib/workspace'
+    );
+    const workspaceId = await getCourseWorkspaceId(section.courseId);
+    if (workspaceId) {
+      // Seat only; teaching power comes from the section-scope binding below.
+      await ensureWorkspaceMembership({ workspaceId, userId: user.id });
+      // Joining with the professor enrollment code grants co-instructor on this section.
+      await upsertRoleBinding({
+        tenantId: workspaceId,
+        userId: user.id,
+        scopeType: 'section',
+        scopeId: section.id,
+        role: 'co_instructor',
+        grantedBy: user.id,
+      });
+    }
 
     return NextResponse.json({
       success: true,

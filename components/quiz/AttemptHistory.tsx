@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertCircle, Award, Clock, RefreshCw } from "lucide-react";
+import { AlertCircle, Award, Clock, RefreshCw } from "@/components/icons";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -90,7 +90,7 @@ export function AttemptHistory({
     return (
       <div className="paper paper-shadow p-8 text-center">
         <p className="text-ink-muted">
-          No attempts yet — take the quiz to begin.
+          No attempts yet. Take the quiz to begin.
         </p>
       </div>
     );

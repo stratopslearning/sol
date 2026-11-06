@@ -6,6 +6,7 @@ import { chatbotSections } from '@/app/db/schema';
 import {
   getActiveChatbot,
   professorEnrolledInSections,
+  userCanWriteChatbot,
 } from '@/lib/chatbot/access';
 import { ApiError, jsonError } from '@/lib/api/errors';
 import { requireProfessorApi } from '@/lib/api/professorAuth';
@@ -44,13 +45,13 @@ export async function POST(
         { status: 400 },
       );
     }
-    if (user.role === 'PROFESSOR' && bot.professorId !== user.id) {
+    if (!(await userCanWriteChatbot(user, bot))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const body = assignSchema.parse(await readJsonBody(req));
-    if (user.role === 'PROFESSOR') {
-      const ok = await professorEnrolledInSections(user.id, body.sectionIds);
+    {
+      const ok = await professorEnrolledInSections(user, body.sectionIds);
       if (!ok) {
         return NextResponse.json(
           { error: 'You can only assign to sections you teach' },

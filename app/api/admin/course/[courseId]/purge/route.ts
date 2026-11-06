@@ -8,7 +8,9 @@ import { auth } from '@clerk/nextjs/server';
 
 import { db } from '@/app/db';
 import { courses, users } from '@/app/db/schema';
+import { apiErrorResponse } from '@/lib/api/errors';
 import { extractRequestMeta, logAudit } from '@/lib/audit';
+import { requireSupportGrant } from '@/lib/authz/requireSupportGrant';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,7 +28,7 @@ export async function DELETE(
     const user = await db.query.users.findFirst({
       where: eq(users.clerkId, userId),
     });
-    if (!user || user.role !== 'ADMIN') {
+    if (!user || !user.platformStaff) {
       return NextResponse.json(
         { error: 'Forbidden - Admin access required' },
         { status: 403 },
@@ -39,6 +41,19 @@ export async function DELETE(
     if (!targetCourse) {
       return NextResponse.json({ error: 'Course not found' }, { status: 404 });
     }
+    const tenantId = targetCourse.tenantId ?? targetCourse.workspaceId;
+    if (!tenantId) {
+      return NextResponse.json({ error: 'Course missing tenant' }, { status: 400 });
+    }
+    await requireSupportGrant(
+      {
+        id: user.id,
+        clerkId: user.clerkId,
+        platformStaff: user.platformStaff,
+      },
+      tenantId,
+      { action: 'support.tenant_access', targetType: 'course', targetId: courseId },
+    );
 
     await db.delete(courses).where(eq(courses.id, courseId));
 
@@ -57,6 +72,6 @@ export async function DELETE(
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error purging course:', error);
-    return NextResponse.json({ error: 'Failed to purge course' }, { status: 500 });
+    return apiErrorResponse(error);
   }
 }

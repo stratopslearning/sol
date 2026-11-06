@@ -1,14 +1,16 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import { db } from "@/app/db";
-import { attempts } from "@/app/db/schema";
+import { attempts, studentSections } from "@/app/db/schema";
 import { AppShell } from "@/components/layout/AppShell";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { listStudentActivities } from "@/lib/assignments";
 import { withBasePath } from "@/lib/basePath";
 import { requireStudent } from "@/lib/auth";
-import { isSectionConcluded } from "@/lib/sectionAvailability";
+import { isSectionConcluded, partitionEnrollmentsByConclusion } from "@/lib/sectionAvailability";
 
 import StudentGradesTableClient from "./StudentGradesTableClient";
+import StudentCompletionsClient from "./StudentCompletionsClient";
 
 export default async function StudentGradesPage({
   searchParams,
@@ -44,8 +46,32 @@ export default async function StudentGradesPage({
     sectionArchived: isSectionConcluded(a.section),
   }));
 
+  const enrollments = await db.query.studentSections.findMany({
+    where: and(
+      eq(studentSections.studentId, user.id),
+      eq(studentSections.status, "ACTIVE"),
+    ),
+    with: { section: true },
+  });
+  const { active } = partitionEnrollmentsByConclusion(enrollments);
+  const sectionIds = active.map((e) => e.sectionId);
+  const activities = await listStudentActivities({
+    studentId: user.id,
+    sectionIds,
+  });
+  const completionRows = activities
+    .filter((a) => a.type !== "QUIZ")
+    .map((a) => ({
+      id: a.id,
+      type: a.type,
+      title: a.title,
+      courseTitle: a.courseTitle,
+      status: a.completionStatus ?? "NOT_STARTED",
+      href: a.href,
+    }));
+
   return (
-    <AppShell role="student" user={user} topbarEyebrow="Learner" topbarTitle="My grades">
+    <AppShell role="student" user={user} topbarTitle="My grades">
       <PageHeader
         breadcrumbs={[
           { label: "Dashboard", href: withBasePath("/dashboard/student") },
@@ -53,13 +79,14 @@ export default async function StudentGradesPage({
         ]}
         eyebrow="Record"
         title="Your gradebook."
-        description="Your attempts grouped by section and quiz — best scores, submission dates, and quick access to review each one. Archived sections stay visible here."
+        description="Quiz scores are numeric. Lessons, discussions, and interactives show completion status."
       />
-      <div className="mt-10">
+      <div className="mt-10 space-y-12">
         <StudentGradesTableClient
           attempts={attemptRows}
           initialSectionId={focusSectionId}
         />
+        <StudentCompletionsClient rows={completionRows} />
       </div>
     </AppShell>
   );

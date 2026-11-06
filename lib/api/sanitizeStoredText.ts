@@ -1,7 +1,7 @@
 /**
  * Lightweight text sanitization before persisting user-authored strings.
  *
- * We do not render user HTML, so this is not an XSS sanitizer — it strips
+ * We do not render user HTML, so this is not an XSS sanitizer: it strips
  * null bytes / C0 controls (except newline and tab), NFC-normalizes, and
  * trims. Apply to quiz answers, chatbot messages, and similar stored text.
  */

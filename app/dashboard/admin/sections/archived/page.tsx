@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Archive } from 'lucide-react';
+import { Archive } from '@/components/icons';
 
 import { db } from '@/app/db';
 import { sections } from '@/app/db/schema';
@@ -41,8 +41,7 @@ export default async function AdminArchivedSectionsPage() {
   return (
     <AppShell
       role="admin"
-      active="sections"
-      topbarEyebrow="Administration"
+      active="workspaces"
       topbarTitle="Past sections"
     >
       <PageHeader
@@ -91,12 +90,12 @@ export default async function AdminArchivedSectionsPage() {
                   <TableRow key={section.id}>
                     <TableCell className="font-medium">{section.name}</TableCell>
                     <TableCell className="text-ink-muted">
-                      {section.course?.title ?? '—'}
+                      {section.course?.title ?? '-'}
                     </TableCell>
                     <TableCell className={`text-ink-muted ${TIMESTAMP_CELL_CLASS}`}>
                         {section.endsAt
                           ? <LocalDateTime stacked value={section.endsAt} />
-                          : '—'}
+                          : '-'}
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline">Concluded</Badge>

@@ -18,10 +18,15 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { SectionHeading } from '@/components/layout/SectionHeading';
 import { EmptyState } from '@/components/patterns/EmptyState';
 import { logGradebookAccess } from '@/lib/audit';
-import { requireAuth, getDashboardUrl } from '@/lib/auth';
+import { requireTeachingAccess } from '@/lib/authz/gates';
+import { authorizeOnSection } from '@/lib/authz/courseAccess';
 import { withBasePath } from '@/lib/basePath';
 import { activeOnly } from '@/lib/db/filters';
 import { comparePersonsByLastName } from '@/lib/personName';
+import {
+  buildCompletionMapForSection,
+  listSectionCompletionColumns,
+} from '@/lib/assignments/completion';
 import { buildGradebookScoresForSection } from '@/lib/professorVisibleAttempts';
 
 export default async function SectionGradebookPage({
@@ -31,16 +36,13 @@ export default async function SectionGradebookPage({
 }) {
   const { sectionId } = await params;
 
-  const me = await requireAuth();
-  if (me.role !== 'PROFESSOR' && me.role !== 'ADMIN') {
-    appRedirect(getDashboardUrl(me.role));
-  }
+  const me = await requireTeachingAccess();
 
   await logGradebookAccess({
     actorUserId: me.id,
     actorClerkId: me.clerkId,
     sectionId,
-    role: me.role,
+    role: me.platformStaff ? 'ADMIN' : 'PROFESSOR',
   });
 
   const section = await db.query.sections.findFirst({
@@ -49,14 +51,12 @@ export default async function SectionGradebookPage({
   });
   if (!section) return notFound();
 
-  if (me.role !== 'ADMIN') {
-    const enrollment = await db.query.professorSections.findFirst({
-      where: and(
-        eq(professorSections.sectionId, sectionId),
-        eq(professorSections.professorId, me.id),
-      ),
-    });
-    if (!enrollment) return notFound();
+  // Binding-based (grade.write / content.read on the section); professor_sections is metadata.
+  if (
+    !(await authorizeOnSection(me, 'grade.write', sectionId)) &&
+    !(await authorizeOnSection(me, 'content.read', sectionId))
+  ) {
+    return notFound();
   }
 
   const studentEnrollments = await db.query.studentSections.findMany({
@@ -87,6 +87,13 @@ export default async function SectionGradebookPage({
     enrolledStudentIds: students.map((s) => s.id),
   });
 
+  const completionColumns = await listSectionCompletionColumns(sectionId);
+  const completionMap = await buildCompletionMapForSection({
+    sectionId,
+    columns: completionColumns,
+    studentIds: students.map((s) => s.id),
+  });
+
   const learners: GradebookLearnerRow[] = students.map((student) => {
     const bestPercentages = sectionQuizzes
       .map((quiz) => studentQuizScores[student.id]?.[quiz.id]?.percentage)
@@ -113,6 +120,7 @@ export default async function SectionGradebookPage({
         email: student.email,
       },
       cells,
+      completions: completionMap[student.id] ?? {},
       average,
     };
   });
@@ -120,18 +128,26 @@ export default async function SectionGradebookPage({
   return (
     <AppShell
       role="professor"
-      active="sections"
-      topbarEyebrow="Faculty"
+      active="courses"
       topbarTitle="Gradebook"
       maxWidth="wide"
     >
       <PageHeader
         breadcrumbs={[
-          { label: 'Dashboard', href: withBasePath('/dashboard/professor') },
           {
-            label: 'My sections',
-            href: withBasePath('/dashboard/professor/sections'),
+            label: 'Courses',
+            href: withBasePath('/dashboard/professor/courses'),
           },
+          ...(section.course
+            ? [
+                {
+                  label: section.course.title,
+                  href: withBasePath(
+                    `/dashboard/professor/courses/${section.course.id}/sections`,
+                  ),
+                },
+              ]
+            : []),
           {
             label: section.name,
             href: withBasePath(
@@ -144,8 +160,8 @@ export default async function SectionGradebookPage({
         title={`${section.name} grades`}
         description={
           section.course
-            ? `${section.course.title} · ${students.length} learners · ${sectionQuizzes.length} quizzes`
-            : `${students.length} learners · ${sectionQuizzes.length} quizzes`
+            ? `${section.course.title} · ${students.length} learners · ${sectionQuizzes.length} quizzes · ${completionColumns.length} completion activities`
+            : `${students.length} learners · ${sectionQuizzes.length} quizzes · ${completionColumns.length} completion activities`
         }
         actions={
           sectionQuizzes.length > 0 ? (
@@ -162,24 +178,30 @@ export default async function SectionGradebookPage({
       <section className="mt-12">
         <SectionHeading eyebrow="Matrix" title="Best score per learner" />
         <div className="mt-6">
-          {students.length === 0 || sectionQuizzes.length === 0 ? (
+          {students.length === 0 ||
+          (sectionQuizzes.length === 0 && completionColumns.length === 0) ? (
             <EmptyState
               eyebrow="Empty"
               title={
                 students.length === 0
                   ? 'No learners enrolled.'
-                  : 'No quizzes assigned to this section.'
+                  : 'No assignments in this section yet.'
               }
               description={
                 students.length === 0
                   ? 'Share the learner enrolment code on the section detail page.'
-                  : 'Assign at least one quiz to start collecting grades.'
+                  : 'Assign a quiz, lesson, discussion, or interactive to start the gradebook.'
               }
             />
           ) : (
             <SectionGradebookTable
               learners={learners}
               quizzes={sectionQuizzes.map((q) => ({ id: q.id, title: q.title }))}
+              completionColumns={completionColumns.map((c) => ({
+                id: c.id,
+                title: c.title,
+                type: c.type,
+              }))}
             />
           )}
         </div>

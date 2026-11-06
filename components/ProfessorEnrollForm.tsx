@@ -44,10 +44,15 @@ export default function ProfessorEnrollForm({
   };
 
   return (
-    <section className="paper paper-shadow p-6 mb-8">
+    <section className="h-full rounded-xl border border-rule bg-surface paper-shadow p-5 sm:p-6">
       <header>
         <span className="eyebrow text-ink-faint">Join</span>
-        <h2 className="font-display text-lg text-ink mt-1">Add a section</h2>
+        <h2
+          className="font-display text-lg text-ink mt-1"
+          style={{ fontVariationSettings: '"opsz" 36' }}
+        >
+          Add a section
+        </h2>
       </header>
       <form
         onSubmit={handleSubmit}

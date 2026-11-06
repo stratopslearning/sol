@@ -55,7 +55,7 @@ const baseRow = {
   email: 'student@example.com',
   firstName: 'Ada',
   lastName: 'Lovelace',
-  role: 'STUDENT' as const,
+  platformStaff: false,
   paid: false,
   createdAt: new Date('2026-01-01T00:00:00.000Z'),
   updatedAt: new Date('2026-01-01T00:00:00.000Z'),
@@ -102,11 +102,11 @@ describe('getOrCreateUser isolate cache', () => {
 
     await getOrCreateUserByClerkId(baseRow.clerkId);
     vi.advanceTimersByTime(USER_CACHE_TTL_MS + 1);
-    mocks.findFirst.mockResolvedValue({ ...baseRow, role: 'PROFESSOR' });
+    mocks.findFirst.mockResolvedValue({ ...baseRow, platformStaff: true });
 
     const after = await getOrCreateUserByClerkId(baseRow.clerkId);
 
-    expect(after?.role).toBe('PROFESSOR');
+    expect(after?.platformStaff).toBe(true);
     expect(mocks.findFirst).toHaveBeenCalledTimes(2);
   });
 

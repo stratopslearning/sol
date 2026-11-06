@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { and, eq } from 'drizzle-orm';
 
 import { db } from '@/app/db';
-import { professorSections, quizSections } from '@/app/db/schema';
-import { ApiError, apiErrorResponse } from '@/lib/api/errors';
+import { quizSections } from '@/app/db/schema';
+import { apiErrorResponse } from '@/lib/api/errors';
 import { requireProfessorApi } from '@/lib/api/professorAuth';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
+import { assertTeachesSection } from '@/lib/professor/sections';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,17 +30,7 @@ export async function POST(
 
     const { sectionId, quizId } = await context.params;
 
-    if (user.role === 'PROFESSOR') {
-      const enrollment = await db.query.professorSections.findFirst({
-        where: and(
-          eq(professorSections.sectionId, sectionId),
-          eq(professorSections.professorId, user.id),
-        ),
-      });
-      if (!enrollment) {
-        throw ApiError.forbidden('Not enrolled in this section');
-      }
-    }
+    await assertTeachesSection(user, sectionId);
 
     await db
       .delete(quizSections)

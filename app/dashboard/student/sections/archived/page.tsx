@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { eq } from "drizzle-orm";
-import { Archive } from "lucide-react";
+import { Archive } from "@/components/icons";
 
 import { db } from "@/app/db";
 import { studentSections } from "@/app/db/schema";
@@ -49,7 +49,6 @@ export default async function StudentArchivedSectionsPage() {
     <AppShell
       role="student"
       user={user}
-      topbarEyebrow="Learner"
       topbarTitle="Past sections"
     >
       <PageHeader
@@ -63,7 +62,7 @@ export default async function StudentArchivedSectionsPage() {
         ]}
         eyebrow="Archive"
         title="Past sections."
-        description="Sections that have ended. You can still review grades and prior attempts — new quizzes and discussions are closed."
+        description="Sections that have ended. You can still review grades and prior attempts. New quizzes and discussions are closed."
         actions={
           <Button asChild variant="outline">
             <Link href={appPath("/dashboard/student/sections")}>
@@ -77,7 +76,7 @@ export default async function StudentArchivedSectionsPage() {
         <SectionHeading
           eyebrow="Concluded"
           title="Archived enrollments"
-          description="Canvas-style past course list — read-only for new work."
+          description="Canvas-style past course list. Read-only for new work."
         />
 
         <div className="mt-6">
@@ -107,12 +106,12 @@ export default async function StudentArchivedSectionsPage() {
                         {section.name}
                       </TableCell>
                       <TableCell className="text-ink-muted">
-                        {section.course?.title ?? "—"}
+                        {section.course?.title ?? "-"}
                       </TableCell>
                       <TableCell className={`text-ink-muted ${TIMESTAMP_CELL_CLASS}`}>
                         {section.endsAt
                           ? <LocalDateTime stacked value={section.endsAt} />
-                          : "—"}
+                          : "-"}
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline">Archived</Badge>

@@ -1,15 +1,23 @@
-import { eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
+import { requireTeachingAccess } from '@/lib/authz/gates';
+import { authorizeOnSection } from '@/lib/authz/courseAccess';
 import { notFound } from "next/navigation";
 
 import { db } from "@/app/db";
 import {
   attempts,
-  professorSections,
+  gradeOverrides,
   questions,
 } from "@/app/db/schema";
 import { AppShell } from "@/components/layout/AppShell";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { SectionHeading } from "@/components/layout/SectionHeading";
+import {
+  AttemptGradeOverridePanel,
+  type OverrideHistoryEntry,
+  type OverrideTargetQuestion,
+} from "@/components/professor/AttemptGradeOverridePanel";
+import { AttemptGradebookStatusBadge } from "@/components/professor/AttemptGradebookStatusBadge";
 import { GPTFeedbackDisplay } from "@/components/quiz/GPTFeedbackDisplay";
 import { RegradeAttemptButton } from "@/components/quiz/RegradeAttemptButton";
 import { Badge } from "@/components/ui/badge";
@@ -21,8 +29,14 @@ import {
   resolveAttemptAnswer,
   resolveAttemptFeedback,
 } from "@/lib/quizAttemptAnswers";
+import { deriveAttemptGradebookStatus } from "@/lib/professor/attemptGradeStatus";
+import { quizGradesAreReleased } from "@/lib/professor/gradesReleased";
 import { isFallbackGradingFeedback, isPendingFeedback } from "@/lib/regradeAttempt";
-import { isPendingStatus } from "@/lib/gradingTypes";
+import {
+  isPendingStatus,
+  type RubricCriterion,
+  type StoredFeedback,
+} from "@/lib/gradingTypes";
 import {
   attemptNeedsBackgroundRetry,
   scheduleAttemptRetry,
@@ -34,8 +48,7 @@ export default async function AttemptDetailPage({
   params: Promise<{ attemptId: string }>;
 }) {
   const { attemptId } = await params;
-  const user = await getOrCreateUser();
-  if (!user || (user.role !== "PROFESSOR" && user.role !== "ADMIN")) return null;
+  const user = await requireTeachingAccess();
 
   const attempt = await db.query.attempts.findFirst({
     where: eq(attempts.id, attemptId),
@@ -48,12 +61,12 @@ export default async function AttemptDetailPage({
 
   if (!attempt) notFound();
 
-  if (user.role !== "ADMIN") {
-    const professorSectionsList = await db.query.professorSections.findMany({
-      where: eq(professorSections.professorId, user.id),
-    });
-    const enrolledSectionIds = professorSectionsList.map((ps) => ps.sectionId);
-    if (!enrolledSectionIds.includes(attempt.sectionId)) notFound();
+  // Binding-based: grade.write or content.read on the attempt's section.
+  if (
+    !(await authorizeOnSection(user, 'grade.write', attempt.sectionId)) &&
+    !(await authorizeOnSection(user, 'content.read', attempt.sectionId))
+  ) {
+    notFound();
   }
 
   const studentAnswers =
@@ -109,11 +122,75 @@ export default async function AttemptDetailPage({
     scheduleAttemptRetry(attempt.id);
   }
 
+  const overrideRows = await db.query.gradeOverrides.findMany({
+    where: eq(gradeOverrides.attemptId, attemptId),
+    orderBy: asc(gradeOverrides.createdAt),
+    with: {
+      actor: {
+        columns: { firstName: true, lastName: true, email: true },
+      },
+    },
+  });
+
+  const gradesReleased = quizGradesAreReleased(attempt.quiz);
+  const gradebookStatus = deriveAttemptGradebookStatus({
+    gradingStatus: attempt.gradingStatus,
+    gptFeedback,
+    hasGradeOverride: overrideRows.length > 0,
+    gradesReleased,
+  });
+
+  const overrideQuestions: OverrideTargetQuestion[] = attempt.quiz.questions.map(
+    (question) => {
+      const feedback = resolveAttemptFeedback(
+        question.id,
+        gptFeedback,
+        questionKeyMap,
+      ) as StoredFeedback | undefined;
+      const rubric =
+        (question.rubric as RubricCriterion[] | null) ??
+        feedback?.rubric ??
+        [];
+      const criteriaState: Record<string, boolean> = {};
+      for (const criterion of rubric) {
+        const match = feedback?.rubricMatches?.find(
+          (m) => m.criterionId === criterion.id,
+        );
+        criteriaState[criterion.id] = match?.matched ?? false;
+      }
+      return {
+        id: question.id,
+        order: question.order,
+        label: question.question,
+        points: question.points,
+        type: question.type,
+        rubric,
+        criteriaState,
+      };
+    },
+  );
+
+  const overrideHistory: OverrideHistoryEntry[] = overrideRows.map((row) => {
+    const actor = row.actor;
+    const actorLabel =
+      [actor.firstName, actor.lastName].filter(Boolean).join(" ") ||
+      actor.email ||
+      "Instructor";
+    return {
+      id: row.id,
+      questionId: row.questionId,
+      numericScore: row.numericScore,
+      criteriaOverrides: row.criteriaOverrides ?? null,
+      note: row.note,
+      createdAt: row.createdAt.toISOString(),
+      actorLabel,
+    };
+  });
+
   return (
     <AppShell
-      role={user.role === "ADMIN" ? "admin" : "professor"}
-      active={user.role === "ADMIN" ? "sections" : "quizzes"}
-      topbarEyebrow={user.role === "ADMIN" ? "Administration" : "Faculty"}
+      role="professor"
+      active="quizzes"
       topbarTitle="Submission detail"
       maxWidth="wide"
     >
@@ -180,11 +257,36 @@ export default async function AttemptDetailPage({
             <dd className="mt-2 text-ink tnum">
               {attempt.submittedAt
                 ? new Date(attempt.submittedAt).toLocaleString()
-                : "—"}
+                : "-"}
+            </dd>
+          </div>
+          <div className="col-span-2 lg:col-span-4">
+            <dt className="eyebrow text-ink-faint">Gradebook status</dt>
+            <dd className="mt-2">
+              <AttemptGradebookStatusBadge status={gradebookStatus} />
             </dd>
           </div>
         </dl>
       </section>
+
+      {attempt.submittedAt ? (
+        <section className="mt-12">
+          <SectionHeading
+            eyebrow="Instructor"
+            title="Score override"
+            description="Adjust numeric scores or rubric criteria. Original AI evidence stays on each question below."
+          />
+          <div className="mt-6 paper paper-shadow p-6 lg:p-8">
+            <AttemptGradeOverridePanel
+              attemptId={attempt.id}
+              maxScore={attempt.maxScore ?? 0}
+              questions={overrideQuestions}
+              history={overrideHistory}
+              canOverride={Boolean(attempt.submittedAt)}
+            />
+          </div>
+        </section>
+      ) : null}
 
       <section className="mt-16">
         <SectionHeading
@@ -231,6 +333,20 @@ export default async function AttemptDetailPage({
                     <h3 className="font-display text-lg text-ink leading-snug">
                       {question.question}
                     </h3>
+                    {Array.isArray(question.conceptTags) &&
+                    question.conceptTags.length > 0 ? (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {question.conceptTags.map((tag) => (
+                          <Badge
+                            key={tag}
+                            variant="outline"
+                            className="font-normal text-[10px]"
+                          >
+                            {tag}
+                          </Badge>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="text-xs text-ink-faint tnum">

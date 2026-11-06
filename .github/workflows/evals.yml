@@ -23,6 +23,9 @@ jobs:
       EVAL_GRADING_BAND_FLOOR: '0.8'
       EVAL_CHATBOT_FLOOR: '0.75'
       EVAL_MCP_FLOOR: '0.7'
+      EVAL_AUTHORING_FLOOR: '0.7'
+      EVAL_SWITCH_UP_FLOOR: '0.7'
+      EVAL_REVIEWER_FLOOR: '0.7'
       DATABASE_URL: https://example.com
       CLERK_SECRET_KEY: test_clerk_secret
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: test_clerk_pub

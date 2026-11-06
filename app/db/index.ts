@@ -8,17 +8,16 @@ if (!process.env.DATABASE_URL) {
   throw new Error('DATABASE_URL environment variable is required');
 }
 
-// `@neondatabase/serverless`'s websocket transport is required for
-// transactions / pooled connections in Node.js environments. In Vercel's
-// serverless runtime there's a built-in WebSocket, so we only swap in the
-// `ws` polyfill when the global one is absent (e.g. local Node.js + tests).
-if (typeof WebSocket === 'undefined') {
-  neonConfig.webSocketConstructor = ws;
-}
+// Always use the `ws` package for Neon transactions. Node 22+ ships a global
+// WebSocket (undici) that does not reliably keep session state across
+// `BEGIN` / `set_config` / DML in Pool transactions — which breaks RLS GUCs
+// (`app.tenant_id`) during workspace provisioning and withTenant().
+neonConfig.webSocketConstructor = ws as unknown as typeof WebSocket;
 
-// Prefer HTTP fetch for pooled queries on serverless. Neon idle WebSockets are
-// what produce "Connection terminated unexpectedly" on Vercel after the
-// compute suspends; fetch reconnects per query instead of holding a socket.
+// Prefer HTTP fetch for *non-transaction* pooled queries. Neon idle WebSockets
+// produce "Connection terminated unexpectedly" (and ws/bufferUtil flakes under
+// Next bundling). Authoring writes that need FORCE RLS use SECURITY DEFINER
+// functions over this HTTP path so they don't depend on sticky GUC sessions.
 if (typeof neonConfig.poolQueryViaFetch !== 'undefined') {
   neonConfig.poolQueryViaFetch = true;
 }
@@ -29,6 +28,8 @@ if (typeof neonConfig.poolQueryViaFetch !== 'undefined') {
 declare global {
   // eslint-disable-next-line no-var
   var __neonPool__: Pool | undefined;
+  // eslint-disable-next-line no-var
+  var __neonPoolErrorBound__: boolean | undefined;
 }
 
 const connectionString = process.env.DATABASE_URL;
@@ -49,7 +50,7 @@ if (
 const isServerless = Boolean(process.env.VERCEL);
 const poolMax = Number(process.env.PG_POOL_MAX) || (isServerless ? 1 : 10);
 
-const pool =
+export const pool =
   globalThis.__neonPool__ ??
   new Pool({
     connectionString,
@@ -58,13 +59,16 @@ const pool =
     connectionTimeoutMillis: 10_000,
   });
 
-pool.on('error', (error: Error) => {
-  // Idle-client disconnects are expected with Neon's proxy. Swallow so they
-  // do not become unhandled 'error' events; the next query opens a new socket.
-  console.error('[db] neon pool error', error);
-});
+if (!globalThis.__neonPoolErrorBound__) {
+  pool.on('error', (error: Error) => {
+    // Idle-client disconnects are expected with Neon's proxy. Swallow so they
+    // do not become unhandled 'error' events; the next query opens a new socket.
+    console.error('[db] neon pool error', error);
+  });
+  globalThis.__neonPoolErrorBound__ = true;
+}
 
-if (process.env.NODE_ENV !== 'production') {
+if (process.env.NODE_ENV !== 'production' || isServerless) {
   globalThis.__neonPool__ = pool;
 }
 

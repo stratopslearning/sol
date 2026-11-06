@@ -3,11 +3,9 @@
 import { apiUrl, withBasePath } from '@/lib/basePath';
 import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
 import { 
   Form,
   FormControl,
@@ -41,13 +39,12 @@ import {
   AlertCircle,
   Upload,
   CalendarIcon
-} from 'lucide-react';
+} from '@/components/icons';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { format } from 'date-fns';
 import { cn, buildQuizDescriptionWithMetadata } from '@/lib/utils';
-import CourseMultiSelect from '@/components/CourseMultiSelect';
 import { toast } from 'sonner';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -112,15 +109,32 @@ interface Section {
 interface QuizCreationFormProps {
   courses: Section[]; // Keep the prop name for backward compatibility but it's actually sections
   apiEndpoint?: string;
+  /** Pre-select sections (e.g. all sections for a course hub create). */
+  defaultSectionIds?: string[];
+  /** Where to go after a successful create. */
+  successHref?: string;
+  /** Jump straight to CSV upload (step 2). */
+  initialStep?: number;
 }
 
-export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps) {
+export function QuizCreationForm({
+  courses,
+  apiEndpoint,
+  defaultSectionIds,
+  successHref,
+  initialStep = 1,
+}: QuizCreationFormProps) {
   const router = useRouter();
-  const [currentStep, setCurrentStep] = useState(1);
+  const [currentStep, setCurrentStep] = useState(() =>
+    Math.min(3, Math.max(1, initialStep)),
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [csvError, setCsvError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [sectionIds, setSectionIds] = useState<string[]>([]);
+  const [sectionIds, setSectionIds] = useState<string[]>(() => {
+    const allowed = new Set(courses.map((c) => c.id));
+    return (defaultSectionIds ?? []).filter((id) => allowed.has(id));
+  });
   const [sectionError, setSectionError] = useState<string | null>(null);
 
   const form = useForm<QuizFormData>({
@@ -205,8 +219,6 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
         
         // Validate headers
         const requiredHeaders = ['question', 'type', 'options', 'correct_answer'];
-        const optionalHeaders = ['points'];
-        const allHeaders = [...requiredHeaders, ...optionalHeaders];
         const missingHeaders = requiredHeaders.filter(h => !headers.includes(h));
         
         if (missingHeaders.length > 0) {
@@ -270,7 +282,7 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
         if (fileInputRef.current) {
           fileInputRef.current.value = '';
         }
-      } catch (error) {
+      } catch {
         setCsvError('Error parsing CSV file');
       }
     };
@@ -279,13 +291,13 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
 
   const onSubmit = async (data: QuizFormData) => {
     if (courses.length === 0) {
-      toast.error('You need to be enrolled in at least one section to create quizzes.');
+      toast.error('Join a section before creating a quiz.');
       setCurrentStep(1);
       return;
     }
 
     if (sectionIds.length === 0) {
-      setSectionError('Please assign the quiz to at least one section.');
+      setSectionError('Assign this quiz to at least one section.');
       toast.error('Assign this quiz to at least one section.');
       setCurrentStep(1);
       return;
@@ -314,10 +326,12 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
 
       if (response.ok) {
         toast.success('Quiz created successfully!');
-        if (apiEndpoint && apiEndpoint.includes('/admin/quiz/create')) {
-          router.push('/dashboard/admin/quizzes');
+        if (successHref) {
+          router.push(successHref);
+        } else if (apiEndpoint && apiEndpoint.includes('/admin/quiz/create')) {
+          router.push('/dashboard/admin/assignments?type=QUIZ');
         } else {
-          router.push('/dashboard/professor/quizzes');
+          router.push('/dashboard/professor/assignments?type=QUIZ');
         }
         return;
       }
@@ -359,7 +373,7 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
         return;
       }
       if (courses.length === 0) {
-        toast.error('You need to be enrolled in at least one section to create quizzes.');
+        toast.error('Join a section before creating a quiz.');
         return;
       }
       if (sectionIds.length === 0) {
@@ -462,7 +476,7 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
                     <FormItem>
                       <FormLabel>Quiz title *</FormLabel>
                       <FormControl>
-                        <Input placeholder="e.g. Midterm — Topic 4" {...field} />
+                        <Input placeholder="e.g. Midterm, Topic 4" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -494,7 +508,7 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
                         <span className="text-sm font-medium">No sections available</span>
                       </div>
                       <p className="text-xs text-ink-muted mt-1">
-                        You need to be enrolled in at least one section to create quizzes.{" "}
+                        Join a section before creating a quiz.{" "}
                         <a href={withBasePath('/dashboard/professor/sections')} className="text-brand hover:underline">
                           Join a section
                         </a>
@@ -1000,8 +1014,8 @@ export function QuizCreationForm({ courses, apiEndpoint }: QuizCreationFormProps
                   <h3 className="eyebrow text-ink-faint mb-3">Basics</h3>
                   <dl className="text-sm flex flex-col gap-2">
                     <div className="flex gap-2"><dt className="text-ink-muted w-32 shrink-0">Title</dt><dd className="text-ink">{form.getValues('title')}</dd></div>
-                    <div className="flex gap-2"><dt className="text-ink-muted w-32 shrink-0">Description</dt><dd className="text-ink">{form.getValues('description') || '—'}</dd></div>
-                    <div className="flex gap-2"><dt className="text-ink-muted w-32 shrink-0">Sections</dt><dd className="text-ink">{sectionIds.length === 0 ? '—' : sectionIds.map(id => courses.find(c => c.id === id)?.title || id).join(', ')}</dd></div>
+                    <div className="flex gap-2"><dt className="text-ink-muted w-32 shrink-0">Description</dt><dd className="text-ink">{form.getValues('description') || '-'}</dd></div>
+                    <div className="flex gap-2"><dt className="text-ink-muted w-32 shrink-0">Sections</dt><dd className="text-ink">{sectionIds.length === 0 ? '-' : sectionIds.map(id => courses.find(c => c.id === id)?.title || id).join(', ')}</dd></div>
                     <div className="flex gap-2"><dt className="text-ink-muted w-32 shrink-0">Max attempts</dt><dd className="text-ink tnum">{form.getValues('maxAttempts')}</dd></div>
                     <div className="flex gap-2"><dt className="text-ink-muted w-32 shrink-0">Time limit</dt><dd className="text-ink tnum">{form.getValues('timeLimit')} min</dd></div>
                     <div className="flex gap-2"><dt className="text-ink-muted w-32 shrink-0">Passing score</dt><dd className="text-ink tnum">{form.getValues('passingScore')}%</dd></div>

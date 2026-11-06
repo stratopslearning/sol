@@ -7,12 +7,15 @@ import {
   shouldEnforceSameOrigin,
 } from '@/lib/api/sameOrigin';
 import { BASE_PATH, withBasePath } from '@/lib/basePath';
+import { CAL_BOOKING_URL } from '@/lib/calBooking';
+import { clerkSatelliteProviderProps } from '@/lib/clerkMultiDomain';
 import { isLoadTestRequest } from '@/lib/loadTestAuth';
 import {
   classifySolHost,
   isDocsPath,
   isMarketingPath,
   isTrustPath,
+  solDemoOnly,
   solHostsConfigured,
   solOrigin,
   type SolHostRole,
@@ -62,6 +65,12 @@ function solHostRedirect(req: {
     return null;
   }
 
+  // APIs stay same-origin on every Sol host. Cross-host redirects break
+  // browser fetch() from marketing (www) → app (CORS / Failed to fetch).
+  if (path === '/api' || path.startsWith('/api/')) {
+    return null;
+  }
+
   if (role === 'marketing') {
     if (isMarketingPath(path)) return null;
     if (isDocsPath(path)) return redirectToSolHost('docs', path, search);
@@ -107,6 +116,17 @@ export default clerkMiddleware(async (auth, req) => {
 
   const hostGate = solHostRedirect(req);
   if (hostGate) return hostGate;
+
+  // teachwithsol marketing: no public auth — send login/signup to Book a demo.
+  if (
+    solDemoOnly() &&
+    (pathname === '/login' ||
+      pathname.startsWith('/login/') ||
+      pathname === '/signup' ||
+      pathname.startsWith('/signup/'))
+  ) {
+    return NextResponse.redirect(CAL_BOOKING_URL);
+  }
 
   // OAuth discovery (RFC 8414 / RFC 9728) is probed at the site apex
   // (e.g. /.well-known/oauth-protected-resource/learning/api/mcp) and under
@@ -161,6 +181,22 @@ export default clerkMiddleware(async (auth, req) => {
     );
   }
 
+  // Blog markdown mirrors: /blog.md and /blog/:slug.md
+  if (appPath === '/blog.md' || appPath === '/blog/index.md') {
+    return NextResponse.rewrite(
+      new URL(`${BASE_PATH}/blog/md/index${req.nextUrl.search}`, req.url),
+    );
+  }
+  const blogMdMatch = appPath.match(/^\/blog\/([^/]+)\.md$/);
+  if (blogMdMatch) {
+    return NextResponse.rewrite(
+      new URL(
+        `${BASE_PATH}/blog/md/${blogMdMatch[1]}${req.nextUrl.search}`,
+        req.url,
+      ),
+    );
+  }
+
   // Agent access paths authenticate inside the route handler with a personal
   // access token (`sol_pat_…`) instead of a Clerk cookie, so the edge layer
   // must not bounce them to the login page. Every handler on these paths
@@ -183,7 +219,8 @@ export default clerkMiddleware(async (auth, req) => {
   }
 
   // Cheap early reject for oversized API bodies (chunked bodies are checked
-  // again in readJsonBody / route handlers). Materials + H5P allow 10 MB.
+  // again in readJsonBody / route handlers). Materials/knowledge/H5P 51 MB
+  // (zip packs); books 50 MB.
   if (
     appPath.startsWith('/api/') &&
     shouldEnforceSameOrigin(req.method, appPath, authHeader || null, loadTest) &&
@@ -226,6 +263,9 @@ export default clerkMiddleware(async (auth, req) => {
     appPath === '/docs' ||
     appPath.startsWith('/docs/') ||
     appPath === '/docs.md' ||
+    appPath === '/blog' ||
+    appPath.startsWith('/blog/') ||
+    appPath === '/blog.md' ||
     appPath === '/privacy' ||
     appPath === '/terms' ||
     appPath === '/security' ||
@@ -239,6 +279,9 @@ export default clerkMiddleware(async (auth, req) => {
     appPath.startsWith('/login/') ||
     appPath === '/signup' ||
     appPath.startsWith('/signup/') ||
+    // Workspace owner claim: page shows sign-in CTA; POST still requires session.
+    appPath === '/workspaces/claim' ||
+    appPath.startsWith('/workspaces/claim/') ||
     appPath === '/api/user' ||
     appPath.startsWith('/api/user/') ||
     appPath === '/api/stripe/product' ||
@@ -253,19 +296,32 @@ export default clerkMiddleware(async (auth, req) => {
     // Cron authenticates with CRON_SECRET in the route handler — must not
     // bounce to /login before that check runs.
     appPath === '/api/cron' ||
-    appPath.startsWith('/api/cron/');
+    appPath.startsWith('/api/cron/') ||
+    // Inngest Dev Server / Cloud (signed requests; no Clerk session).
+    appPath === '/api/inngest' ||
+    appPath.startsWith('/api/inngest/');
 
   if (isPublic) return;
 
   const { userId } = await auth();
   if (!userId) {
+    // API clients (fetch) must not follow a 307 to /login with the original
+    // body — that hits the Server Action 1 MB limit and surfaces as a 500.
+    if (appPath.startsWith('/api/')) {
+      return NextResponse.json(
+        { error: 'Unauthorized', code: 'unauthorized' },
+        { status: 401 },
+      );
+    }
     return redirectWithinApp('/login', req);
   }
-});
+}, clerkSatelliteProviderProps());
 
 export const config = {
   matcher: [
     '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
     '/(api|trpc)(.*)',
+    // Satellite sync / Clerk frontend API proxy paths
+    '/(__clerk)(.*)',
   ],
 };

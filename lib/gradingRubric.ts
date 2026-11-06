@@ -14,14 +14,19 @@ import { z } from 'zod';
 
 import { db } from '@/app/db';
 import { questions } from '@/app/db/schema';
-import { createOpenAIClient } from '@/lib/ai/openai';
+import { getAiClientForTask, resolveModel } from '@/lib/ai/gateway';
+import {
+  buildRubricDesignerSystemPrompt,
+  buildRubricDesignerUserPrompt,
+} from '@/lib/ai/prompts/rubric';
+import { defaultCoursePromptContext } from '@/lib/ai/prompts/courseContext';
 import { hashId, logAiSpan } from '@/lib/ai/tracing';
 import { detectRequiredMatchCount } from '@/lib/gradingQuestionIntent';
 import { GRADING_MODEL_VERSION, type RubricCriterion } from '@/lib/gradingTypes';
 
 const RUBRIC_DERIVATION_TIMEOUT_MS = 20_000;
 
-const openai = createOpenAIClient({
+const openai = getAiClientForTask('rubric', {
   maxRetries: 2,
   timeout: RUBRIC_DERIVATION_TIMEOUT_MS,
 });
@@ -31,11 +36,22 @@ const rubricSchemaZod = z.object({
     .array(
       z.object({
         description: z.string().min(3).max(240),
-        weight: z.number().min(0.1).max(5),
+        weight: z.number().min(0.1).max(5).optional(),
+        points: z.number().min(0.1).max(5).optional(),
+        partialDescriptor: z.string().max(240).optional().nullable(),
+        acceptableVariants: z.array(z.string().max(120)).max(8).optional(),
       }),
     )
     .min(1)
     .max(8),
+  sampleAnswers: z
+    .object({
+      strong: z.string().min(1).max(2_000),
+      partial: z.string().min(1).max(2_000),
+      weak: z.string().min(1).max(2_000),
+    })
+    .optional(),
+  needs_instructor_input: z.boolean().optional(),
 });
 
 const rubricJsonSchema = {
@@ -48,69 +64,92 @@ const rubricJsonSchema = {
         properties: {
           description: { type: 'string' },
           weight: { type: 'number' },
+          points: { type: 'number' },
+          partialDescriptor: { type: 'string' },
+          acceptableVariants: {
+            type: 'array',
+            items: { type: 'string' },
+          },
         },
-        required: ['description', 'weight'],
+        required: ['description'],
         additionalProperties: false,
       },
     },
+    sampleAnswers: {
+      type: 'object',
+      properties: {
+        strong: { type: 'string' },
+        partial: { type: 'string' },
+        weak: { type: 'string' },
+      },
+      required: ['strong', 'partial', 'weak'],
+      additionalProperties: false,
+    },
+    needs_instructor_input: { type: 'boolean' },
   },
   required: ['criteria'],
   additionalProperties: false,
 };
 
-function rubricPrompt(question: string, correctAnswer: string): string {
-  const requiredCount = detectRequiredMatchCount(question);
-  const anyNSection =
-    requiredCount != null
-      ? `
-IMPORTANT: The question asks for ANY ${requiredCount} valid answer point(s). Produce one criterion per distinct valid answer point from the reference answer (an option pool). The student only needs to satisfy ${requiredCount} of these for full credit — they do NOT need every criterion. Use weight 1 for every criterion.
-`
-      : '';
-
-  const taskLine =
-    requiredCount != null
-      ? `TASK: Produce one grading criterion per distinct valid answer point from the reference answer (typically ${requiredCount} or more options). These are alternatives — the student only needs ANY ${requiredCount} for full credit.`
-      : 'TASK: Produce 3-6 grading criteria that a student answer MUST satisfy to earn full credit on this question.';
-
-  return `You are a strict business professor designing a grading rubric for a short-answer exam question.
-
-QUESTION:
-${question}
-
-REFERENCE ANSWER (the only acceptable standard):
-${correctAnswer}
-${anyNSection}
-${taskLine}
-
-Each criterion must be:
-- Specific and verifiable (e.g. "Mentions that quality assurance is process-oriented" rather than "Good answer")
-- Independent — criteria should not heavily overlap
-- Drawn ONLY from the reference answer's content. Do NOT introduce outside concepts.
-- Phrased as a concrete check, not a question
-
-Weights:
-- Use weight 1 for primary / required criteria.
-- Use weight 0.5 only for clearly secondary or optional details that are minor compared to the main concepts.
-${requiredCount != null ? '- For any-N questions, use weight 1 for every criterion (all options are equal alternatives).' : ''}
-
-Return JSON matching the provided schema. Do not include any other text.`;
+/** Normalize `points` ↔ `weight` and optional v2 fields. */
+export function normalizeRubricCriterion(
+  raw: Record<string, unknown>,
+  index: number,
+): RubricCriterion | null {
+  const id =
+    typeof raw.id === 'string' && raw.id.trim()
+      ? raw.id.trim()
+      : `c${index + 1}`;
+  const description =
+    typeof raw.description === 'string' ? raw.description.trim() : '';
+  if (!description) return null;
+  const weightRaw =
+    typeof raw.weight === 'number'
+      ? raw.weight
+      : typeof raw.points === 'number'
+        ? raw.points
+        : 1;
+  const weight = Number.isFinite(weightRaw) && weightRaw > 0 ? weightRaw : 1;
+  const criterion: RubricCriterion = {
+    id,
+    description,
+    weight,
+    points: weight,
+  };
+  if (typeof raw.partialDescriptor === 'string' && raw.partialDescriptor.trim()) {
+    criterion.partialDescriptor = raw.partialDescriptor.trim();
+  }
+  if (Array.isArray(raw.acceptableVariants)) {
+    const variants = raw.acceptableVariants
+      .filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
+      .map((v) => v.trim())
+      .slice(0, 8);
+    if (variants.length > 0) criterion.acceptableVariants = variants;
+  }
+  return criterion;
 }
 
 function isValidRubric(value: unknown): value is RubricCriterion[] {
   if (!Array.isArray(value) || value.length === 0) return false;
-  return value.every(
-    (c) =>
-      c &&
-      typeof c === 'object' &&
-      typeof (c as RubricCriterion).id === 'string' &&
-      typeof (c as RubricCriterion).description === 'string' &&
-      typeof (c as RubricCriterion).weight === 'number',
-  );
+  return value.every((c) => {
+    if (!c || typeof c !== 'object') return false;
+    const row = c as Record<string, unknown>;
+    const hasWeight =
+      typeof row.weight === 'number' || typeof row.points === 'number';
+    return (
+      typeof row.id === 'string' &&
+      typeof row.description === 'string' &&
+      hasWeight
+    );
+  });
 }
 
 export function readRubricFromColumn(value: unknown): RubricCriterion[] | null {
   if (!isValidRubric(value)) return null;
-  return value as RubricCriterion[];
+  const normalized = (value as Record<string, unknown>[])
+    .map((row, i) => normalizeRubricCriterion(row, i))
+    .filter((c): c is RubricCriterion => c != null);
+  return normalized.length > 0 ? normalized : null;
 }
 
 /**
@@ -202,34 +241,60 @@ export class RubricDerivationError extends Error {
   }
 }
 
-async function callRubricModel(
+export type RubricModelResult = {
+  criteria: RubricCriterion[];
+  sampleAnswers?: { strong: string; partial: string; weak: string };
+  needsInstructorInput?: boolean;
+};
+
+export async function callRubricModel(
   question: string,
   correctAnswer: string,
+  opts?: { courseCtx?: ReturnType<typeof defaultCoursePromptContext>; totalPoints?: number },
 ): Promise<RubricCriterion[]> {
+  const full = await callRubricModelFull(question, correctAnswer, opts);
+  return full.criteria;
+}
+
+export async function callRubricModelFull(
+  question: string,
+  correctAnswer: string,
+  opts?: { courseCtx?: ReturnType<typeof defaultCoursePromptContext>; totalPoints?: number },
+): Promise<RubricModelResult> {
   if (!process.env.OPENAI_API_KEY) {
     throw new RubricDerivationError('no_api_key');
   }
 
+  const requiredCount = detectRequiredMatchCount(question);
+  const ctx = opts?.courseCtx ?? defaultCoursePromptContext();
+  const system = buildRubricDesignerSystemPrompt(ctx, {
+    minCriteria: requiredCount ?? 3,
+    maxCriteria: requiredCount != null ? Math.max(requiredCount + 2, 6) : 6,
+    totalPoints: opts?.totalPoints ?? 1,
+  });
+  const user = buildRubricDesignerUserPrompt(question, correctAnswer);
+  const anyNNote =
+    requiredCount != null
+      ? `\nANY-N: produce one criterion per distinct valid answer point (option pool). Use weight/points 1 for every criterion.`
+      : '';
+
+  const model = resolveModel('rubric').model;
   const completion = await openai.chat.completions.create({
-    model: GRADING_MODEL_VERSION,
+    model,
     messages: [
-      {
-        role: 'system',
-        content:
-          'You design strict grading rubrics for business exam short-answer questions. You produce concise, verifiable criteria drawn only from the reference answer. Output valid JSON matching the provided schema.',
-      },
-      { role: 'user', content: rubricPrompt(question, correctAnswer) },
+      { role: 'system', content: system },
+      { role: 'user', content: `${user}${anyNNote}` },
     ],
     response_format: {
       type: 'json_schema',
       json_schema: {
         name: 'grading_rubric',
-        strict: true,
+        strict: false,
         schema: rubricJsonSchema,
       },
     },
     reasoning_effort: 'low',
-    max_completion_tokens: 600,
+    max_completion_tokens: 1200,
     seed: 7,
   } as never);
 
@@ -248,11 +313,30 @@ async function callRubricModel(
     throw new RubricDerivationError('schema_validation_failed');
   }
 
-  return validated.data.criteria.map((c, index) => ({
-    id: `c${index + 1}`,
-    description: c.description.trim(),
-    weight: c.weight,
-  }));
+  const criteria = validated.data.criteria
+    .map((c, index) =>
+      normalizeRubricCriterion(
+        {
+          description: c.description,
+          weight: c.weight,
+          points: c.points,
+          partialDescriptor: c.partialDescriptor,
+          acceptableVariants: c.acceptableVariants,
+        },
+        index,
+      ),
+    )
+    .filter((c): c is RubricCriterion => c != null);
+
+  if (criteria.length === 0) {
+    throw new RubricDerivationError('schema_validation_failed');
+  }
+
+  return {
+    criteria,
+    sampleAnswers: validated.data.sampleAnswers,
+    needsInstructorInput: validated.data.needs_instructor_input,
+  };
 }
 
 /**
@@ -289,9 +373,9 @@ type QuestionRow = {
 };
 
 /**
- * Return the question's rubric, deriving + persisting one on the fly if
- * `questions.rubric` is null. Never throws — failures degrade to a minimal
- * fallback rubric so grading can still proceed.
+ * Return the question's rubric. Prefer an already-authored rubric.
+ * Deriving + persisting at first grade is fallback-only (logged).
+ * Never throws: failures degrade to a minimal fallback rubric.
  */
 export async function getOrDeriveRubric(
   question: QuestionRow,
@@ -304,6 +388,11 @@ export async function getOrDeriveRubric(
       derived: false,
     };
   }
+
+  console.warn(
+    '[rubric] derive-at-grade fallback — prefer approve-at-authoring',
+    { questionId: question.id },
+  );
 
   const correctAnswer = (question.correctAnswer ?? '').trim();
   if (!correctAnswer) {

@@ -1,6 +1,6 @@
 /**
  * Hard delete (purge) of a quiz. The cascading FK policies introduced in
- * 0004 take care of attempts, assignments, questions, and quiz_sections —
+ * 0004 take care of attempts, assignments, questions, and quiz_sections : 
  * we only need to delete the parent row.
  *
  * Soft-delete is exposed at the parent route (DELETE /api/admin/quiz/[id]).
@@ -13,7 +13,9 @@ import { auth } from '@clerk/nextjs/server';
 
 import { db } from '@/app/db';
 import { quizzes, users } from '@/app/db/schema';
+import { apiErrorResponse } from '@/lib/api/errors';
 import { extractRequestMeta, logAudit } from '@/lib/audit';
+import { requireSupportGrant } from '@/lib/authz/requireSupportGrant';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,7 +33,7 @@ export async function DELETE(
     const user = await db.query.users.findFirst({
       where: eq(users.clerkId, userId),
     });
-    if (!user || user.role !== 'ADMIN') {
+    if (!user || !user.platformStaff) {
       return NextResponse.json(
         { error: 'Forbidden - Admin access required' },
         { status: 403 },
@@ -44,6 +46,18 @@ export async function DELETE(
     if (!targetQuiz) {
       return NextResponse.json({ error: 'Quiz not found' }, { status: 404 });
     }
+    if (!targetQuiz.tenantId) {
+      return NextResponse.json({ error: 'Quiz missing tenant' }, { status: 400 });
+    }
+    await requireSupportGrant(
+      {
+        id: user.id,
+        clerkId: user.clerkId,
+        platformStaff: user.platformStaff,
+      },
+      targetQuiz.tenantId,
+      { action: 'support.tenant_access', targetType: 'quiz', targetId: quizId },
+    );
 
     await db.delete(quizzes).where(eq(quizzes.id, quizId));
 
@@ -62,6 +76,6 @@ export async function DELETE(
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error purging quiz:', error);
-    return NextResponse.json({ error: 'Failed to purge quiz' }, { status: 500 });
+    return apiErrorResponse(error);
   }
 }

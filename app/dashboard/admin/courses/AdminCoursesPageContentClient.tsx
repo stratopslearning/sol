@@ -1,10 +1,10 @@
 "use client";
 
 import React, { useCallback, useState } from "react";
-import { BookOpen } from "lucide-react";
+import { BookOpen } from "@/components/icons";
 
+import { AdminFilterBar } from "@/components/admin/AdminFilterBar";
 import { CourseFormModal } from "@/components/admin/CourseFormModal";
-import { Input } from "@/components/ui/input";
 import {
   Pagination,
   PaginationContent,
@@ -13,13 +13,6 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -109,29 +102,20 @@ export default function AdminCoursesPageContentClient({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col md:flex-row gap-3">
-        <Select
-          value={sortMode}
-          onValueChange={(v) => setSortMode(v as CourseSortMode)}
-        >
-          <SelectTrigger className="md:w-48">
-            <SelectValue placeholder="Sort by" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="TITLE">Title A–Z</SelectItem>
-            <SelectItem value="SECTIONS">Section count</SelectItem>
-            <SelectItem value="CREATED_DESC">Created (newest)</SelectItem>
-            <SelectItem value="CREATED_ASC">Created (oldest)</SelectItem>
-          </SelectContent>
-        </Select>
-        <Input
-          type="search"
-          placeholder="Search by title or description…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="flex-1"
-        />
-      </div>
+      <AdminFilterBar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search by title or description…"
+        filterValue={sortMode}
+        onFilterChange={(v) => setSortMode(v as CourseSortMode)}
+        filterLabel="Sort"
+        filterOptions={[
+          { value: "TITLE", label: "Title A–Z" },
+          { value: "SECTIONS", label: "Section count" },
+          { value: "CREATED_DESC", label: "Created (newest)" },
+          { value: "CREATED_ASC", label: "Created (oldest)" },
+        ]}
+      />
 
       <div className="paper paper-shadow overflow-hidden">
         <Table>
@@ -160,7 +144,7 @@ export default function AdminCoursesPageContentClient({
                 <TableRow key={course.id}>
                   <TableCell className="font-medium">{course.title}</TableCell>
                   <TableCell className="text-ink-muted max-w-md truncate">
-                    {course.description || "—"}
+                    {course.description || "-"}
                   </TableCell>
                   <TableCell className="tnum">{course.sectionCount}</TableCell>
                   <TableCell className="sticky right-0 z-10 bg-paper px-3 text-right align-middle">

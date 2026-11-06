@@ -1,12 +1,13 @@
 /**
  * SHA-256 keyed answer cache for the grading pipeline.
  *
- * Cache key = sha256(questionId | rubricVersion | modelVersion | scoringVersion | normalize(answer))
+ * Cache key = sha256(tenantId | questionId | rubricVersion | modelVersion | scoringVersion | materialsHash | normalize(answer))
  *
  * Auto-invalidates when:
  * - the question text or reference answer changes (caller bumps `rubricVersion`)
  * - we upgrade the grading model (caller bumps `GRADING_MODEL_VERSION`)
  * - we change deterministic scoring logic (caller bumps `SCORING_VERSION`)
+ * - course-materials grading context changes (caller passes `materialsContextHash`)
  *
  * Normalization strips trivial differences (case, whitespace, trailing
  * punctuation) so "Quality assurance is a process." and "quality assurance
@@ -17,6 +18,7 @@ import { and, eq } from 'drizzle-orm';
 
 import { db } from '@/app/db';
 import { gradingCache } from '@/app/db/schema';
+import { hashCacheKey } from '@/lib/crypto/cacheKeyHmac';
 import type {
   RubricCriterion,
   RubricMatch,
@@ -28,7 +30,7 @@ export const SCORING_VERSION = 2;
 
 /**
  * Lowercase, collapse whitespace, drop trailing punctuation. Intentionally
- * conservative — we only want to bucket together answers that are obviously
+ * conservative: we only want to bucket together answers that are obviously
  * the same. Semantic equivalence (paraphrasing) is not a cache concern.
  */
 export function normalizeAnswerForCache(answer: string): string {
@@ -45,13 +47,26 @@ export function computeCacheKey(args: {
   studentAnswer: string;
   rubricVersion: number;
   modelVersion: string;
+  /** Workspace tenant id; empty when unknown (legacy rows). */
+  tenantId?: string;
+  /** Hash of materials excerpt used in the grading prompt; empty when unused. */
+  materialsContextHash?: string;
 }): string {
   const normalized = normalizeAnswerForCache(args.studentAnswer);
-  return createHash('sha256')
-    .update(
-      `${args.questionId}|${args.rubricVersion}|${args.modelVersion}|${SCORING_VERSION}|${normalized}`,
-    )
-    .digest('hex');
+  const materialsHash = args.materialsContextHash ?? '';
+  const tenantId = args.tenantId ?? '';
+  // Key material (verified, Wave 4 item 25): tenant + question + rubric/model/
+  // scoring versions + materials hash + normalized answer. HMAC'd when
+  // CACHE_KEY_HMAC_SECRET is set (item 27); legacy SHA-256 otherwise.
+  return hashCacheKey(
+    `${tenantId}|${args.questionId}|${args.rubricVersion}|${args.modelVersion}|${SCORING_VERSION}|${materialsHash}|${normalized}`,
+  );
+}
+
+/** Stable short hash for materials text included in the grading prompt. */
+export function hashMaterialsContext(text: string): string {
+  if (!text.trim()) return '';
+  return createHash('sha256').update(text).digest('hex').slice(0, 16);
 }
 
 export type CachedGradingPayload = {
@@ -71,6 +86,8 @@ export async function lookupCachedGrading(args: {
   studentAnswer: string;
   rubricVersion: number;
   modelVersion: string;
+  tenantId?: string;
+  materialsContextHash?: string;
 }): Promise<CachedGradingPayload | null> {
   if (!args.studentAnswer || !args.studentAnswer.trim()) return null;
   const key = computeCacheKey(args);
@@ -97,6 +114,8 @@ export async function writeCachedGrading(args: {
   studentAnswer: string;
   rubricVersion: number;
   modelVersion: string;
+  tenantId?: string;
+  materialsContextHash?: string;
   payload: CachedGradingPayload;
 }): Promise<void> {
   if (!args.studentAnswer || !args.studentAnswer.trim()) return;

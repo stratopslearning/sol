@@ -16,6 +16,10 @@
     {
       "path": "/learning/api/cron/lti-passback",
       "schedule": "20 9 * * *"
+    },
+    {
+      "path": "/learning/api/cron/access-request-digest",
+      "schedule": "0 10 * * *"
     }
   ],
   "rewrites": [

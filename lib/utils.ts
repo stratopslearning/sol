@@ -183,13 +183,19 @@ export function formatTime(date: Date | string | null | undefined): string {
 // Generate unique 6-character enrollment code (cryptographically random).
 export function generateEnrollmentCode(): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  const bytes = new Uint8Array(6);
-  crypto.getRandomValues(bytes);
-  let result = '';
-  for (let i = 0; i < 6; i++) {
-    result += chars.charAt(bytes[i]! % chars.length);
+  const length = 10;
+  // Rejection sampling avoids modulo bias on 36-char alphabet.
+  const out: string[] = [];
+  while (out.length < length) {
+    const bytes = new Uint8Array(length - out.length);
+    crypto.getRandomValues(bytes);
+    for (const b of bytes) {
+      if (b >= 252) continue; // 252 = 7 * 36
+      out.push(chars.charAt(b % 36));
+      if (out.length >= length) break;
+    }
   }
-  return result;
+  return out.join('');
 }
 
 // Generate unique enrollment codes for sections

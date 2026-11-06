@@ -56,6 +56,7 @@ vi.mock('@/app/db', () => ({
       questions: {
         findMany: (...args: unknown[]) => mocks.questionsFindMany(...args),
       },
+      quizVersions: { findFirst: async () => null },
     },
     transaction: async (fn: (tx: unknown) => Promise<unknown>) => {
       const whereResult = {
@@ -80,6 +81,7 @@ vi.mock('@/app/db', () => ({
             returning: (...args: unknown[]) => mocks.txUpdateReturning(...args),
           }),
         }),
+        execute: async () => ({ rows: [] }),
       };
       return fn(tx);
     },

@@ -66,6 +66,10 @@ const crons = basePath
         path: `${basePath}/api/cron/lti-passback`,
         schedule: '20 9 * * *',
       },
+      {
+        path: `${basePath}/api/cron/access-request-digest`,
+        schedule: '0 10 * * *',
+      },
     ]
   : [];
 

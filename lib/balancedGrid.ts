@@ -1,5 +1,5 @@
 /**
- * Balanced card grids — avoid orphaned leftover cards (especially a single
+ * Balanced card grids: avoid orphaned leftover cards (especially a single
  * card centered in the last row of a 3-column layout).
  *
  * Rules:
@@ -38,7 +38,7 @@ export function getBalancedItemClass(
 ): string {
   const base = 'h-full';
   if (index !== count - 1) return base;
-  // 2×2 layout for four items — no spanning needed.
+  // 2×2 layout for four items: no spanning needed.
   if (count === 4 && maxCols >= 2) return base;
 
   const remainder = count % maxCols;

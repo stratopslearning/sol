@@ -5,6 +5,8 @@ import { z } from 'zod';
 
 import { db } from '@/app/db';
 import { quizSections, quizzes, users } from '@/app/db/schema';
+import { apiErrorResponse } from '@/lib/api/errors';
+import { requireSupportGrant } from '@/lib/authz/requireSupportGrant';
 import { upsertQuizQuestions } from '@/lib/quizQuestionUpsert';
 import {
   isoDateTimeRequired,
@@ -60,12 +62,32 @@ export async function PUT(
     const user = await db.query.users.findFirst({
       where: eq(users.clerkId, userId),
     });
-    if (!user || user.role !== 'ADMIN') {
+    if (!user || !user.platformStaff) {
       return NextResponse.json(
         { error: 'Forbidden - Admin access required' },
         { status: 403 },
       );
     }
+
+    const existingQuiz = await db.query.quizzes.findFirst({
+      where: eq(quizzes.id, quizId),
+      columns: { tenantId: true },
+    });
+    if (!existingQuiz) {
+      return NextResponse.json({ error: 'Quiz not found' }, { status: 404 });
+    }
+    if (!existingQuiz.tenantId) {
+      return NextResponse.json({ error: 'Quiz missing tenant' }, { status: 400 });
+    }
+    await requireSupportGrant(
+      {
+        id: user.id,
+        clerkId: user.clerkId,
+        platformStaff: user.platformStaff,
+      },
+      existingQuiz.tenantId,
+      { action: 'support.tenant_access', targetType: 'quiz', targetId: quizId },
+    );
 
     const body = await readJsonBody(request);
     const parsed = adminQuizUpdateSchema.safeParse(body);
@@ -115,6 +137,6 @@ export async function PUT(
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error updating quiz:', error);
-    return NextResponse.json({ error: 'Failed to update quiz' }, { status: 500 });
+    return apiErrorResponse(error);
   }
 }

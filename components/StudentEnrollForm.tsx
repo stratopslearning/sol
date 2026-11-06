@@ -53,20 +53,33 @@ export default function StudentEnrollForm({
   };
 
   return (
-    <section className="paper paper-shadow p-6 mb-8">
-      <header>
-        <span className="eyebrow text-ink-faint">Join</span>
-        <h2 className="font-display text-lg text-ink mt-1">Add a section</h2>
+    <section className="rounded-xl border border-rule bg-surface px-5 py-5 paper-shadow sm:px-6">
+      <header className="mb-4">
+        <p className="eyebrow">Enrollment</p>
+        <h2
+          className="mt-1 font-display text-ink"
+          style={{
+            fontSize: "1.25rem",
+            lineHeight: 1.25,
+            fontVariationSettings: '"opsz" 36',
+          }}
+        >
+          Join a section
+        </h2>
+        <p className="mt-1.5 text-sm leading-relaxed text-ink-muted">
+          Enter the code from your professor to unlock assignments, lessons, and
+          discussions.
+        </p>
       </header>
       <form
         onSubmit={handleSubmit}
-        className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end"
+        className="flex flex-col gap-3 sm:flex-row sm:items-end"
       >
-        <div className="flex-1 flex flex-col gap-2">
-          <Label htmlFor="enrollment-code">Enrolment code</Label>
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+          <Label htmlFor="enrollment-code">Section code</Label>
           <Input
             id="enrollment-code"
-            placeholder="Enter the code your professor shared"
+            placeholder="e.g. A1B2C3"
             value={code}
             onChange={(e) => {
               setCode(e.target.value);
@@ -76,6 +89,8 @@ export default function StudentEnrollForm({
             aria-describedby={error ? "enrollment-error" : undefined}
             required
             minLength={4}
+            className="font-mono tracking-wider uppercase"
+            autoComplete="off"
           />
           {error ? (
             <p id="enrollment-error" className="text-sm text-danger" role="alert">
@@ -87,8 +102,9 @@ export default function StudentEnrollForm({
           type="submit"
           disabled={loading || !code.trim()}
           loading={loading}
+          className="sm:min-w-[8.5rem]"
         >
-          {loading ? "Joining…" : "Join section"}
+          {loading ? "Joining…" : "Join"}
         </Button>
       </form>
     </section>

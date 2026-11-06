@@ -1,6 +1,6 @@
 "use client";
 
-import { Download } from "lucide-react";
+import { Download } from "@/components/icons";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -54,37 +54,27 @@ export default function ExportResultsSection({
   };
 
   return (
-    <section className="paper paper-shadow p-6 mb-8">
-      <header>
-        <span className="eyebrow text-ink-faint">Export</span>
-        <h2 className="font-display text-lg text-ink mt-1">Quiz results</h2>
-        <p className="mt-1 text-sm text-ink-muted">
-          Download attempts as a CSV. Filter by quiz or date range.
-        </p>
-      </header>
-
-      <div
-        className="mt-5 rounded-md border border-rule bg-[color-mix(in_oklch,var(--surface-sunken)_65%,transparent)] px-4 py-3 text-sm leading-relaxed text-ink-muted"
+    <section className="rounded-lg border border-rule bg-surface p-4">
+      <p
+        className="rounded border border-rule/80 bg-[color-mix(in_oklch,var(--surface-sunken)_65%,transparent)] px-3 py-2 text-xs leading-snug text-ink-muted"
         role="note"
       >
-        <p className="font-medium text-ink">FERPA / restricted data</p>
-        <p className="mt-1">
-          This export can include student names, emails, and grades — education
-          records. Store the file encrypted or on institution-approved storage,
-          do not email it in plaintext, and delete it when you no longer need
-          it.
-        </p>
-      </div>
+        <span className="font-medium text-ink">FERPA.</span> Export may include
+        names, emails, and grades — store securely, don’t email plaintext, delete
+        when done.
+      </p>
 
-      <div className="mt-5 grid gap-4 sm:grid-cols-2">
-        <div className="flex flex-col gap-2 sm:col-span-2">
-          <Label htmlFor="export-quiz">Quiz</Label>
+      <div className="mt-3 grid gap-3 sm:grid-cols-3">
+        <div className="flex flex-col gap-1.5 sm:col-span-3">
+          <Label htmlFor="export-quiz" className="text-xs">
+            Quiz
+          </Label>
           <Select value={quizId || "all"} onValueChange={setQuizId}>
-            <SelectTrigger id="export-quiz">
-              <SelectValue placeholder="All quizzes" />
+            <SelectTrigger id="export-quiz" className="h-9">
+              <SelectValue placeholder="All scored quizzes" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All quizzes</SelectItem>
+              <SelectItem value="all">All scored quizzes</SelectItem>
               {quizzes.map((q) => (
                 <SelectItem key={q.id} value={q.id}>
                   {q.title}
@@ -93,48 +83,54 @@ export default function ExportResultsSection({
             </SelectContent>
           </Select>
         </div>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="export-from">From</Label>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="export-from" className="text-xs">
+            From
+          </Label>
           <Input
             id="export-from"
             type="date"
+            className="h-9"
             value={dateFrom}
             onChange={(e) => setDateFrom(e.target.value)}
           />
         </div>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="export-to">To</Label>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="export-to" className="text-xs">
+            To
+          </Label>
           <Input
             id="export-to"
             type="date"
+            className="h-9"
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
           />
         </div>
-        <div className="flex items-start gap-3 sm:col-span-2">
-          <Checkbox
-            id="export-ferpa-ack"
-            checked={acknowledged}
-            onCheckedChange={(value) => setAcknowledged(value === true)}
-          />
-          <Label
-            htmlFor="export-ferpa-ack"
-            className="text-sm font-normal leading-relaxed text-ink-muted"
-          >
-            I will handle this download as restricted education-record data
-            (secure storage, no plaintext email, delete when done).
-          </Label>
-        </div>
-        <div className="sm:col-span-2">
+        <div className="flex items-end sm:col-span-1">
           <Button
             onClick={handleExport}
             disabled={!acknowledged || downloading}
             loading={downloading}
-            className="w-full"
+            className="h-9 w-full"
           >
-            <Download className="h-4 w-4" />
+            <Download className="h-3.5 w-3.5" />
             {downloading ? "Exporting…" : "Export CSV"}
           </Button>
+        </div>
+        <div className="flex items-start gap-2 sm:col-span-3">
+          <Checkbox
+            id="export-ferpa-ack"
+            checked={acknowledged}
+            onCheckedChange={(value) => setAcknowledged(value === true)}
+            className="mt-0.5"
+          />
+          <Label
+            htmlFor="export-ferpa-ack"
+            className="text-xs font-normal leading-snug text-ink-muted"
+          >
+            I will treat this download as restricted education-record data.
+          </Label>
         </div>
       </div>
     </section>

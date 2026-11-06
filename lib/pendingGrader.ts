@@ -20,6 +20,7 @@ import {
   attempts,
   questions as questionsTable,
   quizzes as quizzesTable,
+  sections,
 } from '@/app/db/schema';
 import { activeOnly } from '@/lib/db/filters';
 import {
@@ -27,7 +28,6 @@ import {
   outcomeToFeedback,
   type GradingRequest,
 } from '@/lib/grading';
-import { getOrDeriveRubric } from '@/lib/gradingRubric';
 import {
   buildLegacyQuestionKeyMap,
   resolveAttemptAnswer,
@@ -63,6 +63,21 @@ export async function gradePendingForAttempt(
     where: eq(questionsTable.quizId, attempt.quizId),
   });
 
+  let courseId: string | undefined;
+  let workspaceId: string | null = null;
+  if (attempt.sectionId) {
+    const section = await db.query.sections.findFirst({
+      where: eq(sections.id, attempt.sectionId),
+      columns: { courseId: true, workspaceId: true },
+    });
+    courseId = section?.courseId;
+    workspaceId = section?.workspaceId ?? null;
+  }
+  if (!workspaceId && courseId) {
+    const { getCourseWorkspaceId } = await import('@/lib/workspace');
+    workspaceId = await getCourseWorkspaceId(courseId);
+  }
+
   const studentAnswers =
     attempt.answers && typeof attempt.answers === 'object'
       ? (attempt.answers as Record<string, unknown>)
@@ -86,12 +101,17 @@ export async function gradePendingForAttempt(
   const nextFeedback: Record<string, unknown> = { ...existingFeedback };
   let totalScore = 0;
   let maxScore = 0;
+  let stillPending = 0;
   const requests: Array<{
     questionId: string;
     maxPoints: number;
     previousAttempts: number;
     request: GradingRequest;
   }> = [];
+
+  const { checkAiBandAvailable } = await import('@/lib/workspace/aiCapGuard');
+  const aiCap = await checkAiBandAvailable(workspaceId);
+  const aiBlocked = !aiCap.ok ? aiCap : null;
 
   for (const question of quizQuestions) {
     const answerValue = resolveAttemptAnswer(question.id, studentAnswers, keyMap);
@@ -137,13 +157,54 @@ export async function gradePendingForAttempt(
       continue;
     }
 
-    const { rubric, rubricVersion } = await getOrDeriveRubric({
+    if (aiBlocked) {
+      stillPending += 1;
+      nextFeedback[question.id] = outcomeToFeedback(
+        {
+          status: 'pending',
+          failureReason: 'ai_band_exceeded',
+          maxPoints: question.points,
+          feedback:
+            'Grading is paused while this organization reaches its AI usage limit. Your instructor has been notified.',
+          message: aiBlocked.reason,
+        },
+        { previousAttempts: current?.attempts ?? 0 },
+      );
+      continue;
+    }
+
+    const { getApprovedOrFallbackRubric } = await import(
+      '@/lib/authoring/rubricApprove'
+    );
+    const resolved = await getApprovedOrFallbackRubric({
       id: question.id,
       question: question.question,
       correctAnswer: question.correctAnswer,
       rubric: question.rubric,
       rubricVersion: question.rubricVersion ?? 1,
+      rubricStatus: (question as { rubricStatus?: string }).rubricStatus,
     });
+
+    if (resolved.unapproved) {
+      stillPending += 1;
+      nextFeedback[question.id] = outcomeToFeedback(
+        {
+          status: 'manual_review',
+          failureReason: 'rubric_unavailable',
+          maxPoints: question.points,
+          feedback:
+            'This answer was sent for instructor review because the grading rubric is not yet approved.',
+          confidence: 0,
+          rubric: resolved.rubric,
+          rubricMatches: [],
+          modelVersion: 'n/a',
+          rubricVersion: resolved.rubricVersion,
+          promptVersion: '2026-11-05.1',
+        },
+        { previousAttempts: current?.attempts ?? 0 },
+      );
+      continue;
+    }
 
     requests.push({
       questionId: question.id,
@@ -156,14 +217,15 @@ export async function gradePendingForAttempt(
         maxPoints: question.points,
         questionType: 'SHORT_ANSWER',
         questionId: question.id,
-        rubric,
-        rubricVersion,
+        rubric: resolved.rubric,
+        rubricVersion: resolved.rubricVersion,
+        courseId,
+        workspaceId: workspaceId ?? undefined,
       },
     });
   }
 
   let regraded = 0;
-  let stillPending = 0;
   let promoted = 0;
 
   if (requests.length > 0) {
@@ -183,6 +245,9 @@ export async function gradePendingForAttempt(
         (stored.attempts ?? 0) >= MAX_GRADING_ATTEMPTS
       ) {
         stored.status = 'manual_review';
+        promoted += 1;
+      }
+      if (outcome.status === 'manual_review') {
         promoted += 1;
       }
 
@@ -225,6 +290,32 @@ export async function gradePendingForAttempt(
       gradingStatus,
     })
     .where(eq(attempts.id, attempt.id));
+
+  if (gradingStatus === 'complete') {
+    const { enqueueQuizPassback } = await import('@/lib/lti/passback');
+    void enqueueQuizPassback({ attemptId: attempt.id }).catch((err) =>
+      console.error('LTI quiz passback enqueue failed', err),
+    );
+  }
+
+  if (regraded > 0 && attempt.sectionId) {
+    void (async () => {
+      try {
+        const section = await db.query.sections.findFirst({
+          where: eq(sections.id, attempt.sectionId!),
+          columns: { courseId: true },
+        });
+        if (!section) return;
+        const { getCourseWorkspaceId, recordAiUsage } = await import(
+          '@/lib/workspace'
+        );
+        const workspaceId = await getCourseWorkspaceId(section.courseId);
+        if (workspaceId) await recordAiUsage(workspaceId, 'grade', regraded);
+      } catch (err) {
+        console.warn('[pendingGrader] usage meter failed', err);
+      }
+    })();
+  }
 
   return { attemptId: attempt.id, regraded, stillPending, promoted };
 }

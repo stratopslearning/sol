@@ -17,24 +17,40 @@ const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 export const MIDDLEWARE_MAX_BODY_BYTES = 1_048_576; // 1 MB
 
 /**
- * Multipart upload routes that accept larger bodies (materials / H5P).
- * Must stay aligned with `MAX_UPLOAD_BYTES` in lib/knowledge/constants.ts.
+ * Multipart upload routes that accept larger bodies (materials / knowledge /
+ * H5P). Sized for zip packs (`MAX_ZIP_UPLOAD_BYTES` = 50 MB) plus ~1 MB of
+ * multipart framing so a max-size zip is not rejected at the edge.
  */
-export const MIDDLEWARE_UPLOAD_MAX_BODY_BYTES = 10 * 1024 * 1024; // 10 MB
+export const MIDDLEWARE_UPLOAD_MAX_BODY_BYTES = 51 * 1024 * 1024; // 51 MB
 
-/** Paths that may receive multipart file uploads up to the upload budget. */
+/**
+ * Hosted-book EPUB/XML uploads (Pressbooks exports are often large).
+ * Must stay aligned with `MAX_BOOK_UPLOAD_BYTES` in lib/books/constants.ts.
+ */
+export const MIDDLEWARE_BOOK_UPLOAD_MAX_BODY_BYTES = 50 * 1024 * 1024; // 50 MB
+
+/** Paths that may receive multipart file uploads up to the materials budget. */
 export function isLargeUploadApiPath(appPath: string): boolean {
   if (appPath === '/api/professor/materials') return true;
   if (appPath.startsWith('/api/professor/materials/')) return true;
+  if (appPath === '/api/professor/knowledge/documents') return true;
+  if (appPath.startsWith('/api/professor/knowledge/documents/')) return true;
   if (appPath === '/api/professor/interactive/import') return true;
   if (appPath.startsWith('/api/professor/interactive/import/')) return true;
   return false;
 }
 
+/** Paths that may receive book EPUB/XML uploads up to the book budget. */
+export function isBookUploadApiPath(appPath: string): boolean {
+  if (appPath === '/api/professor/books') return true;
+  if (appPath.startsWith('/api/professor/books/')) return true;
+  return false;
+}
+
 export function middlewareBodyLimitBytes(appPath: string): number {
-  return isLargeUploadApiPath(appPath)
-    ? MIDDLEWARE_UPLOAD_MAX_BODY_BYTES
-    : MIDDLEWARE_MAX_BODY_BYTES;
+  if (isBookUploadApiPath(appPath)) return MIDDLEWARE_BOOK_UPLOAD_MAX_BODY_BYTES;
+  if (isLargeUploadApiPath(appPath)) return MIDDLEWARE_UPLOAD_MAX_BODY_BYTES;
+  return MIDDLEWARE_MAX_BODY_BYTES;
 }
 
 export function isMutatingMethod(method: string): boolean {
@@ -52,6 +68,10 @@ export function isOriginExemptPath(appPath: string): boolean {
   if (appPath === '/api/mcp' || appPath.startsWith('/api/mcp/')) return true;
   // Canvas LTI OIDC form_post + tool JWKS (no browser cookie session yet).
   if (appPath === '/api/lti' || appPath.startsWith('/api/lti/')) return true;
+  // Inngest Dev Server / Cloud invokes this route without our browser Origin.
+  if (appPath === '/api/inngest' || appPath.startsWith('/api/inngest/')) {
+    return true;
+  }
   return false;
 }
 
@@ -73,24 +93,45 @@ export function allowedOrigins(): string[] {
   }
 
   // Sol multi-host deploy: cookie mutations may originate from www/app/docs/trust.
+  // Hosts may include ports (local *.localhost:3000) and use http locally.
   for (const key of [
     'NEXT_PUBLIC_SOL_MARKETING_HOST',
     'NEXT_PUBLIC_SOL_APP_HOST',
     'NEXT_PUBLIC_SOL_DOCS_HOST',
     'NEXT_PUBLIC_SOL_TRUST_HOST',
   ] as const) {
-    const host = process.env[key]?.replace(/^https?:\/\//, '').replace(/\/$/, '');
-    if (host) {
-      origins.add(`https://${host}`);
-      if (host.startsWith('www.')) {
-        origins.add(`https://${host.slice(4)}`);
-      }
+    const raw = process.env[key]?.trim();
+    if (!raw) continue;
+    let value = raw.replace(/\/$/, '');
+    let protocol: 'http' | 'https' | null = null;
+    if (/^https:\/\//i.test(value)) {
+      protocol = 'https';
+      value = value.slice('https://'.length);
+    } else if (/^http:\/\//i.test(value)) {
+      protocol = 'http';
+      value = value.slice('http://'.length);
+    }
+    const hostname = value.split(':')[0]?.toLowerCase() ?? value;
+    const isLocal =
+      hostname === 'localhost' ||
+      hostname.endsWith('.localhost') ||
+      hostname.endsWith('.local') ||
+      hostname === '127.0.0.1';
+    const scheme = protocol ?? (isLocal ? 'http' : 'https');
+    origins.add(`${scheme}://${value}`);
+    if (hostname.startsWith('www.')) {
+      const apex = value.replace(/^www\./i, '');
+      origins.add(`${scheme}://${apex}`);
     }
   }
 
   if (process.env.NODE_ENV !== 'production') {
     origins.add('http://localhost:3000');
     origins.add('http://127.0.0.1:3000');
+    origins.add('http://www.localhost:3000');
+    origins.add('http://app.localhost:3000');
+    origins.add('http://docs.localhost:3000');
+    origins.add('http://trust.localhost:3000');
   }
 
   return [...origins];

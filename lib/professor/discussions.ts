@@ -1,6 +1,6 @@
 /**
  * Professor discussion (chatbot) reads, shared by the REST API and MCP tools.
- * Mirrors `/dashboard/professor/discussions` and the session API routes.
+ * Access via role_bindings (content.write / tutor.transcripts.read).
  */
 import { and, desc, eq, inArray, isNull, or } from 'drizzle-orm';
 
@@ -9,14 +9,19 @@ import {
   chatbotSections,
   chatbotSessions,
   chatbots,
-  professorSections,
 } from '@/app/db/schema';
 import { ApiError } from '@/lib/api/errors';
+import { authorizeOnSection } from '@/lib/authz/courseAccess';
 import { logAudit } from '@/lib/audit';
-import { getActiveChatbot } from '@/lib/chatbot/access';
+import {
+  getActiveChatbot,
+  userCanWriteChatbot,
+} from '@/lib/chatbot/access';
 import type { UserData } from '@/lib/getOrCreateUser';
 
-type ProfessorUser = Pick<UserData, 'id' | 'role' | 'clerkId'>;
+type ProfessorUser = Pick<UserData, 'id' | 'platformStaff' | 'clerkId'> & {
+  platformStaff?: boolean;
+};
 
 export type DiscussionSummary = {
   id: string;
@@ -46,14 +51,16 @@ export async function listProfessorDiscussions(
     orderBy: (t, { desc: d }) => [d(t.updatedAt)],
   });
 
-  return rows.map((bot) => ({
+  return rows.map((bot) => {
+    const authorId = bot.professorId;
+    return {
     id: bot.id,
     title: bot.title,
     personaName: bot.personaName,
     description: bot.description,
     isTemplate: bot.isTemplate,
     isActive: bot.isActive,
-    ownedByMe: bot.professorId === user.id,
+    ownedByMe: Boolean(authorId && authorId === user.id),
     relatedQuiz: bot.relatedQuiz
       ? { id: bot.relatedQuiz.id, title: bot.relatedQuiz.title }
       : null,
@@ -61,7 +68,8 @@ export async function listProfessorDiscussions(
       .filter((sa) => sa.section != null)
       .map((sa) => ({ id: sa.section.id, name: sa.section.name })),
     updatedAt: bot.updatedAt,
-  }));
+  };
+  });
 }
 
 export type DiscussionDetail = DiscussionSummary & {
@@ -70,7 +78,7 @@ export type DiscussionDetail = DiscussionSummary & {
   model: string;
 };
 
-/** Owner or admin only — includes instructions and the system prompt. */
+/** Teaching staff with content.write (or template): includes instructions. */
 export async function getProfessorDiscussion(
   user: ProfessorUser,
   chatbotId: string,
@@ -84,9 +92,10 @@ export async function getProfessorDiscussion(
   });
   if (!bot) throw ApiError.notFound('Discussion not found');
 
-  const isOwner = bot.professorId === user.id;
-  if (!isOwner && !bot.isTemplate && user.role !== 'ADMIN') {
-    throw ApiError.forbidden('You do not own this discussion');
+  const authorId = bot.professorId;
+  const isOwner = Boolean(authorId && authorId === user.id);
+  if (!bot.isTemplate && !(await userCanWriteChatbot(user, bot))) {
+    throw ApiError.forbidden('You do not have access to this discussion');
   }
 
   return {
@@ -119,33 +128,29 @@ export type DiscussionSessionSummary = {
   messageCount: number;
 };
 
-/** Completed sessions for an owned bot, scoped to sections the caller teaches. */
+/** Completed sessions for a bot, scoped to sections the caller can read transcripts for. */
 export async function listDiscussionSessions(
   user: ProfessorUser,
   chatbotId: string,
 ): Promise<DiscussionSessionSummary[]> {
   const bot = await getActiveChatbot(chatbotId);
   if (!bot) throw ApiError.notFound('Discussion not found');
-  if (user.role === 'PROFESSOR' && bot.professorId !== user.id) {
-    throw ApiError.forbidden('You do not own this discussion');
-  }
-
-  let sectionFilter: string[] | null = null;
-  if (user.role === 'PROFESSOR') {
-    const taught = await db.query.professorSections.findMany({
-      where: eq(professorSections.professorId, user.id),
-    });
-    sectionFilter = taught.map((t) => t.sectionId);
+  if (!(await userCanWriteChatbot(user, bot))) {
+    throw ApiError.forbidden('You do not have access to this discussion');
   }
 
   const assigned = await db.query.chatbotSections.findMany({
     where: eq(chatbotSections.chatbotId, chatbotId),
   });
-  const assignedIds = assigned.map((a) => a.sectionId);
-  const allowedSections =
-    sectionFilter == null
-      ? assignedIds
-      : assignedIds.filter((sid) => sectionFilter!.includes(sid));
+  const allowedSections: string[] = [];
+  for (const a of assigned) {
+    if (
+      (await authorizeOnSection(user, 'tutor.transcripts.read', a.sectionId)) ||
+      (await authorizeOnSection(user, 'content.write', a.sectionId))
+    ) {
+      allowedSections.push(a.sectionId);
+    }
+  }
 
   if (allowedSections.length === 0) return [];
 
@@ -183,7 +188,7 @@ export type DiscussionSessionDetail = {
   personaName: string;
 };
 
-/** Full transcript — an education-record disclosure, so it is audited. */
+/** Full transcript: an education-record disclosure, so it is audited. */
 export async function getDiscussionSession(
   user: ProfessorUser,
   sessionId: string,
@@ -194,17 +199,16 @@ export async function getDiscussionSession(
   });
   if (!session) throw ApiError.notFound('Session not found');
 
-  if (user.role === 'PROFESSOR') {
-    const owns = session.chatbot.professorId === user.id;
-    const teaches = await db.query.professorSections.findFirst({
-      where: and(
-        eq(professorSections.professorId, user.id),
-        eq(professorSections.sectionId, session.sectionId),
-      ),
-    });
-    if (!owns && !teaches) {
-      throw ApiError.forbidden('You do not have access to this session');
-    }
+  const canRead =
+    (await authorizeOnSection(
+      user,
+      'tutor.transcripts.read',
+      session.sectionId,
+    )) ||
+    (await authorizeOnSection(user, 'content.write', session.sectionId)) ||
+    (await userCanWriteChatbot(user, session.chatbot));
+  if (!canRead) {
+    throw ApiError.forbidden('You do not have access to this session');
   }
 
   await logAudit({
@@ -213,7 +217,7 @@ export async function getDiscussionSession(
     action: 'education.discussion_session.view',
     targetType: 'chatbot_session',
     targetId: sessionId,
-    metadata: { viewerRole: user.role },
+    metadata: { via: 'bindings' },
   });
 
   return {

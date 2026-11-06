@@ -8,7 +8,7 @@ import {
   FileText,
   Layers,
   XCircle,
-} from "lucide-react";
+} from "@/components/icons";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -138,7 +138,7 @@ function buildSectionGroups(attempts: AttemptRow[]): SectionGroup[] {
 function formatScore(a: AttemptRow): string {
   if (a.maxScore != null) return `${a.score ?? 0} / ${a.maxScore}`;
   if (a.percentage != null) return `${a.percentage}%`;
-  return "—";
+  return "-";
 }
 
 function StatusBadge({ passed }: { passed: boolean | null }) {
@@ -371,7 +371,7 @@ function SectionGradebook({ section }: { section: SectionGroup }) {
                           {attempt.submittedAt ? (
                             <LocalDateTime stacked value={attempt.submittedAt} />
                           ) : (
-                            "—"
+                            "-"
                           )}
                         </TableCell>
                         <TableCell className="tnum align-top">
@@ -408,7 +408,7 @@ function SectionGradebook({ section }: { section: SectionGroup }) {
                         </div>
                       </TableCell>
                       <TableCell className="align-top">
-                        {best ? <StatusBadge passed={best.passed} /> : "—"}
+                        {best ? <StatusBadge passed={best.passed} /> : "-"}
                       </TableCell>
                       <TableCell className="sticky right-0 z-10 border-l border-rule bg-surface-sunken/95 px-3 text-right align-top">
                         {best ? (
@@ -429,7 +429,7 @@ function SectionGradebook({ section }: { section: SectionGroup }) {
                           {attempt.submittedAt ? (
                             <LocalDateTime stacked value={attempt.submittedAt} />
                           ) : (
-                            "—"
+                            "-"
                           )}
                         </TableCell>
                         <TableCell className="tnum align-top">

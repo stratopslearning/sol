@@ -4,9 +4,11 @@ Instructions for Cursor: when building or editing any SOL UI, copy, email, or ma
 
 ## 1. Brand in one paragraph
 
-SOL is the AI teaching layer for the LMS universities already use, starting with Canvas. It is not “an AI quiz grader.” It turns an instructor’s own materials into courses, practice, and quizzes (the instructor edits in chat and approves before students see anything), gives students a tutor grounded only in that course’s materials, grades with auditable rubrics, runs assessments that are hard to game, and shows instructors concept-level gaps and weak questions. The brand should feel like a warm, sharp teaching assistant: calm, clear, a little bit of light in a busy semester. It is not a robot, not a classroom cartoon, and not enterprise gray.
+SOL is the operating system for teaching: an AI layer that takes over the repetitive work around running a course, so instructors spend their time on teaching. It is the AI teaching layer for the LMS you already use (connectors optional; Canvas is first, not required). It is not “an AI quiz grader.” It turns an instructor’s own materials into courses, practice, and quizzes (the instructor edits and approves before students see anything), gives students a tutor grounded only in that course’s materials, grades with auditable rubrics, runs assessments that are hard to game, and shows instructors concept-level gaps so the next term improves. The brand should feel like a warm, sharp teaching assistant: calm, clear, a little bit of light in a busy semester. It is not a robot, not a classroom cartoon, and not enterprise gray.
 
 The idea behind the name: Sol means sun. A sun doesn’t do the work for you; it lets you see. SOL’s job is the same: show instructors where students are, and show students where to go next.
+
+**Full product truth:** [`PRODUCT.md`](./PRODUCT.md)
 
 **Positioning line:** The AI teaching layer for the LMS you already use.
 
