@@ -73,6 +73,8 @@ const crons = [
 
 const config = {
   $schema: 'https://openapi.vercel.sh/vercel.json',
+  // Match CI: package-lock.json is the source of truth (pnpm lock removed).
+  installCommand: 'npm ci',
   ...(crons.length ? { crons } : {}),
   rewrites,
 };
