@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import type { PoolClient } from '@neondatabase/serverless';
+import type { PoolClient } from 'pg';
 
 import type { TestDb } from './db';
 

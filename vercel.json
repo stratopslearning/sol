@@ -1,43 +1,44 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "npm ci",
   "crons": [
     {
-      "path": "/learning/api/cron/grade-pending",
+      "path": "/api/cron/grade-pending",
       "schedule": "15 9 * * *"
     },
     {
-      "path": "/learning/api/cron/process-materials",
+      "path": "/api/cron/process-materials",
       "schedule": "30 9 * * *"
     },
     {
-      "path": "/learning/api/cron/lti-roster",
+      "path": "/api/cron/lti-roster",
       "schedule": "45 9 * * *"
     },
     {
-      "path": "/learning/api/cron/lti-passback",
+      "path": "/api/cron/lti-passback",
       "schedule": "20 9 * * *"
     },
     {
-      "path": "/learning/api/cron/access-request-digest",
+      "path": "/api/cron/access-request-digest",
       "schedule": "0 10 * * *"
     }
   ],
   "rewrites": [
     {
       "source": "/.well-known/:path*",
-      "destination": "/learning/well-known/:path*"
+      "destination": "/well-known/:path*"
     },
     {
       "source": "/llms.txt",
-      "destination": "/learning/llms.txt"
+      "destination": "/llms.txt"
     },
     {
       "source": "/robots.txt",
-      "destination": "/learning/robots.txt"
+      "destination": "/robots.txt"
     },
     {
       "source": "/sitemap.xml",
-      "destination": "/learning/sitemap.xml"
+      "destination": "/sitemap.xml"
     }
   ]
 }
