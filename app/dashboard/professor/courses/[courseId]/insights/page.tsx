@@ -3,7 +3,6 @@ import { requireTeachingAccess } from '@/lib/authz/gates';
 import { Lightbulb } from '@/components/icons';
 import { and, desc, eq } from 'drizzle-orm';
 
-import { db } from '@/app/db';
 import { analyticsRollups, courseOfferings } from '@/app/db/schema';
 import { CourseHubShell } from '@/components/professor/CourseHubShell';
 import { SectionHeading } from '@/components/layout/SectionHeading';
@@ -14,10 +13,9 @@ import {
   type WhatToChangeSuggestion,
 } from '@/lib/analytics/computeRollups';
 import { withBasePath } from '@/lib/basePath';
-import { getOrCreateUser } from '@/lib/getOrCreateUser';
+import { withTenant } from '@/lib/db/tenantContext';
 import { assertCanManageCourse } from '@/lib/knowledge/access';
 import { getCourseWorkspaceId } from '@/lib/workspace';
-import { appRedirect } from '@/lib/serverRedirect';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,41 +41,48 @@ export default async function CourseInsightsPage({
   }
 
   const tenantId = await getCourseWorkspaceId(courseId);
-  const offering = await db.query.courseOfferings.findFirst({
-    where: and(
-      eq(courseOfferings.courseId, courseId),
-      eq(courseOfferings.termLabel, 'default'),
-    ),
-  });
 
-  let rollup =
-    tenantId && offering
-      ? await db.query.analyticsRollups.findFirst({
+  let suggestions: WhatToChangeSuggestion[] = [];
+
+  if (tenantId) {
+    try {
+      const offering = await withTenant(tenantId, user.id, async (tx) =>
+        tx.query.courseOfferings.findFirst({
           where: and(
-            eq(analyticsRollups.tenantId, tenantId),
-            eq(analyticsRollups.kind, 'criterion_miss_rates'),
-            eq(analyticsRollups.offeringId, offering.id),
+            eq(courseOfferings.courseId, courseId),
+            eq(courseOfferings.termLabel, 'default'),
           ),
-          orderBy: [desc(analyticsRollups.computedAt)],
-        })
-      : null;
+        }),
+      );
 
-  if (!rollup && tenantId) {
-    await computeRollupsForCourse({
-      tenantId,
-      courseId,
-      offeringId: offering?.id ?? null,
-    });
-    rollup = await db.query.analyticsRollups.findFirst({
-      where: and(
-        eq(analyticsRollups.tenantId, tenantId),
-        eq(analyticsRollups.kind, 'criterion_miss_rates'),
-      ),
-      orderBy: [desc(analyticsRollups.computedAt)],
-    });
+      let rollup = offering
+        ? await withTenant(tenantId, user.id, async (tx) =>
+            tx.query.analyticsRollups.findFirst({
+              where: and(
+                eq(analyticsRollups.tenantId, tenantId),
+                eq(analyticsRollups.kind, 'criterion_miss_rates'),
+                eq(analyticsRollups.offeringId, offering.id),
+              ),
+              orderBy: [desc(analyticsRollups.computedAt)],
+            }),
+          )
+        : null;
+
+      if (!rollup) {
+        const computed = await computeRollupsForCourse({
+          tenantId,
+          courseId,
+          offeringId: offering?.id ?? null,
+        });
+        suggestions = computed.suggestions;
+      } else {
+        suggestions = suggestionsFromPayload(rollup.payload);
+      }
+    } catch (err) {
+      console.error('insights rollup failed', err);
+      suggestions = [];
+    }
   }
-
-  const suggestions = suggestionsFromPayload(rollup?.payload);
 
   return (
     <CourseHubShell

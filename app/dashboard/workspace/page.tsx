@@ -397,106 +397,101 @@ export default async function WorkspaceOwnerPage() {
           </div>
 
           {canInviteFaculty ? (
-            <div className="rounded-2xl border border-rule/80 bg-surface paper-shadow p-5">
-              <p className="eyebrow">Team</p>
-              <h2 className="mt-1 font-display text-lg tracking-tight text-ink">
-                Faculty
-              </h2>
-              <p className="mt-1.5 text-xs leading-relaxed text-ink-faint">
-                Invite colleagues with an email-bound claim link. Students still
-                join via section codes.
-              </p>
+            <div className="rounded-2xl border border-rule/80 bg-surface paper-shadow p-4">
+              <div className="flex items-baseline justify-between gap-2">
+                <h2 className="font-display text-base tracking-tight text-ink">
+                  Team
+                </h2>
+                <span className="text-[0.65rem] uppercase tracking-[0.06em] text-ink-faint">
+                  {facultyMembers.length} member
+                  {facultyMembers.length === 1 ? '' : 's'}
+                </span>
+              </div>
 
-              <div className="mt-4">
+              <div className="mt-3">
                 <InviteFacultyForm workspaceId={workspace.id} />
-                <FacultyCsvImportForm workspaceId={workspace.id} />
               </div>
-
-              <div className="mt-5 border-t border-rule/60 pt-4">
-                <p className="text-[0.65rem] font-medium uppercase tracking-[0.08em] text-ink-faint">
-                  Access requests
-                </p>
-                <AccessRequestsPanel
-                  workspaceId={workspace.id}
-                  initialRequests={accessRequests.map((r) => ({
-                    id: r.id,
-                    email: r.email,
-                    name: r.name,
-                    claimedRole: r.claimedRole,
-                    createdAt: r.createdAt,
-                  }))}
-                />
-              </div>
-
-              {canTransferOwnership ? (
-                <div className="mt-4">
-                  <TransferOwnershipForm
-                    workspaceId={workspace.id}
-                    candidates={facultyMembers
-                      .filter((m) => m.userId !== user.id)
-                      .map((m) => ({
-                        userId: m.userId,
-                        label: m.user?.email ?? m.userId,
-                      }))}
-                  />
-                </div>
-              ) : null}
 
               {facultyMembers.length > 0 ? (
-                <ul className="mt-5 divide-y divide-rule/60 border-t border-rule/60">
+                <ul className="mt-3 divide-y divide-rule/50 border-t border-rule/50">
                   {facultyMembers.map((m) => (
                     <li
                       key={m.id}
-                      className="flex items-center justify-between gap-2 py-2.5 text-sm"
+                      className="flex items-center justify-between gap-2 py-2 text-sm"
                     >
-                      <div className="min-w-0">
-                        <p className="truncate text-ink">
-                          {m.user?.email ?? m.userId}
-                        </p>
-                        <p className="text-[0.65rem] uppercase tracking-[0.06em] text-ink-faint">
-                          Member
-                        </p>
-                      </div>
+                      <p className="min-w-0 truncate text-ink">
+                        {m.user?.email ?? m.userId}
+                      </p>
                       {m.userId !== user.id ? (
                         <RemoveMemberButton
                           workspaceId={workspace.id}
                           membershipId={m.id}
                           label={m.user?.email ?? 'member'}
                         />
-                      ) : null}
+                      ) : (
+                        <span className="shrink-0 text-[0.65rem] uppercase tracking-[0.06em] text-ink-faint">
+                          You
+                        </span>
+                      )}
                     </li>
                   ))}
                 </ul>
               ) : null}
 
               {openInvites.length > 0 ? (
-                <div className="mt-4 border-t border-rule/60 pt-4">
-                  <p className="text-[0.65rem] font-medium uppercase tracking-[0.08em] text-ink-faint">
-                    Pending
-                  </p>
-                  <ul className="mt-2 space-y-2.5">
-                    {openInvites.map((i) => (
-                      <li
-                        key={i.id}
-                        className="flex items-start justify-between gap-2 text-sm"
-                      >
-                        <div className="min-w-0">
-                          <p className="truncate text-ink">{i.email}</p>
-                          <p className="text-xs text-ink-faint">
-                            {i.role} · expires{' '}
-                            <LocalDateTime value={i.expiresAt} dateOnly />
-                          </p>
-                        </div>
-                        <RevokeInviteButton
-                          workspaceId={workspace.id}
-                          inviteId={i.id}
-                          email={i.email}
-                        />
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+                <ul className="mt-2 space-y-1.5 border-t border-rule/50 pt-2">
+                  {openInvites.map((i) => (
+                    <li
+                      key={i.id}
+                      className="flex items-center justify-between gap-2 text-xs"
+                    >
+                      <p className="min-w-0 truncate text-ink-muted">
+                        {i.email} · pending
+                      </p>
+                      <RevokeInviteButton
+                        workspaceId={workspace.id}
+                        inviteId={i.id}
+                        email={i.email}
+                      />
+                    </li>
+                  ))}
+                </ul>
               ) : null}
+
+              <details className="mt-3 border-t border-rule/50 pt-2">
+                <summary className="cursor-pointer text-xs text-ink-faint hover:text-ink-muted">
+                  More team tools
+                </summary>
+                <div className="mt-3 space-y-4">
+                  <FacultyCsvImportForm workspaceId={workspace.id} />
+                  <div>
+                    <p className="mb-2 text-[0.65rem] font-medium uppercase tracking-[0.08em] text-ink-faint">
+                      Access requests
+                    </p>
+                    <AccessRequestsPanel
+                      workspaceId={workspace.id}
+                      initialRequests={accessRequests.map((r) => ({
+                        id: r.id,
+                        email: r.email,
+                        name: r.name,
+                        claimedRole: r.claimedRole,
+                        createdAt: r.createdAt,
+                      }))}
+                    />
+                  </div>
+                  {canTransferOwnership ? (
+                    <TransferOwnershipForm
+                      workspaceId={workspace.id}
+                      candidates={facultyMembers
+                        .filter((m) => m.userId !== user.id)
+                        .map((m) => ({
+                          userId: m.userId,
+                          label: m.user?.email ?? m.userId,
+                        }))}
+                    />
+                  ) : null}
+                </div>
+              </details>
             </div>
           ) : null}
 

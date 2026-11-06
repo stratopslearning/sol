@@ -309,6 +309,66 @@ export async function fetchWorkspaceAuditRows(
   }));
 }
 
+/** Platform-ops audit trail (SECURITY DEFINER — bypasses FORCE RLS). */
+export async function fetchPlatformAuditRows(opts: {
+  action?: string | null;
+  tenantId?: string | null;
+  from?: Date | null;
+  to?: Date | null;
+  limit?: number;
+  offset?: number;
+}) {
+  const result = await db.execute(sql`
+    SELECT * FROM sol_platform_audit_rows(
+      ${opts.action?.trim() || null}::text,
+      ${opts.tenantId || null}::uuid,
+      ${opts.from ?? null}::timestamptz,
+      ${opts.to ?? null}::timestamptz,
+      ${opts.limit ?? 50}::int,
+      ${opts.offset ?? 0}::int
+    )
+  `);
+  return rowsFromExecute<{
+    id: string;
+    action: string;
+    created_at: Date | string;
+    actor_user_id: string | null;
+    actor_clerk_id: string | null;
+    target_type: string | null;
+    target_id: string | null;
+    tenant_id: string | null;
+    metadata: unknown;
+  }>(result).map((r) => ({
+    id: r.id,
+    action: r.action,
+    createdAt: asDate(r.created_at)!,
+    actorUserId: r.actor_user_id,
+    actorClerkId: r.actor_clerk_id,
+    targetType: r.target_type,
+    targetId: r.target_id,
+    tenantId: r.tenant_id,
+    metadata: r.metadata,
+  }));
+}
+
+export async function fetchPlatformAuditCount(opts: {
+  action?: string | null;
+  tenantId?: string | null;
+  from?: Date | null;
+  to?: Date | null;
+}) {
+  const result = await db.execute(sql`
+    SELECT sol_platform_audit_count(
+      ${opts.action?.trim() || null}::text,
+      ${opts.tenantId || null}::uuid,
+      ${opts.from ?? null}::timestamptz,
+      ${opts.to ?? null}::timestamptz
+    ) AS count
+  `);
+  const row = rowsFromExecute<{ count: number }>(result)[0];
+  return Number(row?.count ?? 0);
+}
+
 export async function fetchUserSubmittedAttempts(
   userId: string,
   limit = 20,
