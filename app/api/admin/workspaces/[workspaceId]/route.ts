@@ -7,7 +7,6 @@ import { db } from '@/app/db';
 import { DEFAULT_WORKSPACE_ID, users } from '@/app/db/schema';
 import { apiErrorResponse } from '@/lib/api/errors';
 import { logAudit } from '@/lib/audit';
-import { requireSupportGrant } from '@/lib/authz/requireSupportGrant';
 import {
   adminHardDeleteWorkspaceDefiner,
   adminSoftDeleteWorkspaceDefiner,
@@ -71,23 +70,12 @@ export async function PATCH(
     }
 
     // FORCE RLS: platform staff have no membership → bare findFirst is null.
+    // Platform Ops license/delete actions match create + owner-invite: platform_staff
+    // only (no support grant). Teaching PII routes still require grants.
     const workspace = await adminWorkspaceDeleteInfoDefiner(workspaceId);
     if (!workspace) {
       return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
     }
-    await requireSupportGrant(
-      {
-        id: admin.id,
-        clerkId: admin.clerkId,
-        platformStaff: admin.platformStaff,
-      },
-      workspaceId,
-      {
-        action: 'support.tenant_access',
-        targetType: 'workspace',
-        targetId: workspaceId,
-      },
-    );
     if (workspace.status === 'churned') {
       return NextResponse.json(
         { error: 'Cannot change access on a churned workspace' },
@@ -186,24 +174,11 @@ export async function DELETE(
     }
 
     // FORCE RLS: platform staff without membership cannot see workspace rows.
+    // Platform Ops delete: platform_staff only (same as create / owner-invite).
     const workspace = await adminWorkspaceDeleteInfoDefiner(workspaceId);
     if (!workspace) {
       return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
     }
-
-    await requireSupportGrant(
-      {
-        id: admin.id,
-        clerkId: admin.clerkId,
-        platformStaff: admin.platformStaff,
-      },
-      workspaceId,
-      {
-        action: 'support.tenant_access',
-        targetType: 'workspace',
-        targetId: workspaceId,
-      },
-    );
 
     if (workspace.status === 'churned') {
       return NextResponse.json(
