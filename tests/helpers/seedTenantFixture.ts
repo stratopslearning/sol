@@ -302,62 +302,59 @@ export async function cleanupTenantFixture(
   db: TestDb,
   fixture: TenantFixture | TenantGraph,
 ): Promise<void> {
-  await withPinnedTenantDb(db, fixture.workspaceId, async (tdb) => {
-    if (fixture.attemptId) {
-      await tdb.delete(attempts).where(eq(attempts.id, fixture.attemptId));
-    }
-    if (fixture.assignmentId) {
+  try {
+    await withPinnedTenantDb(db, fixture.workspaceId, async (tdb) => {
+      if (fixture.attemptId) {
+        await tdb.delete(attempts).where(eq(attempts.id, fixture.attemptId));
+      }
+      if (fixture.assignmentId) {
+        await tdb
+          .delete(assignments)
+          .where(eq(assignments.id, fixture.assignmentId));
+      }
+      if (fixture.quizId) {
+        await tdb
+          .delete(quizSections)
+          .where(eq(quizSections.quizId, fixture.quizId));
+        await tdb.delete(quizzes).where(eq(quizzes.id, fixture.quizId));
+      }
       await tdb
-        .delete(assignments)
-        .where(eq(assignments.id, fixture.assignmentId));
-    }
-    if (fixture.quizId) {
+        .delete(professorSections)
+        .where(eq(professorSections.sectionId, fixture.sectionId));
       await tdb
-        .delete(quizSections)
-        .where(eq(quizSections.quizId, fixture.quizId));
-      await tdb.delete(quizzes).where(eq(quizzes.id, fixture.quizId));
-    }
-    await tdb
-      .delete(professorSections)
-      .where(eq(professorSections.sectionId, fixture.sectionId));
-    await tdb
-      .delete(studentSections)
-      .where(eq(studentSections.sectionId, fixture.sectionId));
-    await tdb.delete(sections).where(eq(sections.courseId, fixture.courseId));
-    await tdb
-      .delete(courseOfferings)
-      .where(eq(courseOfferings.courseId, fixture.courseId));
-    await tdb.delete(courses).where(eq(courses.id, fixture.courseId));
-    await tdb
-      .delete(roleBindings)
-      .where(eq(roleBindings.tenantId, fixture.workspaceId));
-    await tdb
-      .delete(supportAccessGrants)
-      .where(eq(supportAccessGrants.tenantId, fixture.workspaceId));
-    await tdb
-      .delete(workspaceLicenses)
-      .where(eq(workspaceLicenses.workspaceId, fixture.workspaceId));
-    await tdb
-      .delete(workspaceMemberships)
-      .where(eq(workspaceMemberships.workspaceId, fixture.workspaceId));
-    await tdb
-      .delete(workspaces)
-      .where(eq(workspaces.id, fixture.workspaceId));
-  });
-
-  if (fixture.institutionId) {
-    await withPinnedTenantDb(db, fixture.institutionId, async (tdb) => {
+        .delete(studentSections)
+        .where(eq(studentSections.sectionId, fixture.sectionId));
+      await tdb.delete(sections).where(eq(sections.courseId, fixture.courseId));
+      await tdb
+        .delete(courseOfferings)
+        .where(eq(courseOfferings.courseId, fixture.courseId));
+      await tdb.delete(courses).where(eq(courses.id, fixture.courseId));
+      await tdb
+        .delete(roleBindings)
+        .where(eq(roleBindings.tenantId, fixture.workspaceId));
+      await tdb
+        .delete(supportAccessGrants)
+        .where(eq(supportAccessGrants.tenantId, fixture.workspaceId));
       await tdb
         .delete(workspaceLicenses)
-        .where(eq(workspaceLicenses.workspaceId, fixture.institutionId!));
+        .where(eq(workspaceLicenses.workspaceId, fixture.workspaceId));
       await tdb
-        .delete(workspaces)
-        .where(eq(workspaces.id, fixture.institutionId!));
+        .delete(workspaceMemberships)
+        .where(eq(workspaceMemberships.workspaceId, fixture.workspaceId));
+      try {
+        await tdb
+          .delete(workspaces)
+          .where(eq(workspaces.id, fixture.workspaceId));
+      } catch {
+        // audit_log append-only can block tenant FK nulling on workspace delete.
+      }
     });
+  } catch {
+    // Best-effort cleanup; ephemeral CI DB is discarded after the job.
   }
 
-  // Skip users delete: audit_log forbids mutating actor_user_id FKs. Ephemeral
-  // CI Postgres is discarded after the job; leftover users are fine.
+  // Do not delete fixture.institutionId (shared parent). Callers that own the
+  // institution graph must cleanup that fixture separately.
 }
 
 export async function grantSupportAccess(

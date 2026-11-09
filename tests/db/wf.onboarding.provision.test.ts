@@ -20,21 +20,17 @@ describe.skipIf(skip)('wf.onboarding.provision', () => {
 
   afterAll(async () => {
     for (const id of cleanupWs) {
-      await db.delete(roleBindings).where(eq(roleBindings.tenantId, id));
-      await db
-        .delete(workspaceLicenses)
-        .where(eq(workspaceLicenses.workspaceId, id));
-      await db.delete(workspaces).where(eq(workspaces.id, id));
-    }
-    for (const id of cleanupUsers) {
       try {
+        await db.delete(roleBindings).where(eq(roleBindings.tenantId, id));
         await db
-          .delete((await import('@/app/db/schema')).users)
-          .where(eq((await import('@/app/db/schema')).users.id, id));
+          .delete(workspaceLicenses)
+          .where(eq(workspaceLicenses.workspaceId, id));
+        await db.delete(workspaces).where(eq(workspaces.id, id));
       } catch {
-        // audit_log is append-only; FK SET NULL on actor_user_id is forbidden.
+        // audit_log is append-only; deleting a tenant can try to NULL audit FKs.
       }
     }
+    // Skip users delete (audit_log actor FK). Ephemeral CI DB is discarded.
     await closeTestDb();
   });
 

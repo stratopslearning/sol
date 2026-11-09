@@ -8,7 +8,6 @@ import { closeTestDb, getTestDb, type TestDb } from '../helpers/db';
 import {
   ensureRlsShadowPolicies,
   solAppRoleExists,
-  withTenantGuc,
 } from '../helpers/rlsSetup';
 import {
   cleanupTenantFixture,
@@ -118,9 +117,9 @@ describe.skipIf(skip)('rls.facultyDefiners', () => {
       const {
         rows: [ta],
       } = await client.query<{ id: string }>(
-        `INSERT INTO users (email, first_name, last_name)
-         VALUES ($1, 'TA', 'Offering') RETURNING id`,
-        [`${tag}@example.com`],
+        `INSERT INTO users (clerk_id, email, first_name, last_name)
+         VALUES ($1, $2, 'TA', 'Offering') RETURNING id`,
+        [`clerk_${tag}`, `${tag}@example.com`],
       );
       await client.query(
         `INSERT INTO role_bindings (tenant_id, user_id, scope_type, scope_id, role)
@@ -135,7 +134,7 @@ describe.skipIf(skip)('rls.facultyDefiners', () => {
       expect(rows.map((r) => r.section_id)).toContain(a.sectionId);
 
       await client.query(`DELETE FROM role_bindings WHERE user_id = $1`, [ta.id]);
-      await client.query(`DELETE FROM users WHERE id = $1`, [ta.id]);
+      // Skip users delete: audit_log forbids actor FK nulling.
     } finally {
       client.release();
     }
@@ -166,6 +165,9 @@ describe.skipIf(skip)('rls.facultyDefiners', () => {
     try {
       await client.query('BEGIN');
       await client.query('SET LOCAL ROLE sol_app');
+      await client.query(`SELECT set_config('app.tenant_id', $1, true)`, [
+        a.workspaceId,
+      ]);
       const {
         rows: [quiz],
       } = await client.query<{ id: string }>(
@@ -186,19 +188,18 @@ describe.skipIf(skip)('rls.facultyDefiners', () => {
       } catch (err) {
         message = err instanceof Error ? err.message : String(err);
       }
-      await client.query('ROLLBACK');
       expect(message).toMatch(/Section tenant mismatch/i);
     } finally {
+      try {
+        await client.query('ROLLBACK');
+      } catch {
+        /* already idle */
+      }
       client.release();
     }
   });
 
   it('sol_app bare role_bindings insert fails; DEFINER upsert succeeds', async () => {
-    await withTenantGuc(db, a.workspaceId, async (client) => {
-      // Even with GUC, documenting DEFINER path
-      void client;
-    });
-
     const client = await db.$client.connect();
     try {
       await client.query('BEGIN');
@@ -235,8 +236,12 @@ describe.skipIf(skip)('rls.facultyDefiners', () => {
           ? JSON.parse(raw)
           : (raw as { bindingId?: string });
       expect(parsed?.bindingId).toBeTruthy();
-      await client.query('ROLLBACK');
     } finally {
+      try {
+        await client.query('ROLLBACK');
+      } catch {
+        /* already idle */
+      }
       client.release();
     }
   });
