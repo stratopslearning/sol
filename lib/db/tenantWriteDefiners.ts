@@ -358,28 +358,85 @@ export type AdminWorkspaceDeleteInfo = {
   activeCourseCount: number;
 };
 
-/** Platform-staff workspace lookup for delete/PATCH under FORCE RLS. */
+/**
+ * Platform-staff workspace lookup for delete/PATCH under FORCE RLS.
+ * Prefer owner-owned directory/fetch (BYPASSRLS) so sol_migrator-owned helpers
+ * that lack BYPASSRLS cannot falsely 404.
+ */
 export async function adminWorkspaceDeleteInfoDefiner(
   workspaceId: string,
 ): Promise<AdminWorkspaceDeleteInfo | null> {
-  const result = await db.execute(sql`
-    SELECT sol_admin_workspace_delete_info(${workspaceId}::uuid) AS row
+  // 1) Owner-owned provisioned fetch (BYPASSRLS) — authoritative existence.
+  const fetched = await db.execute(sql`
+    SELECT workspace FROM sol_fetch_provisioned_workspace(${workspaceId}::uuid)
   `);
-  const parsed = parseJsonb<Record<string, unknown>>(
-    rowsFromExecute<{ row: unknown }>(result)[0]?.row,
+  const wsRaw = parseJsonb<Record<string, unknown>>(
+    rowsFromExecute<{ workspace: unknown }>(fetched)[0]?.workspace,
   );
-  if (!parsed?.id) return null;
+  if (!wsRaw?.id) {
+    // 2) Fallback: migrator-owned helper with tenant GUC pin.
+    const result = await db.execute(sql`
+      SELECT sol_admin_workspace_delete_info(${workspaceId}::uuid) AS row
+    `);
+    const parsed = parseJsonb<Record<string, unknown>>(
+      rowsFromExecute<{ row: unknown }>(result)[0]?.row,
+    );
+    if (!parsed?.id) return null;
+    return {
+      id: String(parsed.id),
+      slug: String(parsed.slug ?? ''),
+      name: String(parsed.name ?? ''),
+      type: String(parsed.type ?? ''),
+      status: String(parsed.status ?? ''),
+      parentWorkspaceId: parsed.parentWorkspaceId
+        ? String(parsed.parentWorkspaceId)
+        : null,
+      childCount: Number(parsed.childCount ?? 0),
+      activeCourseCount: Number(parsed.activeCourseCount ?? 0),
+    };
+  }
+
+  // Accurate child/course counts from admin directory (also BYPASSRLS).
+  let childCount = 0;
+  let activeCourseCount = 0;
+  try {
+    const dir = await db.execute(sql`
+      SELECT id, child_count, course_count
+      FROM sol_admin_workspace_directory()
+      WHERE id = ${workspaceId}::uuid
+    `);
+    const row = rowsFromExecute<{
+      id: string;
+      child_count: number | null;
+      course_count: number | null;
+    }>(dir)[0];
+    if (row) {
+      childCount = Number(row.child_count ?? 0);
+      activeCourseCount = Number(row.course_count ?? 0);
+    }
+  } catch {
+    // Directory unavailable — fall back to GUC-pinned helper counts.
+    const result = await db.execute(sql`
+      SELECT sol_admin_workspace_delete_info(${workspaceId}::uuid) AS row
+    `);
+    const parsed = parseJsonb<Record<string, unknown>>(
+      rowsFromExecute<{ row: unknown }>(result)[0]?.row,
+    );
+    childCount = Number(parsed?.childCount ?? 0);
+    activeCourseCount = Number(parsed?.activeCourseCount ?? 0);
+  }
+
   return {
-    id: String(parsed.id),
-    slug: String(parsed.slug ?? ''),
-    name: String(parsed.name ?? ''),
-    type: String(parsed.type ?? ''),
-    status: String(parsed.status ?? ''),
-    parentWorkspaceId: parsed.parentWorkspaceId
-      ? String(parsed.parentWorkspaceId)
+    id: String(wsRaw.id),
+    slug: String(wsRaw.slug ?? ''),
+    name: String(wsRaw.name ?? ''),
+    type: String(wsRaw.type ?? ''),
+    status: String(wsRaw.status ?? ''),
+    parentWorkspaceId: wsRaw.parent_workspace_id
+      ? String(wsRaw.parent_workspace_id)
       : null,
-    childCount: Number(parsed.childCount ?? 0),
-    activeCourseCount: Number(parsed.activeCourseCount ?? 0),
+    childCount,
+    activeCourseCount,
   };
 }
 

@@ -13,11 +13,17 @@ DECLARE
   v_children integer;
   v_courses integer;
 BEGIN
+  -- FORCE RLS applies to sol_migrator (no BYPASSRLS). Pin tenant before read.
+  PERFORM set_config('app.tenant_id', p_workspace_id::text, true);
+
   SELECT * INTO v_ws FROM workspaces WHERE id = p_workspace_id;
   IF NOT FOUND THEN
     RETURN NULL;
   END IF;
 
+  -- Child rows have different workspace ids; with parent GUC they are invisible
+  -- under FORCE RLS. Prefer sol_admin_workspace_directory() from TS for
+  -- accurate child_count. Keep a best-effort count here.
   SELECT count(*)::integer INTO v_children
   FROM workspaces
   WHERE parent_workspace_id = p_workspace_id;
