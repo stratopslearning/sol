@@ -7,6 +7,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { SectionHeading } from '@/components/layout/SectionHeading';
 import { EmptyState } from '@/components/patterns/EmptyState';
 import { Button } from '@/components/ui/button';
+import { TeachingPaywallBanner } from '@/components/workspace/TeachingPaywallBanner';
 import { WorkspaceSwitcher } from '@/components/workspace/WorkspaceSwitcher';
 import { appPath, withBasePath } from '@/lib/basePath';
 import { requireTeachingAccess } from '@/lib/authz/gates';
@@ -80,6 +81,21 @@ export default async function ProfessorCoursesPage() {
         }
       />
 
+      {workspaceId &&
+      !entitlement.ok &&
+      entitlement.code === 'billing_required' ? (
+        <div className="mt-6">
+          <TeachingPaywallBanner
+            workspaceId={workspaceId}
+            reason={
+              entitlement.reason.includes('Pilot ended')
+                ? entitlement.reason
+                : 'Pilot ended. Finish billing to keep teaching, or ask SOL to restore access.'
+            }
+          />
+        </div>
+      ) : null}
+
       {!workspaceId ? (
         <EmptyState
           className="mt-12 animate-fade-in"
@@ -111,7 +127,7 @@ export default async function ProfessorCoursesPage() {
               canCreate
                 ? 'Name the course, keep the default section, and you get faculty and learner codes right away.'
                 : !entitlement.ok && entitlement.code === 'billing_required'
-                  ? 'Billing for this workspace is not finished yet. Complete it, then you can create courses here.'
+                  ? 'Pilot ended. Finish billing to keep teaching, or ask SOL to restore access.'
                   : !entitlement.ok
                     ? entitlement.reason
                     : 'Create or join a workspace first.'

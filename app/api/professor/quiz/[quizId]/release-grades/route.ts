@@ -41,6 +41,18 @@ export async function POST(
     const canAccess = await professorCanAccessQuiz(user, quizId);
     if (!canAccess) throw ApiError.forbidden('Not allowed to manage this quiz');
 
+    const quiz = await db.query.quizzes.findFirst({
+      where: eq(quizzes.id, quizId),
+      columns: { tenantId: true },
+    });
+    if (!quiz) throw ApiError.notFound('Quiz not found');
+    if (quiz.tenantId) {
+      const { requireWorkspaceTeaching } = await import(
+        '@/lib/workspace/entitlement'
+      );
+      await requireWorkspaceTeaching(quiz.tenantId, user);
+    }
+
     const raw = await readJsonBody(req).catch(() => ({}));
     const parsed = bodySchema.safeParse(raw ?? {});
     if (!parsed.success) {

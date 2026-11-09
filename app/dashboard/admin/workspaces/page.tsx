@@ -54,6 +54,7 @@ export default async function AdminWorkspacesPage() {
     licensePeriodEnd: w.licensePeriodEnd
       ? w.licensePeriodEnd.toISOString()
       : null,
+    stripeSubscriptionId: w.stripeSubscriptionId ?? null,
   }));
 
   return (

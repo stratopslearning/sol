@@ -112,6 +112,12 @@ export async function proposeOutlineSkeleton(
   audit?: { ip?: string | null; userAgent?: string | null },
 ): Promise<OutlineDetail> {
   const course = await assertCanManageCourse(user, opts.courseId);
+  {
+    const { requireCourseTeaching } = await import(
+      '@/lib/workspace/entitlement'
+    );
+    await requireCourseTeaching(opts.courseId, user);
+  }
   await assertCourseHasReadyMaterials(opts.courseId);
   const stats = await getCourseAuthoringMaterialStats(opts.courseId);
   const policy = await getAuthoringPolicyForCourse(opts.courseId);
@@ -281,6 +287,12 @@ export async function approveAndBuildOutline(
   audit?: { ip?: string | null; userAgent?: string | null },
 ): Promise<OutlineDetail> {
   const outlineRow = await assertCanManageOutline(user, outlineId);
+  {
+    const { requireCourseTeaching } = await import(
+      '@/lib/workspace/entitlement'
+    );
+    await requireCourseTeaching(outlineRow.courseId, user);
+  }
   const detail = await getOutlineDetail(user, outlineId);
 
   if (detail.bodiesBuilt && detail.status === 'READY') {

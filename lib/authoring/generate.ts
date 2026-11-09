@@ -932,6 +932,12 @@ export async function generateCourseOutline(
   audit?: { ip?: string | null; userAgent?: string | null },
 ): Promise<OutlineDetail> {
   const course = await assertCanManageCourse(user, opts.courseId);
+  {
+    const { requireCourseTeaching } = await import(
+      '@/lib/workspace/entitlement'
+    );
+    await requireCourseTeaching(opts.courseId, user);
+  }
   await assertCourseHasReadyMaterials(opts.courseId);
 
   const query =

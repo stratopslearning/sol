@@ -554,6 +554,20 @@
       "when": 1784800000000,
       "tag": "0078_platform_audit_read",
       "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1784900000000,
+      "tag": "0079_workspace_entitlement_pilot",
+      "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "7",
+      "when": 1785000000000,
+      "tag": "0080_admin_workspace_stripe_sub",
+      "breakpoints": true
     }
   ]
 }

@@ -108,10 +108,10 @@ export function CourseAssignmentsClient({
 }: {
   activities: ActivityListItem[];
   sectionOptions: SectionOption[];
-  createQuizHref: string;
-  importQuizHref: string;
-  createDiscussionHref: string;
-  createInteractiveHref: string;
+  createQuizHref?: string;
+  importQuizHref?: string;
+  createDiscussionHref?: string;
+  createInteractiveHref?: string;
   authoringHref: string;
 }) {
   const router = useRouter();
@@ -189,7 +189,14 @@ export function CourseAssignmentsClient({
     }
   }
 
-  const newMenu = (
+  const canCreate = Boolean(
+    createQuizHref &&
+      importQuizHref &&
+      createDiscussionHref &&
+      createInteractiveHref,
+  );
+
+  const newMenu = canCreate ? (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button size="sm">
@@ -199,25 +206,25 @@ export function CourseAssignmentsClient({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuItem asChild>
-          <Link href={createQuizHref}>
+          <Link href={createQuizHref!}>
             <ClipboardList className="h-4 w-4" />
             Create quiz
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <Link href={importQuizHref}>
+          <Link href={importQuizHref!}>
             <FileSpreadsheet className="h-4 w-4" />
             Import quiz CSV
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <Link href={createDiscussionHref}>
+          <Link href={createDiscussionHref!}>
             <MessageSquare className="h-4 w-4" />
             Discussion
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <Link href={createInteractiveHref}>
+          <Link href={createInteractiveHref!}>
             <Puzzle className="h-4 w-4" />
             Interactive
           </Link>
@@ -231,7 +238,7 @@ export function CourseAssignmentsClient({
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
-  );
+  ) : null;
 
   return (
     <div className="space-y-4">
@@ -278,79 +285,87 @@ export function CourseAssignmentsClient({
             </p>
           </div>
 
-          <div className="mx-auto mt-8 grid max-w-3xl gap-3 sm:grid-cols-3">
-            <Link
-              href={createQuizHref}
-              className="group flex flex-col gap-3 rounded-xl border border-border bg-background/70 p-4 text-left transition-colors hover:border-foreground/25 hover:bg-muted/40"
-            >
-              <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors group-hover:text-foreground">
-                <Plus className="h-4 w-4" aria-hidden />
-              </span>
-              <div>
-                <p className="text-sm font-medium text-foreground">
-                  Create quiz
-                </p>
-                <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-                  Questions, schedule, and points — ready to release.
-                </p>
-              </div>
-            </Link>
+          {canCreate ? (
+            <>
+              <div className="mx-auto mt-8 grid max-w-3xl gap-3 sm:grid-cols-3">
+                <Link
+                  href={createQuizHref!}
+                  className="group flex flex-col gap-3 rounded-xl border border-border bg-background/70 p-4 text-left transition-colors hover:border-foreground/25 hover:bg-muted/40"
+                >
+                  <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors group-hover:text-foreground">
+                    <Plus className="h-4 w-4" aria-hidden />
+                  </span>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">
+                      Create quiz
+                    </p>
+                    <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                      Questions, schedule, and points — ready to release.
+                    </p>
+                  </div>
+                </Link>
 
-            <Link
-              href={importQuizHref}
-              className="group flex flex-col gap-3 rounded-xl border border-border bg-background/70 p-4 text-left transition-colors hover:border-foreground/25 hover:bg-muted/40"
-            >
-              <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors group-hover:text-foreground">
-                <FileSpreadsheet className="h-4 w-4" aria-hidden />
-              </span>
-              <div>
-                <p className="text-sm font-medium text-foreground">
-                  Import CSV
-                </p>
-                <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-                  Upload a spreadsheet of questions, then set schedule.
-                </p>
-              </div>
-            </Link>
+                <Link
+                  href={importQuizHref!}
+                  className="group flex flex-col gap-3 rounded-xl border border-border bg-background/70 p-4 text-left transition-colors hover:border-foreground/25 hover:bg-muted/40"
+                >
+                  <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors group-hover:text-foreground">
+                    <FileSpreadsheet className="h-4 w-4" aria-hidden />
+                  </span>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">
+                      Import CSV
+                    </p>
+                    <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                      Upload a spreadsheet of questions, then set schedule.
+                    </p>
+                  </div>
+                </Link>
 
-            <Link
-              href={authoringHref}
-              className="group flex flex-col gap-3 rounded-xl border border-border bg-background/70 p-4 text-left transition-colors hover:border-foreground/25 hover:bg-muted/40"
-            >
-              <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors group-hover:text-foreground">
-                <Sparkles className="h-4 w-4" aria-hidden />
-              </span>
-              <div>
-                <p className="text-sm font-medium text-foreground">
-                  Author from materials
-                </p>
-                <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-                  Propose an outline from Knowledge, then publish what you
-                  approve.
-                </p>
+                <Link
+                  href={authoringHref}
+                  className="group flex flex-col gap-3 rounded-xl border border-border bg-background/70 p-4 text-left transition-colors hover:border-foreground/25 hover:bg-muted/40"
+                >
+                  <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors group-hover:text-foreground">
+                    <Sparkles className="h-4 w-4" aria-hidden />
+                  </span>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">
+                      Author from materials
+                    </p>
+                    <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                      Propose an outline from Knowledge, then publish what you
+                      approve.
+                    </p>
+                  </div>
+                </Link>
               </div>
-            </Link>
-          </div>
 
-          <div className="mx-auto mt-5 flex max-w-3xl flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
-            <Link
-              href={createDiscussionHref}
-              className="inline-flex items-center gap-1.5 transition-colors hover:text-foreground"
-            >
-              <MessageSquare className="h-3.5 w-3.5" aria-hidden />
-              Discussion
-            </Link>
-            <span aria-hidden className="text-border">
-              ·
-            </span>
-            <Link
-              href={createInteractiveHref}
-              className="inline-flex items-center gap-1.5 transition-colors hover:text-foreground"
-            >
-              <Puzzle className="h-3.5 w-3.5" aria-hidden />
-              Interactive
-            </Link>
-          </div>
+              <div className="mx-auto mt-5 flex max-w-3xl flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
+                <Link
+                  href={createDiscussionHref!}
+                  className="inline-flex items-center gap-1.5 transition-colors hover:text-foreground"
+                >
+                  <MessageSquare className="h-3.5 w-3.5" aria-hidden />
+                  Discussion
+                </Link>
+                <span aria-hidden className="text-border">
+                  ·
+                </span>
+                <Link
+                  href={createInteractiveHref!}
+                  className="inline-flex items-center gap-1.5 transition-colors hover:text-foreground"
+                >
+                  <Puzzle className="h-3.5 w-3.5" aria-hidden />
+                  Interactive
+                </Link>
+              </div>
+            </>
+          ) : (
+            <p className="mx-auto mt-6 max-w-lg text-center text-sm text-muted-foreground">
+              Creating assignments is paused until billing is restored.
+            </p>
+          )}
         </div>
       ) : visible.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border px-5 py-10 text-center">

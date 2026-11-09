@@ -98,6 +98,10 @@ export async function setActivitySections(
   },
 ): Promise<{ sectionIds: string[] }> {
   const sectionIds = [...new Set(opts.sectionIds)];
+  if (sectionIds.length > 0) {
+    const { requireSectionTeaching } = await import('@/lib/workspace/entitlement');
+    await requireSectionTeaching(sectionIds[0]!, user);
+  }
 
   if (opts.type === 'QUIZ') {
     const ids = await setQuizSectionsReplace(user, opts.entityId, sectionIds);
@@ -131,6 +135,8 @@ export async function addActivityToSection(
     sectionId: string;
   },
 ): Promise<void> {
+  const { requireSectionTeaching } = await import('@/lib/workspace/entitlement');
+  await requireSectionTeaching(opts.sectionId, user);
   await assertWriteOnSections(user, [opts.sectionId]);
 
   if (opts.type === 'QUIZ') {

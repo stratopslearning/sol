@@ -6,6 +6,7 @@ import { BookOpen } from '@/components/icons';
 
 import { DeleteWorkspaceButton } from '@/app/dashboard/admin/workspaces/DeleteWorkspaceButton';
 import { GrantCompAccessButton } from '@/app/dashboard/admin/workspaces/GrantCompAccessButton';
+import { ResendOwnerInviteButton } from '@/app/dashboard/admin/workspaces/ResendOwnerInviteButton';
 import { AdminFilterBar } from '@/components/admin/AdminFilterBar';
 import { AdminStatusBadge } from '@/components/admin/AdminStatusBadge';
 import { Button } from '@/components/ui/button';
@@ -39,6 +40,8 @@ export type WorkspaceDirectoryRow = {
   alreadyChurned: boolean;
   /** ISO date when complimentary window ends, if set. */
   licensePeriodEnd: string | null;
+  /** Live Stripe subscription id when billed. */
+  stripeSubscriptionId: string | null;
 };
 
 export function WorkspacesDirectory({ rows }: { rows: WorkspaceDirectoryRow[] }) {
@@ -151,9 +154,15 @@ export function WorkspacesDirectory({ rows }: { rows: WorkspaceDirectoryRow[] })
                       <span className="text-[0.65rem] text-ink-faint">
                         {w.licensePlan ?? ''}
                         {w.billingProvider ? ` · ${w.billingProvider}` : ''}
-                        {w.licensePeriodEnd
-                          ? ` · until ${new Date(w.licensePeriodEnd).toLocaleDateString()}`
-                          : ''}
+                        {w.status === 'suspended'
+                          ? ' · pilot revoked'
+                          : w.licenseStatus === 'trialing' &&
+                              !w.licensePeriodEnd &&
+                              !w.stripeSubscriptionId
+                            ? ' · indefinite pilot'
+                            : w.licensePeriodEnd
+                              ? ` · until ${new Date(w.licensePeriodEnd).toLocaleDateString()}`
+                              : ''}
                       </span>
                     </div>
                   </TableCell>
@@ -176,10 +185,25 @@ export function WorkspacesDirectory({ rows }: { rows: WorkspaceDirectoryRow[] })
                           <span className="sr-only">Catalog</span>
                         </Link>
                       </Button>
+                      <ResendOwnerInviteButton
+                        workspaceId={w.id}
+                        name={w.name}
+                        ownerEmail={w.ownerEmail}
+                        claimStatus={w.claimStatus}
+                      />
                       <GrantCompAccessButton
                         workspaceId={w.id}
                         name={w.name}
                         alreadyChurned={w.alreadyChurned}
+                        hasOpenPilot={
+                          w.licenseStatus === 'trialing' &&
+                          !w.stripeSubscriptionId &&
+                          (w.licensePeriodEnd == null ||
+                            new Date(w.licensePeriodEnd).getTime() > Date.now())
+                        }
+                        hasLiveStripe={Boolean(
+                          w.stripeSubscriptionId && w.licenseStatus === 'active',
+                        )}
                       />
                       <DeleteWorkspaceButton
                         workspaceId={w.id}

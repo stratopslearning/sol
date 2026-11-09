@@ -31,6 +31,7 @@ import { Button } from '@/components/ui/button';
 import { LocalDateTime } from '@/components/timezone/LocalDateTime';
 import { appPath, withBasePath } from '@/lib/basePath';
 import { requireTeachingAccess } from '@/lib/authz/gates';
+import { TeachingPaywallBanner } from '@/components/workspace/TeachingPaywallBanner';
 import { WorkspaceSwitcher } from '@/components/workspace/WorkspaceSwitcher';
 import {
   assertWorkspaceAllowsCourseCreate,
@@ -95,6 +96,8 @@ export default async function WorkspaceOwnerPage() {
   const hasLiveStripe =
     Boolean(license?.stripeSubscriptionId) && license?.status === 'active';
   const hasCompAccess = Boolean(license && licenseHasOpenCompWindow(license));
+  const isIndefinitePilot =
+    hasCompAccess && !license?.periodEnd && !hasLiveStripe;
   const needsStripeBilling =
     (workspace.type === 'creator' || workspace.type === 'business') &&
     !hasLiveStripe;
@@ -134,18 +137,30 @@ export default async function WorkspaceOwnerPage() {
     ? 'Invoiced'
     : hasLiveStripe
       ? 'Stripe active'
-      : hasCompAccess
-        ? 'Complimentary'
-        : needsStripeBilling
-          ? 'Billing needed'
-          : license?.status ?? '—';
+      : workspace.status === 'suspended'
+        ? 'Pilot revoked'
+        : isIndefinitePilot
+          ? 'Indefinite pilot'
+          : hasCompAccess
+            ? 'Complimentary'
+            : needsStripeBilling
+              ? 'Billing needed'
+              : license?.status ?? '—';
+
+  const pilotRevoked =
+    workspace.status === 'suspended' ||
+    (!entitlement.ok &&
+      entitlement.code === 'billing_required' &&
+      !hasCompAccess);
 
   const createDisabledReason = entitlement.ok
     ? undefined
     : entitlement.code === 'billing_required'
-      ? hasCompAccess
-        ? entitlement.reason
-        : 'Complete billing in the sidebar before creating courses.'
+      ? pilotRevoked
+        ? 'Pilot ended. Finish billing to keep teaching, or ask SOL to restore access.'
+        : hasCompAccess
+          ? entitlement.reason
+          : 'Complete billing in the sidebar before creating courses.'
       : entitlement.reason;
 
   return (
@@ -195,6 +210,16 @@ export default async function WorkspaceOwnerPage() {
           </div>
         }
       />
+
+      {pilotRevoked ? (
+        <div className="mt-6">
+          <TeachingPaywallBanner
+            workspaceId={workspace.id}
+            reason={createDisabledReason}
+            showCheckout={needsStripeBilling}
+          />
+        </div>
+      ) : null}
 
       <div className="mt-8 grid gap-4 sm:grid-cols-3">
         <StatCard
@@ -374,23 +399,31 @@ export default async function WorkspaceOwnerPage() {
                 <p>Stripe subscription is active for this workspace.</p>
               ) : (
                 <>
-                  {hasCompAccess && license?.periodEnd ? (
+                  {pilotRevoked ? (
+                    <p>
+                      Pilot ended. Finish billing to keep teaching, or ask SOL
+                      to restore access.
+                    </p>
+                  ) : isIndefinitePilot ? (
+                    <p>Complimentary pilot — no end date.</p>
+                  ) : hasCompAccess && license?.periodEnd ? (
                     <p>
                       Complimentary access until{' '}
                       <LocalDateTime value={license.periodEnd} dateOnly />.
                     </p>
                   ) : null}
-                  {needsStripeBilling ? (
+                  {needsStripeBilling && !isIndefinitePilot ? (
                     <div className="space-y-3">
                       <p>
-                        Complete Checkout to keep creating courses after the
-                        trial window.
+                        {pilotRevoked
+                          ? 'Complete Checkout to resume teaching on this workspace.'
+                          : 'Complete Checkout to keep creating courses after the trial window.'}
                       </p>
                       <WorkspaceBillingButton workspaceId={workspace.id} />
                     </div>
-                  ) : (
+                  ) : !pilotRevoked && !hasCompAccess ? (
                     <p>No action needed right now.</p>
-                  )}
+                  ) : null}
                 </>
               )}
             </div>

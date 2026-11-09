@@ -45,6 +45,11 @@ export async function POST(
       return NextResponse.json({ error: 'Section tenant not found' }, { status: 404 });
     }
 
+    const { requireWorkspaceTeaching } = await import(
+      '@/lib/workspace/entitlement'
+    );
+    await requireWorkspaceTeaching(tenantId, user);
+
     const allowed = await authorize(user, 'roster.manage', {
       tenantId,
       scopeType: 'section',

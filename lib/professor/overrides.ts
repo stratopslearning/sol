@@ -275,11 +275,27 @@ export async function insertGradeOverride(
 
   const attempt = await db.query.attempts.findFirst({
     where: eq(attempts.id, input.attemptId),
-    columns: { id: true, submittedAt: true, quizId: true, tenantId: true },
+    columns: {
+      id: true,
+      submittedAt: true,
+      quizId: true,
+      tenantId: true,
+      sectionId: true,
+    },
   });
   if (!attempt) throw ApiError.notFound('Attempt not found');
   if (!attempt.submittedAt) {
     throw ApiError.badRequest('Only submitted attempts can be overridden');
+  }
+  {
+    const { requireWorkspaceTeaching, requireSectionTeaching } = await import(
+      '@/lib/workspace/entitlement'
+    );
+    if (attempt.tenantId) {
+      await requireWorkspaceTeaching(attempt.tenantId);
+    } else if (attempt.sectionId) {
+      await requireSectionTeaching(attempt.sectionId);
+    }
   }
 
   if (input.questionId) {

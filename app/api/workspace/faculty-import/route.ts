@@ -53,6 +53,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
+  try {
+    const { requireWorkspaceTeaching } = await import(
+      '@/lib/workspace/entitlement'
+    );
+    await requireWorkspaceTeaching(workspaceId, user);
+  } catch (error) {
+    const { apiErrorResponse } = await import('@/lib/api/errors');
+    return apiErrorResponse(error);
+  }
+
   const emails = parseEmailListFromCsv(parsed.data.csv);
   if (emails.length === 0) {
     return NextResponse.json({ error: 'No valid emails in CSV' }, { status: 400 });
