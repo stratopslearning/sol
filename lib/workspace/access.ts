@@ -199,33 +199,13 @@ export async function ensureWorkspaceMembership(opts: {
   role?: 'owner' | 'admin' | 'instructor' | 'learner' | 'member';
   status?: 'active' | 'invited' | 'removed';
 }): Promise<void> {
-  const status = opts.status ?? 'active';
-  const existing = await db.query.workspaceMemberships.findFirst({
-    where: and(
-      eq(workspaceMemberships.workspaceId, opts.workspaceId),
-      eq(workspaceMemberships.userId, opts.userId),
-    ),
-  });
-  if (existing) {
-    await db
-      .update(workspaceMemberships)
-      .set({
-        status:
-          status === 'active'
-            ? 'active'
-            : existing.status === 'active'
-              ? 'active'
-              : status,
-        role: 'member',
-        updatedAt: new Date(),
-      })
-      .where(eq(workspaceMemberships.id, existing.id));
-    return;
-  }
-  await db.insert(workspaceMemberships).values({
+  // FORCE RLS: bare membership insert/update flakes without a sticky tenant GUC.
+  const { ensureWorkspaceMembershipDefiner } = await import(
+    '@/lib/db/facultyWriteDefiners'
+  );
+  await ensureWorkspaceMembershipDefiner({
     workspaceId: opts.workspaceId,
     userId: opts.userId,
-    role: 'member',
-    status,
+    status: opts.status ?? 'active',
   });
 }

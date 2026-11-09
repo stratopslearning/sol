@@ -2,8 +2,6 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { Plus } from '@/components/icons';
-
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -87,7 +85,6 @@ export function CreateCourseForm({
           onClick={() => setOpen(true)}
           className="shrink-0"
         >
-          <Plus className="h-4 w-4" />
           New course
         </Button>
       </div>

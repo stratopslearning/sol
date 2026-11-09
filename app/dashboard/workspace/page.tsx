@@ -2,11 +2,10 @@ import Link from 'next/link';
 import { and, desc, eq, isNull } from 'drizzle-orm';
 import { ArrowUpRight, BookOpen, CreditCard, Users } from '@/components/icons';
 
-import { CodeChip } from '@/app/dashboard/workspace/CodeChip';
 import { CreateCourseForm } from '@/app/dashboard/workspace/CreateCourseForm';
-import { CreateSectionForm } from '@/app/dashboard/workspace/CreateSectionForm';
 import { AccessRequestsPanel } from '@/app/dashboard/workspace/AccessRequestsPanel';
 import { InviteFacultyForm } from '@/app/dashboard/workspace/InviteFacultyForm';
+import { WorkspaceCourseList } from '@/app/dashboard/workspace/WorkspaceCourseList';
 import { FacultyCsvImportForm } from '@/components/workspace/FacultyCsvImportForm';
 import { TransferOwnershipForm } from '@/components/workspace/TransferOwnershipForm';
 import { listPendingAccessRequests } from '@/lib/workspace/accessRequests';
@@ -26,9 +25,8 @@ import { AppShell } from '@/components/layout/AppShell';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { EmptyState } from '@/components/patterns/EmptyState';
 import { StatCard } from '@/components/patterns/StatCard';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { LocalDateTime } from '@/components/timezone/LocalDateTime';
+import { Button } from '@/components/ui/button';
 import { appPath, withBasePath } from '@/lib/basePath';
 import { requireTeachingAccess } from '@/lib/authz/gates';
 import { TeachingPaywallBanner } from '@/components/workspace/TeachingPaywallBanner';
@@ -283,102 +281,21 @@ export default async function WorkspaceOwnerPage() {
               description="Create a course to open its hub — materials, authoring, and sections with enrollment codes."
             />
           ) : (
-            <ul className="space-y-5">
-              {workspaceCourses.map((c) => (
-                <li
-                  key={c.id}
-                  className="overflow-hidden rounded-2xl border border-rule/80 bg-surface paper-shadow"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-3 border-b border-rule/60 px-5 py-4 sm:px-6">
-                    <div className="min-w-0">
-                      <h3 className="font-display text-xl tracking-tight text-ink">
-                        <Link
-                          href={appPath(`/dashboard/professor/courses/${c.id}`)}
-                          className="transition-colors hover:text-brand"
-                        >
-                          {c.title}
-                        </Link>
-                      </h3>
-                      {c.description ? (
-                        <p className="mt-1 line-clamp-2 text-sm text-ink-muted">
-                          {c.description}
-                        </p>
-                      ) : null}
-                    </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <Badge variant="secondary" className="capitalize">
-                        {c.status}
-                      </Badge>
-                      <Button asChild variant="outline" size="sm">
-                        <Link
-                          href={appPath(`/dashboard/professor/courses/${c.id}`)}
-                        >
-                          Course hub
-                          <ArrowUpRight className="h-3.5 w-3.5" />
-                        </Link>
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div className="px-5 py-4 sm:px-6">
-                    {c.sections.length > 0 ? (
-                      <ul className="divide-y divide-rule/50">
-                        {c.sections.map((s) => (
-                          <li
-                            key={s.id}
-                            className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0"
-                          >
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                              <Link
-                                href={appPath(
-                                  `/dashboard/professor/sections/${s.id}`,
-                                )}
-                                className="font-medium text-ink transition-colors hover:text-brand"
-                              >
-                                {s.name}
-                              </Link>
-                              <Button asChild variant="ghost" size="sm">
-                                <Link
-                                  href={appPath(
-                                    `/dashboard/professor/sections/${s.id}`,
-                                  )}
-                                >
-                                  Open
-                                  <ArrowUpRight className="h-3.5 w-3.5" />
-                                </Link>
-                              </Button>
-                            </div>
-                            <div className="flex flex-wrap gap-2">
-                              <CodeChip
-                                label="Faculty"
-                                code={s.professorEnrollmentCode}
-                              />
-                              <CodeChip
-                                label="Learner"
-                                code={s.studentEnrollmentCode}
-                              />
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="py-2 text-sm text-ink-muted">
-                        No sections yet — add one to start inviting learners.
-                      </p>
-                    )}
-
-                    {entitlement.ok ? (
-                      <div className="mt-3 border-t border-rule/50 pt-3">
-                        <CreateSectionForm
-                          courseId={c.id}
-                          courseTitle={c.title}
-                        />
-                      </div>
-                    ) : null}
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <WorkspaceCourseList
+              canAddSections={entitlement.ok}
+              courses={workspaceCourses.map((c) => ({
+                id: c.id,
+                title: c.title,
+                description: c.description,
+                status: c.status,
+                sections: c.sections.map((s) => ({
+                  id: s.id,
+                  name: s.name,
+                  professorEnrollmentCode: s.professorEnrollmentCode,
+                  studentEnrollmentCode: s.studentEnrollmentCode,
+                })),
+              }))}
+            />
           )}
         </div>
 

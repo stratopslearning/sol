@@ -1,9 +1,4 @@
-import { and, eq, isNotNull, ne, or, sql } from 'drizzle-orm';
-
-import { db } from '@/app/db';
-import { courseKnowledgeLinks } from '@/app/db/schema';
 import { ApiError } from '@/lib/api/errors';
-import { withTenant } from '@/lib/db/tenantContext';
 import type { UserData } from '@/lib/getOrCreateUser';
 import { assertCanManageCourse } from '@/lib/knowledge/access';
 import { getCourseWorkspaceId } from '@/lib/workspace';
@@ -18,23 +13,10 @@ export async function notifyLinkedCoursesOfNewVersion(
   documentId: string,
   newVersionId: string,
 ): Promise<void> {
-  const now = new Date();
-  await db
-    .update(courseKnowledgeLinks)
-    .set({
-      updateAvailableVersionId: newVersionId,
-      updateNoticedAt: now,
-      updatedAt: now,
-    })
-    .where(
-      and(
-        eq(courseKnowledgeLinks.documentId, documentId),
-        or(
-          sql`${courseKnowledgeLinks.pinnedVersionId} IS NULL`,
-          ne(courseKnowledgeLinks.pinnedVersionId, newVersionId),
-        ),
-      ),
-    );
+  const { notifyCourseKnowledgeVersionDefiner } = await import(
+    '@/lib/db/tenantWriteDefiners'
+  );
+  await notifyCourseKnowledgeVersionDefiner(documentId, newVersionId);
 }
 
 /** Advance the course pin to the offered update version. */
@@ -47,28 +29,25 @@ export async function acceptLinkedDocumentUpdate(
   const workspaceId = await getCourseWorkspaceId(courseId);
   if (!workspaceId) throw ApiError.badRequest('Course has no workspace');
 
-  await withTenant(workspaceId, user.id, async (tx) => {
-    const link = await tx.query.courseKnowledgeLinks.findFirst({
-      where: and(
-        eq(courseKnowledgeLinks.courseId, courseId),
-        eq(courseKnowledgeLinks.documentId, documentId),
-      ),
+  const { acceptCourseKnowledgeUpdateDefiner } = await import(
+    '@/lib/db/tenantWriteDefiners'
+  );
+  try {
+    await acceptCourseKnowledgeUpdateDefiner({
+      courseId,
+      documentId,
+      tenantId: workspaceId,
     });
-    if (!link) throw ApiError.notFound('Document is not attached to this course');
-    if (!link.updateAvailableVersionId) {
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (message.includes('not attached')) {
+      throw ApiError.notFound('Document is not attached to this course');
+    }
+    if (message.includes('No update available')) {
       throw ApiError.badRequest('No update available for this attachment');
     }
-    const now = new Date();
-    await tx
-      .update(courseKnowledgeLinks)
-      .set({
-        pinnedVersionId: link.updateAvailableVersionId,
-        updateAvailableVersionId: null,
-        updateNoticedAt: null,
-        updatedAt: now,
-      })
-      .where(eq(courseKnowledgeLinks.id, link.id));
-  });
+    throw err;
+  }
 }
 
 /** Keep the current pin; clear the update notice. */
@@ -81,24 +60,15 @@ export async function dismissLinkedDocumentUpdate(
   const workspaceId = await getCourseWorkspaceId(courseId);
   if (!workspaceId) throw ApiError.badRequest('Course has no workspace');
 
-  const updated = await withTenant(workspaceId, user.id, async (tx) =>
-    tx
-      .update(courseKnowledgeLinks)
-      .set({
-        updateAvailableVersionId: null,
-        updateNoticedAt: null,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(courseKnowledgeLinks.courseId, courseId),
-          eq(courseKnowledgeLinks.documentId, documentId),
-          isNotNull(courseKnowledgeLinks.updateAvailableVersionId),
-        ),
-      )
-      .returning(),
+  const { dismissCourseKnowledgeUpdateDefiner } = await import(
+    '@/lib/db/tenantWriteDefiners'
   );
-  if (updated.length === 0) {
+  const updated = await dismissCourseKnowledgeUpdateDefiner({
+    courseId,
+    documentId,
+    tenantId: workspaceId,
+  });
+  if (updated === 0) {
     throw ApiError.notFound('No pending update for this attachment');
   }
 }

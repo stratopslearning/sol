@@ -1,7 +1,7 @@
 /**
  * Full tenant graphs for DB / isolation tests across creator, department, institution.
  */
-import { eq, inArray } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 import {
   assignments,
@@ -15,7 +15,6 @@ import {
   sections,
   studentSections,
   supportAccessGrants,
-  users,
   workspaceLicenses,
   workspaceMemberships,
   workspaces,
@@ -37,6 +36,7 @@ import {
   randomSlug,
   type WorkspaceSku,
 } from './factories';
+import { withPinnedTenantDb } from './rlsSetup';
 
 const uniqueTag = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -125,7 +125,9 @@ export async function seedTenantGraph(
       name: `Institution ${label}`,
       slug: `inst-${label}-${Date.now()}`.slice(0, 63),
     });
-    await makeLicense(db, inst.id, licenseDefaults('institution'));
+    await withPinnedTenantDb(db, inst.id, async (tdb) => {
+      await makeLicense(tdb, inst.id, licenseDefaults('institution'));
+    });
     institutionId = inst.id;
   }
 
@@ -149,99 +151,101 @@ export async function seedTenantGraph(
     });
   }
 
-  await makeMembership(db, ws.id, owner.id);
-  await makeMembership(db, ws.id, lead.id);
-  if (student) await makeMembership(db, ws.id, student.id);
+  return withPinnedTenantDb(db, ws.id, async (tdb) => {
+    await makeMembership(tdb, ws.id, owner.id);
+    await makeMembership(tdb, ws.id, lead.id);
+    if (student) await makeMembership(tdb, ws.id, student.id);
 
-  const license = await makeLicense(db, ws.id, licenseDefaults(sku));
+    const license = await makeLicense(tdb, ws.id, licenseDefaults(sku));
 
-  await db.insert(roleBindings).values({
-    tenantId: ws.id,
-    userId: owner.id,
-    scopeType: 'organization',
-    scopeId: ws.id,
-    role: 'owner',
-    grantedBy: owner.id,
-  });
+    await tdb.insert(roleBindings).values({
+      tenantId: ws.id,
+      userId: owner.id,
+      scopeType: 'organization',
+      scopeId: ws.id,
+      role: 'owner',
+      grantedBy: owner.id,
+    });
 
-  const { course, offering, tenantId } = await makeCourseWithOffering(db, {
-    workspaceId: ws.id,
-    tenantId: ws.id,
-    title: `Course ${label}`,
-  });
+    const { course, offering, tenantId } = await makeCourseWithOffering(tdb, {
+      workspaceId: ws.id,
+      tenantId: ws.id,
+      title: `Course ${label}`,
+    });
 
-  await db.insert(roleBindings).values({
-    tenantId: ws.id,
-    userId: lead.id,
-    scopeType: 'offering',
-    scopeId: offering.id,
-    role: 'lead_instructor',
-    grantedBy: owner.id,
-  });
+    await tdb.insert(roleBindings).values({
+      tenantId: ws.id,
+      userId: lead.id,
+      scopeType: 'offering',
+      scopeId: offering.id,
+      role: 'lead_instructor',
+      grantedBy: owner.id,
+    });
 
-  const section = await makeSection(db, course.id, {
-    workspaceId: ws.id,
-    tenantId,
-    offeringId: offering.id,
-    name: `Section ${label}`,
-  });
+    const section = await makeSection(tdb, course.id, {
+      workspaceId: ws.id,
+      tenantId,
+      offeringId: offering.id,
+      name: `Section ${label}`,
+    });
 
-  await db.insert(professorSections).values({
-    professorId: lead.id,
-    sectionId: section.id,
-    tenantId: ws.id,
-    offeringId: offering.id,
-  });
-
-  if (student) {
-    await enrollStudent(db, student.id, section.id, ws.id);
-  }
-
-  let quizId = '';
-  let assignmentId = '';
-  let attemptId = '';
-
-  if (withQuiz) {
-    const quiz = await makeQuiz(db, lead.id, {
+    await tdb.insert(professorSections).values({
+      professorId: lead.id,
+      sectionId: section.id,
       tenantId: ws.id,
       offeringId: offering.id,
-      title: `Quiz ${label}`,
     });
-    quizId = quiz.id;
-    await assignQuizToSection(db, quiz.id, section.id, lead.id, ws.id);
 
     if (student) {
-      const assignment = await makeAssignment(db, quiz.id, student.id, {
-        tenantId: ws.id,
-      });
-      assignmentId = assignment!.id;
-      const attempt = await makeAttempt(db, {
-        assignmentId: assignment!.id,
-        studentId: student.id,
-        quizId: quiz.id,
-        sectionId: section.id,
-        tenantId: ws.id,
-      });
-      attemptId = attempt.id;
+      await enrollStudent(tdb, student.id, section.id, ws.id);
     }
-  }
 
-  return {
-    workspaceId: ws.id,
-    professorId: lead.id,
-    leadId: lead.id,
-    ownerId: owner.id,
-    studentId: student?.id ?? null,
-    courseId: course.id,
-    sectionId: section.id,
-    quizId,
-    assignmentId,
-    attemptId,
-    offeringId: offering.id,
-    institutionId,
-    sku,
-    licenseId: license.id,
-  };
+    let quizId = '';
+    let assignmentId = '';
+    let attemptId = '';
+
+    if (withQuiz) {
+      const quiz = await makeQuiz(tdb, lead.id, {
+        tenantId: ws.id,
+        offeringId: offering.id,
+        title: `Quiz ${label}`,
+      });
+      quizId = quiz.id;
+      await assignQuizToSection(tdb, quiz.id, section.id, lead.id, ws.id);
+
+      if (student) {
+        const assignment = await makeAssignment(tdb, quiz.id, student.id, {
+          tenantId: ws.id,
+        });
+        assignmentId = assignment!.id;
+        const attempt = await makeAttempt(tdb, {
+          assignmentId: assignment!.id,
+          studentId: student.id,
+          quizId: quiz.id,
+          sectionId: section.id,
+          tenantId: ws.id,
+        });
+        attemptId = attempt.id;
+      }
+    }
+
+    return {
+      workspaceId: ws.id,
+      professorId: lead.id,
+      leadId: lead.id,
+      ownerId: owner.id,
+      studentId: student?.id ?? null,
+      courseId: course.id,
+      sectionId: section.id,
+      quizId,
+      assignmentId,
+      attemptId,
+      offeringId: offering.id,
+      institutionId,
+      sku,
+      licenseId: license.id,
+    };
+  });
 }
 
 /** Two department children under one institution (sibling isolation). */
@@ -251,7 +255,9 @@ export async function seedSiblingDepartments(db: TestDb, label = 'SIB') {
     name: `Institution ${label}`,
     slug: `inst-${label}-${Date.now()}`.slice(0, 63),
   });
-  await makeLicense(db, inst.id, licenseDefaults('institution'));
+  await withPinnedTenantDb(db, inst.id, async (tdb) => {
+    await makeLicense(tdb, inst.id, licenseDefaults('institution'));
+  });
   const a = await seedTenantGraph(db, {
     sku: 'department',
     label: `${label}A`,
@@ -296,56 +302,59 @@ export async function cleanupTenantFixture(
   db: TestDb,
   fixture: TenantFixture | TenantGraph,
 ): Promise<void> {
-  const ids = [fixture.workspaceId];
-  if (fixture.institutionId) ids.push(fixture.institutionId);
+  try {
+    await withPinnedTenantDb(db, fixture.workspaceId, async (tdb) => {
+      if (fixture.attemptId) {
+        await tdb.delete(attempts).where(eq(attempts.id, fixture.attemptId));
+      }
+      if (fixture.assignmentId) {
+        await tdb
+          .delete(assignments)
+          .where(eq(assignments.id, fixture.assignmentId));
+      }
+      if (fixture.quizId) {
+        await tdb
+          .delete(quizSections)
+          .where(eq(quizSections.quizId, fixture.quizId));
+        await tdb.delete(quizzes).where(eq(quizzes.id, fixture.quizId));
+      }
+      await tdb
+        .delete(professorSections)
+        .where(eq(professorSections.sectionId, fixture.sectionId));
+      await tdb
+        .delete(studentSections)
+        .where(eq(studentSections.sectionId, fixture.sectionId));
+      await tdb.delete(sections).where(eq(sections.courseId, fixture.courseId));
+      await tdb
+        .delete(courseOfferings)
+        .where(eq(courseOfferings.courseId, fixture.courseId));
+      await tdb.delete(courses).where(eq(courses.id, fixture.courseId));
+      await tdb
+        .delete(roleBindings)
+        .where(eq(roleBindings.tenantId, fixture.workspaceId));
+      await tdb
+        .delete(supportAccessGrants)
+        .where(eq(supportAccessGrants.tenantId, fixture.workspaceId));
+      await tdb
+        .delete(workspaceLicenses)
+        .where(eq(workspaceLicenses.workspaceId, fixture.workspaceId));
+      await tdb
+        .delete(workspaceMemberships)
+        .where(eq(workspaceMemberships.workspaceId, fixture.workspaceId));
+      try {
+        await tdb
+          .delete(workspaces)
+          .where(eq(workspaces.id, fixture.workspaceId));
+      } catch {
+        // audit_log append-only can block tenant FK nulling on workspace delete.
+      }
+    });
+  } catch {
+    // Best-effort cleanup; ephemeral CI DB is discarded after the job.
+  }
 
-  if (fixture.attemptId) {
-    await db.delete(attempts).where(eq(attempts.id, fixture.attemptId));
-  }
-  if (fixture.assignmentId) {
-    await db.delete(assignments).where(eq(assignments.id, fixture.assignmentId));
-  }
-  if (fixture.quizId) {
-    await db.delete(quizSections).where(eq(quizSections.quizId, fixture.quizId));
-    await db.delete(quizzes).where(eq(quizzes.id, fixture.quizId));
-  }
-  await db
-    .delete(professorSections)
-    .where(eq(professorSections.sectionId, fixture.sectionId));
-  await db
-    .delete(studentSections)
-    .where(eq(studentSections.sectionId, fixture.sectionId));
-  // All sections for the course (tests may add siblings) before offerings.
-  await db.delete(sections).where(eq(sections.courseId, fixture.courseId));
-  await db
-    .delete(courseOfferings)
-    .where(eq(courseOfferings.courseId, fixture.courseId));
-  await db.delete(courses).where(eq(courses.id, fixture.courseId));
-  await db
-    .delete(roleBindings)
-    .where(eq(roleBindings.tenantId, fixture.workspaceId));
-  await db
-    .delete(supportAccessGrants)
-    .where(eq(supportAccessGrants.tenantId, fixture.workspaceId));
-  await db
-    .delete(workspaceLicenses)
-    .where(eq(workspaceLicenses.workspaceId, fixture.workspaceId));
-  await db
-    .delete(workspaceMemberships)
-    .where(eq(workspaceMemberships.workspaceId, fixture.workspaceId));
-
-  const userIds = [
-    fixture.professorId,
-    fixture.ownerId,
-    fixture.studentId,
-    'leadId' in fixture ? (fixture as TenantGraph).leadId : null,
-  ].filter(Boolean) as string[];
-  const uniqueUsers = [...new Set(userIds)];
-  if (uniqueUsers.length) {
-    await db.delete(users).where(inArray(users.id, uniqueUsers));
-  }
-
-  await db.delete(workspaces).where(eq(workspaces.id, fixture.workspaceId));
+  // Do not delete fixture.institutionId (shared parent). Callers that own the
+  // institution graph must cleanup that fixture separately.
 }
 
 export async function grantSupportAccess(
@@ -358,17 +367,19 @@ export async function grantSupportAccess(
     reason?: string;
   },
 ) {
-  const [row] = await db
-    .insert(supportAccessGrants)
-    .values({
-      tenantId: opts.tenantId,
-      userId: opts.userId,
-      grantedBy: opts.grantedBy,
-      expiresAt: opts.expiresAt ?? new Date(Date.now() + 60 * 60 * 1000),
-      reason: opts.reason ?? 'test support grant',
-    })
-    .returning();
-  return row!;
+  return withPinnedTenantDb(db, opts.tenantId, async (tdb) => {
+    const [row] = await tdb
+      .insert(supportAccessGrants)
+      .values({
+        tenantId: opts.tenantId,
+        userId: opts.userId,
+        grantedBy: opts.grantedBy,
+        expiresAt: opts.expiresAt ?? new Date(Date.now() + 60 * 60 * 1000),
+        reason: opts.reason ?? 'test support grant',
+      })
+      .returning();
+    return row!;
+  });
 }
 
 export { randomSlug };

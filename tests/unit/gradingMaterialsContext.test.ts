@@ -37,8 +37,8 @@ describe('buildGradingPrompt with materials', () => {
       null,
       'Course notes about X.',
     );
-    expect(prompt).toContain('REFERENCE ANSWER');
-    expect(prompt).toContain('COURSE MATERIALS');
+    expect(prompt).toContain('<reference_answer>');
+    expect(prompt).toContain('<materials>');
     expect(prompt).toContain('Course notes about X.');
   });
 
@@ -56,7 +56,8 @@ describe('buildGradingPrompt with materials', () => {
       null,
       '',
     );
-    expect(prompt).not.toContain('COURSE MATERIALS');
+    expect(prompt).toContain('<materials></materials>');
+    expect(prompt).not.toContain('Course notes');
   });
 });
 

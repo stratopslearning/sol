@@ -19,15 +19,13 @@ CREATE INDEX IF NOT EXISTS grading_override_examples_q_idx
   ON grading_override_examples (tenant_id, question_id, rubric_version);
 
 ALTER TABLE questions
-  ADD COLUMN IF NOT EXISTS rubric_status text NOT NULL DEFAULT 'none';
-  -- none | proposed | approved | rejected
+  ADD COLUMN IF NOT EXISTS rubric_status text NOT NULL DEFAULT 'none', -- none | proposed | approved | rejected
   ADD COLUMN IF NOT EXISTS rubric_approved_at timestamptz,
   ADD COLUMN IF NOT EXISTS rubric_approved_by uuid REFERENCES users(id) ON DELETE SET NULL;
 
 ALTER TABLE outline_items
   ADD COLUMN IF NOT EXISTS review_flags jsonb NOT NULL DEFAULT '[]'::jsonb,
-  ADD COLUMN IF NOT EXISTS review_status text NOT NULL DEFAULT 'none',
-  -- none | pending | flagged | cleared
+  ADD COLUMN IF NOT EXISTS review_status text NOT NULL DEFAULT 'none', -- none | pending | flagged | cleared
   ADD COLUMN IF NOT EXISTS ai_meta jsonb NOT NULL DEFAULT '{}'::jsonb;
 
 CREATE TABLE IF NOT EXISTS unit_insights (

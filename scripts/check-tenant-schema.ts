@@ -6,8 +6,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { config as loadEnv } from 'dotenv';
-import { neonConfig, Pool } from '@neondatabase/serverless';
-import ws from 'ws';
+import { Pool } from 'pg';
 
 loadEnv({ path: '.env', quiet: true });
 loadEnv({ path: '.env.local', override: true, quiet: true });
@@ -46,7 +45,8 @@ async function main() {
   }
   const allowed = new Set(allowlist.map((e) => e.table));
 
-  neonConfig.webSocketConstructor = ws;
+  // Always TCP via node-postgres (works for CI localhost and Neon). Avoids
+  // Neon serverless WS against localhost and pg/Neon PoolClient union TS errors.
   const pool = new Pool({ connectionString: target.url });
   const client = await pool.connect();
   const required = new Set<string>([...TEACHING_TENANT_TABLES, ...EXTRA_REQUIRED]);

@@ -2,8 +2,12 @@
  * Schema-correct factories for DB tests (post-0045: tenant_id + offering_id).
  * Every teaching insert defaults tenantId; makeCourse creates a default offering;
  * makeSection requires offeringId (or creates one via makeCourseWithOffering).
+ *
+ * Workspace create uses sol_bootstrap_workspace (FORCE RLS chicken/egg).
+ * Follow-on tenant writes must run under withPinnedTenantDb / withTenantGuc.
  */
-import { eq } from 'drizzle-orm';
+import { randomUUID } from 'crypto';
+import { eq, sql } from 'drizzle-orm';
 
 import {
   assignments,
@@ -23,28 +27,80 @@ import {
 } from '@/app/db/schema';
 
 import type { TestDb } from './db';
+import { withPinnedTenantDb } from './rlsSetup';
 
 export const randomSlug = () =>
   Math.random().toString(36).slice(2, 8).toUpperCase();
 
 export type WorkspaceSku = 'creator' | 'business' | 'department' | 'institution';
 
+function rowsFromExecute<T>(result: unknown): T[] {
+  return (
+    (result as { rows?: T[] }).rows ??
+    (Array.isArray(result) ? (result as T[]) : [])
+  );
+}
+
 export async function makeWorkspace(
   db: TestDb,
   overrides: Partial<typeof workspaces.$inferInsert> = {},
 ) {
   const type = (overrides.type ?? 'department') as WorkspaceSku;
-  const [row] = await db
-    .insert(workspaces)
-    .values({
-      slug: `ws-${randomSlug().toLowerCase()}`,
-      name: `Workspace ${randomSlug()}`,
-      type,
-      status: 'active',
-      ...overrides,
-    })
-    .returning();
-  return row!;
+  const id = overrides.id ?? randomUUID();
+  const slug = overrides.slug ?? `ws-${randomSlug().toLowerCase()}`;
+  const name = overrides.name ?? `Workspace ${randomSlug()}`;
+  const status = overrides.status ?? 'active';
+  const parentWorkspaceId = overrides.parentWorkspaceId ?? null;
+  const settings = (overrides.settings ?? {}) as Record<string, unknown>;
+  const stripeBilled = type === 'creator' || type === 'business';
+  const plan =
+    type === 'business' ? 'business_team' : type === 'creator' ? 'creator' : type;
+  // Tests expect teaching-ready seats; keep active even for stripe SKUs.
+  const licenseStatus = 'active';
+  const billingProvider = stripeBilled ? 'stripe' : 'manual';
+
+  await db.execute(sql`
+    SELECT sol_bootstrap_workspace(
+      ${id}::uuid,
+      ${slug}::text,
+      ${name}::text,
+      ${type}::text,
+      ${status}::text,
+      ${parentWorkspaceId}::uuid,
+      ${JSON.stringify(settings)}::jsonb,
+      ${null}::uuid,
+      ${plan}::text,
+      ${500}::integer,
+      ${1000}::integer,
+      ${billingProvider}::text,
+      ${licenseStatus}::text
+    )
+  `);
+
+  const fetched = await db.execute(sql`
+    SELECT workspace FROM sol_fetch_provisioned_workspace(${id}::uuid)
+  `);
+  const raw = rowsFromExecute<{ workspace: unknown }>(fetched)[0]?.workspace;
+  const w =
+    typeof raw === 'string'
+      ? (JSON.parse(raw) as Record<string, unknown>)
+      : (raw as Record<string, unknown> | null);
+  if (!w?.id) {
+    throw new Error('makeWorkspace: bootstrap succeeded but fetch returned null');
+  }
+  return {
+    id: String(w.id),
+    slug: String(w.slug),
+    name: String(w.name),
+    type: w.type as typeof workspaces.$inferSelect.type,
+    status: w.status as typeof workspaces.$inferSelect.status,
+    parentWorkspaceId: w.parent_workspace_id
+      ? String(w.parent_workspace_id)
+      : null,
+    settings: (w.settings ?? {}) as typeof workspaces.$inferSelect.settings,
+    createdAt: w.created_at ? new Date(String(w.created_at)) : new Date(),
+    updatedAt: w.updated_at ? new Date(String(w.updated_at)) : new Date(),
+  };
 }
 
 /** Seat only — writers always store role=member. */
@@ -75,6 +131,28 @@ export async function makeLicense(
   workspaceId: string,
   overrides: Partial<typeof workspaceLicenses.$inferInsert> = {},
 ) {
+  // Bootstrap already inserts a license; update it when present (needs tenant GUC).
+  const existing = await db.query.workspaceLicenses.findFirst({
+    where: eq(workspaceLicenses.workspaceId, workspaceId),
+  });
+  if (existing) {
+    const [row] = await db
+      .update(workspaceLicenses)
+      .set({
+        plan: overrides.plan ?? existing.plan,
+        seatCap: overrides.seatCap ?? existing.seatCap ?? 500,
+        aiUnitCap: overrides.aiUnitCap ?? existing.aiUnitCap ?? 1000,
+        status: overrides.status ?? existing.status,
+        billingProvider: overrides.billingProvider ?? existing.billingProvider,
+        periodStart: overrides.periodStart ?? existing.periodStart,
+        periodEnd: overrides.periodEnd ?? existing.periodEnd,
+        stripeSubscriptionId:
+          overrides.stripeSubscriptionId ?? existing.stripeSubscriptionId,
+      })
+      .where(eq(workspaceLicenses.id, existing.id))
+      .returning();
+    return row!;
+  }
   const [row] = await db
     .insert(workspaceLicenses)
     .values({
@@ -147,20 +225,29 @@ export async function makeCourse(
   let workspaceId = overrides.workspaceId;
   if (!workspaceId) {
     const ws = await makeWorkspace(db, { type: 'department' });
-    await makeLicense(db, ws.id);
+    await withPinnedTenantDb(db, ws.id, async (tdb) => {
+      await makeLicense(tdb, ws.id);
+    });
     workspaceId = ws.id;
   }
   const tenantId = overrides.tenantId ?? workspaceId;
-  const [row] = await db
-    .insert(courses)
-    .values({
-      title: `Course ${randomSlug()}`,
-      ...overrides,
-      workspaceId,
-      tenantId,
-    })
-    .returning();
-  return row!;
+  const insertCourse = async (tdb: TestDb) => {
+    const [row] = await tdb
+      .insert(courses)
+      .values({
+        title: `Course ${randomSlug()}`,
+        ...overrides,
+        workspaceId,
+        tenantId,
+      })
+      .returning();
+    return row!;
+  };
+  // Caller may already be inside a pinned tenant transaction.
+  if (overrides.workspaceId) {
+    return insertCourse(db);
+  }
+  return withPinnedTenantDb(db, workspaceId!, insertCourse);
 }
 
 /** Course + default offering (preferred for section creation). */
@@ -168,10 +255,29 @@ export async function makeCourseWithOffering(
   db: TestDb,
   overrides: Partial<typeof courses.$inferInsert> = {},
 ) {
-  const course = await makeCourse(db, overrides);
-  const tenantId = course.tenantId ?? course.workspaceId;
-  const offering = await makeOffering(db, course.id, { tenantId });
-  return { course, offering, tenantId };
+  let workspaceId = overrides.workspaceId;
+  if (!workspaceId) {
+    const ws = await makeWorkspace(db, { type: 'department' });
+    await withPinnedTenantDb(db, ws.id, async (tdb) => {
+      await makeLicense(tdb, ws.id);
+    });
+    workspaceId = ws.id;
+  }
+  const tenantId = overrides.tenantId ?? workspaceId;
+  const run = async (tdb: TestDb) => {
+    const course = await makeCourse(tdb, {
+      ...overrides,
+      workspaceId,
+      tenantId,
+    });
+    const offering = await makeOffering(tdb, course.id, { tenantId });
+    return { course, offering, tenantId: tenantId! };
+  };
+  // Caller may already be inside a pinned tenant transaction.
+  if (overrides.workspaceId) {
+    return run(db);
+  }
+  return withPinnedTenantDb(db, workspaceId!, run);
 }
 
 export async function makeSection(
@@ -208,24 +314,34 @@ export async function makeQuiz(
   overrides: Partial<typeof quizzes.$inferInsert> = {},
 ) {
   let tenantId = overrides.tenantId;
+  let mintedTenant = false;
   if (!tenantId) {
     // Convenience for thin integration tests: mint a disposable tenant.
     const ws = await makeWorkspace(db, { type: 'department' });
-    await makeLicense(db, ws.id);
+    await withPinnedTenantDb(db, ws.id, async (tdb) => {
+      await makeLicense(tdb, ws.id);
+    });
     tenantId = ws.id;
+    mintedTenant = true;
   }
-  const [row] = await db
-    .insert(quizzes)
-    .values({
-      title: `Quiz ${randomSlug()}`,
-      maxAttempts: 1,
-      passingScore: 60,
-      ...overrides,
-      professorId,
-      tenantId,
-    })
-    .returning();
-  return row!;
+  const insertQuiz = async (tdb: TestDb) => {
+    const [row] = await tdb
+      .insert(quizzes)
+      .values({
+        title: `Quiz ${randomSlug()}`,
+        maxAttempts: 1,
+        passingScore: 60,
+        ...overrides,
+        professorId,
+        tenantId,
+      })
+      .returning();
+    return row!;
+  };
+  if (!mintedTenant) {
+    return insertQuiz(db);
+  }
+  return withPinnedTenantDb(db, tenantId!, insertQuiz);
 }
 
 export async function makeQuestion(

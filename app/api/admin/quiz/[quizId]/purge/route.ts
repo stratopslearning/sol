@@ -1,21 +1,19 @@
 /**
- * Hard delete (purge) of a quiz. The cascading FK policies introduced in
- * 0004 take care of attempts, assignments, questions, and quiz_sections : 
- * we only need to delete the parent row.
- *
- * Soft-delete is exposed at the parent route (DELETE /api/admin/quiz/[id]).
- * Use this purge endpoint only for FERPA right-to-be-forgotten requests or
- * to clean up test data; once a row is purged here it cannot be restored.
+ * Hard delete (purge) of a quiz under FORCE RLS via SECURITY DEFINER.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { eq } from 'drizzle-orm';
 import { auth } from '@clerk/nextjs/server';
 
 import { db } from '@/app/db';
-import { quizzes, users } from '@/app/db/schema';
+import { users } from '@/app/db/schema';
 import { apiErrorResponse } from '@/lib/api/errors';
 import { extractRequestMeta, logAudit } from '@/lib/audit';
 import { requireSupportGrant } from '@/lib/authz/requireSupportGrant';
+import {
+  adminFetchQuizDefiner,
+  adminPurgeQuizDefiner,
+} from '@/lib/db/tenantWriteDefiners';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,13 +38,12 @@ export async function DELETE(
       );
     }
 
-    const targetQuiz = await db.query.quizzes.findFirst({
-      where: eq(quizzes.id, quizId),
-    });
+    const targetQuiz = await adminFetchQuizDefiner(quizId);
     if (!targetQuiz) {
       return NextResponse.json({ error: 'Quiz not found' }, { status: 404 });
     }
-    if (!targetQuiz.tenantId) {
+    const tenantId = targetQuiz.tenant_id as string | null;
+    if (!tenantId) {
       return NextResponse.json({ error: 'Quiz missing tenant' }, { status: 400 });
     }
     await requireSupportGrant(
@@ -55,11 +52,11 @@ export async function DELETE(
         clerkId: user.clerkId,
         platformStaff: user.platformStaff,
       },
-      targetQuiz.tenantId,
+      tenantId,
       { action: 'support.tenant_access', targetType: 'quiz', targetId: quizId },
     );
 
-    await db.delete(quizzes).where(eq(quizzes.id, quizId));
+    await adminPurgeQuizDefiner(quizId);
 
     const meta = extractRequestMeta(request);
     await logAudit({

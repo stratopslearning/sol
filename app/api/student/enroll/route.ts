@@ -1,13 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 import { db } from '@/app/db';
-import {
-  courseOfferings,
-  courses,
-  sections,
-  studentSections,
-} from '@/app/db/schema';
+import { courseOfferings, courses } from '@/app/db/schema';
 import {
   isOfferingEnded,
   OFFERING_ENDED_MESSAGE,
@@ -15,8 +10,6 @@ import {
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
 import { readJsonBody } from '@/lib/api/readJsonBody';
 import { extractRequestMeta, logAudit } from '@/lib/audit';
-import { activeOnly } from '@/lib/db/filters';
-import { withTenant } from '@/lib/db/tenantContext';
 import { paymentsEnabled } from '@/lib/featureFlags';
 import { userMayUsePreEnrollStudentApi } from '@/lib/authz';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
@@ -120,7 +113,10 @@ export async function POST(req: NextRequest) {
 
     // Refuse to enroll into archived / concluded sections.
     if (!section.isActive) {
-      return NextResponse.json({ error: 'This section is no longer active.' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'This section is no longer active.' },
+        { status: 400 },
+      );
     }
     if (isSectionConcluded(section)) {
       return NextResponse.json(
@@ -164,98 +160,79 @@ export async function POST(req: NextRequest) {
       return apiErrorResponse(error);
     }
 
-    return withTenant(tenantId, user.id, async () => {
-      const existingSame = await db.query.studentSections.findFirst({
-        where: and(
-          eq(studentSections.sectionId, section!.id),
-          eq(studentSections.studentId, user.id),
-        ),
-      });
-
-      if (!existingSame) {
-        const existingCourseEnrollments =
-          await db.query.studentSections.findMany({
-            where: and(
-              eq(studentSections.studentId, user.id),
-              eq(studentSections.status, 'ACTIVE'),
-            ),
-            with: { section: true },
-          });
-
-        const conflictingEnrollment = existingCourseEnrollments.find(
-          (e) =>
-            e.section.courseId === section!.courseId &&
-            !isSectionConcluded(e.section),
+    const workspaceId = await getCourseWorkspaceId(section.courseId);
+    if (workspaceId) {
+      const seats = await assertSeatAvailable(workspaceId);
+      if (!seats.ok) {
+        return NextResponse.json(
+          { error: seats.reason, seatCap: seats.cap, seatsUsed: seats.used },
+          { status: 403 },
         );
-
-        if (conflictingEnrollment) {
-          return NextResponse.json(
-            {
-              error:
-                'You are already enrolled in a section from this course. You cannot enroll in multiple sections from the same course.',
-            },
-            { status: 400 },
-          );
-        }
       }
+    }
 
-      const workspaceId = await getCourseWorkspaceId(section!.courseId);
-      if (workspaceId) {
-        const seats = await assertSeatAvailable(workspaceId);
-        if (!seats.ok) {
-          return NextResponse.json(
-            { error: seats.reason, seatCap: seats.cap, seatsUsed: seats.used },
-            { status: 403 },
-          );
-        }
-      }
-
-      const enrollResult = await upsertStudentEnrollment({
+    let enrollResult;
+    try {
+      enrollResult = await upsertStudentEnrollment({
         studentId: user.id,
-        sectionId: section!.id,
+        sectionId: section.id,
         source: 'code',
+        tenantId,
+        refuseCourseConflict: true,
       });
-
-      if (workspaceId) {
-        await ensureWorkspaceMembership({
-          workspaceId,
-          userId: user.id,
-          role: 'learner',
-        });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes('COURSE_SECTION_CONFLICT')) {
+        return NextResponse.json(
+          {
+            error:
+              'You are already enrolled in a section from this course. You cannot enroll in multiple sections from the same course.',
+          },
+          { status: 400 },
+        );
       }
+      throw error;
+    }
 
-      const meta = extractRequestMeta(req);
-      await logAudit({
-        actorUserId: user.id,
-        actorClerkId: user.clerkId,
-        action: 'education.enrollment.join',
-        targetType: 'section',
-        targetId: section!.id,
-        metadata: { courseId: section!.courseId },
-        ip: meta.ip,
-        userAgent: meta.userAgent,
+    if (workspaceId) {
+      await ensureWorkspaceMembership({
+        workspaceId,
+        userId: user.id,
+        role: 'learner',
       });
+    }
 
-      const course = await db.query.courses.findFirst({
-        where: eq(courses.id, section!.courseId),
-      });
+    const meta = extractRequestMeta(req);
+    await logAudit({
+      actorUserId: user.id,
+      actorClerkId: user.clerkId,
+      action: 'education.enrollment.join',
+      targetType: 'section',
+      targetId: section.id,
+      metadata: { courseId: section.courseId },
+      ip: meta.ip,
+      userAgent: meta.userAgent,
+    });
 
-      return NextResponse.json({
-        success: true,
-        message: enrollResult.created
-          ? 'Successfully enrolled in section'
-          : 'Enrollment updated for this section',
-        section: {
-          id: section!.id,
-          name: section!.name,
-          course: course
-            ? {
-                id: course.id,
-                title: course.title,
-              }
-            : null,
-        },
-      });
+    const course = await db.query.courses.findFirst({
+      where: eq(courses.id, section.courseId),
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: enrollResult.created
+        ? 'Successfully enrolled in section'
+        : 'Enrollment updated for this section',
+      section: {
+        id: section.id,
+        name: section.name,
+        course: course
+          ? {
+              id: course.id,
+              title: course.title,
+            }
+          : null,
+      },
     });
   } catch (error) {
     console.error('Enrollment error:', error);

@@ -150,52 +150,12 @@ export async function restoreAuthoringRevision(
     `Before restore: ${revision.label}`,
   );
 
-  await withOutlineTenant(revision.outlineId, user.id, async (tx) => {
-    for (const mod of snap.modules) {
-      await tx
-        .update(outlineModules)
-        .set({
-          title: mod.title,
-          summary: mod.summary,
-          position: mod.position,
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(outlineModules.id, mod.id),
-            eq(outlineModules.outlineId, revision.outlineId),
-          ),
-        );
-
-      for (const item of mod.items) {
-        await tx
-          .update(outlineItems)
-          .set({
-            title: item.title,
-            type: item.type as 'LESSON' | 'QUIZ' | 'DISCUSSION' | 'INTERACTIVE',
-            status: item.status as 'DRAFT' | 'PREVIEW' | 'PUBLISHED',
-            position: item.position,
-            body: item.body ?? {},
-            faithfulBody: item.faithfulBody ?? null,
-            variantOfItemId: item.variantOfItemId ?? null,
-            updatedAt: new Date(),
-          })
-          .where(
-            and(eq(outlineItems.id, item.id), isNull(outlineItems.deletedAt)),
-          );
-      }
-    }
-
-    await tx
-      .update(courseOutlines)
-      .set({
-        title: snap.title || undefined,
-        status: (snap.status as 'DRAFT' | 'READY' | 'ARCHIVED') || undefined,
-        bodiesBuilt: snap.bodiesBuilt ?? false,
-        hasPriorCorpus: snap.hasPriorCorpus ?? false,
-        updatedAt: new Date(),
-      })
-      .where(eq(courseOutlines.id, revision.outlineId));
+  const { restoreAuthoringSnapshotDefiner } = await import(
+    '@/lib/db/tenantWriteDefiners'
+  );
+  await restoreAuthoringSnapshotDefiner({
+    outlineId: revision.outlineId,
+    snapshot: snap,
   });
 
   return getOutlineDetail(user, revision.outlineId);

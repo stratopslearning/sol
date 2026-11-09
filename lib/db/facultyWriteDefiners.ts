@@ -383,3 +383,45 @@ export async function duplicateChatbotDefiner(payload: {
   if (!parsed?.id) throw new Error('sol_duplicate_chatbot returned no row');
   return parsed;
 }
+
+/** Seat-only membership upsert under FORCE RLS (0083). */
+export async function ensureWorkspaceMembershipDefiner(payload: {
+  workspaceId: string;
+  userId: string;
+  status?: 'active' | 'invited' | 'removed';
+}): Promise<void> {
+  await db.execute(sql`
+    SELECT sol_ensure_workspace_membership(${JSON.stringify(payload)}::jsonb)
+  `);
+}
+
+export type UpsertStudentEnrollmentDefinerResult = {
+  enrollmentId: string;
+  created: boolean;
+  reactivated: boolean;
+  sources: Array<'lti' | 'code' | 'csv' | 'invite'>;
+  tenantId: string | null;
+  offeringId: string | null;
+};
+
+/** Student section + offering enroll under FORCE RLS (0083). */
+export async function upsertStudentEnrollmentDefiner(payload: {
+  studentId: string;
+  sectionId: string;
+  source: 'lti' | 'code' | 'csv' | 'invite';
+  tenantId?: string | null;
+  offeringId?: string | null;
+  refuseCourseConflict?: boolean;
+  bestEffortOfferingSync?: boolean;
+}): Promise<UpsertStudentEnrollmentDefinerResult> {
+  const result = await db.execute(sql`
+    SELECT sol_upsert_student_enrollment(${JSON.stringify(payload)}::jsonb) AS row
+  `);
+  const parsed = parseJsonb<UpsertStudentEnrollmentDefinerResult>(
+    rowsFromExecute<{ row: unknown }>(result)[0]?.row,
+  );
+  if (!parsed?.enrollmentId) {
+    throw new Error('sol_upsert_student_enrollment returned no row');
+  }
+  return parsed;
+}

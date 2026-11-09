@@ -1,7 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { drizzle as drizzlePg } from 'drizzle-orm/node-postgres';
 import type { PoolClient } from 'pg';
+
+import * as schema from '@/app/db/schema';
 
 import type { TestDb } from './db';
 
@@ -75,6 +78,39 @@ export async function withTenantGuc<T>(
       tenantId,
     ]);
     const result = await fn(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (err) {
+    try {
+      await client.query('ROLLBACK');
+    } catch {
+      /* already aborted */
+    }
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Pin app.tenant_id on one pooled connection and run Drizzle work through it.
+ * Use for FORCE RLS seed helpers after sol_bootstrap_workspace.
+ */
+export async function withPinnedTenantDb<T>(
+  db: TestDb,
+  tenantId: string,
+  fn: (scoped: TestDb) => Promise<T>,
+): Promise<T> {
+  const client = await db.$client.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(`SELECT set_config('app.tenant_id', $1, true)`, [
+      tenantId,
+    ]);
+    const scoped = Object.assign(drizzlePg(client, { schema }), {
+      $client: db.$client,
+    }) as TestDb;
+    const result = await fn(scoped);
     await client.query('COMMIT');
     return result;
   } catch (err) {

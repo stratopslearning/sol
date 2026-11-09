@@ -133,37 +133,30 @@ export async function linkDocumentToCourse(
   const workspaceId = await getCourseWorkspaceId(courseId);
   if (!workspaceId) throw ApiError.badRequest('Course has no workspace');
 
-  await withTenant(workspaceId, user.id, async (tx) => {
-    const doc = await tx.query.knowledgeDocuments.findFirst({
-      where: and(
-        eq(knowledgeDocuments.id, documentId),
-        eq(knowledgeDocuments.workspaceId, workspaceId),
-        isNull(knowledgeDocuments.deletedAt),
-      ),
+  const { linkCourseKnowledgeDefiner } = await import(
+    '@/lib/db/tenantWriteDefiners'
+  );
+  try {
+    await linkCourseKnowledgeDefiner({
+      courseId,
+      documentId,
+      tenantId: workspaceId,
+      linkedByUserId: user.id,
+      authoringCorpus: opts?.authoringCorpus ?? 'this_term',
     });
-    if (!doc) throw ApiError.notFound('Document not found in workspace library');
-    if (doc.visibility === 'personal') {
-      throw ApiError.badRequest(
-        'Share this document to the library before attaching it to a course',
-      );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (message.includes('Document not found')) {
+      throw ApiError.notFound('Document not found in workspace library');
     }
-    if (!doc.currentVersionId) {
+    if (message.includes('Share this document')) {
+      throw ApiError.badRequest(message);
+    }
+    if (message.includes('no indexed version')) {
       throw ApiError.badRequest('Document has no indexed version yet');
     }
-
-    await tx
-      .insert(courseKnowledgeLinks)
-      .values({
-        courseId,
-        documentId,
-        tenantId: workspaceId,
-        linkedByUserId: user.id,
-        authoringCorpus: opts?.authoringCorpus ?? 'this_term',
-        pinnedVersionId: doc.currentVersionId,
-        updatedAt: new Date(),
-      })
-      .onConflictDoNothing();
-  });
+    throw err;
+  }
 }
 
 export async function setLinkedDocumentAuthoringCorpus(
@@ -176,19 +169,16 @@ export async function setLinkedDocumentAuthoringCorpus(
   const workspaceId = await getCourseWorkspaceId(courseId);
   if (!workspaceId) throw ApiError.badRequest('Course has no workspace');
 
-  const updated = await withTenant(workspaceId, user.id, async (tx) =>
-    tx
-      .update(courseKnowledgeLinks)
-      .set({ authoringCorpus: corpus, updatedAt: new Date() })
-      .where(
-        and(
-          eq(courseKnowledgeLinks.courseId, courseId),
-          eq(courseKnowledgeLinks.documentId, documentId),
-        ),
-      )
-      .returning(),
+  const { setCourseKnowledgeCorpusDefiner } = await import(
+    '@/lib/db/tenantWriteDefiners'
   );
-  if (updated.length === 0) {
+  const updated = await setCourseKnowledgeCorpusDefiner({
+    courseId,
+    documentId,
+    tenantId: workspaceId,
+    authoringCorpus: corpus,
+  });
+  if (updated === 0) {
     throw ApiError.notFound('Document is not attached to this course');
   }
 }
@@ -202,15 +192,13 @@ export async function unlinkDocumentFromCourse(
   const workspaceId = await getCourseWorkspaceId(courseId);
   if (!workspaceId) throw ApiError.badRequest('Course has no workspace');
 
-  await withTenant(workspaceId, user.id, async (tx) => {
-    await tx
-      .delete(courseKnowledgeLinks)
-      .where(
-        and(
-          eq(courseKnowledgeLinks.courseId, courseId),
-          eq(courseKnowledgeLinks.documentId, documentId),
-        ),
-      );
+  const { unlinkCourseKnowledgeDefiner } = await import(
+    '@/lib/db/tenantWriteDefiners'
+  );
+  await unlinkCourseKnowledgeDefiner({
+    courseId,
+    documentId,
+    tenantId: workspaceId,
   });
 }
 

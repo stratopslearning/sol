@@ -63,37 +63,23 @@ export async function createSectionStudentInvite(opts: {
   const tokenHash = hashToken(token);
   const expiresAt = new Date(Date.now() + INVITE_TTL_MS);
 
-  const invite = await withTenant(opts.tenantId, opts.invitedBy, async (tx) => {
-    await tx
-      .update(sectionStudentInvites)
-      .set({ expiresAt: new Date() })
-      .where(
-        and(
-          eq(sectionStudentInvites.sectionId, opts.sectionId),
-          sql`lower(${sectionStudentInvites.email}) = ${email}`,
-          isNull(sectionStudentInvites.claimedAt),
-        ),
-      );
-
-    const [row] = await tx
-      .insert(sectionStudentInvites)
-      .values({
-        tenantId: opts.tenantId,
-        sectionId: opts.sectionId,
-        email,
-        tokenHash,
-        invitedBy: opts.invitedBy,
-        expiresAt,
-      })
-      .returning();
-    return row;
+  const { createStudentInviteDefiner } = await import(
+    '@/lib/db/tenantWriteDefiners'
+  );
+  const invite = await createStudentInviteDefiner({
+    tenantId: opts.tenantId,
+    sectionId: opts.sectionId,
+    email,
+    tokenHash,
+    invitedBy: opts.invitedBy,
+    expiresAt: expiresAt.toISOString(),
   });
 
   return {
     inviteId: invite.id,
     token,
     claimUrl: buildClaimUrl(token, opts.baseUrl),
-    expiresAt,
+    expiresAt: invite.expiresAt,
   };
 }
 

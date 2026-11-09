@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { db } from '@/app/db';
-import { users, workspaceInvites, workspaces } from '@/app/db/schema';
+import { users } from '@/app/db/schema';
 import { apiErrorResponse } from '@/lib/api/errors';
 import { logAudit } from '@/lib/audit';
 import { getRequiredBaseUrl } from '@/lib/stripe';
@@ -49,26 +49,45 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid body' }, { status: 400 });
     }
 
-    const workspace = await db.query.workspaces.findFirst({
-      where: eq(workspaces.id, workspaceId),
-    });
-    if (!workspace) {
+    // FORCE RLS: platform staff often have no membership — use DEFINER fetch.
+    const fetched = await db.execute(sql`
+      SELECT workspace FROM sol_fetch_provisioned_workspace(${workspaceId}::uuid)
+    `);
+    const fetchedRows =
+      (fetched as unknown as { rows?: { workspace: unknown }[] }).rows ??
+      (Array.isArray(fetched) ? (fetched as { workspace: unknown }[]) : []);
+    const wsRaw = fetchedRows[0]?.workspace as
+      | { id?: string; name?: string; slug?: string; status?: string }
+      | null
+      | undefined;
+    if (!wsRaw?.id) {
       return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
     }
-    if (workspace.status === 'churned') {
+    if (wsRaw.status === 'churned') {
       return NextResponse.json(
         { error: 'Cannot invite on a churned workspace' },
         { status: 400 },
       );
     }
+    const workspace = {
+      id: String(wsRaw.id),
+      name: String(wsRaw.name ?? ''),
+      slug: String(wsRaw.slug ?? ''),
+      status: String(wsRaw.status ?? ''),
+    };
 
     let email = parsed.data.email?.trim().toLowerCase();
     if (!email) {
-      const pending = await db.query.workspaceInvites.findFirst({
-        where: eq(workspaceInvites.workspaceId, workspaceId),
-        orderBy: (t, { desc }) => [desc(t.createdAt)],
-      });
-      email = pending?.email?.toLowerCase();
+      // Directory is owner-owned (BYPASSRLS) and already coalesces invite email.
+      const dir = await db.execute(sql`
+        SELECT owner_email
+        FROM sol_admin_workspace_directory()
+        WHERE id = ${workspaceId}::uuid
+      `);
+      const dirRows =
+        (dir as unknown as { rows?: { owner_email: string | null }[] }).rows ??
+        (Array.isArray(dir) ? (dir as { owner_email: string | null }[]) : []);
+      email = dirRows[0]?.owner_email?.trim().toLowerCase() || undefined;
     }
     if (!email) {
       return NextResponse.json(

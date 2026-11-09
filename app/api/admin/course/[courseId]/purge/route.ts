@@ -7,10 +7,14 @@ import { eq } from 'drizzle-orm';
 import { auth } from '@clerk/nextjs/server';
 
 import { db } from '@/app/db';
-import { courses, users } from '@/app/db/schema';
+import { users } from '@/app/db/schema';
 import { apiErrorResponse } from '@/lib/api/errors';
 import { extractRequestMeta, logAudit } from '@/lib/audit';
 import { requireSupportGrant } from '@/lib/authz/requireSupportGrant';
+import {
+  adminFetchCourseDefiner,
+  adminPurgeCourseDefiner,
+} from '@/lib/db/tenantWriteDefiners';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,13 +39,13 @@ export async function DELETE(
       );
     }
 
-    const targetCourse = await db.query.courses.findFirst({
-      where: eq(courses.id, courseId),
-    });
+    const targetCourse = await adminFetchCourseDefiner(courseId);
     if (!targetCourse) {
       return NextResponse.json({ error: 'Course not found' }, { status: 404 });
     }
-    const tenantId = targetCourse.tenantId ?? targetCourse.workspaceId;
+    const tenantId =
+      (targetCourse.tenant_id as string | null) ??
+      (targetCourse.workspace_id as string | null);
     if (!tenantId) {
       return NextResponse.json({ error: 'Course missing tenant' }, { status: 400 });
     }
@@ -55,7 +59,7 @@ export async function DELETE(
       { action: 'support.tenant_access', targetType: 'course', targetId: courseId },
     );
 
-    await db.delete(courses).where(eq(courses.id, courseId));
+    await adminPurgeCourseDefiner(courseId);
 
     const meta = extractRequestMeta(request);
     await logAudit({

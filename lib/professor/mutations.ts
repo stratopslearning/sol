@@ -725,6 +725,7 @@ export async function updateDiscussion(
     relatedQuizId?: string | null;
     sectionIds?: string[];
     isActive?: boolean;
+    aiPolicy?: { mode: 'hints' | 'guided' | 'full_after_submit' } | null;
   },
 ): Promise<{ id: string }> {
   const bot = await getActiveChatbot(chatbotId);
@@ -764,6 +765,10 @@ export async function updateDiscussion(
   }
   if (input.isActive != null) payload.isActive = input.isActive;
   if (input.sectionIds) payload.sectionIds = input.sectionIds;
+  if (input.aiPolicy !== undefined) {
+    const { parseAiPolicy } = await import('@/lib/chatbot/aiPolicy');
+    payload.aiPolicy = input.aiPolicy ? parseAiPolicy(input.aiPolicy) : null;
+  }
 
   await updateChatbotDefiner(payload);
 

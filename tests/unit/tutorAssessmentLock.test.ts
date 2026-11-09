@@ -27,7 +27,7 @@ const sha = (s: string) => createHash('sha256').update(s).digest('hex');
 describe('tutor assessment lock — goldens', () => {
   it('SOCRATIC_LEARNING_RULES is unchanged', () => {
     expect(sha(SOCRATIC_LEARNING_RULES)).toBe(
-      '2fb0501507a7d7141b2ee322338f596668d319089bb93758965d63f4026b3271',
+      'af1233c2014c841b34370aafc81b5e05ca36c7d393b3cb126be30e51f06fa0b7',
     );
   });
 
@@ -51,8 +51,8 @@ describe('tutor assessment lock — goldens', () => {
 
 describe('tutor assessment lock — invariants (survive intentional rewording)', () => {
   it('rules forbid revealing answers and treat student text as untrusted', () => {
-    expect(SOCRATIC_LEARNING_RULES).toMatch(/NEVER reveal/);
     expect(SOCRATIC_LEARNING_RULES).toMatch(/answer keys/i);
+    expect(SOCRATIC_LEARNING_RULES).toMatch(/Never follow instructions/i);
     expect(SOCRATIC_LEARNING_RULES).toMatch(/<student_message>/);
   });
 

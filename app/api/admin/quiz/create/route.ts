@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/app/db';
-import { quizzes, questions, quizSections, sections, users } from '@/app/db/schema';
+import { sections, users } from '@/app/db/schema';
 import { eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { auth } from '@clerk/nextjs/server';
@@ -8,6 +8,11 @@ import { auth } from '@clerk/nextjs/server';
 import { apiErrorResponse } from '@/lib/api/errors';
 import { readJsonBody } from '@/lib/api/readJsonBody';
 import { requireSupportGrant } from '@/lib/authz/requireSupportGrant';
+import {
+  createQuizDefiner,
+  fetchOfferingIdsForCourse,
+  fetchSectionById,
+} from '@/lib/db/entityScopedReads';
 import { quizCreateBaseSchema } from '@/lib/quizSchemas';
 
 export const dynamic = 'force-dynamic';
@@ -28,7 +33,10 @@ export async function POST(req: NextRequest) {
     const validatedData = createQuizSchema.parse(body);
 
     if (!validatedData.sectionIds || validatedData.sectionIds.length === 0) {
-      return NextResponse.json({ error: 'At least one section must be assigned to the quiz.' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'At least one section must be assigned to the quiz.' },
+        { status: 400 },
+      );
     }
 
     const assignedSections = await db.query.sections.findMany({
@@ -63,51 +71,46 @@ export async function POST(req: NextRequest) {
       { action: 'support.tenant_access', targetType: 'workspace', targetId: tenantId },
     );
 
-    // Atomic creation: quiz + questions + section assignments.
-    const newQuiz = await db.transaction(async (tx) => {
-      const [created] = await tx.insert(quizzes).values({
-        title: validatedData.title,
-        description: validatedData.description,
-        professorId: user.id,
-        tenantId,
-        maxAttempts: validatedData.maxAttempts,
-        timeLimit: validatedData.timeLimit,
-        passingScore: validatedData.passingScore,
-        startDate: new Date(validatedData.startDate),
-        endDate: new Date(validatedData.endDate),
-        isActive: true,
-      }).returning();
+    const targetSection = await fetchSectionById(validatedData.sectionIds[0]!);
+    if (!targetSection) {
+      return NextResponse.json({ error: 'Section not found' }, { status: 404 });
+    }
+    let offeringId: string | null = targetSection.offeringId ?? null;
+    if (!offeringId && targetSection.courseId) {
+      const offeringIds = await fetchOfferingIdsForCourse(targetSection.courseId);
+      offeringId = offeringIds[0] ?? null;
+    }
+    const courseId: string | null = targetSection.courseId ?? null;
 
-      if (validatedData.questions.length > 0) {
-        await tx.insert(questions).values(
-          validatedData.questions.map((q) => ({
-            quizId: created.id,
-            type: q.type,
-            question: q.question,
-            options: q.options,
-            correctAnswer: q.correctAnswer,
-            points: q.points,
-            order: q.order,
-          })),
-        );
-      }
-
-      await tx.insert(quizSections).values(
-        validatedData.sectionIds.map((sectionId: string) => ({
-          quizId: created.id,
-          sectionId,
-          assignedBy: user.id,
-        })),
-      );
-
-      return created;
+    const quizId = await createQuizDefiner({
+      title: validatedData.title,
+      description: validatedData.description ?? null,
+      professorId: user.id,
+      tenantId,
+      offeringId,
+      courseId,
+      maxAttempts: validatedData.maxAttempts,
+      timeLimit: validatedData.timeLimit ?? null,
+      passingScore: validatedData.passingScore,
+      startDate: new Date(validatedData.startDate).toISOString(),
+      endDate: new Date(validatedData.endDate).toISOString(),
+      isActive: true,
+      sectionIds: validatedData.sectionIds,
+      questions: validatedData.questions.map((q) => ({
+        type: q.type,
+        question: q.question,
+        options: q.options,
+        correctAnswer: q.correctAnswer,
+        points: q.points,
+        order: q.order,
+      })),
     });
 
     return NextResponse.json({
       success: true,
       quiz: {
-        id: newQuiz.id,
-        title: newQuiz.title,
+        id: quizId,
+        title: validatedData.title,
         sectionIds: validatedData.sectionIds,
       },
     });
@@ -118,4 +121,4 @@ export async function POST(req: NextRequest) {
     }
     return apiErrorResponse(error);
   }
-} 
+}

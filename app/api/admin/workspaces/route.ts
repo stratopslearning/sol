@@ -170,8 +170,18 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     console.error('[admin/workspaces POST]', error);
-    if (error instanceof Error && /unique|duplicate/i.test(error.message)) {
-      return NextResponse.json({ error: 'Slug already exists' }, { status: 409 });
+    const message =
+      error instanceof Error
+        ? `${error.message} ${String((error as { cause?: unknown }).cause ?? '')}`
+        : String(error);
+    if (/unique|duplicate|already exists/i.test(message)) {
+      return NextResponse.json(
+        {
+          error:
+            'That slug already exists. Pick a new slug, or use Resend invite on the existing workspace.',
+        },
+        { status: 409 },
+      );
     }
     if (error instanceof Error && /email/i.test(error.message)) {
       return NextResponse.json({ error: error.message }, { status: 400 });

@@ -1,18 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
-import { db } from '@/app/db';
-import { chatbotSections, chatbots } from '@/app/db/schema';
-import {
-  professorCanLinkQuiz,
-  professorEnrolledInSections,
-} from '@/lib/chatbot/access';
-import { parseAiPolicy } from '@/lib/chatbot/aiPolicy';
-import { CHATBOT_MODEL } from '@/lib/chatbot/constants';
 import { ApiError, jsonError } from '@/lib/api/errors';
 import { requireProfessorApi } from '@/lib/api/professorAuth';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
 import { readJsonBody } from '@/lib/api/readJsonBody';
+import { createDiscussion } from '@/lib/professor/mutations';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,55 +34,7 @@ export async function POST(req: NextRequest) {
     if (limited) return limited;
 
     const body = createSchema.parse(await readJsonBody(req));
-
-    {
-      const ok = await professorEnrolledInSections(user, body.sectionIds);
-      if (!ok) {
-        return NextResponse.json(
-          { error: 'You can only assign discussions to sections you teach' },
-          { status: 403 },
-        );
-      }
-      if (body.relatedQuizId) {
-        const canLink = await professorCanLinkQuiz(user, body.relatedQuizId);
-        if (!canLink) {
-          return NextResponse.json(
-            { error: 'You cannot link that quiz' },
-            { status: 403 },
-          );
-        }
-      }
-    }
-
-    const created = await db.transaction(async (tx) => {
-      const [bot] = await tx
-        .insert(chatbots)
-        .values({
-          professorId: user.id,
-          title: body.title,
-          description: body.description ?? null,
-          personaName: body.personaName,
-          instructions: body.instructions,
-          systemPrompt: body.systemPrompt,
-          relatedQuizId: body.relatedQuizId ?? null,
-          isTemplate: false,
-          model: CHATBOT_MODEL,
-          isActive: true,
-        })
-        .returning();
-
-      if (body.sectionIds.length > 0) {
-        await tx.insert(chatbotSections).values(
-          body.sectionIds.map((sectionId) => ({
-            chatbotId: bot.id,
-            sectionId,
-            assignedBy: user.id,
-          })),
-        );
-      }
-
-      return bot;
-    });
+    const created = await createDiscussion(user, body);
 
     return NextResponse.json({
       success: true,
