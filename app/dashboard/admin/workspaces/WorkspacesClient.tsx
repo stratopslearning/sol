@@ -24,6 +24,9 @@ type Props = {
   parentOptions: { id: string; name: string }[];
 };
 
+const fieldLabel = 'text-[0.65rem] font-medium uppercase tracking-[0.06em] text-ink-faint';
+const control = 'h-8 text-sm';
+
 export function WorkspacesClient({ parentOptions }: Props) {
   const router = useRouter();
   const [slug, setSlug] = useState('');
@@ -35,6 +38,7 @@ export function WorkspacesClient({ parentOptions }: Props) {
     String(defaultTierForSku('department').seatCap),
   );
   const [ownerEmail, setOwnerEmail] = useState('');
+  const [slugTouched, setSlugTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [claimUrl, setClaimUrl] = useState<string | null>(null);
@@ -42,13 +46,17 @@ export function WorkspacesClient({ parentOptions }: Props) {
 
   const tiers = useMemo(() => tiersForSku(type), [type]);
 
-  /** Lowercase kebab slug. Hyphen first so HTML `pattern` is valid under unicodeSets (`v`). */
   function normalizeSlug(raw: string): string {
     return raw
       .toLowerCase()
       .replace(/[^a-z0-9-]+/g, '-')
       .replace(/-+/g, '-')
       .replace(/^-+|-+$/g, '');
+  }
+
+  function onNameChange(raw: string) {
+    setName(raw);
+    if (!slugTouched) setSlug(normalizeSlug(raw));
   }
 
   function onTypeChange(next: WorkspaceSku) {
@@ -89,7 +97,7 @@ export function WorkspacesClient({ parentOptions }: Props) {
         setError(
           data.error ||
             (res.status === 400
-              ? 'Check slug (lowercase letters, numbers, hyphens) and owner email.'
+              ? 'Check slug and owner email.'
               : 'Failed to create workspace'),
         );
         return;
@@ -97,19 +105,16 @@ export function WorkspacesClient({ parentOptions }: Props) {
       setSlug('');
       setName('');
       setOwnerEmail('');
+      setSlugTouched(false);
       setClaimUrl(data.invite?.claimUrl ?? null);
       if (data.emailSkipped) {
         setError(
-          'Workspace created, but email is disabled (EMAIL_ENABLED). Copy the claim link below.',
+          'Created — email disabled. Copy the claim link.',
         );
       } else if (data.emailError) {
-        setError(
-          `Workspace created, but invite email failed: ${data.emailError}. Copy the claim link below.`,
-        );
+        setError(`Created — email failed: ${data.emailError}. Copy link.`);
       } else if (data.emailSent === false) {
-        setError(
-          'Workspace created, but invite email did not send. Copy the claim link below.',
-        );
+        setError('Created — email did not send. Copy the claim link.');
       }
       router.refresh();
     } catch {
@@ -131,76 +136,103 @@ export function WorkspacesClient({ parentOptions }: Props) {
   }
 
   return (
-    <div className="grid gap-4">
+    <div className="space-y-3">
       <form
         onSubmit={onSubmit}
-        className="grid gap-4 rounded-lg border border-rule/70 bg-surface p-4"
+        className="space-y-3 rounded-lg border border-rule/70 bg-surface p-3"
       >
-        <div className="grid gap-2">
-          <Label htmlFor="ws-name">Name</Label>
-          <Input
-            id="ws-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-            placeholder="College of Engineering"
-          />
+        <div className="grid grid-cols-2 gap-2">
+          <div className="grid gap-1">
+            <Label htmlFor="ws-name" className={fieldLabel}>
+              Name
+            </Label>
+            <Input
+              id="ws-name"
+              className={control}
+              value={name}
+              onChange={(e) => onNameChange(e.target.value)}
+              required
+              placeholder="College of Engineering"
+            />
+          </div>
+          <div className="grid gap-1">
+            <Label htmlFor="ws-slug" className={fieldLabel}>
+              Slug
+            </Label>
+            <Input
+              id="ws-slug"
+              className={control}
+              value={slug}
+              onChange={(e) => {
+                setSlugTouched(true);
+                setSlug(normalizeSlug(e.target.value));
+              }}
+              required
+              placeholder="engineering"
+              inputMode="text"
+              autoComplete="off"
+              spellCheck={false}
+              title="Lowercase letters, numbers, and hyphens"
+            />
+          </div>
         </div>
-        <div className="grid gap-2">
-          <Label htmlFor="ws-slug">Slug</Label>
-          <Input
-            id="ws-slug"
-            value={slug}
-            onChange={(e) => setSlug(normalizeSlug(e.target.value))}
-            required
-            placeholder="engineering"
-            inputMode="text"
-            autoComplete="off"
-            spellCheck={false}
-            title="Lowercase letters, numbers, and hyphens only"
-          />
-          <p className="text-xs text-ink-faint">
-            URL id — letters, numbers, hyphens (spaces become hyphens).
-          </p>
+
+        <div className="grid grid-cols-2 gap-2">
+          <div className="grid gap-1">
+            <Label className={fieldLabel}>Type</Label>
+            <Select
+              value={type}
+              onValueChange={(v) => onTypeChange(v as WorkspaceSku)}
+            >
+              <SelectTrigger className={`w-full ${control}`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="creator">Creator</SelectItem>
+                <SelectItem value="business">Business</SelectItem>
+                <SelectItem value="department">Department</SelectItem>
+                <SelectItem value="institution">Institution</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-1">
+            <Label htmlFor="ws-seats" className={fieldLabel}>
+              Seats
+            </Label>
+            <Input
+              id="ws-seats"
+              className={control}
+              type="number"
+              min={1}
+              value={seatCap}
+              onChange={(e) => setSeatCap(e.target.value)}
+            />
+          </div>
         </div>
-        <div className="grid gap-2">
-          <Label>Type</Label>
-          <Select
-            value={type}
-            onValueChange={(v) => onTypeChange(v as WorkspaceSku)}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="creator">Creator</SelectItem>
-              <SelectItem value="business">Business</SelectItem>
-              <SelectItem value="department">Department</SelectItem>
-              <SelectItem value="institution">Institution</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="grid gap-2">
-          <Label>Pricing tier</Label>
+
+        <div className="grid gap-1">
+          <Label className={fieldLabel}>Pricing tier</Label>
           <Select value={tierId} onValueChange={onTierChange}>
-            <SelectTrigger className="w-full">
+            <SelectTrigger className={`w-full ${control}`}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               {tiers.map((t) => (
                 <SelectItem key={t.id} value={t.id}>
-                  {t.label} · {t.seatCap.toLocaleString()} seats · $
-                  {t.priceUsd.toLocaleString()}/{t.period === 'month' ? 'mo' : 'yr'}
+                  {t.label} · {t.seatCap.toLocaleString()} · $
+                  {t.priceUsd.toLocaleString()}/
+                  {t.period === 'month' ? 'mo' : 'yr'}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
+
         {type === 'department' ? (
-          <div className="grid gap-2">
-            <Label>Parent institution (optional)</Label>
+          <div className="grid gap-1">
+            <Label className={fieldLabel}>Parent institution</Label>
             <Select value={parentId} onValueChange={setParentId}>
-              <SelectTrigger className="w-full">
+              <SelectTrigger className={`w-full ${control}`}>
                 <SelectValue placeholder="None" />
               </SelectTrigger>
               <SelectContent>
@@ -214,54 +246,42 @@ export function WorkspacesClient({ parentOptions }: Props) {
             </Select>
           </div>
         ) : null}
-        <div className="grid gap-2">
-          <Label htmlFor="ws-seats">Seat cap (active learners)</Label>
-          <Input
-            id="ws-seats"
-            type="number"
-            min={1}
-            value={seatCap}
-            onChange={(e) => setSeatCap(e.target.value)}
-          />
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="ws-owner">Owner email</Label>
+
+        <div className="grid gap-1">
+          <Label htmlFor="ws-owner" className={fieldLabel}>
+            Owner email
+          </Label>
           <Input
             id="ws-owner"
+            className={control}
             type="email"
             value={ownerEmail}
             onChange={(e) => setOwnerEmail(e.target.value)}
             required
             placeholder="chair@university.edu"
           />
-          <p className="text-xs text-ink-muted">
-            Client signs in with this email, claims the workspace, then pays
-            (Creator/Business) and creates courses. They never get platform
-            admin.
-          </p>
         </div>
+
         {error ? (
-          <p className="text-sm text-destructive">{error}</p>
+          <p className="text-xs text-destructive">{error}</p>
         ) : null}
-        <Button type="submit" disabled={busy}>
-          {busy ? 'Creating…' : 'Create workspace & invite owner'}
+
+        <Button type="submit" size="sm" className="w-full" disabled={busy}>
+          {busy ? 'Creating…' : 'Create & invite'}
         </Button>
       </form>
 
       {claimUrl ? (
-        <div className="rounded-lg border border-success/40 bg-success-soft/30 p-4">
-          <p className="text-sm font-medium text-ink">Workspace created</p>
-          <p className="mt-1 text-xs text-ink-muted">
-            Send this claim link to the owner. It is only shown once.
-          </p>
-          <code className="mt-3 block break-all rounded-md border border-rule/60 bg-surface px-3 py-2 text-xs">
+        <div className="space-y-2 rounded-lg border border-success/40 bg-success-soft/30 p-3">
+          <p className="text-xs font-medium text-ink">Claim link (shown once)</p>
+          <code className="block break-all rounded-md border border-rule/60 bg-surface px-2 py-1.5 text-[0.7rem] leading-snug">
             {claimUrl}
           </code>
           <Button
             type="button"
             size="sm"
-            className="mt-3"
             variant="outline"
+            className="h-7"
             onClick={copyClaim}
           >
             {copied ? 'Copied' : 'Copy link'}

@@ -109,20 +109,20 @@ export default async function AdminWorkspacesPage() {
         </div>
       </AdminSection>
 
-      <div className="mt-14 grid gap-10 lg:grid-cols-[minmax(0,1.4fr)_minmax(18rem,0.9fr)] lg:items-start">
+      <div className="mt-14 grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,18rem)] lg:items-start">
         <AdminSection
           first
           className="!mt-0"
           eyebrow="Directory"
           title="All workspaces"
-          description="Filter by type or billing. Owner email comes from active membership or latest invite."
+          description="Filter by type or billing."
         >
           {clientOnly.length === 0 ? (
             <EmptyState
               icon={<Building2 className="h-5 w-5" />}
               eyebrow="No client tenants"
               title="Only the default workspace exists."
-              description="Use the provision form to create a Creator, Business, Department, or Institution workspace and invite the owner by email."
+              description="Use Provision to create a workspace and invite the owner."
             />
           ) : null}
           <WorkspacesDirectory rows={directoryRows} />
@@ -132,8 +132,8 @@ export default async function AdminWorkspacesPage() {
           first
           className="!mt-0 lg:sticky lg:top-6"
           eyebrow="Provision"
-          title="Add a workspace"
-          description="Set type, tier, and owner email. Share the claim link — they pay (if Stripe) and create courses."
+          title="Add workspace"
+          description="Type, tier, owner — then share the claim link."
         >
           <WorkspacesClient
             parentOptions={institutions.map((i) => ({

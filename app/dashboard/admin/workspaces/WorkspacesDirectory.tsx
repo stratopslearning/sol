@@ -101,7 +101,7 @@ export function WorkspacesDirectory({ rows }: { rows: WorkspaceDirectoryRow[] })
           { value: 'pending_claim', label: 'Pending claim' },
         ]}
       />
-      <div className="overflow-x-auto rounded-lg border border-rule/70">
+      <div className="rounded-lg border border-rule/70">
         <Table>
           <TableHeader>
             <TableRow>
@@ -112,7 +112,16 @@ export function WorkspacesDirectory({ rows }: { rows: WorkspaceDirectoryRow[] })
               <TableHead>License</TableHead>
               <TableHead>Seats</TableHead>
               <TableHead>Created</TableHead>
-              <TableHead className="w-12 text-right"> </TableHead>
+              <TableHead
+                className={[
+                  'sticky right-0 z-20 w-[1%] text-right',
+                  'bg-surface-sunken',
+                  'shadow-[-10px_0_10px_-10px_rgba(0,0,0,0.45)]',
+                  'border-l border-rule/60',
+                ].join(' ')}
+              >
+                <span className="sr-only">Actions</span>
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -127,7 +136,7 @@ export function WorkspacesDirectory({ rows }: { rows: WorkspaceDirectoryRow[] })
               </TableRow>
             ) : (
               filtered.map((w) => (
-                <TableRow key={w.id}>
+                <TableRow key={w.id} className="group">
                   <TableCell>
                     <div className="font-medium text-ink">{w.name}</div>
                     <div className="text-xs text-ink-muted">{w.slug}</div>
@@ -175,7 +184,14 @@ export function WorkspacesDirectory({ rows }: { rows: WorkspaceDirectoryRow[] })
                   <TableCell className="text-xs text-ink-muted whitespace-nowrap">
                     <LocalDateTime value={w.createdAt} dateOnly />
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell
+                    className={[
+                      'sticky right-0 z-10 text-right',
+                      'bg-surface group-hover:bg-surface-sunken/60',
+                      'shadow-[-10px_0_10px_-10px_rgba(0,0,0,0.45)]',
+                      'border-l border-rule/60',
+                    ].join(' ')}
+                  >
                     <div className="inline-flex items-center justify-end gap-0.5">
                       <Button asChild variant="ghost" size="sm" className="h-8 px-2">
                         <Link
