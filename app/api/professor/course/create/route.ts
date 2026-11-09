@@ -4,13 +4,12 @@ import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { db } from '@/app/db';
-import { courses, users } from '@/app/db/schema';
-import { withRequestTenant } from '@/lib/db/requestTenant';
-import { withTenant } from '@/lib/db/tenantContext';
+import { users } from '@/app/db/schema';
+import { createCourseDefiner } from '@/lib/db/entityScopedReads';
 import { cloneCourseKnowledgeLinks } from '@/lib/knowledge/documents';
 import { assertCanManageCourse } from '@/lib/knowledge/access';
 import { hasActiveSupportAccess } from '@/lib/authz/supportAccess';
-import { bindLeadInstructor, ensureOffering } from '@/lib/offerings/create';
+import { bindLeadInstructor } from '@/lib/offerings/create';
 import { createSectionForCourse } from '@/lib/professor/createSection';
 import {
   assertWorkspaceAllowsCourseCreate,
@@ -98,46 +97,21 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    type CourseRow = typeof courses.$inferSelect;
+    // FORCE RLS: Neon drops withTenant GUCs — create via SECURITY DEFINER.
+    const created = await createCourseDefiner({
+      workspaceId,
+      title: validatedData.title,
+      description: validatedData.description || null,
+      createdByUserId: isStaff ? null : user.id,
+      bindCreator: !isStaff,
+    });
 
-    const insertCourse = async (
-      tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
-    ) => {
-      const [row] = await tx
-        .insert(courses)
-        .values({
-          workspaceId,
-          tenantId: workspaceId,
-          title: validatedData.title,
-          description: validatedData.description || null,
-          status: 'ACTIVE',
-          isActive: true,
-        })
-        .returning();
-      await ensureOffering(tx, {
-        courseId: row!.id,
-        tenantId: workspaceId!,
-      });
-      return row!;
-    };
-
-    const newCourse: CourseRow =
-      isStaff
-        ? await withTenant(workspaceId, user.id, insertCourse)
-        : await withRequestTenant(user, insertCourse, workspaceId);
-
-    // Lead bind under tenant GUC (upsertRoleBinding uses global db).
-    if (!isStaff) {
-      await withTenant(workspaceId, user.id, async (tx) => {
-        const offering = await ensureOffering(tx, {
-          courseId: newCourse.id,
-          tenantId: workspaceId!,
-        });
-        await bindLeadInstructor({
-          tenantId: workspaceId!,
-          offeringId: offering.id,
-          userId: user.id,
-        });
+    if (!isStaff && created.offeringId) {
+      // Idempotent if DEFINER already bound lead_instructor.
+      await bindLeadInstructor({
+        tenantId: workspaceId,
+        offeringId: created.offeringId,
+        userId: user.id,
       });
     }
 
@@ -146,7 +120,7 @@ export async function POST(req: NextRequest) {
       null;
     if (createDefaultSection && !isStaff) {
       section = await createSectionForCourse(user, {
-        courseId: newCourse.id,
+        courseId: created.id,
         name: validatedData.sectionName?.trim() || 'Main',
       });
     }
@@ -159,7 +133,7 @@ export async function POST(req: NextRequest) {
       );
       clonedKnowledgeLinks = await cloneCourseKnowledgeLinks(
         validatedData.cloneKnowledgeFromCourseId,
-        newCourse.id,
+        created.id,
         user.id,
       );
     }
@@ -167,12 +141,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       course: {
-        id: newCourse.id,
-        title: newCourse.title,
-        description: newCourse.description,
-        status: newCourse.status,
-        workspaceId: newCourse.workspaceId,
-        createdAt: newCourse.createdAt,
+        id: created.id,
+        title: created.title,
+        description: created.description,
+        status: created.status,
+        workspaceId: created.workspaceId,
+        createdAt: created.createdAt,
       },
       section,
       clonedKnowledgeLinks,

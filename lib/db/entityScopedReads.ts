@@ -888,6 +888,48 @@ export async function setKnowledgeDocumentTitleDefiner(
   `);
 }
 
+/** Create course + default offering + optional lead bind — SECURITY DEFINER. */
+export async function createCourseDefiner(payload: {
+  workspaceId: string;
+  title: string;
+  description?: string | null;
+  createdByUserId?: string | null;
+  bindCreator?: boolean;
+}): Promise<{
+  id: string;
+  workspaceId: string;
+  tenantId: string | null;
+  title: string;
+  description: string | null;
+  status: string;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  offeringId: string | null;
+}> {
+  const result = await db.execute(sql`
+    SELECT sol_create_course(${JSON.stringify(payload)}::jsonb) AS row
+  `);
+  const raw = rowsFromExecute<{ row: unknown }>(result)[0]?.row;
+  const row =
+    typeof raw === 'string'
+      ? (JSON.parse(raw) as Record<string, unknown>)
+      : (raw as Record<string, unknown> | undefined);
+  if (!row?.id) throw new Error('sol_create_course returned no row');
+  return {
+    id: String(row.id),
+    workspaceId: String(row.workspaceId ?? payload.workspaceId),
+    tenantId: (row.tenantId as string | null) ?? payload.workspaceId,
+    title: String(row.title ?? payload.title),
+    description: (row.description as string | null) ?? null,
+    status: String(row.status ?? 'ACTIVE'),
+    isActive: Boolean(row.isActive ?? true),
+    createdAt: asDate(row.createdAt as Date | string | null | undefined) ?? new Date(),
+    updatedAt: asDate(row.updatedAt as Date | string | null | undefined) ?? new Date(),
+    offeringId: row.offeringId ? String(row.offeringId) : null,
+  };
+}
+
 /** Create section + default offering + optional lead bind — SECURITY DEFINER. */
 export async function createSectionDefiner(payload: {
   courseId: string;

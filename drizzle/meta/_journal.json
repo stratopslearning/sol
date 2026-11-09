@@ -575,6 +575,13 @@
       "when": 1785100000000,
       "tag": "0081_fetch_provisioned_workspace",
       "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1785200000000,
+      "tag": "0082_create_course_definer",
+      "breakpoints": true
     }
   ]
 }
