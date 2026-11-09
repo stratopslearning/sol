@@ -141,7 +141,9 @@ export function WorkspacesClient({ parentOptions }: Props) {
             onChange={(e) => setSlug(normalizeSlug(e.target.value))}
             required
             placeholder="engineering"
-            pattern="[-a-z0-9]+"
+            inputMode="text"
+            autoComplete="off"
+            spellCheck={false}
             title="Lowercase letters, numbers, and hyphens only"
           />
           <p className="text-xs text-ink-faint">

@@ -201,30 +201,38 @@ export async function provisionWorkspace(
     )
   `);
 
-  const workspace = await withTenant(workspaceId, actorId, async (tx) => {
-    const row = await tx.query.workspaces.findFirst({
-      where: eq(workspaces.id, workspaceId),
-    });
-    if (!row) {
-      throw new Error('Workspace bootstrap succeeded but row is not visible');
-    }
-    await ensureDefaultFacultyJoinLinkTx(tx, {
-      workspaceId,
-      ownerUserId: input.ownerUserId ?? null,
-      existingSettings: initialSettings,
-    });
-    return row;
-  });
+  // Neon pool/WS often drops transaction-local app.tenant_id GUCs between
+  // statements, so FORCE RLS hides the new row after bootstrap. Read via DEFINER.
+  const fetched = await db.execute(sql`
+    SELECT workspace, license
+    FROM sol_fetch_provisioned_workspace(${workspaceId}::uuid)
+  `);
+  const fetchedRows =
+    (fetched as unknown as { rows?: { workspace: unknown; license: unknown }[] })
+      .rows ??
+    (Array.isArray(fetched)
+      ? (fetched as { workspace: unknown; license: unknown }[])
+      : []);
+  const bundle = fetchedRows[0];
+  if (!bundle?.workspace) {
+    throw new Error('Workspace bootstrap succeeded but row is not visible');
+  }
+  if (!bundle.license) {
+    throw new Error('Workspace license missing after bootstrap');
+  }
 
-  const license = await withTenant(workspaceId, actorId, async (tx) => {
-    const row = await tx.query.workspaceLicenses.findFirst({
-      where: eq(workspaceLicenses.workspaceId, workspaceId),
+  const workspace = mapJsonWorkspace(bundle.workspace);
+  const license = mapJsonLicense(bundle.license);
+
+  if (input.ownerUserId) {
+    await withTenant(workspaceId, actorId, async (tx) => {
+      await ensureDefaultFacultyJoinLinkTx(tx, {
+        workspaceId,
+        ownerUserId: input.ownerUserId ?? null,
+        existingSettings: initialSettings,
+      });
     });
-    if (!row) {
-      throw new Error('Workspace license missing after bootstrap');
-    }
-    return row;
-  });
+  }
 
   await logAudit({
     actorUserId: input.actorUserId ?? input.ownerUserId ?? null,
@@ -245,6 +253,53 @@ export async function provisionWorkspace(
 }
 
 type Tx = Parameters<Parameters<typeof withTenant>[2]>[0];
+
+function asDate(value: unknown): Date {
+  if (value instanceof Date) return value;
+  if (typeof value === 'string' || typeof value === 'number') {
+    return new Date(value);
+  }
+  return new Date();
+}
+
+function mapJsonWorkspace(
+  raw: unknown,
+): typeof workspaces.$inferSelect {
+  const w = raw as Record<string, unknown>;
+  return {
+    id: String(w.id),
+    slug: String(w.slug),
+    name: String(w.name),
+    type: w.type as typeof workspaces.$inferSelect.type,
+    status: w.status as typeof workspaces.$inferSelect.status,
+    parentWorkspaceId: (w.parent_workspace_id as string | null) ?? null,
+    settings: (w.settings as Record<string, unknown>) ?? {},
+    createdAt: asDate(w.created_at),
+    updatedAt: asDate(w.updated_at),
+  };
+}
+
+function mapJsonLicense(
+  raw: unknown,
+): typeof workspaceLicenses.$inferSelect {
+  const l = raw as Record<string, unknown>;
+  return {
+    id: String(l.id),
+    workspaceId: String(l.workspace_id),
+    plan: l.plan as typeof workspaceLicenses.$inferSelect.plan,
+    status: l.status as typeof workspaceLicenses.$inferSelect.status,
+    seatCap: Number(l.seat_cap ?? 0),
+    aiUnitCap: Number(l.ai_unit_cap ?? 0),
+    billingProvider:
+      l.billing_provider as typeof workspaceLicenses.$inferSelect.billingProvider,
+    stripeCustomerId: (l.stripe_customer_id as string | null) ?? null,
+    stripeSubscriptionId: (l.stripe_subscription_id as string | null) ?? null,
+    periodStart: l.period_start ? asDate(l.period_start) : null,
+    periodEnd: l.period_end ? asDate(l.period_end) : null,
+    createdAt: asDate(l.created_at),
+    updatedAt: asDate(l.updated_at),
+  };
+}
 
 async function ensureOnboardingSettingsTx(
   tx: Tx,
