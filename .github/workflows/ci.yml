@@ -115,10 +115,11 @@ jobs:
           --health-retries 12
     env:
       NODE_ENV: test
-      # Owner/migrator connection (DDL). Runtime + tests connect as sol_app so FORCE RLS applies.
+      # Owner connection for migrate + factory seeding (BYPASSRLS). RLS suites use
+      # withTenantGuc → SET LOCAL ROLE sol_app + app.tenant_id for FORCE RLS checks.
       DATABASE_MIGRATE_URL: postgresql://postgres:ci_owner_pw@localhost:5432/neondb
-      DATABASE_URL: postgresql://sol_app:ci_app_pw@localhost:5432/neondb
-      TEST_DATABASE_URL: postgresql://sol_app:ci_app_pw@localhost:5432/neondb
+      DATABASE_URL: postgresql://postgres:ci_owner_pw@localhost:5432/neondb
+      TEST_DATABASE_URL: postgresql://postgres:ci_owner_pw@localhost:5432/neondb
       # assertDevDatabase allowlist: the ephemeral container only.
       DEV_DB_HOSTS: localhost
       I_CONFIRM_DEV_DB: '1'
@@ -138,10 +139,11 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:ci_owner_pw@localhost:5432/neondb
         run: npm run migrate
-      - name: Set sol_app password (role created by 0034_app_roles)
+      - name: Ensure sol_app can be assumed (SET ROLE in RLS tests)
         run: |
           PGPASSWORD=ci_owner_pw psql -h localhost -U postgres -d neondb \
-            -c "ALTER ROLE sol_app WITH LOGIN PASSWORD 'ci_app_pw';"
+            -c "ALTER ROLE sol_app WITH LOGIN PASSWORD 'ci_app_pw';" \
+            -c "GRANT sol_app TO postgres;"
       - name: DB project (RLS + integration + tests/db)
         env:
           CI: 'true'

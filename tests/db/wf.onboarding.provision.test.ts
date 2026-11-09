@@ -27,9 +27,13 @@ describe.skipIf(skip)('wf.onboarding.provision', () => {
       await db.delete(workspaces).where(eq(workspaces.id, id));
     }
     for (const id of cleanupUsers) {
-      await db
-        .delete((await import('@/app/db/schema')).users)
-        .where(eq((await import('@/app/db/schema')).users.id, id));
+      try {
+        await db
+          .delete((await import('@/app/db/schema')).users)
+          .where(eq((await import('@/app/db/schema')).users.id, id));
+      } catch {
+        // audit_log is append-only; FK SET NULL on actor_user_id is forbidden.
+      }
     }
     await closeTestDb();
   });
