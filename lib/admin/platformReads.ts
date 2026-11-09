@@ -53,6 +53,7 @@ export async function fetchAdminWorkspaceDirectory() {
     license_status: string | null;
     billing_provider: string | null;
     license_period_end: Date | string | null;
+    stripe_subscription_id: string | null;
     owner_email: string | null;
     claim_status: string;
     course_count: number;
@@ -71,6 +72,7 @@ export async function fetchAdminWorkspaceDirectory() {
     licenseStatus: r.license_status,
     billingProvider: r.billing_provider,
     licensePeriodEnd: asDate(r.license_period_end),
+    stripeSubscriptionId: r.stripe_subscription_id ?? null,
     ownerEmail: r.owner_email,
     claimStatus: r.claim_status as 'claimed' | 'pending' | 'expired' | 'none',
     courseCount: Number(r.course_count ?? 0),

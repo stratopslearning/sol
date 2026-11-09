@@ -17,6 +17,10 @@ export async function dropStudentFromSection(
 ): Promise<void> {
   const tenantId = await tenantIdForSection(opts.sectionId);
   if (!tenantId) throw ApiError.notFound('Section not found');
+  const { requireWorkspaceTeaching } = await import(
+    '@/lib/workspace/entitlement'
+  );
+  await requireWorkspaceTeaching(tenantId, user);
   const allowed = await authorize(user, 'roster.manage', {
     tenantId,
     scopeType: 'section',

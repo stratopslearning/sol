@@ -189,6 +189,12 @@ export async function assignInteractiveSections(
   sectionIds: string[],
 ) {
   const interactive = await assertCanManageInteractive(user, interactiveId);
+  {
+    const { requireCourseTeaching } = await import(
+      '@/lib/workspace/entitlement'
+    );
+    await requireCourseTeaching(interactive.courseId, user);
+  }
   const teachable = await listTeachableSectionsForCourse(
     user,
     interactive.courseId,

@@ -6,6 +6,7 @@ import {
   workspaceMemberships,
   workspaces,
 } from '@/app/db/schema';
+import { ApiError } from '@/lib/api/errors';
 import { authorize } from '@/lib/authz/authorize';
 import { listBoundWorkspaceIds } from '@/lib/authz/gates';
 
@@ -92,21 +93,30 @@ export async function userCanCreateCoursesInWorkspace(
   );
 }
 
-export type CourseCreateEntitlement =
+export type TeachingEntitlement =
   | { ok: true }
   | { ok: false; reason: string; code: 'billing_required' | 'license_inactive' };
 
-/** True when license.periodEnd is set and still in the future (admin comp / trial). */
+/** @deprecated Alias — prefer TeachingEntitlement / assertWorkspaceAllowsTeaching. */
+export type CourseCreateEntitlement = TeachingEntitlement;
+
+/**
+ * Open admin complimentary window: finite (periodEnd in the future) or
+ * indefinite (trialing with null periodEnd).
+ */
 export function licenseHasOpenCompWindow(license: {
+  status?: string | null;
   periodEnd?: Date | null;
 }): boolean {
-  return Boolean(
-    license.periodEnd && license.periodEnd.getTime() > Date.now(),
-  );
+  if (license.periodEnd && license.periodEnd.getTime() > Date.now()) {
+    return true;
+  }
+  return license.status === 'trialing' && license.periodEnd == null;
 }
 
 type EntitlementSnapshot = {
   workspace_exists: boolean;
+  workspace_status: string | null;
   workspace_type: string | null;
   license_status: string | null;
   billing_provider: string | null;
@@ -121,6 +131,7 @@ async function loadCourseEntitlementSnapshot(
   const result = await db.execute(sql`
     SELECT
       workspace_exists,
+      workspace_status,
       workspace_type,
       license_status,
       billing_provider,
@@ -134,27 +145,27 @@ async function loadCourseEntitlementSnapshot(
   return rows[0] ?? null;
 }
 
-/**
- * Creator/Business (Stripe): require active license with subscription id,
- * OR a still-open admin complimentary window (periodEnd in the future).
- * Department/Institution (manual): require active/trialing license (honor periodEnd).
- *
- * Reads via SECURITY DEFINER — FORCE RLS otherwise hides workspace/license
- * without app.tenant_id and falsely returns "Workspace not found".
- */
-export async function assertWorkspaceAllowsCourseCreate(
-  workspaceId: string,
-): Promise<CourseCreateEntitlement> {
-  const snap = await loadCourseEntitlementSnapshot(workspaceId);
-  if (!snap?.workspace_exists) {
+function evaluateTeachingEntitlement(
+  snap: EntitlementSnapshot,
+): TeachingEntitlement {
+  if (!snap.workspace_exists) {
     return { ok: false, reason: 'Workspace not found', code: 'license_inactive' };
   }
 
-  if (!snap.license_status) {
+  if (snap.workspace_status === 'churned') {
     return {
       ok: false,
-      reason: 'No active license for this workspace.',
+      reason: 'This workspace has been closed.',
       code: 'license_inactive',
+    };
+  }
+
+  if (snap.workspace_status === 'suspended') {
+    return {
+      ok: false,
+      reason:
+        'Pilot ended. Finish billing to keep teaching, or ask SOL to restore access.',
+      code: 'billing_required',
     };
   }
 
@@ -170,11 +181,41 @@ export async function assertWorkspaceAllowsCourseCreate(
     periodEnd,
   };
 
+  if (!license.status) {
+    if (license.billingProvider === 'stripe') {
+      return {
+        ok: false,
+        reason: 'Finish workspace billing to keep teaching.',
+        code: 'billing_required',
+      };
+    }
+    return {
+      ok: false,
+      reason: 'No active license for this workspace.',
+      code: 'license_inactive',
+    };
+  }
+
+  // Revoked / canceled unpaid Stripe pilot → billing paywall.
+  if (
+    (license.status === 'canceled' || license.status === 'past_due') &&
+    license.billingProvider === 'stripe' &&
+    !license.stripeSubscriptionId
+  ) {
+    return {
+      ok: false,
+      reason:
+        'Pilot ended. Finish billing to keep teaching, or ask SOL to restore access.',
+      code: 'billing_required',
+    };
+  }
+
   if (license.periodEnd && license.periodEnd.getTime() < Date.now()) {
     if (license.billingProvider === 'stripe' && !license.stripeSubscriptionId) {
       return {
         ok: false,
-        reason: 'Complimentary access expired. Finish billing to keep creating courses.',
+        reason:
+          'Complimentary access expired. Finish billing to keep teaching.',
         code: 'billing_required',
       };
     }
@@ -194,25 +235,114 @@ export async function assertWorkspaceAllowsCourseCreate(
     }
     return {
       ok: false,
-      reason: 'Finish workspace billing to create courses.',
+      reason: 'Finish workspace billing to keep teaching.',
       code: 'billing_required',
     };
   }
 
-  return { ok: true };
+  // Manual (department/institution): active/trialing license, honor periodEnd above.
+  if (license.status === 'active' || license.status === 'trialing') {
+    return { ok: true };
+  }
+
+  return {
+    ok: false,
+    reason: 'No active license for this workspace.',
+    code: 'license_inactive',
+  };
 }
 
 /**
- * Admin grant: time-boxed complimentary access so Creator/Business can operate
- * without Stripe (local demos, pilots). Does not create a Stripe subscription.
+ * Creator/Business (Stripe): require active license with subscription id,
+ * OR an open admin complimentary window (finite periodEnd or indefinite null).
+ * Department/Institution (manual): require active/trialing license (honor periodEnd).
+ * Suspended/churned workspaces are blocked.
+ *
+ * Reads via SECURITY DEFINER — FORCE RLS otherwise hides workspace/license
+ * without app.tenant_id and falsely returns "Workspace not found".
+ */
+export async function assertWorkspaceAllowsTeaching(
+  workspaceId: string,
+): Promise<TeachingEntitlement> {
+  const snap = await loadCourseEntitlementSnapshot(workspaceId);
+  if (!snap) {
+    return { ok: false, reason: 'Workspace not found', code: 'license_inactive' };
+  }
+  return evaluateTeachingEntitlement(snap);
+}
+
+/** Same rules as teaching — kept for call sites that create courses/sections. */
+export async function assertWorkspaceAllowsCourseCreate(
+  workspaceId: string,
+): Promise<CourseCreateEntitlement> {
+  return assertWorkspaceAllowsTeaching(workspaceId);
+}
+
+/**
+ * Throw ApiError 402/403 when teaching is not allowed.
+ * Platform staff skip (support grant is enforced separately by callers).
+ */
+export async function requireWorkspaceTeaching(
+  workspaceId: string,
+  actor?: { platformStaff?: boolean | null },
+): Promise<void> {
+  if (actor?.platformStaff) return;
+  const entitlement = await assertWorkspaceAllowsTeaching(workspaceId);
+  if (entitlement.ok) return;
+  if (entitlement.code === 'billing_required') {
+    throw ApiError.paymentRequired(entitlement.reason);
+  }
+  throw ApiError.forbidden(entitlement.reason);
+}
+
+/** Resolve course → workspace, then require teaching entitlement. */
+export async function requireCourseTeaching(
+  courseId: string,
+  actor?: { platformStaff?: boolean | null },
+): Promise<string> {
+  if (actor?.platformStaff) {
+    const { getCourseWorkspaceId } = await import('@/lib/workspace/access');
+    const workspaceId = await getCourseWorkspaceId(courseId);
+    if (!workspaceId) throw ApiError.notFound('Course not found');
+    return workspaceId;
+  }
+  const { getCourseWorkspaceId } = await import('@/lib/workspace/access');
+  const workspaceId = await getCourseWorkspaceId(courseId);
+  if (!workspaceId) throw ApiError.notFound('Course not found');
+  await requireWorkspaceTeaching(workspaceId, actor);
+  return workspaceId;
+}
+
+/** Resolve section → tenant, then require teaching entitlement. */
+export async function requireSectionTeaching(
+  sectionId: string,
+  actor?: { platformStaff?: boolean | null },
+): Promise<string> {
+  const { tenantIdForSection } = await import('@/lib/authz');
+  const workspaceId = await tenantIdForSection(sectionId);
+  if (!workspaceId) throw ApiError.notFound('Section not found');
+  await requireWorkspaceTeaching(workspaceId, actor);
+  return workspaceId;
+}
+
+/**
+ * Admin grant: complimentary access so Creator/Business can operate without
+ * Stripe. Finite (1–365 days) or indefinite (periodEnd null). Re-grant clears
+ * suspended and restores trialing.
  */
 export async function grantWorkspaceCompAccess(opts: {
   workspaceId: string;
   days?: number;
-}): Promise<{ periodStart: Date; periodEnd: Date }> {
-  const days = Math.min(Math.max(opts.days ?? 30, 1), 365);
+  indefinite?: boolean;
+}): Promise<{ periodStart: Date; periodEnd: Date | null }> {
   const periodStart = new Date();
-  const periodEnd = new Date(periodStart.getTime() + days * 24 * 60 * 60 * 1000);
+  const indefinite = Boolean(opts.indefinite);
+  const periodEnd = indefinite
+    ? null
+    : new Date(
+        periodStart.getTime() +
+          Math.min(Math.max(opts.days ?? 30, 1), 365) * 24 * 60 * 60 * 1000,
+      );
 
   const existing = await db.query.workspaceLicenses.findFirst({
     where: eq(workspaceLicenses.workspaceId, opts.workspaceId),
@@ -238,4 +368,48 @@ export async function grantWorkspaceCompAccess(opts: {
     .where(eq(workspaces.id, opts.workspaceId));
 
   return { periodStart, periodEnd };
+}
+
+/**
+ * Revoke unpaid pilot: cancel license, suspend workspace. Blocks teaching until
+ * Stripe checkout or a later grant. Refuses when a live Stripe subscription exists.
+ */
+export async function revokeWorkspaceCompAccess(opts: {
+  workspaceId: string;
+}): Promise<{ revokedAt: Date }> {
+  const existing = await db.query.workspaceLicenses.findFirst({
+    where: eq(workspaceLicenses.workspaceId, opts.workspaceId),
+    orderBy: (t, { desc }) => [desc(t.createdAt)],
+  });
+  if (!existing) {
+    throw new Error('Workspace has no license row');
+  }
+
+  if (
+    existing.status === 'active' &&
+    existing.stripeSubscriptionId &&
+    existing.billingProvider === 'stripe'
+  ) {
+    throw ApiError.badRequest(
+      'Cannot revoke a workspace with an active Stripe subscription. Cancel billing in Stripe instead.',
+    );
+  }
+
+  const revokedAt = new Date();
+
+  await db
+    .update(workspaceLicenses)
+    .set({
+      status: 'canceled',
+      periodEnd: revokedAt,
+      updatedAt: revokedAt,
+    })
+    .where(eq(workspaceLicenses.id, existing.id));
+
+  await db
+    .update(workspaces)
+    .set({ status: 'suspended', updatedAt: revokedAt })
+    .where(eq(workspaces.id, opts.workspaceId));
+
+  return { revokedAt };
 }

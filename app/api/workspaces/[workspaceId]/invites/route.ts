@@ -48,6 +48,15 @@ export async function POST(
     );
   }
 
+  try {
+    const { requireWorkspaceTeaching } = await import(
+      '@/lib/workspace/entitlement'
+    );
+    await requireWorkspaceTeaching(workspaceId, user);
+  } catch (error) {
+    return apiErrorResponse(error);
+  }
+
   const limited = await enforceRateLimit({
     key: `ws-invite:${user.id}`,
     limit: 30,

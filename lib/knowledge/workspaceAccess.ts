@@ -1,10 +1,11 @@
 import { authorize } from '@/lib/authz/authorize';
 import { ApiError } from '@/lib/api/errors';
 import type { UserData } from '@/lib/getOrCreateUser';
+import { requireWorkspaceTeaching } from '@/lib/workspace/entitlement';
 
 type AuthUser = Pick<UserData, 'id'> & { platformStaff?: boolean | null };
 
-export async function assertWorkspaceFaculty(
+async function assertWorkspaceFacultyRole(
   user: AuthUser,
   workspaceId: string,
 ): Promise<void> {
@@ -29,6 +30,26 @@ export async function assertWorkspaceFaculty(
   }
 }
 
+/** Role check only — safe for reads (policy GET, etc.). */
+export async function assertWorkspaceFacultyRead(
+  user: AuthUser,
+  workspaceId: string,
+): Promise<void> {
+  await assertWorkspaceFacultyRole(user, workspaceId);
+}
+
+/**
+ * Faculty role + teaching entitlement. Use for knowledge/connector writes.
+ * Platform staff skip entitlement (support grant enforced elsewhere).
+ */
+export async function assertWorkspaceFaculty(
+  user: AuthUser,
+  workspaceId: string,
+): Promise<void> {
+  await assertWorkspaceFacultyRole(user, workspaceId);
+  await requireWorkspaceTeaching(workspaceId, user);
+}
+
 /** Shared-library mutate + connector admin (owner/admin only). */
 export async function assertWorkspaceLibraryAdmin(
   user: AuthUser,
@@ -44,6 +65,7 @@ export async function assertWorkspaceLibraryAdmin(
       'Only workspace owners or admins can manage the shared library',
     );
   }
+  await requireWorkspaceTeaching(workspaceId, user);
 }
 
 /**

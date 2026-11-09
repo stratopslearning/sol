@@ -101,6 +101,12 @@ export async function enrollInSection(
     enrollmentCode,
   );
   if (!section) throw ApiError.notFound('Invalid enrollment code');
+  {
+    const { requireWorkspaceTeaching } = await import(
+      '@/lib/workspace/entitlement'
+    );
+    await requireWorkspaceTeaching(scope.workspaceId, user);
+  }
 
   const {
     professorSectionEnrollmentDefiner,
@@ -204,6 +210,8 @@ export async function unassignQuizFromSection(
   sectionId: string,
   quizId: string,
 ): Promise<void> {
+  const { requireSectionTeaching } = await import('@/lib/workspace/entitlement');
+  await requireSectionTeaching(sectionId, user);
   await assertTeachesSection(user, sectionId);
   const { unassignQuizSectionDefiner } = await import(
     '@/lib/db/facultyWriteDefiners'
@@ -217,6 +225,8 @@ export async function unassignDiscussionFromSection(
   sectionId: string,
   chatbotId: string,
 ): Promise<void> {
+  const { requireSectionTeaching } = await import('@/lib/workspace/entitlement');
+  await requireSectionTeaching(sectionId, user);
   await assertTeachesSection(user, sectionId);
   const { unassignChatbotSectionDefiner } = await import(
     '@/lib/db/facultyWriteDefiners'
@@ -245,6 +255,12 @@ export async function createQuiz(
 ): Promise<{ id: string; title: string; sectionIds: string[] }> {
   if (input.sectionIds.length === 0) {
     throw ApiError.badRequest('Select at least one section');
+  }
+  {
+    const { requireSectionTeaching } = await import(
+      '@/lib/workspace/entitlement'
+    );
+    await requireSectionTeaching(input.sectionIds[0]!, user);
   }
 
   // Binding-based: content.write on every target section (no users.role check).
@@ -529,6 +545,12 @@ export async function assignQuizSections(
   if (sectionIds.length === 0) {
     throw ApiError.badRequest('Provide at least one section id');
   }
+  {
+    const { requireSectionTeaching } = await import(
+      '@/lib/workspace/entitlement'
+    );
+    await requireSectionTeaching(sectionIds[0]!, user);
+  }
 
   const quiz = await db.query.quizzes.findFirst({
     where: and(eq(quizzes.id, quizId), activeOnly(quizzes.deletedAt)),
@@ -779,6 +801,12 @@ export async function assignDiscussion(
 ): Promise<{ id: string }> {
   if (sectionIds.length === 0) {
     throw ApiError.badRequest('Provide at least one section id');
+  }
+  {
+    const { requireSectionTeaching } = await import(
+      '@/lib/workspace/entitlement'
+    );
+    await requireSectionTeaching(sectionIds[0]!, user);
   }
 
   const bot = await getActiveChatbot(chatbotId);

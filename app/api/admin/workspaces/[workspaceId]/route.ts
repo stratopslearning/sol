@@ -16,7 +16,10 @@ import { activeOnly } from '@/lib/db/filters';
 import { apiErrorResponse } from '@/lib/api/errors';
 import { logAudit } from '@/lib/audit';
 import { requireSupportGrant } from '@/lib/authz/requireSupportGrant';
-import { grantWorkspaceCompAccess } from '@/lib/workspace/entitlement';
+import {
+  grantWorkspaceCompAccess,
+  revokeWorkspaceCompAccess,
+} from '@/lib/workspace/entitlement';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,11 +28,17 @@ const deleteBodySchema = z.object({
   confirmSlug: z.string().min(1).max(64),
 });
 
-const grantBodySchema = z.object({
-  action: z.literal('grant_comp_access'),
-  /** Complimentary window length (1–365). Default 30. */
-  days: z.number().int().min(1).max(365).optional(),
-});
+const patchBodySchema = z.discriminatedUnion('action', [
+  z.object({
+    action: z.literal('grant_comp_access'),
+    /** Complimentary window length (1–365). Ignored when indefinite. */
+    days: z.number().int().min(1).max(365).optional(),
+    indefinite: z.boolean().optional(),
+  }),
+  z.object({
+    action: z.literal('revoke_comp_access'),
+  }),
+]);
 
 async function requireAdminUser() {
   const { userId } = await auth();
@@ -42,7 +51,7 @@ async function requireAdminUser() {
 }
 
 /**
- * Admin license ops (grant complimentary / trial access without Stripe).
+ * Admin license ops (grant / revoke complimentary pilot access without Stripe).
  */
 export async function PATCH(
   req: NextRequest,
@@ -59,7 +68,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Invalid workspace id' }, { status: 400 });
     }
 
-    const parsed = grantBodySchema.safeParse(await req.json().catch(() => ({})));
+    const parsed = patchBodySchema.safeParse(await req.json().catch(() => ({})));
     if (!parsed.success) {
       return NextResponse.json({ error: 'Invalid body' }, { status: 400 });
     }
@@ -85,14 +94,37 @@ export async function PATCH(
     );
     if (workspace.status === 'churned') {
       return NextResponse.json(
-        { error: 'Cannot grant access on a churned workspace' },
+        { error: 'Cannot change access on a churned workspace' },
         { status: 400 },
       );
     }
 
+    if (parsed.data.action === 'revoke_comp_access') {
+      const { revokedAt } = await revokeWorkspaceCompAccess({ workspaceId });
+      await logAudit({
+        actorUserId: admin.id,
+        actorClerkId: admin.clerkId,
+        action: 'workspace.revoke_comp_access',
+        targetType: 'workspace',
+        targetId: workspaceId,
+        metadata: {
+          slug: workspace.slug,
+          revokedAt: revokedAt.toISOString(),
+        },
+      });
+      return NextResponse.json({
+        success: true,
+        workspaceId,
+        revokedAt: revokedAt.toISOString(),
+      });
+    }
+
+    const indefinite = Boolean(parsed.data.indefinite);
+    const days = indefinite ? undefined : (parsed.data.days ?? 30);
     const { periodStart, periodEnd } = await grantWorkspaceCompAccess({
       workspaceId,
-      days: parsed.data.days ?? 30,
+      days,
+      indefinite,
     });
 
     await logAudit({
@@ -103,17 +135,19 @@ export async function PATCH(
       targetId: workspaceId,
       metadata: {
         slug: workspace.slug,
-        days: parsed.data.days ?? 30,
+        indefinite,
+        days: indefinite ? null : (days ?? 30),
         periodStart: periodStart.toISOString(),
-        periodEnd: periodEnd.toISOString(),
+        periodEnd: periodEnd?.toISOString() ?? null,
       },
     });
 
     return NextResponse.json({
       success: true,
       workspaceId,
+      indefinite,
       periodStart: periodStart.toISOString(),
-      periodEnd: periodEnd.toISOString(),
+      periodEnd: periodEnd?.toISOString() ?? null,
     });
   } catch (error) {
     console.error('[admin/workspaces PATCH]', error);

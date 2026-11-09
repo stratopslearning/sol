@@ -30,8 +30,10 @@ import {
   fetchRecentAttemptsForSections,
   fetchSectionLearnerCounts,
 } from '@/lib/db/facultyStudentReads';
+import { TeachingPaywallBanner } from '@/components/workspace/TeachingPaywallBanner';
 import { assertCanManageCourse, listCourseMaterials } from '@/lib/knowledge';
 import { getAttentionItemsForProfessor } from '@/lib/professorAttention';
+import { assertWorkspaceAllowsTeaching } from '@/lib/workspace';
 
 export const dynamic = 'force-dynamic';
 
@@ -55,12 +57,16 @@ export default async function ProfessorCourseHubPage({
   const user = await requireTeachingAccess();
 
   const { courseId } = await params;
-  let course: { id: string; title: string };
+  let course: { id: string; title: string; workspaceId: string | null };
   try {
     course = await assertCanManageCourse(user, courseId);
   } catch {
     notFound();
   }
+
+  const teachingEntitlement = course.workspaceId
+    ? await assertWorkspaceAllowsTeaching(course.workspaceId)
+    : { ok: true as const };
 
   const sectionIds = await listTeachableSectionIdsForCourse(user, courseId);
   const base = `/dashboard/professor/courses/${courseId}`;
@@ -143,6 +149,16 @@ export default async function ProfessorCourseHubPage({
         </div>
       }
     >
+      {course.workspaceId &&
+      !teachingEntitlement.ok &&
+      teachingEntitlement.code === 'billing_required' ? (
+        <div className="mb-6">
+          <TeachingPaywallBanner
+            workspaceId={course.workspaceId}
+            reason={teachingEntitlement.reason}
+          />
+        </div>
+      ) : null}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
         <StatCard
           label="Students"

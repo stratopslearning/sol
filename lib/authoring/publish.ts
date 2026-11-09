@@ -123,6 +123,12 @@ export async function publishOutlineItem(
   audit?: { ip?: string | null; userAgent?: string | null },
 ): Promise<OutlineItemSummary> {
   const { item, outline } = await assertCanManageItem(user, itemId);
+  {
+    const { requireCourseTeaching } = await import(
+      '@/lib/workspace/entitlement'
+    );
+    await requireCourseTeaching(outline.courseId, user);
+  }
   const body = (item.body ?? {}) as OutlineItemSummary['body'];
 
   if (
@@ -306,7 +312,13 @@ export async function publishOutlineItems(
   opts?: { sectionIds?: string[] },
   audit?: { ip?: string | null; userAgent?: string | null },
 ): Promise<PublishItemsResult> {
-  await assertCanManageOutline(user, outlineId);
+  const outline = await assertCanManageOutline(user, outlineId);
+  {
+    const { requireCourseTeaching } = await import(
+      '@/lib/workspace/entitlement'
+    );
+    await requireCourseTeaching(outline.courseId, user);
+  }
   const uniqueIds = [...new Set(itemIds.filter(Boolean))];
   if (uniqueIds.length === 0) {
     throw ApiError.badRequest('Select at least one assignment to publish');
@@ -383,6 +395,12 @@ export async function releaseOutlineItem(
   audit?: { ip?: string | null; userAgent?: string | null },
 ): Promise<OutlineItemSummary> {
   const { item, outline } = await assertCanManageItem(user, itemId);
+  {
+    const { requireCourseTeaching } = await import(
+      '@/lib/workspace/entitlement'
+    );
+    await requireCourseTeaching(outline.courseId, user);
+  }
 
   if (
     !item.publishedQuizId &&

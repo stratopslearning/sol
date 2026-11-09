@@ -5,7 +5,10 @@ import { ApiError } from '@/lib/api/errors';
 import { fetchCourseById } from '@/lib/db/entityScopedReads';
 import { withTenant } from '@/lib/db/tenantContext';
 import { assertCanManageCourse } from '@/lib/knowledge/access';
-import { assertWorkspaceFaculty } from '@/lib/knowledge/workspaceAccess';
+import {
+  assertWorkspaceFaculty,
+  assertWorkspaceFacultyRead,
+} from '@/lib/knowledge/workspaceAccess';
 import type { UserData } from '@/lib/getOrCreateUser';
 
 type AuthUser = Pick<UserData, 'id' | 'clerkId'> & { platformStaff?: boolean | null };
@@ -55,7 +58,7 @@ export async function getAuthoringPolicyForWorkspace(
   user: AuthUser,
   workspaceId: string,
 ): Promise<AuthoringPolicy | null> {
-  await assertWorkspaceFaculty(user, workspaceId);
+  await assertWorkspaceFacultyRead(user, workspaceId);
   return readAuthoringPolicyForWorkspace(workspaceId, user.id);
 }
 

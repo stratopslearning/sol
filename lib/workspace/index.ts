@@ -71,7 +71,12 @@ export {
   userCanInviteWorkspaceFaculty,
   userCanCreateCoursesInWorkspace,
   assertWorkspaceAllowsCourseCreate,
+  assertWorkspaceAllowsTeaching,
+  requireWorkspaceTeaching,
+  requireCourseTeaching,
+  requireSectionTeaching,
   grantWorkspaceCompAccess,
+  revokeWorkspaceCompAccess,
   licenseHasOpenCompWindow,
 } from '@/lib/workspace/entitlement';
 

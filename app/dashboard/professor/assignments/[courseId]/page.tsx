@@ -7,10 +7,12 @@ import { listTeachableSectionIdsForCourse } from '@/lib/authoring/access';
 import { appPath } from '@/lib/basePath';
 import { requireTeachingAccess } from '@/lib/authz/gates';
 import { fetchSectionsByIds } from '@/lib/db/entityScopedReads';
+import { TeachingPaywallBanner } from '@/components/workspace/TeachingPaywallBanner';
 import {
   assertCanManageCourse,
   listTeachableCourses,
 } from '@/lib/knowledge';
+import { assertWorkspaceAllowsTeaching } from '@/lib/workspace';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,12 +24,19 @@ export default async function ProfessorAssignmentsPage({
   const user = await requireTeachingAccess();
 
   const { courseId } = await params;
-  let course: { id: string; title: string };
+  let course: { id: string; title: string; workspaceId: string | null };
   try {
     course = await assertCanManageCourse(user, courseId);
   } catch {
     notFound();
   }
+
+  const teachingEntitlement = course.workspaceId
+    ? await assertWorkspaceAllowsTeaching(course.workspaceId)
+    : { ok: true as const };
+  const teachingBlocked =
+    !teachingEntitlement.ok &&
+    teachingEntitlement.code === 'billing_required';
 
   const [activities, teachable, teachableSectionIds] = await Promise.all([
     listCourseActivities({ courseId }),
@@ -53,21 +62,43 @@ export default async function ProfessorAssignmentsPage({
       teachable={teachable}
       hrefTemplate="/dashboard/professor/assignments/{courseId}"
     >
+      {course.workspaceId && teachingBlocked ? (
+        <div className="mb-6">
+          <TeachingPaywallBanner
+            workspaceId={course.workspaceId}
+            reason={teachingEntitlement.reason}
+          />
+        </div>
+      ) : null}
       <CourseAssignmentsClient
         activities={activities}
         sectionOptions={sectionOptions}
-        createQuizHref={appPath(
-          `/dashboard/professor/quiz/new?courseId=${courseId}`,
-        )}
-        importQuizHref={appPath(
-          `/dashboard/professor/quiz/new?courseId=${courseId}&import=csv`,
-        )}
-        createDiscussionHref={appPath(
-          `/dashboard/professor/discussions/new?courseId=${courseId}`,
-        )}
-        createInteractiveHref={appPath(
-          `/dashboard/professor/interactive/new?courseId=${courseId}`,
-        )}
+        createQuizHref={
+          teachingBlocked
+            ? undefined
+            : appPath(`/dashboard/professor/quiz/new?courseId=${courseId}`)
+        }
+        importQuizHref={
+          teachingBlocked
+            ? undefined
+            : appPath(
+                `/dashboard/professor/quiz/new?courseId=${courseId}&import=csv`,
+              )
+        }
+        createDiscussionHref={
+          teachingBlocked
+            ? undefined
+            : appPath(
+                `/dashboard/professor/discussions/new?courseId=${courseId}`,
+              )
+        }
+        createInteractiveHref={
+          teachingBlocked
+            ? undefined
+            : appPath(
+                `/dashboard/professor/interactive/new?courseId=${courseId}`,
+              )
+        }
         authoringHref={appPath(`/dashboard/professor/authoring/${courseId}`)}
       />
     </ProfessorToolCourseShell>

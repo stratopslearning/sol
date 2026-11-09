@@ -154,6 +154,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    try {
+      const { requireWorkspaceTeaching } = await import(
+        '@/lib/workspace/entitlement'
+      );
+      await requireWorkspaceTeaching(tenantId);
+    } catch (error) {
+      const { apiErrorResponse } = await import('@/lib/api/errors');
+      return apiErrorResponse(error);
+    }
+
     return withTenant(tenantId, user.id, async () => {
       const existingSame = await db.query.studentSections.findFirst({
         where: and(
