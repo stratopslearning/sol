@@ -6,9 +6,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { config as loadEnv } from 'dotenv';
-import { neonConfig, Pool as NeonPool } from '@neondatabase/serverless';
-import { Pool as PgPool } from 'pg';
-import ws from 'ws';
+import { Pool } from 'pg';
 
 loadEnv({ path: '.env', quiet: true });
 loadEnv({ path: '.env.local', override: true, quiet: true });
@@ -31,15 +29,6 @@ const EXTRA_REQUIRED = [
 
 type AllowEntry = { table: string; reason: string };
 
-function isLocalPostgresHost(url: string): boolean {
-  try {
-    const host = new URL(url).hostname;
-    return host === 'localhost' || host === '127.0.0.1' || host === '::1';
-  } catch {
-    return false;
-  }
-}
-
 async function main() {
   const target = assertDevDatabaseOrExit({
     urlEnvVars: ['TEST_DATABASE_URL', 'DATABASE_MIGRATE_URL', 'DATABASE_URL'],
@@ -56,14 +45,9 @@ async function main() {
   }
   const allowed = new Set(allowlist.map((e) => e.table));
 
-  // CI ephemeral Postgres is TCP; Neon remotes need the serverless WS driver.
-  let pool: PgPool | NeonPool;
-  if (isLocalPostgresHost(target.url)) {
-    pool = new PgPool({ connectionString: target.url });
-  } else {
-    neonConfig.webSocketConstructor = ws;
-    pool = new NeonPool({ connectionString: target.url });
-  }
+  // Always TCP via node-postgres (works for CI localhost and Neon). Avoids
+  // Neon serverless WS against localhost and pg/Neon PoolClient union TS errors.
+  const pool = new Pool({ connectionString: target.url });
   const client = await pool.connect();
   const required = new Set<string>([...TEACHING_TENANT_TABLES, ...EXTRA_REQUIRED]);
   const failures: string[] = [];
