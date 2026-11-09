@@ -42,6 +42,15 @@ export function WorkspacesClient({ parentOptions }: Props) {
 
   const tiers = useMemo(() => tiersForSku(type), [type]);
 
+  /** Lowercase kebab slug. Hyphen first so HTML `pattern` is valid under unicodeSets (`v`). */
+  function normalizeSlug(raw: string): string {
+    return raw
+      .toLowerCase()
+      .replace(/[^a-z0-9-]+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-+|-+$/g, '');
+  }
+
   function onTypeChange(next: WorkspaceSku) {
     setType(next);
     const tier = defaultTierForSku(next);
@@ -66,7 +75,7 @@ export function WorkspacesClient({ parentOptions }: Props) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          slug: slug.trim().toLowerCase(),
+          slug: normalizeSlug(slug),
           name: name.trim(),
           type,
           parentWorkspaceId: parentId === 'none' ? null : parentId,
@@ -77,7 +86,12 @@ export function WorkspacesClient({ parentOptions }: Props) {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(data.error || 'Failed to create workspace');
+        setError(
+          data.error ||
+            (res.status === 400
+              ? 'Check slug (lowercase letters, numbers, hyphens) and owner email.'
+              : 'Failed to create workspace'),
+        );
         return;
       }
       setSlug('');
@@ -124,11 +138,15 @@ export function WorkspacesClient({ parentOptions }: Props) {
           <Input
             id="ws-slug"
             value={slug}
-            onChange={(e) => setSlug(e.target.value)}
+            onChange={(e) => setSlug(normalizeSlug(e.target.value))}
             required
             placeholder="engineering"
-            pattern="[a-z0-9-]+"
+            pattern="[-a-z0-9]+"
+            title="Lowercase letters, numbers, and hyphens only"
           />
+          <p className="text-xs text-ink-faint">
+            URL id — letters, numbers, hyphens (spaces become hyphens).
+          </p>
         </div>
         <div className="grid gap-2">
           <Label>Type</Label>

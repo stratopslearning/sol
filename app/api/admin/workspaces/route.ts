@@ -84,8 +84,14 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const parsed = createSchema.safeParse(body);
     if (!parsed.success) {
+      const first = parsed.error.errors[0];
       return NextResponse.json(
-        { error: 'Validation error', details: parsed.error.errors },
+        {
+          error: first
+            ? `${first.path.join('.') || 'body'}: ${first.message}`
+            : 'Validation error',
+          details: parsed.error.errors,
+        },
         { status: 400 },
       );
     }
