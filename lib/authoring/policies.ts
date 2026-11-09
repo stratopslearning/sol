@@ -1,9 +1,5 @@
-import { eq } from 'drizzle-orm';
-
-import { authoringPolicies } from '@/app/db/schema';
 import { ApiError } from '@/lib/api/errors';
 import { fetchCourseById } from '@/lib/db/entityScopedReads';
-import { withTenant } from '@/lib/db/tenantContext';
 import { assertCanManageCourse } from '@/lib/knowledge/access';
 import {
   assertWorkspaceFaculty,
@@ -25,23 +21,11 @@ export type AuthoringPolicy = {
 
 async function readAuthoringPolicyForWorkspace(
   workspaceId: string,
-  actorUserId?: string | null,
 ): Promise<AuthoringPolicy | null> {
-  return withTenant(workspaceId, actorUserId ?? null, async (tx) => {
-    const row = await tx.query.authoringPolicies.findFirst({
-      where: eq(authoringPolicies.workspaceId, workspaceId),
-    });
-    if (!row) return null;
-    return {
-      id: row.id,
-      workspaceId: row.workspaceId,
-      structureNotes: row.structureNotes,
-      rubricStyle: row.rubricStyle,
-      tone: row.tone,
-      extraPrompt: row.extraPrompt,
-      updatedAt: row.updatedAt,
-    };
-  });
+  const { getAuthoringPolicyDefiner } = await import(
+    '@/lib/db/tenantWriteDefiners'
+  );
+  return getAuthoringPolicyDefiner(workspaceId);
 }
 
 /** Trusted internal read after course-scoped authz (propose/switchUp/etc.). */
@@ -59,7 +43,7 @@ export async function getAuthoringPolicyForWorkspace(
   workspaceId: string,
 ): Promise<AuthoringPolicy | null> {
   await assertWorkspaceFacultyRead(user, workspaceId);
-  return readAuthoringPolicyForWorkspace(workspaceId, user.id);
+  return readAuthoringPolicyForWorkspace(workspaceId);
 }
 
 export async function upsertAuthoringPolicy(
@@ -73,46 +57,15 @@ export async function upsertAuthoringPolicy(
   },
 ): Promise<AuthoringPolicy> {
   await assertWorkspaceFaculty(user, workspaceId);
-  return withTenant(workspaceId, user.id, async (tx) => {
-    const existing = await tx.query.authoringPolicies.findFirst({
-      where: eq(authoringPolicies.workspaceId, workspaceId),
-    });
-    const values = {
-      structureNotes: input.structureNotes ?? null,
-      rubricStyle: input.rubricStyle ?? null,
-      tone: input.tone ?? null,
-      extraPrompt: input.extraPrompt ?? null,
-      updatedAt: new Date(),
-    };
-    if (existing) {
-      const [row] = await tx
-        .update(authoringPolicies)
-        .set(values)
-        .where(eq(authoringPolicies.id, existing.id))
-        .returning();
-      return {
-        id: row!.id,
-        workspaceId: row!.workspaceId,
-        structureNotes: row!.structureNotes,
-        rubricStyle: row!.rubricStyle,
-        tone: row!.tone,
-        extraPrompt: row!.extraPrompt,
-        updatedAt: row!.updatedAt,
-      };
-    }
-    const [row] = await tx
-      .insert(authoringPolicies)
-      .values({ workspaceId, tenantId: workspaceId, ...values })
-      .returning();
-    return {
-      id: row!.id,
-      workspaceId: row!.workspaceId,
-      structureNotes: row!.structureNotes,
-      rubricStyle: row!.rubricStyle,
-      tone: row!.tone,
-      extraPrompt: row!.extraPrompt,
-      updatedAt: row!.updatedAt,
-    };
+  const { upsertAuthoringPolicyDefiner } = await import(
+    '@/lib/db/tenantWriteDefiners'
+  );
+  return upsertAuthoringPolicyDefiner({
+    workspaceId,
+    structureNotes: input.structureNotes ?? null,
+    rubricStyle: input.rubricStyle ?? null,
+    tone: input.tone ?? null,
+    extraPrompt: input.extraPrompt ?? null,
   });
 }
 
@@ -124,7 +77,7 @@ export async function getAuthoringPolicyForManagedCourse(
   const course = await fetchCourseById(courseId);
   const workspaceId = course?.workspaceId ?? course?.tenantId;
   if (!workspaceId) return null;
-  return readAuthoringPolicyForWorkspace(workspaceId, user.id);
+  return readAuthoringPolicyForWorkspace(workspaceId);
 }
 
 export async function requireWorkspaceIdForCourse(

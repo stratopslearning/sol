@@ -335,39 +335,22 @@ export async function grantWorkspaceCompAccess(opts: {
   days?: number;
   indefinite?: boolean;
 }): Promise<{ periodStart: Date; periodEnd: Date | null }> {
-  const periodStart = new Date();
-  const indefinite = Boolean(opts.indefinite);
-  const periodEnd = indefinite
-    ? null
-    : new Date(
-        periodStart.getTime() +
-          Math.min(Math.max(opts.days ?? 30, 1), 365) * 24 * 60 * 60 * 1000,
-      );
-
-  const existing = await db.query.workspaceLicenses.findFirst({
-    where: eq(workspaceLicenses.workspaceId, opts.workspaceId),
-    orderBy: (t, { desc }) => [desc(t.createdAt)],
-  });
-  if (!existing) {
-    throw new Error('Workspace has no license row');
+  const { grantWorkspaceCompAccessDefiner } = await import(
+    '@/lib/db/tenantWriteDefiners'
+  );
+  try {
+    return await grantWorkspaceCompAccessDefiner({
+      workspaceId: opts.workspaceId,
+      days: opts.days,
+      indefinite: opts.indefinite,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (message.includes('no license row')) {
+      throw new Error('Workspace has no license row');
+    }
+    throw err;
   }
-
-  await db
-    .update(workspaceLicenses)
-    .set({
-      status: 'trialing',
-      periodStart,
-      periodEnd,
-      updatedAt: periodStart,
-    })
-    .where(eq(workspaceLicenses.id, existing.id));
-
-  await db
-    .update(workspaces)
-    .set({ status: 'trial', updatedAt: periodStart })
-    .where(eq(workspaces.id, opts.workspaceId));
-
-  return { periodStart, periodEnd };
 }
 
 /**
@@ -377,39 +360,21 @@ export async function grantWorkspaceCompAccess(opts: {
 export async function revokeWorkspaceCompAccess(opts: {
   workspaceId: string;
 }): Promise<{ revokedAt: Date }> {
-  const existing = await db.query.workspaceLicenses.findFirst({
-    where: eq(workspaceLicenses.workspaceId, opts.workspaceId),
-    orderBy: (t, { desc }) => [desc(t.createdAt)],
-  });
-  if (!existing) {
-    throw new Error('Workspace has no license row');
+  const { revokeWorkspaceCompAccessDefiner } = await import(
+    '@/lib/db/tenantWriteDefiners'
+  );
+  try {
+    return await revokeWorkspaceCompAccessDefiner(opts.workspaceId);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (message.includes('no license row')) {
+      throw new Error('Workspace has no license row');
+    }
+    if (message.includes('STRIPE_ACTIVE_SUBSCRIPTION')) {
+      throw ApiError.badRequest(
+        'Cannot revoke a workspace with an active Stripe subscription. Cancel billing in Stripe instead.',
+      );
+    }
+    throw err;
   }
-
-  if (
-    existing.status === 'active' &&
-    existing.stripeSubscriptionId &&
-    existing.billingProvider === 'stripe'
-  ) {
-    throw ApiError.badRequest(
-      'Cannot revoke a workspace with an active Stripe subscription. Cancel billing in Stripe instead.',
-    );
-  }
-
-  const revokedAt = new Date();
-
-  await db
-    .update(workspaceLicenses)
-    .set({
-      status: 'canceled',
-      periodEnd: revokedAt,
-      updatedAt: revokedAt,
-    })
-    .where(eq(workspaceLicenses.id, existing.id));
-
-  await db
-    .update(workspaces)
-    .set({ status: 'suspended', updatedAt: revokedAt })
-    .where(eq(workspaces.id, opts.workspaceId));
-
-  return { revokedAt };
 }

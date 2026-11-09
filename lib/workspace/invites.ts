@@ -1,16 +1,11 @@
 import { createHash, randomBytes } from 'crypto';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 
 import { db } from '@/app/db';
-import {
-  users,
-  workspaceInvites,
-  workspaceMemberships,
-} from '@/app/db/schema';
+import { users } from '@/app/db/schema';
 import { upsertRoleBinding } from '@/lib/authz/bindings';
 import type { BindingRole } from '@/lib/authz/permissions';
 import { withBasePath } from '@/lib/basePath';
-import { withTenant } from '@/lib/db/tenantContext';
 import { ensureWorkspaceMembership } from '@/lib/workspace/access';
 
 const INVITE_TTL_MS = 14 * 24 * 60 * 60 * 1000; // 14 days
@@ -72,30 +67,15 @@ export async function createWorkspaceOwnerInvite(opts: {
   const tokenHash = hashInviteToken(token);
   const expiresAt = new Date(Date.now() + INVITE_TTL_MS);
 
-  const invite = await withTenant(opts.workspaceId, null, async (tx) => {
-    // Supersede unclaimed invites for the same email in this workspace.
-    await tx
-      .update(workspaceInvites)
-      .set({ expiresAt: new Date() })
-      .where(
-        and(
-          eq(workspaceInvites.workspaceId, opts.workspaceId),
-          sql`lower(${workspaceInvites.email}) = ${email}`,
-          isNull(workspaceInvites.claimedAt),
-        ),
-      );
-
-    const [row] = await tx
-      .insert(workspaceInvites)
-      .values({
-        workspaceId: opts.workspaceId,
-        email,
-        role,
-        tokenHash,
-        expiresAt,
-      })
-      .returning();
-    return row;
+  const { createWorkspaceInviteDefiner } = await import(
+    '@/lib/db/tenantWriteDefiners'
+  );
+  const invite = await createWorkspaceInviteDefiner({
+    workspaceId: opts.workspaceId,
+    email,
+    role,
+    tokenHash,
+    expiresAt: expiresAt.toISOString(),
   });
 
   // If the user already exists, stage an invited membership.
@@ -114,7 +94,7 @@ export async function createWorkspaceOwnerInvite(opts: {
     inviteId: invite.id,
     token,
     claimUrl: buildClaimUrl(token, opts.baseUrl),
-    expiresAt,
+    expiresAt: invite.expiresAt,
   };
 }
 
@@ -216,21 +196,7 @@ export async function claimWorkspaceInvite(opts: {
   await ensureWorkspaceMembership({
     workspaceId: claimed.workspace_id,
     userId: opts.user.id,
-  });
-  await withTenant(claimed.workspace_id, opts.user.id, async (tx) => {
-    await tx
-      .update(workspaceMemberships)
-      .set({
-        status: 'active',
-        role: 'member',
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(workspaceMemberships.workspaceId, claimed.workspace_id),
-          eq(workspaceMemberships.userId, opts.user.id),
-        ),
-      );
+    status: 'active',
   });
 
   await upsertRoleBinding({

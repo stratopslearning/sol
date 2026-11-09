@@ -4,13 +4,7 @@ import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { db } from '@/app/db';
-import {
-  chatbotSections,
-  chatbots,
-  quizSections,
-  quizzes,
-  users,
-} from '@/app/db/schema';
+import { users } from '@/app/db/schema';
 import { apiErrorResponse } from '@/lib/api/errors';
 import { extractRequestMeta, logAudit } from '@/lib/audit';
 import { canGrantPlatformStaff } from '@/lib/env';
@@ -298,24 +292,12 @@ export async function DELETE(
       userAgent: meta.userAgent,
     });
 
-    await db
-      .update(quizSections)
-      .set({ assignedBy: admin.id })
-      .where(eq(quizSections.assignedBy, targetUserId));
-    await db
-      .update(chatbotSections)
-      .set({ assignedBy: admin.id })
-      .where(eq(chatbotSections.assignedBy, targetUserId));
-    await db
-      .update(quizzes)
-      .set({ professorId: admin.id, updatedAt: new Date() })
-      .where(eq(quizzes.professorId, targetUserId));
-    await db
-      .update(chatbots)
-      .set({ professorId: admin.id, updatedAt: new Date() })
-      .where(eq(chatbots.professorId, targetUserId));
-
-    await db.delete(users).where(eq(users.id, targetUserId));
+    const {
+      adminReassignUserContentDefiner,
+      adminDeleteUserDefiner,
+    } = await import('@/lib/db/tenantWriteDefiners');
+    await adminReassignUserContentDefiner(targetUserId, admin.id);
+    await adminDeleteUserDefiner(targetUserId);
 
     return NextResponse.json({
       success: true,

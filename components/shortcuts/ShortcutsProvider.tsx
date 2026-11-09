@@ -87,8 +87,11 @@ export function ShortcutsProvider({
 
   React.useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      const key = typeof e.key === "string" ? e.key : "";
+      if (!key) return;
+
       // Help: ⌘/
-      if (e.key === "/" && isModKey(e) && !e.altKey && !e.shiftKey) {
+      if (key === "/" && isModKey(e) && !e.altKey && !e.shiftKey) {
         e.preventDefault();
         clearGChord();
         setHelpOpen((open) => !open);
@@ -97,7 +100,7 @@ export function ShortcutsProvider({
 
       // Jump to: ⌘K
       if (
-        e.key.toLowerCase() === "k" &&
+        key.toLowerCase() === "k" &&
         isModKey(e) &&
         !e.altKey &&
         !e.shiftKey
@@ -109,7 +112,7 @@ export function ShortcutsProvider({
       }
 
       // Sidebar: ⌘[
-      if (e.key === "[" && isModKey(e) && !e.altKey && !e.shiftKey) {
+      if (key === "[" && isModKey(e) && !e.altKey && !e.shiftKey) {
         e.preventDefault();
         clearGChord();
         sidebarToggleRef.current?.();
@@ -117,7 +120,7 @@ export function ShortcutsProvider({
       }
 
       // Jump to: /
-      if (e.key === "/" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      if (key === "/" && !e.metaKey && !e.ctrlKey && !e.altKey) {
         if (isTypingTarget(e.target)) return;
         e.preventDefault();
         clearGChord();
@@ -126,7 +129,7 @@ export function ShortcutsProvider({
       }
 
       // Esc: clear Jump to when focused (dialogs handle their own Esc)
-      if (e.key === "Escape") {
+      if (key === "Escape") {
         clearGChord();
         if (!helpOpenRef.current && jumpToRef.current?.isFocused()) {
           e.preventDefault();
@@ -138,7 +141,7 @@ export function ShortcutsProvider({
 
       // g-then chords
       if (gPendingRef.current) {
-        if (e.key === "Escape") {
+        if (key === "Escape") {
           e.preventDefault();
           clearGChord();
           return;
@@ -147,9 +150,9 @@ export function ShortcutsProvider({
           clearGChord();
           return;
         }
-        if (e.key.length === 1) {
+        if (key.length === 1) {
           e.preventDefault();
-          const letter = e.key.toLowerCase();
+          const letter = key.toLowerCase();
           clearGChord();
           navigateChord(letter);
           return;
@@ -159,7 +162,7 @@ export function ShortcutsProvider({
       }
 
       if (
-        e.key.toLowerCase() === "g" &&
+        key.toLowerCase() === "g" &&
         !e.metaKey &&
         !e.ctrlKey &&
         !e.altKey &&

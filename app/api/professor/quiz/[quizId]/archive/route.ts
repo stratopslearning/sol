@@ -1,14 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { and, eq } from 'drizzle-orm';
 
-import { db } from '@/app/db';
-import { quizzes } from '@/app/db/schema';
 import { ApiError, jsonError } from '@/lib/api/errors';
 import { requireProfessorApi } from '@/lib/api/professorAuth';
-import { activeOnly } from '@/lib/db/filters';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
-import { userCanWriteQuiz } from '@/lib/quizAccess';
-import { softDeleteActivityByEntity } from '@/lib/assignments/sync';
+import { archiveQuiz } from '@/lib/professor/mutations';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,32 +24,11 @@ export async function POST(
     });
     if (limited) return limited;
 
-    const existingQuiz = await db.query.quizzes.findFirst({
-      where: and(eq(quizzes.id, quizId), activeOnly(quizzes.deletedAt)),
-    });
-    if (!existingQuiz) {
-      return NextResponse.json({ error: 'Quiz not found' }, { status: 404 });
-    }
-
-    if (!(await userCanWriteQuiz(user, quizId))) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
-
-    const [archivedQuiz] = await db
-      .update(quizzes)
-      .set({
-        isActive: false,
-        deletedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(quizzes.id, quizId))
-      .returning();
-
-    await softDeleteActivityByEntity({ quizId });
+    const archived = await archiveQuiz(user, quizId);
 
     return NextResponse.json({
       success: true,
-      quizId: archivedQuiz.id,
+      quizId: archived.id,
       message: 'Quiz archived successfully',
     });
   } catch (error) {

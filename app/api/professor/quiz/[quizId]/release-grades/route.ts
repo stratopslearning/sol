@@ -69,16 +69,10 @@ export async function POST(
           ? null
           : new Date(parsed.data.gradesReleasedAt);
 
-    const [updated] = await db
-      .update(quizzes)
-      .set({ gradesReleasedAt: releasedAt, updatedAt: new Date() })
-      .where(eq(quizzes.id, quizId))
-      .returning({
-        id: quizzes.id,
-        gradesReleasedAt: quizzes.gradesReleasedAt,
-      });
-
-    if (!updated) throw ApiError.notFound('Quiz not found');
+    const { setQuizGradesReleasedDefiner } = await import(
+      '@/lib/db/tenantWriteDefiners'
+    );
+    const updated = await setQuizGradesReleasedDefiner(quizId, releasedAt);
 
     const meta = extractRequestMeta(req);
     await logAudit({

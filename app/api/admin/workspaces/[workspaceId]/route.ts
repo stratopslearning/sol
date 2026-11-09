@@ -1,21 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { and, count, eq, inArray, isNull } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { db } from '@/app/db';
-import {
-  courses,
-  DEFAULT_WORKSPACE_ID,
-  sections,
-  users,
-  workspaceLicenses,
-  workspaces,
-} from '@/app/db/schema';
-import { activeOnly } from '@/lib/db/filters';
+import { DEFAULT_WORKSPACE_ID, users } from '@/app/db/schema';
 import { apiErrorResponse } from '@/lib/api/errors';
 import { logAudit } from '@/lib/audit';
 import { requireSupportGrant } from '@/lib/authz/requireSupportGrant';
+import {
+  adminHardDeleteWorkspaceDefiner,
+  adminSoftDeleteWorkspaceDefiner,
+  adminWorkspaceDeleteInfoDefiner,
+} from '@/lib/db/tenantWriteDefiners';
 import {
   grantWorkspaceCompAccess,
   revokeWorkspaceCompAccess,
@@ -73,9 +70,8 @@ export async function PATCH(
       return NextResponse.json({ error: 'Invalid body' }, { status: 400 });
     }
 
-    const workspace = await db.query.workspaces.findFirst({
-      where: eq(workspaces.id, workspaceId),
-    });
+    // FORCE RLS: platform staff have no membership → bare findFirst is null.
+    const workspace = await adminWorkspaceDeleteInfoDefiner(workspaceId);
     if (!workspace) {
       return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
     }
@@ -126,7 +122,6 @@ export async function PATCH(
       days,
       indefinite,
     });
-
     await logAudit({
       actorUserId: admin.id,
       actorClerkId: admin.clerkId,
@@ -141,7 +136,6 @@ export async function PATCH(
         periodEnd: periodEnd?.toISOString() ?? null,
       },
     });
-
     return NextResponse.json({
       success: true,
       workspaceId,
@@ -156,7 +150,7 @@ export async function PATCH(
 }
 
 /**
- * Delete a workspace (admin only).
+ * Delete a workspace.
  * - Empty workspace (no active courses, no children): hard delete (cascades).
  * - Has active courses: soft delete — churn workspace, cancel licenses, soft-delete courses/sections.
  * Blocked: default workspace, slug mismatch, child workspaces.
@@ -191,9 +185,8 @@ export async function DELETE(
       );
     }
 
-    const workspace = await db.query.workspaces.findFirst({
-      where: eq(workspaces.id, workspaceId),
-    });
+    // FORCE RLS: platform staff without membership cannot see workspace rows.
+    const workspace = await adminWorkspaceDeleteInfoDefiner(workspaceId);
     if (!workspace) {
       return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
     }
@@ -228,54 +221,18 @@ export async function DELETE(
       );
     }
 
-    const [childRow] = await db
-      .select({ n: count() })
-      .from(workspaces)
-      .where(eq(workspaces.parentWorkspaceId, workspaceId));
-    const childCount = Number(childRow?.n ?? 0);
-    if (childCount > 0) {
+    if (workspace.childCount > 0) {
       return NextResponse.json(
         {
-          error: `Cannot delete: ${childCount} child workspace${childCount === 1 ? '' : 's'} still reference this institution. Delete or re-parent them first.`,
-          childCount,
+          error: `Cannot delete: ${workspace.childCount} child workspace${workspace.childCount === 1 ? '' : 's'} still reference this institution. Delete or re-parent them first.`,
+          childCount: workspace.childCount,
         },
         { status: 409 },
       );
     }
 
-    const activeCourses = await db.query.courses.findMany({
-      where: and(
-        eq(courses.workspaceId, workspaceId),
-        activeOnly(courses.deletedAt),
-      ),
-      columns: { id: true },
-    });
-    const courseCount = activeCourses.length;
-    const now = new Date();
-
-    if (courseCount > 0) {
-      const courseIds = activeCourses.map((c) => c.id);
-      await db
-        .update(sections)
-        .set({ deletedAt: now, isActive: false })
-        .where(
-          and(inArray(sections.courseId, courseIds), isNull(sections.deletedAt)),
-        );
-      await db
-        .update(courses)
-        .set({ deletedAt: now, isActive: false })
-        .where(
-          and(eq(courses.workspaceId, workspaceId), isNull(courses.deletedAt)),
-        );
-      await db
-        .update(workspaceLicenses)
-        .set({ status: 'canceled', updatedAt: now })
-        .where(eq(workspaceLicenses.workspaceId, workspaceId));
-      await db
-        .update(workspaces)
-        .set({ status: 'churned', updatedAt: now })
-        .where(eq(workspaces.id, workspaceId));
-
+    if (workspace.activeCourseCount > 0) {
+      const soft = await adminSoftDeleteWorkspaceDefiner(workspaceId);
       await logAudit({
         actorUserId: admin.id,
         actorClerkId: admin.clerkId,
@@ -286,7 +243,7 @@ export async function DELETE(
           slug: workspace.slug,
           name: workspace.name,
           type: workspace.type,
-          courseCount,
+          courseCount: soft.courseCount,
           mode: 'soft',
         },
       });
@@ -295,11 +252,11 @@ export async function DELETE(
         success: true,
         mode: 'soft',
         workspaceId,
-        courseCount,
+        courseCount: soft.courseCount,
       });
     }
 
-    await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
+    const hard = await adminHardDeleteWorkspaceDefiner(workspaceId);
 
     await logAudit({
       actorUserId: admin.id,
@@ -318,7 +275,7 @@ export async function DELETE(
     return NextResponse.json({
       success: true,
       mode: 'hard',
-      deletedId: workspaceId,
+      deletedId: hard.deletedId,
     });
   } catch (error) {
     console.error('[admin/workspaces DELETE]', error);

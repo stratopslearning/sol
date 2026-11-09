@@ -3,7 +3,7 @@ import { and, eq, isNull, ne } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { db } from '@/app/db';
-import { authoringRevisions, courseOutlines } from '@/app/db/schema';
+import { courseOutlines } from '@/app/db/schema';
 import { ApiError, apiErrorResponse } from '@/lib/api/errors';
 import { requireProfessorApi } from '@/lib/api/professorAuth';
 import { readJsonBody } from '@/lib/api/readJsonBody';
@@ -61,28 +61,38 @@ export async function POST(
     if (!tenantId) {
       throw ApiError.notFound('Course workspace not found');
     }
-    const [revision] = await db
-      .insert(authoringRevisions)
-      .values({
-        outlineId: outline.id,
-        tenantId,
-        createdByUserId: auth.user.id,
-        label: `Insight: ${body.title.slice(0, 120)}`,
-        snapshot: {
-          source: 'analytics_insights',
-          suggestionId: body.suggestionId,
-          title: body.title,
-          description: body.description ?? null,
-          acceptedAt: new Date().toISOString(),
-        },
-      })
-      .returning();
+    const { insertAuthoringRevisionDefiner } = await import(
+      '@/lib/db/entityScopedReads'
+    );
+    const snapshot = {
+      source: 'analytics_insights',
+      suggestionId: body.suggestionId,
+      title: body.title,
+      description: body.description ?? null,
+      acceptedAt: new Date().toISOString(),
+    };
+    const label = `Insight: ${body.title.slice(0, 120)}`;
+    const revisionId = await insertAuthoringRevisionDefiner({
+      outlineId: outline.id,
+      tenantId,
+      userId: auth.user.id,
+      label,
+      snapshot,
+    });
+    const revision = {
+      id: revisionId,
+      outlineId: outline.id,
+      tenantId,
+      createdByUserId: auth.user.id,
+      label,
+      snapshot,
+    };
 
     if (contentType.includes('application/json')) {
       return NextResponse.json({
         ok: true,
         revision,
-        authoringUrl: `/dashboard/professor/authoring/${courseId}?refineRevision=${revision!.id}`,
+        authoringUrl: `/dashboard/professor/authoring/${courseId}?refineRevision=${revisionId}`,
       });
     }
     // NOTE: next/navigation redirect() throws NEXT_REDIRECT, which the catch
@@ -90,7 +100,7 @@ export async function POST(
     return NextResponse.redirect(
       new URL(
         withBasePath(
-          `/dashboard/professor/authoring/${courseId}?refineRevision=${revision!.id}`,
+          `/dashboard/professor/authoring/${courseId}?refineRevision=${revisionId}`,
         ),
         req.url,
       ),

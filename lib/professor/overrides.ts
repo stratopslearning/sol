@@ -240,15 +240,16 @@ export async function persistEffectiveAttemptScore(
 ): Promise<EffectiveAttemptScore> {
   const effective = await computeEffectiveAttemptScore(attemptId, overrideRows);
 
-  await db
-    .update(attempts)
-    .set({
-      score: effective.totalScore,
-      maxScore: effective.maxScore,
-      percentage: effective.percentage,
-      passed: effective.passed,
-    })
-    .where(eq(attempts.id, attemptId));
+  const { updateAttemptScoreDefiner } = await import(
+    '@/lib/db/tenantWriteDefiners'
+  );
+  await updateAttemptScoreDefiner({
+    attemptId,
+    score: effective.totalScore,
+    maxScore: effective.maxScore,
+    percentage: effective.percentage,
+    passed: effective.passed,
+  });
 
   return effective;
 }
@@ -326,18 +327,19 @@ export async function insertGradeOverride(
     throw ApiError.badRequest('Attempt is missing tenant_id');
   }
 
-  const [override] = await db
-    .insert(gradeOverrides)
-    .values({
-      attemptId: input.attemptId,
-      tenantId: attempt.tenantId,
-      questionId: input.questionId ?? null,
-      numericScore: hasNumeric ? input.numericScore! : null,
-      criteriaOverrides: hasCriteria ? input.criteriaOverrides! : null,
-      note,
-      actorUserId: input.actorUserId,
-    })
-    .returning();
+  const {
+    insertGradeOverrideDefiner,
+    listGradeOverridesDefiner,
+  } = await import('@/lib/db/tenantWriteDefiners');
+  const override = await insertGradeOverrideDefiner({
+    attemptId: input.attemptId,
+    tenantId: attempt.tenantId,
+    questionId: input.questionId ?? null,
+    numericScore: hasNumeric ? input.numericScore! : null,
+    criteriaOverrides: hasCriteria ? input.criteriaOverrides! : null,
+    note,
+    actorUserId: input.actorUserId,
+  });
 
   // Few-shot moat: persist labeled example for this question.
   if (input.questionId) {
@@ -381,17 +383,14 @@ export async function insertGradeOverride(
     }
   }
 
-  const allRows = await db.query.gradeOverrides.findMany({
-    where: eq(gradeOverrides.attemptId, input.attemptId),
-    orderBy: asc(gradeOverrides.createdAt),
-  });
+  const allRows = await listGradeOverridesDefiner(input.attemptId);
 
   const effective = await persistEffectiveAttemptScore(
     input.attemptId,
-    allRows,
+    allRows as GradeOverrideRow[],
   );
 
-  return { override, effective };
+  return { override: override as GradeOverrideRow, effective };
 }
 
 export async function listAttemptIdsWithGradeOverrides(

@@ -65,8 +65,16 @@ async function main() {
   const pool = new Pool({ connectionString });
   const client = await pool.connect();
   try {
-    // Skip if already applied.
-    await client.query('CREATE SCHEMA IF NOT EXISTS drizzle');
+    // Skip if already applied. sol_migrator may lack CREATE on the DB even when
+    // the drizzle schema already exists — only create when missing.
+    const schema = await client.query<{ exists: boolean }>(
+      `SELECT EXISTS (
+         SELECT 1 FROM pg_namespace WHERE nspname = 'drizzle'
+       ) AS exists`,
+    );
+    if (!schema.rows[0]?.exists) {
+      await client.query('CREATE SCHEMA drizzle');
+    }
     await client.query(
       `CREATE TABLE IF NOT EXISTS drizzle.__drizzle_migrations (
         id SERIAL PRIMARY KEY,

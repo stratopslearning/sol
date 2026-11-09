@@ -1,17 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
-import { db } from '@/app/db';
-import { chatbotSections } from '@/app/db/schema';
-import {
-  getActiveChatbot,
-  professorEnrolledInSections,
-  userCanWriteChatbot,
-} from '@/lib/chatbot/access';
 import { ApiError, jsonError } from '@/lib/api/errors';
 import { requireProfessorApi } from '@/lib/api/professorAuth';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
 import { readJsonBody } from '@/lib/api/readJsonBody';
+import { assignDiscussion } from '@/lib/professor/mutations';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,40 +32,8 @@ export async function POST(
     if (limited) return limited;
 
     const { id } = await context.params;
-    const bot = await getActiveChatbot(id);
-    if (!bot || bot.isTemplate) {
-      return NextResponse.json(
-        { error: 'Duplicate the template before assigning' },
-        { status: 400 },
-      );
-    }
-    if (!(await userCanWriteChatbot(user, bot))) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
     const body = assignSchema.parse(await readJsonBody(req));
-    {
-      const ok = await professorEnrolledInSections(user, body.sectionIds);
-      if (!ok) {
-        return NextResponse.json(
-          { error: 'You can only assign to sections you teach' },
-          { status: 403 },
-        );
-      }
-    }
-
-    await db
-      .insert(chatbotSections)
-      .values(
-        body.sectionIds.map((sectionId) => ({
-          chatbotId: id,
-          sectionId,
-          assignedBy: user.id,
-        })),
-      )
-      .onConflictDoNothing({
-        target: [chatbotSections.chatbotId, chatbotSections.sectionId],
-      });
+    await assignDiscussion(user, id, body.sectionIds);
 
     return NextResponse.json({ success: true });
   } catch (error) {

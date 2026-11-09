@@ -1,7 +1,7 @@
-import { and, desc, eq, gte, sql } from 'drizzle-orm';
+import { and, eq, gte } from 'drizzle-orm';
 
 import { db } from '@/app/db';
-import { users, workspaceAccessRequests, workspaces } from '@/app/db/schema';
+import { users, workspaceAccessRequests } from '@/app/db/schema';
 import { ApiError } from '@/lib/api/errors';
 import { withTenant } from '@/lib/db/tenantContext';
 import { createWorkspaceInvite } from '@/lib/workspace/invites';
@@ -15,6 +15,25 @@ export type AccessRequestStatus =
   | 'rejected'
   | 'blocked';
 
+function mapAccessRequestRow(raw: Record<string, unknown>) {
+  return {
+    id: String(raw.id),
+    workspaceId: String(raw.workspace_id ?? raw.workspaceId),
+    email: String(raw.email),
+    name: (raw.name as string | null) ?? null,
+    claimedRole: (raw.claimed_role ?? raw.claimedRole) as AccessRequestRole,
+    userId: (raw.user_id ?? raw.userId) as string | null,
+    status: String(raw.status) as AccessRequestStatus,
+    decidedBy: (raw.decided_by ?? raw.decidedBy) as string | null,
+    decidedAt: raw.decided_at || raw.decidedAt
+      ? new Date(String(raw.decided_at ?? raw.decidedAt))
+      : null,
+    note: (raw.note as string | null) ?? null,
+    createdAt: new Date(String(raw.created_at ?? raw.createdAt)),
+    updatedAt: new Date(String(raw.updated_at ?? raw.updatedAt)),
+  };
+}
+
 export async function createWorkspaceAccessRequest(opts: {
   workspaceId: string;
   email: string;
@@ -27,56 +46,35 @@ export async function createWorkspaceAccessRequest(opts: {
     throw ApiError.badRequest('Valid email is required');
   }
 
-  const workspace = await db.query.workspaces.findFirst({
-    where: eq(workspaces.id, opts.workspaceId),
-    columns: { id: true },
-  });
-  if (!workspace) throw ApiError.notFound('Workspace not found');
-
-  return withTenant(
-    opts.workspaceId,
-    opts.userId ?? null,
-    async (tx) => {
-      const existing = await tx.query.workspaceAccessRequests.findFirst({
-        where: and(
-          eq(workspaceAccessRequests.workspaceId, opts.workspaceId),
-          sql`lower(${workspaceAccessRequests.email}) = ${email}`,
-          eq(workspaceAccessRequests.status, 'pending'),
-        ),
-      });
-      if (existing) return { id: existing.id };
-
-      const [row] = await tx
-        .insert(workspaceAccessRequests)
-        .values({
-          workspaceId: opts.workspaceId,
-          email,
-          name: opts.name?.trim() || null,
-          claimedRole: opts.claimedRole ?? 'instructor',
-          userId: opts.userId ?? null,
-          status: 'pending',
-        })
-        .returning({ id: workspaceAccessRequests.id });
-
-      return { id: row.id };
-    },
+  const { createAccessRequestDefiner } = await import(
+    '@/lib/db/tenantWriteDefiners'
   );
+  try {
+    return await createAccessRequestDefiner({
+      workspaceId: opts.workspaceId,
+      email,
+      name: opts.name?.trim() || null,
+      claimedRole: opts.claimedRole ?? 'instructor',
+      userId: opts.userId ?? null,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (message.includes('Workspace not found')) {
+      throw ApiError.notFound('Workspace not found');
+    }
+    throw err;
+  }
 }
 
 export async function listPendingAccessRequests(
   workspaceId: string,
-  actorUserId?: string | null,
+  _actorUserId?: string | null,
 ) {
-  return withTenant(workspaceId, actorUserId ?? null, async (tx) => {
-    return tx.query.workspaceAccessRequests.findMany({
-      where: and(
-        eq(workspaceAccessRequests.workspaceId, workspaceId),
-        eq(workspaceAccessRequests.status, 'pending'),
-      ),
-      orderBy: [desc(workspaceAccessRequests.createdAt)],
-      limit: 100,
-    });
-  });
+  const { listPendingAccessRequestsDefiner } = await import(
+    '@/lib/db/tenantWriteDefiners'
+  );
+  const rows = await listPendingAccessRequestsDefiner(workspaceId);
+  return rows.map(mapAccessRequestRow);
 }
 
 export async function decideAccessRequest(opts: {
@@ -96,36 +94,26 @@ export async function decideAccessRequest(opts: {
     throw ApiError.forbidden('Only workspace owner or admin can decide requests');
   }
 
-  const request = await withTenant(
-    opts.workspaceId,
-    opts.actorUserId,
-    async (tx) => {
-      const row = await tx.query.workspaceAccessRequests.findFirst({
-        where: and(
-          eq(workspaceAccessRequests.id, opts.requestId),
-          eq(workspaceAccessRequests.workspaceId, opts.workspaceId),
-        ),
-      });
-      if (!row) throw ApiError.notFound('Request not found');
-      if (row.status !== 'pending') {
-        throw ApiError.badRequest('Request is already decided');
-      }
-      return row;
-    },
+  const { fetchAccessRequestDefiner, decideAccessRequestDefiner } = await import(
+    '@/lib/db/tenantWriteDefiners'
   );
+  const raw = await fetchAccessRequestDefiner({
+    requestId: opts.requestId,
+    workspaceId: opts.workspaceId,
+  });
+  if (!raw) throw ApiError.notFound('Request not found');
+  const request = mapAccessRequestRow(raw);
+  if (request.status !== 'pending') {
+    throw ApiError.badRequest('Request is already decided');
+  }
 
   if (opts.decision !== 'approved') {
-    await withTenant(opts.workspaceId, opts.actorUserId, async (tx) => {
-      await tx
-        .update(workspaceAccessRequests)
-        .set({
-          status: opts.decision,
-          decidedBy: opts.actorUserId,
-          decidedAt: new Date(),
-          note: opts.note?.trim() || null,
-          updatedAt: new Date(),
-        })
-        .where(eq(workspaceAccessRequests.id, opts.requestId));
+    await decideAccessRequestDefiner({
+      requestId: opts.requestId,
+      workspaceId: opts.workspaceId,
+      status: opts.decision,
+      decidedBy: opts.actorUserId,
+      note: opts.note?.trim() || null,
     });
     return {};
   }
@@ -148,17 +136,12 @@ export async function decideAccessRequest(opts: {
     baseUrl,
   });
 
-  await withTenant(opts.workspaceId, opts.actorUserId, async (tx) => {
-    await tx
-      .update(workspaceAccessRequests)
-      .set({
-        status: 'approved',
-        decidedBy: opts.actorUserId,
-        decidedAt: new Date(),
-        note: opts.note?.trim() || null,
-        updatedAt: new Date(),
-      })
-      .where(eq(workspaceAccessRequests.id, opts.requestId));
+  await decideAccessRequestDefiner({
+    requestId: opts.requestId,
+    workspaceId: opts.workspaceId,
+    status: 'approved',
+    decidedBy: opts.actorUserId,
+    note: opts.note?.trim() || null,
   });
 
   return {
@@ -207,11 +190,10 @@ export async function accessRequestDigestStats(workspaceId: string) {
 export async function findWorkspaceIdBySlug(
   slug: string,
 ): Promise<string | null> {
-  const row = await db.query.workspaces.findFirst({
-    where: eq(workspaces.slug, slug.trim().toLowerCase()),
-    columns: { id: true },
-  });
-  return row?.id ?? null;
+  const { findWorkspaceIdBySlugDefiner } = await import(
+    '@/lib/db/tenantWriteDefiners'
+  );
+  return findWorkspaceIdBySlugDefiner(slug);
 }
 
 export async function actorEmail(userId: string): Promise<string | null> {

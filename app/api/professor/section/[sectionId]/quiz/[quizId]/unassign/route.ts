@@ -1,12 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { and, eq } from 'drizzle-orm';
 
-import { db } from '@/app/db';
-import { quizSections } from '@/app/db/schema';
 import { apiErrorResponse } from '@/lib/api/errors';
 import { requireProfessorApi } from '@/lib/api/professorAuth';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
-import { assertTeachesSection } from '@/lib/professor/sections';
+import { unassignQuizFromSection } from '@/lib/professor/mutations';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,17 +26,7 @@ export async function POST(
     if (limited) return limited;
 
     const { sectionId, quizId } = await context.params;
-
-    await assertTeachesSection(user, sectionId);
-
-    await db
-      .delete(quizSections)
-      .where(
-        and(
-          eq(quizSections.sectionId, sectionId),
-          eq(quizSections.quizId, quizId),
-        ),
-      );
+    await unassignQuizFromSection(user, sectionId, quizId);
 
     return NextResponse.json({ success: true });
   } catch (error) {

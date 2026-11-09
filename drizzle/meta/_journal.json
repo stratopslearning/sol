@@ -582,6 +582,34 @@
       "when": 1785200000000,
       "tag": "0082_create_course_definer",
       "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "7",
+      "when": 1785300000000,
+      "tag": "0083_rls_write_definers",
+      "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1785400000000,
+      "tag": "0084_more_rls_write_definers",
+      "breakpoints": true
+    },
+    {
+      "idx": 85,
+      "version": "7",
+      "when": 1785500000000,
+      "tag": "0085_admin_workspace_delete",
+      "breakpoints": true
+    },
+    {
+      "idx": 86,
+      "version": "7",
+      "when": 1785600000000,
+      "tag": "0086_admin_purge_access_entitlement",
+      "breakpoints": true
     }
   ]
 }

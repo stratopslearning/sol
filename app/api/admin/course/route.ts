@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/app/db';
-import { courses, users } from '@/app/db/schema';
+import { users } from '@/app/db/schema';
 import { z } from 'zod';
 import { auth } from '@clerk/nextjs/server';
 import { eq } from 'drizzle-orm';
 
 import { apiErrorResponse } from '@/lib/api/errors';
 import { requireSupportGrant } from '@/lib/authz/requireSupportGrant';
+import { createCourseDefiner } from '@/lib/db/entityScopedReads';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,14 +39,13 @@ export async function POST(req: NextRequest) {
       workspaceId,
       { action: 'support.tenant_access', targetType: 'workspace', targetId: workspaceId },
     );
-    const [newCourse] = await db.insert(courses).values({
+    const newCourse = await createCourseDefiner({
       workspaceId,
-      tenantId: workspaceId,
       title: validatedData.title,
-      description: validatedData.description || null,
-      status: 'ACTIVE',
-      isActive: true,
-    }).returning();
+      description: validatedData.description ?? null,
+      createdByUserId: user.id,
+      bindCreator: false,
+    });
     return NextResponse.json({ success: true, course: newCourse });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -53,4 +53,4 @@ export async function POST(req: NextRequest) {
     }
     return apiErrorResponse(error);
   }
-} 
+}

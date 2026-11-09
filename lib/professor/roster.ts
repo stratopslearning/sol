@@ -1,7 +1,3 @@
-import { and, eq } from 'drizzle-orm';
-
-import { db } from '@/app/db';
-import { studentSections } from '@/app/db/schema';
 import { ApiError } from '@/lib/api/errors';
 import { authorize, tenantIdForSection } from '@/lib/authz';
 import { logAudit } from '@/lib/audit';
@@ -30,21 +26,25 @@ export async function dropStudentFromSection(
     throw ApiError.forbidden('You cannot manage the roster for this section');
   }
 
-  const enrollment = await db.query.studentSections.findFirst({
-    where: and(
-      eq(studentSections.id, opts.enrollmentId),
-      eq(studentSections.sectionId, opts.sectionId),
-    ),
-  });
-  if (!enrollment) throw ApiError.notFound('Enrollment not found');
-  if (enrollment.status === 'DROPPED') {
-    throw ApiError.badRequest('Student is already dropped from this section');
+  const { dropStudentEnrollmentDefiner } = await import(
+    '@/lib/db/tenantWriteDefiners'
+  );
+  let dropped: Awaited<ReturnType<typeof dropStudentEnrollmentDefiner>>;
+  try {
+    dropped = await dropStudentEnrollmentDefiner(opts.enrollmentId);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (message.includes('Enrollment not found')) {
+      throw ApiError.notFound('Enrollment not found');
+    }
+    if (message.includes('ALREADY_DROPPED')) {
+      throw ApiError.badRequest('Student is already dropped from this section');
+    }
+    throw err;
   }
-
-  await db
-    .update(studentSections)
-    .set({ status: 'DROPPED' })
-    .where(eq(studentSections.id, enrollment.id));
+  if (dropped.sectionId !== opts.sectionId) {
+    throw ApiError.notFound('Enrollment not found');
+  }
 
   await logAudit({
     actorUserId: user.id,
@@ -53,8 +53,8 @@ export async function dropStudentFromSection(
     targetType: 'section',
     targetId: opts.sectionId,
     metadata: {
-      enrollmentId: enrollment.id,
-      studentId: enrollment.studentId,
+      enrollmentId: dropped.id,
+      studentId: dropped.studentId,
     },
     ip: audit?.ip ?? null,
     userAgent: audit?.userAgent ?? null,

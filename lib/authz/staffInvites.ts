@@ -1,11 +1,9 @@
 import { createHash, randomBytes } from 'crypto';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 
 import { db } from '@/app/db';
-import { sectionStaffInvites } from '@/app/db/schema';
 import { grantSectionStaff } from '@/lib/authz/staffGrants';
 import { withBasePath } from '@/lib/basePath';
-import { withTenant } from '@/lib/db/tenantContext';
 
 const INVITE_TTL_MS = 14 * 24 * 60 * 60 * 1000;
 
@@ -64,38 +62,24 @@ export async function createSectionStaffInvite(opts: {
   const tokenHash = hashToken(token);
   const expiresAt = new Date(Date.now() + INVITE_TTL_MS);
 
-  const invite = await withTenant(opts.tenantId, opts.grantedBy, async (tx) => {
-    await tx
-      .update(sectionStaffInvites)
-      .set({ expiresAt: new Date() })
-      .where(
-        and(
-          eq(sectionStaffInvites.sectionId, opts.sectionId),
-          sql`lower(${sectionStaffInvites.email}) = ${email}`,
-          isNull(sectionStaffInvites.claimedAt),
-        ),
-      );
-
-    const [row] = await tx
-      .insert(sectionStaffInvites)
-      .values({
-        tenantId: opts.tenantId,
-        sectionId: opts.sectionId,
-        email,
-        role: opts.role,
-        tokenHash,
-        grantedBy: opts.grantedBy,
-        expiresAt,
-      })
-      .returning();
-    return row;
+  const { createStaffInviteDefiner } = await import(
+    '@/lib/db/tenantWriteDefiners'
+  );
+  const invite = await createStaffInviteDefiner({
+    tenantId: opts.tenantId,
+    sectionId: opts.sectionId,
+    email,
+    role: opts.role,
+    tokenHash,
+    grantedBy: opts.grantedBy,
+    expiresAt: expiresAt.toISOString(),
   });
 
   return {
     inviteId: invite.id,
     token,
     claimUrl: buildClaimUrl(token, opts.baseUrl),
-    expiresAt,
+    expiresAt: invite.expiresAt,
   };
 }
 
