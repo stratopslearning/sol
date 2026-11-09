@@ -205,6 +205,9 @@ describe.skipIf(skip)('rls.facultyDefiners', () => {
       await client.query('BEGIN');
       await client.query('SET LOCAL ROLE sol_app');
       await client.query(`SELECT set_config('app.tenant_id', '', true)`);
+
+      // Expected RLS failure aborts the subxact; SAVEPOINT keeps the outer txn usable.
+      await client.query('SAVEPOINT bare_insert');
       let bareFailed = false;
       try {
         await client.query(
@@ -214,6 +217,7 @@ describe.skipIf(skip)('rls.facultyDefiners', () => {
         );
       } catch {
         bareFailed = true;
+        await client.query('ROLLBACK TO SAVEPOINT bare_insert');
       }
       expect(bareFailed).toBe(true);
 
