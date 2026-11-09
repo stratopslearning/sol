@@ -55,6 +55,19 @@ export function ResendOwnerInviteButton({
         return;
       }
       setClaimUrl(data.invite?.claimUrl ?? null);
+      if (data.emailSkipped) {
+        setError(
+          'Invite rotated, but email is disabled (EMAIL_ENABLED). Copy the claim URL.',
+        );
+      } else if (data.emailError) {
+        setError(
+          `Invite rotated, but email failed: ${data.emailError}. Copy the claim URL.`,
+        );
+      } else if (data.emailSent === false) {
+        setError(
+          'Invite rotated, but email did not send. Copy the claim URL.',
+        );
+      }
       router.refresh();
     } catch {
       setError('Network error');

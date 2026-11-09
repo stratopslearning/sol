@@ -162,7 +162,10 @@ export function WorkspacesDirectory({ rows }: { rows: WorkspaceDirectoryRow[] })
                             ? ' · indefinite pilot'
                             : w.licensePeriodEnd
                               ? ` · until ${new Date(w.licensePeriodEnd).toLocaleDateString()}`
-                              : ''}
+                              : w.licenseStatus === 'incomplete' &&
+                                  !w.stripeSubscriptionId
+                                ? ' · awaiting pilot/billing'
+                                : ''}
                       </span>
                     </div>
                   </TableCell>

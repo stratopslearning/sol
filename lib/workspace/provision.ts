@@ -197,7 +197,9 @@ export async function provisionWorkspace(
       ${(input.seatCap ?? tier.seatCap)}::integer,
       ${tier.aiUnitCap}::integer,
       ${stripeBilled ? 'stripe' : 'manual'}::text,
-      ${stripeBilled ? 'trialing' : 'active'}::text
+      -- Creator/Business: incomplete until Stripe checkout or admin Grant pilot.
+      -- Do not use trialing+null period_end here — that is the indefinite pilot.
+      ${stripeBilled ? 'incomplete' : 'active'}::text
     )
   `);
 

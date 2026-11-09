@@ -98,6 +98,19 @@ export function WorkspacesClient({ parentOptions }: Props) {
       setName('');
       setOwnerEmail('');
       setClaimUrl(data.invite?.claimUrl ?? null);
+      if (data.emailSkipped) {
+        setError(
+          'Workspace created, but email is disabled (EMAIL_ENABLED). Copy the claim link below.',
+        );
+      } else if (data.emailError) {
+        setError(
+          `Workspace created, but invite email failed: ${data.emailError}. Copy the claim link below.`,
+        );
+      } else if (data.emailSent === false) {
+        setError(
+          'Workspace created, but invite email did not send. Copy the claim link below.',
+        );
+      }
       router.refresh();
     } catch {
       setError('Network error');

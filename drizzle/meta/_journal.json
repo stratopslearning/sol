@@ -610,6 +610,13 @@
       "when": 1785600000000,
       "tag": "0086_admin_purge_access_entitlement",
       "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "7",
+      "when": 1785700000000,
+      "tag": "0087_no_auto_indefinite_pilot",
+      "breakpoints": true
     }
   ]
 }

@@ -94,6 +94,22 @@ export async function sendTransactionalEmail(
       recipientCount: recipients.length,
       tag: opts.tags?.kind,
     });
+    // SES sandbox (ProductionAccessEnabled=false) only delivers to verified
+    // identities — map to a clearer operator-facing error.
+    if (/not verified|MessageRejected/i.test(message)) {
+      return {
+        ok: false,
+        error:
+          'SES could not deliver: recipient (or From) is not verified. In SES sandbox only verified addresses receive mail — verify the owner email in AWS SES, or request production access. Claim link is still available to copy.',
+      };
+    }
+    if (/expired|reauthenticate|credentials/i.test(message)) {
+      return {
+        ok: false,
+        error:
+          'AWS credentials expired — re-run aws login for the SES profile, then resend. Claim link is still available to copy.',
+      };
+    }
     return { ok: false, error: message };
   }
 }

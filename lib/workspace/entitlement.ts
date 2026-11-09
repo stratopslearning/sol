@@ -102,7 +102,9 @@ export type CourseCreateEntitlement = TeachingEntitlement;
 
 /**
  * Open admin complimentary window: finite (periodEnd in the future) or
- * indefinite (trialing with null periodEnd).
+ * indefinite (trialing with null periodEnd). New Creator/Business tenants are
+ * provisioned as `incomplete` so this only matches after an admin Grant click
+ * (or a finite window with periodEnd).
  */
 export function licenseHasOpenCompWindow(license: {
   status?: string | null;
