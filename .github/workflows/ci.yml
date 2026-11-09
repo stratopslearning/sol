@@ -104,20 +104,21 @@ jobs:
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: ci_owner_pw
-          POSTGRES_DB: sol_ci
+          # Must be neondb: drizzle/0034_app_roles.sql GRANTs CONNECT ON DATABASE neondb.
+          POSTGRES_DB: neondb
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U postgres -d sol_ci"
+          --health-cmd "pg_isready -U postgres -d neondb"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 12
     env:
       NODE_ENV: test
       # Owner/migrator connection (DDL). Runtime + tests connect as sol_app so FORCE RLS applies.
-      DATABASE_MIGRATE_URL: postgresql://postgres:ci_owner_pw@localhost:5432/sol_ci
-      DATABASE_URL: postgresql://sol_app:ci_app_pw@localhost:5432/sol_ci
-      TEST_DATABASE_URL: postgresql://sol_app:ci_app_pw@localhost:5432/sol_ci
+      DATABASE_MIGRATE_URL: postgresql://postgres:ci_owner_pw@localhost:5432/neondb
+      DATABASE_URL: postgresql://sol_app:ci_app_pw@localhost:5432/neondb
+      TEST_DATABASE_URL: postgresql://sol_app:ci_app_pw@localhost:5432/neondb
       # assertDevDatabase allowlist: the ephemeral container only.
       DEV_DB_HOSTS: localhost
       I_CONFIRM_DEV_DB: '1'
@@ -135,11 +136,11 @@ jobs:
       - run: npm ci
       - name: Apply migrations (as owner)
         env:
-          DATABASE_URL: postgresql://postgres:ci_owner_pw@localhost:5432/sol_ci
+          DATABASE_URL: postgresql://postgres:ci_owner_pw@localhost:5432/neondb
         run: npm run migrate
       - name: Set sol_app password (role created by 0034_app_roles)
         run: |
-          PGPASSWORD=ci_owner_pw psql -h localhost -U postgres -d sol_ci \
+          PGPASSWORD=ci_owner_pw psql -h localhost -U postgres -d neondb \
             -c "ALTER ROLE sol_app WITH LOGIN PASSWORD 'ci_app_pw';"
       - name: DB project (RLS + integration + tests/db)
         env:
