@@ -1,13 +1,7 @@
 import { notFound } from 'next/navigation';
 
-import { appRedirect } from '@/lib/serverRedirect';
-
 import { AssignActivityToSectionDialog } from '@/components/sections/AssignActivityToSectionDialog';
-import { InviteStudentsForm } from '@/components/sections/InviteStudentsForm';
 import { SectionDetailView } from '@/components/sections/SectionDetailView';
-import { RosterCsvImportForm } from '@/components/sections/RosterCsvImportForm';
-import { SectionStaffInviteForm } from '@/components/sections/SectionStaffInviteForm';
-import { SectionHeading } from '@/components/layout/SectionHeading';
 import { AppShell } from '@/components/layout/AppShell';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -147,39 +141,6 @@ export default async function SectionDetailsPage({
           />
         )}
       />
-
-      <section className="mt-16 max-w-xl">
-        <SectionHeading
-          eyebrow="Settings"
-          title="Section staff"
-          description="Invite TAs and graders by email. They grade assigned sections only."
-        />
-        <div className="mt-6 rounded-xl border border-rule bg-surface px-4 py-4">
-          <SectionStaffInviteForm sectionId={sectionId} />
-        </div>
-      </section>
-
-      <section className="mt-12 max-w-xl">
-        <SectionHeading
-          eyebrow="Roster"
-          title="Invite students"
-          description="Email claim links (and the section code). Works before they have a SOL account."
-        />
-        <div className="mt-6 rounded-xl border border-rule bg-surface px-4 py-4">
-          <InviteStudentsForm sectionId={sectionId} />
-        </div>
-      </section>
-
-      <section className="mt-12 max-w-xl">
-        <SectionHeading
-          eyebrow="Roster"
-          title="Import learners (CSV)"
-          description="Existing accounts enroll immediately. Unknown emails get a student invite instead."
-        />
-        <div className="mt-6 rounded-xl border border-rule bg-surface px-4 py-4">
-          <RosterCsvImportForm sectionId={sectionId} />
-        </div>
-      </section>
 
       <CanvasLinkPanel sectionId={sectionId} />
     </AppShell>

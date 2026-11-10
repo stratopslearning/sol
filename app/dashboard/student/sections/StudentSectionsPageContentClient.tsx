@@ -4,7 +4,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Layers } from "@/components/icons";
 
-import LeaveSectionButton from "@/components/LeaveSectionButton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -178,10 +177,6 @@ export default function StudentSectionsPageContentClient({
                           Open
                         </Link>
                       </Button>
-                      <LeaveSectionButton
-                        sectionId={section.id}
-                        sectionName={section.name}
-                      />
                     </div>
                   </TableCell>
                 </TableRow>

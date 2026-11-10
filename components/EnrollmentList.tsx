@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { motion, useReducedMotion } from "framer-motion";
 
-import LeaveSectionButton from "@/components/LeaveSectionButton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { withBasePath } from "@/lib/basePath";
@@ -81,10 +80,6 @@ export function EnrollmentList({ enrollments }: EnrollmentListProps) {
                 Open
               </Link>
             </Button>
-            <LeaveSectionButton
-              sectionId={enrollment.section.id}
-              sectionName={enrollment.section.name}
-            />
           </div>
         </motion.li>
       ))}
