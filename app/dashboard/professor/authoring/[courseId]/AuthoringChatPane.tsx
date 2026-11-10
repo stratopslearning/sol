@@ -19,6 +19,10 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { toast } from 'sonner';
 
+import {
+  ThinkingState,
+  type ThinkingRow,
+} from '@/components/authoring/ThinkingState';
 import { SolMark } from '@/components/brand/SolMark';
 import { Button } from '@/components/ui/button';
 import {
@@ -39,8 +43,11 @@ import {
   AuthoringPlusMenu,
   splitMaterialTitle,
 } from './AuthoringPlusMenu';
+import { stripLastActionMarker } from '@/lib/authoring/agent/lastAction';
+
 import type {
   AuthoringChatMessage,
+  AuthoringProgress,
   AuthoringSessionListItem,
   AuthoringSuggestedAction,
 } from './types';
@@ -85,6 +92,7 @@ export function AuthoringChatPane({
   showMobileArtifactButton,
   artifactOpen = false,
   toolStatus,
+  progress = null,
 }: {
   courseId: string;
   courseTitle: string;
@@ -126,6 +134,8 @@ export function AuthoringChatPane({
   showMobileArtifactButton: boolean;
   artifactOpen?: boolean;
   toolStatus?: string | null;
+  /** Structured agent progress — drives the expandable thinking trace. */
+  progress?: AuthoringProgress | null;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -222,8 +232,9 @@ export function AuthoringChatPane({
     },
   ];
 
-  // Prefer concrete parent-driven toolStatus (title + n/N) for every action.
+  // Prefer concrete parent-driven progress (title + n/N) for every action.
   const statusLine =
+    progress?.label ||
     toolStatus ||
     (approving
       ? 'Building assignments…'
@@ -234,6 +245,17 @@ export function AuthoringChatPane({
           : thinking
             ? 'Thinking…'
             : null);
+
+  const thinkingRows: ThinkingRow[] =
+    progress?.steps?.length
+      ? progress.steps.map((step) => ({ primary: step }))
+      : statusLine
+        ? [{ primary: statusLine.replace(/…$/, '') }]
+        : [{ primary: 'Working on your request' }];
+
+  const thinkingStepIndex = progress?.steps?.length
+    ? progress.index
+    : 0;
 
   const islandExpanded =
     isWelcome ||
@@ -401,7 +423,7 @@ export function AuthoringChatPane({
           return (
             <span
               key={id}
-              className="inline-flex max-w-[12rem] items-center gap-1 rounded-full border border-brand/20 bg-brand-soft/80 py-0.5 pl-2.5 pr-1 text-xs text-ink"
+              className="authoring-pop-in inline-flex max-w-[12rem] items-center gap-1 rounded-full bg-surface-sunken py-0.5 pl-2.5 pr-1 text-[11.5px] text-ink-muted shadow-[0_0_0_1px_var(--rule)]"
             >
               <span className="min-w-0 truncate">
                 {folder ? (
@@ -488,8 +510,12 @@ export function AuthoringChatPane({
         ref={formRef}
         onSubmit={onSubmit}
         className={cn(
-          'overflow-hidden border bg-surface/95 shadow-[var(--shadow-paper)] backdrop-blur-md transition-[border-radius,box-shadow,background-color] duration-200',
-          islandExpanded ? 'rounded-[1.65rem]' : 'rounded-full',
+          'relative isolate overflow-hidden border bg-surface shadow-[var(--shadow-paper)] transition-[border-color,border-radius,box-shadow,background-color] duration-150',
+          islandExpanded
+            ? focusedMaterialIds.length > 0 || isWelcome
+              ? 'rounded-[22px]'
+              : 'rounded-[18px]'
+            : 'rounded-full',
           dragOver
             ? 'border-brand/45 bg-brand-soft/40'
             : composerFocused
@@ -500,16 +526,18 @@ export function AuthoringChatPane({
         <div
           className={cn(
             'flex gap-1.5',
-            islandExpanded ? 'flex-col px-2.5 pb-2.5 pt-2' : 'items-center px-2 py-1.5',
+            islandExpanded ? 'flex-col p-2.5' : 'items-end gap-1 p-1.5',
           )}
         >
           <div
             className={cn(
               'flex min-w-0 flex-1',
-              islandExpanded ? 'items-start gap-1.5' : 'items-center gap-1.5',
+              islandExpanded ? 'items-start gap-1' : 'items-center gap-1',
             )}
           >
-            <div className="shrink-0 pt-0.5">{plusMenu}</div>
+            {!islandExpanded ? (
+              <div className="shrink-0">{plusMenu}</div>
+            ) : null}
             <Textarea
               ref={composerRef}
               value={chatInput}
@@ -520,12 +548,12 @@ export function AuthoringChatPane({
               onFocus={() => setComposerFocused(true)}
               onBlur={() => setComposerFocused(false)}
               className={cn(
-                'min-w-0 flex-1 resize-none border-0 bg-transparent px-1 py-1.5 text-sm leading-relaxed shadow-none placeholder:text-ink-faint focus-visible:ring-0',
+                'min-w-0 flex-1 resize-none border-0 bg-transparent px-1.5 text-[13px] leading-[18px] shadow-none placeholder:text-ink-faint focus-visible:ring-0',
                 islandExpanded
                   ? isWelcome
-                    ? 'min-h-[4.5rem]'
-                    : 'min-h-[2.75rem]'
-                  : 'min-h-[2rem] max-h-[2rem] overflow-hidden py-1.5',
+                    ? 'min-h-[4.5rem] py-1.5 text-sm leading-5'
+                    : 'min-h-[2.75rem] py-1.5'
+                  : 'max-h-7 min-h-7 overflow-hidden py-[5px]',
               )}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
@@ -535,79 +563,47 @@ export function AuthoringChatPane({
               }}
             />
             {!islandExpanded ? (
-              streaming && onStop ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  className="h-8 w-8 shrink-0 rounded-full p-0"
-                  onClick={onStop}
-                  aria-label="Stop"
-                >
-                  <Square className="h-3.5 w-3.5 fill-current" />
-                </Button>
-              ) : (
-                <Button
-                  type="submit"
-                  size="sm"
-                  disabled={!canSend}
-                  className="h-8 w-8 shrink-0 rounded-full p-0"
-                  aria-label={!hasOutline ? 'Propose' : 'Send'}
-                >
-                  <ArrowUp className="h-4 w-4" />
-                </Button>
-              )
+              <ComposerSend
+                canSend={canSend}
+                streaming={streaming}
+                onStop={onStop}
+                label={!hasOutline ? 'Propose' : 'Send'}
+                pill
+              />
             ) : null}
           </div>
 
           {islandExpanded ? (
-            <div className="flex items-center justify-between gap-2 pl-0.5">
-              <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                {isWelcome
-                  ? starters.map((chip) => (
-                      <button
-                        key={chip.id}
-                        type="button"
-                        disabled={busy || !canPropose}
-                        onClick={() => onAction(chip)}
-                        className="rounded-full border border-rule/70 bg-surface-sunken/50 px-2.5 py-1 text-[11px] text-ink transition-colors hover:bg-surface-sunken disabled:opacity-50"
-                      >
-                        {chip.label}
-                      </button>
-                    ))
-                  : (
-                      <span className="px-1 text-[11px] text-ink-faint">
-                        Enter to send · Shift+Enter newline ·{' '}
-                        {formatShortcutKeys('⌘/', isMacPlatform())} shortcuts
-                      </span>
-                    )}
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex min-w-0 flex-1 items-center gap-1">
+                <div className="shrink-0">{plusMenu}</div>
+                <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                  {isWelcome
+                    ? starters.map((chip) => (
+                        <button
+                          key={chip.id}
+                          type="button"
+                          disabled={busy || !canPropose}
+                          onClick={() => onAction(chip)}
+                          className="rounded-full bg-surface-sunken/70 px-2.5 py-1 text-[11.5px] text-ink transition-colors hover:bg-surface-sunken disabled:opacity-50"
+                        >
+                          {chip.label}
+                        </button>
+                      ))
+                    : (
+                        <span className="px-1 text-[11px] text-ink-faint">
+                          Enter to send · Shift+Enter newline ·{' '}
+                          {formatShortcutKeys('⌘/', isMacPlatform())} shortcuts
+                        </span>
+                      )}
+                </div>
               </div>
-              {streaming && onStop ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  className="h-8 w-8 shrink-0 rounded-full p-0"
-                  onClick={onStop}
-                  aria-label="Stop"
-                >
-                  <Square className="h-3.5 w-3.5 fill-current" />
-                </Button>
-              ) : (
-                <Button
-                  type="submit"
-                  size="sm"
-                  disabled={!canSend}
-                  className="h-8 w-8 shrink-0 rounded-full p-0"
-                  aria-label={!hasOutline ? 'Propose' : 'Send'}
-                >
-                  {streaming ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <ArrowUp className="h-4 w-4" />
-                  )}
-                </Button>
-              )}
+              <ComposerSend
+                canSend={canSend}
+                streaming={streaming}
+                onStop={onStop}
+                label={!hasOutline ? 'Propose' : 'Send'}
+              />
             </div>
           ) : null}
         </div>
@@ -683,21 +679,23 @@ export function AuthoringChatPane({
             />
           ))}
           {thinking || streaming ? (
-            <div
-              className="flex items-center gap-2 text-xs text-ink-muted"
-              aria-live="polite"
-            >
-              <span className="inline-flex gap-1" aria-hidden>
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-ink-faint" />
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-ink-faint [animation-delay:120ms]" />
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-ink-faint [animation-delay:240ms]" />
-              </span>
-              <span
-                key={statusLine || 'working'}
-                className="animate-fade-in"
-              >
-                {statusLine || 'Working…'}
-              </span>
+            <div aria-live="polite" className="pl-0.5">
+              <ThinkingState
+                key={
+                  approving
+                    ? 'approve'
+                    : generating
+                      ? 'generate'
+                      : chatting
+                        ? 'chat'
+                        : 'think'
+                }
+                variant="Steps"
+                busy
+                active={statusLine?.replace(/…$/, '') || 'Thinking'}
+                rows={thinkingRows}
+                stepIndex={thinkingStepIndex}
+              />
             </div>
           ) : null}
           <div ref={bottomRef} />
@@ -746,6 +744,54 @@ function relativeTime(iso?: string) {
   return `${days} day${days === 1 ? '' : 's'} ago`;
 }
 
+function ComposerSend({
+  canSend,
+  streaming,
+  onStop,
+  label,
+  pill = false,
+}: {
+  canSend: boolean;
+  streaming: boolean;
+  onStop?: () => void;
+  label: string;
+  pill?: boolean;
+}) {
+  const radius = pill ? 'rounded-full' : 'rounded-lg';
+  if (streaming && onStop) {
+    return (
+      <button
+        type="button"
+        onClick={onStop}
+        aria-label="Stop"
+        className={cn(
+          'flex size-7 shrink-0 items-center justify-center bg-surface-sunken text-ink transition-[background-color,transform] duration-150 hover:bg-rule/70 active:scale-[0.94]',
+          radius,
+        )}
+      >
+        <Square className="h-3.5 w-3.5 fill-current" />
+      </button>
+    );
+  }
+  return (
+    <button
+      type="submit"
+      disabled={!canSend}
+      aria-label={label}
+      className={cn(
+        'flex size-7 shrink-0 items-center justify-center transition-[background-color,color,transform] duration-200 enabled:active:scale-[0.94]',
+        radius,
+      )}
+      style={{
+        background: canSend ? 'var(--ink)' : 'var(--rule-strong)',
+        color: canSend ? 'var(--surface)' : 'var(--ink-muted)',
+      }}
+    >
+      <ArrowUp className="h-4 w-4" />
+    </button>
+  );
+}
+
 function MessageActions({
   align,
   when,
@@ -762,41 +808,41 @@ function MessageActions({
   return (
     <div
       className={cn(
-        'mt-1 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100',
+        'mt-1.5 flex items-center gap-0.5 opacity-55 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100',
         align === 'end' ? 'justify-end' : 'justify-start',
       )}
     >
-      {when ? (
-        <span className="mr-1 text-[11px] text-ink-faint">{when}</span>
-      ) : null}
+      <button
+        type="button"
+        onClick={onCopy}
+        className="inline-flex size-6 items-center justify-center rounded-md text-ink-faint transition-colors hover:bg-surface-sunken hover:text-ink-muted"
+        aria-label="Copy"
+      >
+        <Copy className="h-[15px] w-[15px]" />
+      </button>
       {onRetry ? (
         <button
           type="button"
           onClick={onRetry}
-          className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-ink-faint hover:bg-surface-sunken hover:text-ink"
+          className="inline-flex size-6 items-center justify-center rounded-md text-ink-faint transition-colors hover:bg-surface-sunken hover:text-ink-muted"
           aria-label="Retry"
         >
-          <RotateCcw className="h-3.5 w-3.5" />
+          <RotateCcw className="h-[15px] w-[15px]" />
         </button>
       ) : null}
       {onEdit ? (
         <button
           type="button"
           onClick={onEdit}
-          className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-ink-faint hover:bg-surface-sunken hover:text-ink"
+          className="inline-flex size-6 items-center justify-center rounded-md text-ink-faint transition-colors hover:bg-surface-sunken hover:text-ink-muted"
           aria-label="Edit"
         >
-          <Pencil className="h-3.5 w-3.5" />
+          <Pencil className="h-[15px] w-[15px]" />
         </button>
       ) : null}
-      <button
-        type="button"
-        onClick={onCopy}
-        className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-ink-faint hover:bg-surface-sunken hover:text-ink"
-        aria-label="Copy"
-      >
-        <Copy className="h-3.5 w-3.5" />
-      </button>
+      {when ? (
+        <span className="ml-1.5 text-[11px] text-ink-faint">{when}</span>
+      ) : null}
     </div>
   );
 }
@@ -817,10 +863,15 @@ function ChatBubble({
   const isUser = message.role === 'user';
   const isSystem = message.role === 'system';
   const when = relativeTime(message.createdAt);
+  const followUps = message.suggestedActions ?? [];
+
+  const displayContent = isUser
+    ? message.content
+    : stripLastActionMarker(message.content);
 
   async function copyText() {
     try {
-      await navigator.clipboard.writeText(message.content);
+      await navigator.clipboard.writeText(displayContent);
       toast.success('Copied');
     } catch {
       toast.error('Could not copy');
@@ -830,14 +881,14 @@ function ChatBubble({
   return (
     <div
       className={cn(
-        'group flex flex-col gap-2',
+        'group authoring-fade-up flex flex-col gap-2.5',
         isUser ? 'items-end' : 'items-start',
       )}
     >
       {isUser ? (
-        <div className="flex max-w-[85%] flex-col items-end">
-          <div className="rounded-2xl bg-surface-sunken px-4 py-2.5 text-sm leading-relaxed text-ink">
-            <p className="whitespace-pre-wrap">{message.content}</p>
+        <div className="flex max-w-[min(85%,28rem)] flex-col items-end pl-10">
+          <div className="rounded-xl bg-surface-sunken px-3 py-1.5 text-[13px] leading-[1.4] text-ink">
+            <p className="whitespace-pre-wrap">{displayContent}</p>
           </div>
           <MessageActions
             align="end"
@@ -850,24 +901,36 @@ function ChatBubble({
       ) : (
         <div className="w-full max-w-none">
           {!isSystem ? (
-            <p className="mb-1 text-[10px] font-medium uppercase tracking-[0.14em] text-ink-faint">
-              SOL
-            </p>
+            <div className="mb-1.5 flex items-center gap-1.5 text-[12px] leading-none">
+              <span className="font-medium text-ink">SOL</span>
+              {when ? (
+                <span className="text-ink-faint">· {when}</span>
+              ) : null}
+            </div>
           ) : null}
           <div
             className={cn(
-              'prose prose-sm max-w-none text-ink/90 prose-p:leading-relaxed prose-headings:font-medium prose-headings:text-ink prose-a:text-brand prose-code:rounded prose-code:bg-surface-sunken prose-code:px-1 prose-code:py-0.5 prose-code:text-xs prose-pre:bg-surface-sunken',
+              'authoring-md prose max-w-none text-[14px] leading-[1.55] text-ink',
+              'prose-p:my-2.5 prose-p:text-[14px] prose-p:leading-[1.55]',
+              'prose-headings:mb-1.5 prose-headings:mt-3.5 prose-headings:font-semibold prose-headings:text-ink prose-headings:tracking-normal',
+              'prose-h3:text-[13px] prose-h3:font-semibold prose-h3:uppercase prose-h3:tracking-[0.06em] prose-h3:text-ink-muted',
+              'prose-h4:text-[13px] prose-h4:font-semibold prose-h4:text-ink-muted',
+              'prose-ul:my-2.5 prose-ul:list-disc prose-ul:pl-5',
+              'prose-ol:my-2.5 prose-ol:list-decimal prose-ol:pl-5',
+              'prose-li:my-1.5 prose-li:text-[14px] prose-li:leading-[1.5] prose-li:marker:text-ink-faint',
+              'prose-strong:font-semibold prose-strong:text-ink',
+              'prose-a:text-brand prose-code:rounded prose-code:bg-surface-sunken prose-code:px-1 prose-code:py-0.5 prose-code:text-[13px] prose-pre:bg-surface-sunken',
+              'prose-hr:my-3 prose-hr:border-rule/70',
               isSystem && 'text-ink-muted',
             )}
           >
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {message.content}
+              {displayContent}
             </ReactMarkdown>
           </div>
           {!isSystem ? (
             <MessageActions
               align="start"
-              when={when}
               onRetry={busy ? undefined : onRetry}
               onCopy={() => void copyText()}
             />
@@ -892,37 +955,60 @@ function ChatBubble({
               itemId: message.artifactRef!.itemId,
             })
           }
-          className="inline-flex max-w-[22rem] items-center gap-3 rounded-2xl border border-rule/80 bg-surface px-3.5 py-3 text-left shadow-sm transition-colors hover:border-rule-strong hover:bg-surface-elevated disabled:opacity-50"
+          className="authoring-pop-in inline-flex max-w-[22rem] items-center gap-3 rounded-[10px] border border-rule/80 bg-surface px-3 py-2.5 text-left shadow-[var(--shadow-paper)] transition-colors hover:border-rule-strong hover:bg-surface-elevated disabled:opacity-50"
         >
           <span className="min-w-0 flex-1">
-            <span className="block text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-faint">
+            <span className="block text-[11px] font-medium text-ink-faint">
               {message.artifactRef.kind === 'outline'
                 ? 'Outline'
                 : message.artifactRef.kind === 'switch_up'
                   ? 'Switch-up'
                   : 'Assignment'}
             </span>
-            <span className="mt-0.5 block truncate text-sm font-medium text-ink">
+            <span className="mt-0.5 block truncate text-[13px] font-medium text-ink">
               {message.artifactRef.label}
             </span>
-            <span className="mt-0.5 block text-[11px] text-brand">Open</span>
+          </span>
+          <span className="shrink-0 text-[12px] font-medium text-brand">
+            Open
           </span>
         </button>
       ) : null}
 
-      {message.suggestedActions && message.suggestedActions.length > 0 ? (
-        <div className="flex max-w-full flex-wrap gap-1.5">
-          {message.suggestedActions.map((chip) => (
-            <button
-              key={chip.id}
-              type="button"
-              disabled={busy}
-              onClick={() => onAction(chip)}
-              className="rounded-full border border-rule bg-surface px-2.5 py-1 text-[11px] text-ink transition-colors hover:bg-surface-sunken disabled:opacity-50"
-            >
-              {chip.label}
-            </button>
-          ))}
+      {followUps.length > 0 ? (
+        <div className="w-full max-w-md">
+          <p className="text-[12px] font-medium text-ink-muted">Follow-ups</p>
+          <div className="mt-0.5 flex flex-col">
+            {followUps.map((chip, i) => (
+              <button
+                key={chip.id}
+                type="button"
+                disabled={busy}
+                onClick={() => onAction(chip)}
+                className="-mx-1.5 flex items-center gap-2 rounded-md border-b border-rule/60 px-1.5 py-1.5 text-left text-[12.5px] text-ink transition-colors hover:bg-surface-sunken/70 disabled:opacity-50 last:border-b-0"
+                style={{
+                  animation: `authoring-fade-up 350ms cubic-bezier(0.23,1,0.32,1) ${i * 90}ms both`,
+                }}
+              >
+                <svg
+                  width="11"
+                  height="11"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="var(--ink-faint)"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="shrink-0"
+                  aria-hidden
+                >
+                  <path d="M9 10l-5 5 5 5" />
+                  <path d="M20 4v7a4 4 0 0 1-4 4H4" />
+                </svg>
+                {chip.label}
+              </button>
+            ))}
+          </div>
         </div>
       ) : null}
     </div>

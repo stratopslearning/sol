@@ -135,24 +135,34 @@ export function inventoryPlannerSnapshot(inventory: OutlineInventory): string {
 
 export function inventoryHumanSummary(inventory: OutlineInventory): string {
   const lines = [
-    `Outline “${inventory.title}”: ${inventory.counts.total} items (${inventory.counts.published} published drafts, ${inventory.counts.unpublished} unpublished).`,
+    `### ${inventory.title}`,
+    '',
+    `**${inventory.counts.total}** items · **${inventory.counts.published}** published drafts · **${inventory.counts.unpublished}** unpublished`,
+    '',
+    '#### By type',
+    '',
   ];
   for (const [type, n] of Object.entries(inventory.counts.byType)) {
-    lines.push(`- ${type}: ${n}`);
+    lines.push(`- **${type}** — ${n}`);
   }
   if (inventory.focus) {
     lines.push(
-      `Focus: ${inventory.focus.type} “${inventory.focus.title}” (${inventory.focus.published ? 'published draft' : 'unpublished'}, id ${inventory.focus.id}).`,
+      '',
+      '#### Focus',
+      '',
+      `- **${inventory.focus.type}** ${inventory.focus.title} (${inventory.focus.published ? 'published draft' : 'unpublished'})`,
     );
   }
   const published = inventory.items.filter((i) => i.published).slice(0, 8);
   if (published.length > 0) {
-    lines.push('Published drafts (course order):');
+    lines.push('', '#### Published drafts', '');
     for (const item of published) {
-      lines.push(`  ${item.orderIndex + 1}. [${item.type}] ${item.title}`);
+      lines.push(`- **${item.type}** ${item.title}`);
     }
     if (inventory.counts.published > published.length) {
-      lines.push(`  … +${inventory.counts.published - published.length} more`);
+      lines.push(
+        `- … +${inventory.counts.published - published.length} more`,
+      );
     }
   }
   return lines.join('\n');

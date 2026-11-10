@@ -22,6 +22,7 @@ export const TOOL_NAMES = [
   'schedule_items',
   'refine_items',
   'answer_question',
+  'restore_revision',
 ] as const;
 
 export type ToolName = (typeof TOOL_NAMES)[number];
@@ -87,6 +88,15 @@ export const toolCallSchema = z.discriminatedUnion('name', [
     name: z.literal('answer_question'),
     args: z.object({
       question: z.string().min(1).max(2000),
+      mode: z.enum(['status', 'advise', 'help', 'decline']).optional(),
+    }),
+  }),
+  z.object({
+    name: z.literal('restore_revision'),
+    args: z.object({
+      revisionId: z.string().uuid().optional(),
+      /** When true, restore the most recent revision. */
+      latest: z.boolean().optional(),
     }),
   }),
 ]);
@@ -137,6 +147,12 @@ export type ToolResult =
       name: 'answer_question';
       ok: true;
       answer: string;
+    }
+  | {
+      name: 'restore_revision';
+      ok: true;
+      revisionId: string;
+      label: string;
     }
   | {
       name: ToolName;
@@ -208,16 +224,25 @@ export function formatToolResultsReply(results: ToolResult[]): string {
         break;
       case 'publish_items': {
         if (r.published.length > 0) {
-          const names = r.published
-            .slice(0, 5)
-            .map((p) => `“${p.title}”`)
-            .join(', ');
+          const bullets = r.published
+            .slice(0, 8)
+            .map((p) => `- ${p.title}`)
+            .join('\n');
           parts.push(
-            `Published ${r.published.length} assignment${
-              r.published.length === 1 ? '' : 's'
-            } as inactive drafts${names ? `: ${names}` : ''}${
-              r.published.length > 5 ? '…' : ''
-            }. Release when students should see them.`,
+            [
+              `### Published ${r.published.length} draft${
+                r.published.length === 1 ? '' : 's'
+              }`,
+              '',
+              bullets,
+              r.published.length > 8
+                ? `\n- … +${r.published.length - 8} more`
+                : '',
+              '',
+              'They’re inactive until you **release** them to students.',
+            ]
+              .filter(Boolean)
+              .join('\n'),
           );
         } else if (r.failed.length === 0) {
           parts.push(
@@ -227,26 +252,35 @@ export function formatToolResultsReply(results: ToolResult[]): string {
         if (r.failed.length > 0) {
           const sample = r.failed
             .slice(0, 3)
-            .map((f) => (f.title ? `“${f.title}”: ${f.error}` : f.error))
-            .join(' · ');
+            .map((f) => `- ${f.title ? `**${f.title}** — ` : ''}${f.error}`)
+            .join('\n');
           parts.push(
-            `Could not publish ${r.failed.length}: ${sample || 'see errors'}`,
+            [`### Could not publish ${r.failed.length}`, '', sample].join(
+              '\n',
+            ),
           );
         }
         break;
       }
       case 'release_items': {
         if (r.released.length > 0) {
-          const names = r.released
-            .slice(0, 5)
-            .map((p) => `“${p.title}”`)
-            .join(', ');
+          const bullets = r.released
+            .slice(0, 8)
+            .map((p) => `- ${p.title}`)
+            .join('\n');
           parts.push(
-            `Released ${r.released.length} assignment${
-              r.released.length === 1 ? '' : 's'
-            } to students${names ? `: ${names}` : ''}${
-              r.released.length > 5 ? '…' : ''
-            }.`,
+            [
+              `### Released ${r.released.length} assignment${
+                r.released.length === 1 ? '' : 's'
+              }`,
+              '',
+              bullets,
+              r.released.length > 8
+                ? `\n- … +${r.released.length - 8} more`
+                : '',
+            ]
+              .filter(Boolean)
+              .join('\n'),
           );
         } else if (r.failed.length === 0) {
           parts.push(
@@ -256,9 +290,13 @@ export function formatToolResultsReply(results: ToolResult[]): string {
         if (r.failed.length > 0) {
           const sample = r.failed
             .slice(0, 3)
-            .map((f) => `“${f.title}”: ${f.error}`)
-            .join(' · ');
-          parts.push(`Could not release ${r.failed.length}: ${sample}`);
+            .map((f) => `- **${f.title}** — ${f.error}`)
+            .join('\n');
+          parts.push(
+            [`### Could not release ${r.failed.length}`, '', sample].join(
+              '\n',
+            ),
+          );
         }
         break;
       }
@@ -266,14 +304,21 @@ export function formatToolResultsReply(results: ToolResult[]): string {
         if (r.patched.length === 0) {
           parts.push('No matching items to update schedule for.');
         } else {
-          const names = r.patched
-            .slice(0, 5)
-            .map((p) => `“${p.title}”`)
-            .join(', ');
+          const bullets = r.patched
+            .slice(0, 8)
+            .map((p) => `- ${p.title}`)
+            .join('\n');
           parts.push(
-            `Updated schedule on ${r.patched.length} assignment${
-              r.patched.length === 1 ? '' : 's'
-            }: ${names}${r.patched.length > 5 ? '…' : ''}.`,
+            [
+              `### Updated schedule on ${r.patched.length}`,
+              '',
+              bullets,
+              r.patched.length > 8
+                ? `\n- … +${r.patched.length - 8} more`
+                : '',
+            ]
+              .filter(Boolean)
+              .join('\n'),
           );
         }
         break;
@@ -284,14 +329,23 @@ export function formatToolResultsReply(results: ToolResult[]): string {
         } else if (r.patched.length === 0) {
           parts.push('No matching items to refine.');
         } else {
-          const names = r.patched
-            .slice(0, 5)
-            .map((p) => `“${p.title}”`)
-            .join(', ');
+          const bullets = r.patched
+            .slice(0, 8)
+            .map((p) => `- ${p.title}`)
+            .join('\n');
           parts.push(
-            `Updated ${r.patched.length} assignment${
-              r.patched.length === 1 ? '' : 's'
-            }: ${names}${r.patched.length > 5 ? '…' : ''}.`,
+            [
+              `### Updated ${r.patched.length} assignment${
+                r.patched.length === 1 ? '' : 's'
+              }`,
+              '',
+              bullets,
+              r.patched.length > 8
+                ? `\n- … +${r.patched.length - 8} more`
+                : '',
+            ]
+              .filter(Boolean)
+              .join('\n'),
           );
         }
         break;
@@ -299,11 +353,20 @@ export function formatToolResultsReply(results: ToolResult[]): string {
       case 'answer_question':
         parts.push(r.answer);
         break;
+      case 'restore_revision':
+        parts.push(
+          [
+            '### Restored revision',
+            '',
+            `Rolled back to **${r.label}**. The outline matches that snapshot.`,
+          ].join('\n'),
+        );
+        break;
       default:
         break;
     }
   }
-  return parts.filter(Boolean).join(' ') || 'Done.';
+  return parts.filter(Boolean).join('\n\n') || 'Done.';
 }
 
 function findOutlineItem(
@@ -474,6 +537,36 @@ export async function executeToolCall(opts: {
           name: 'answer_question',
           ok: true,
           answer: '', // filled by runner LLM
+        };
+      }
+      case 'restore_revision': {
+        const { listAuthoringRevisions, restoreAuthoringRevision } =
+          await import('@/lib/authoring/revisions');
+        let revisionId = call.args.revisionId;
+        let label = 'revision';
+        if (!revisionId || call.args.latest) {
+          const revisions = await listAuthoringRevisions(user, outlineId);
+          const latest = revisions[0];
+          if (!latest) {
+            return {
+              name: 'restore_revision',
+              ok: false,
+              error: 'No revisions to restore yet.',
+            };
+          }
+          revisionId = latest.id;
+          label = latest.label;
+        } else {
+          const revisions = await listAuthoringRevisions(user, outlineId);
+          label =
+            revisions.find((r) => r.id === revisionId)?.label ?? 'revision';
+        }
+        await restoreAuthoringRevision(user, revisionId);
+        return {
+          name: 'restore_revision',
+          ok: true,
+          revisionId,
+          label,
         };
       }
       default:

@@ -15,8 +15,11 @@ export type AuthoringSuggestedAction = {
     | "preview_student"
     | "publish"
     | "re_propose"
-    | "show_artifact";
+    | "show_artifact"
+    | "prompt";
   itemId?: string;
+  /** When action is `prompt`, send this as the next chat message. */
+  prompt?: string;
 };
 
 export type AuthoringChatMessage = {
@@ -70,6 +73,33 @@ export type AuthoringSessionListItem = {
   createdAt: string;
   updatedAt: string;
 };
+
+/** Live agent progress for the chat thinking trace + artifact header. */
+export type AuthoringProgress = {
+  /** Header line, e.g. Updating "Virtual Memory" (3/13)… */
+  label: string;
+  /** Full step list for the expandable trace (no n/N suffix). */
+  steps: string[];
+  /** 0-based index of the step currently in flight. */
+  index: number;
+};
+
+export function authoringProgressAt(
+  steps: string[],
+  index: number,
+  fallbackLabel = "Working…",
+): AuthoringProgress {
+  if (steps.length === 0) {
+    return { label: fallbackLabel, steps: [fallbackLabel], index: 0 };
+  }
+  const i = Math.min(Math.max(0, index), steps.length - 1);
+  const step = steps[i]!;
+  return {
+    label: `${step} (${i + 1}/${steps.length})…`,
+    steps,
+    index: i,
+  };
+}
 
 export function newMessageId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {

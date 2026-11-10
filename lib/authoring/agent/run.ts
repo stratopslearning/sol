@@ -28,6 +28,21 @@ import {
   restoreQuizContentFromFallback,
 } from '@/lib/authoring/bodyMerge';
 import {
+  authoringCapabilitiesReply,
+  authoringClarifyReply,
+  authoringOutOfScopeReply,
+} from '@/lib/authoring/agent/capabilities';
+import { classifyAuthoringIntent } from '@/lib/authoring/agent/classify';
+import {
+  findLastActionInHistory,
+  stripLastActionMarker,
+  withLastActionMarker,
+  type AuthoringLastAction,
+} from '@/lib/authoring/agent/lastAction';
+import type { AuthoringIntent } from '@/lib/authoring/agent/classify';
+import { resolveAuthoringTargets } from '@/lib/authoring/agent/resolveTargets';
+import {
+  looksLikeHelpOrCapabilitiesRequest,
   looksLikePublishRequest,
   looksLikeReleaseRequest,
   looksLikeRewriteRequest,
@@ -95,9 +110,6 @@ export async function runAuthoringAgent(
   if (!outlineRow.tenantId) {
     throw ApiError.badRequest('Outline is missing tenant_id');
   }
-  if (!process.env.OPENAI_API_KEY) {
-    throw ApiError.badRequest('OpenAI is not configured');
-  }
 
   let detail = await getOutlineDetail(user, opts.outlineId);
   let inventory = buildOutlineInventory(detail, opts.focusItemId);
@@ -110,6 +122,19 @@ export async function runAuthoringAgent(
 
   const prior = await fetchAuthoringMessagesForOutline(opts.outlineId, 12);
   const history = prior.slice().reverse();
+  const lastAction = findLastActionInHistory(history);
+
+  const intent = classifyAuthoringIntent(message, { inventory, lastAction });
+
+  // Deterministic intents don't need the model.
+  const needsModel =
+    intent.kind === 'act' ||
+    intent.kind === 'advise' ||
+    intent.kind === 'status' ||
+    intent.kind === 'repeat';
+  if (needsModel && !process.env.OPENAI_API_KEY) {
+    throw ApiError.badRequest('OpenAI is not configured');
+  }
 
   const { text: materialsContext } = await buildAuthoringMaterialsContext(
     outlineRow.courseId,
@@ -117,44 +142,376 @@ export async function runAuthoringAgent(
     { materialIds: opts.materialIds },
   );
 
-  const plan = await planTools({
-    message,
+  async function persistAndReturn(optsPersist: {
+    assistantMessage: string;
+    tools: string[];
+    lastAction?: AuthoringLastAction | null;
+    patchedItemIds?: string[];
+    publishedItemIds?: string[];
+    releasedItemIds?: string[];
+    publishFailed?: AuthoringAgentResult['publishFailed'];
+  }): Promise<AuthoringAgentResult> {
+    const assistantMessage = withLastActionMarker(
+      optsPersist.assistantMessage,
+      optsPersist.lastAction ?? null,
+    );
+    await insertAuthoringMessagesDefiner({
+      outlineId: opts.outlineId,
+      tenantId: outlineRow.tenantId!,
+      messages: [
+        { role: 'user', content: message },
+        { role: 'assistant', content: assistantMessage },
+      ],
+    });
+    await logAudit({
+      actorUserId: user.id,
+      actorClerkId: user.clerkId,
+      action: 'professor.authoring.refine',
+      targetType: 'course_outline',
+      targetId: opts.outlineId,
+      tenantId: outlineRow.tenantId,
+      metadata: {
+        agentHarness: true,
+        intent: intent.kind,
+        tools: optsPersist.tools,
+        publishedCount: optsPersist.publishedItemIds?.length ?? 0,
+        releasedCount: optsPersist.releasedItemIds?.length ?? 0,
+        patchedCount: optsPersist.patchedItemIds?.length ?? 0,
+        focusItemId: opts.focusItemId ?? null,
+      },
+      ip: audit?.ip ?? null,
+      userAgent: audit?.userAgent ?? null,
+    });
+    const updated = await getOutlineDetail(user, opts.outlineId);
+    return {
+      assistantMessage: stripForClient(assistantMessage),
+      outline: updated,
+      patchedItemIds: [...new Set(optsPersist.patchedItemIds ?? [])],
+      publishedItemIds:
+        (optsPersist.publishedItemIds?.length ?? 0) > 0
+          ? [...new Set(optsPersist.publishedItemIds)]
+          : undefined,
+      releasedItemIds:
+        (optsPersist.releasedItemIds?.length ?? 0) > 0
+          ? [...new Set(optsPersist.releasedItemIds)]
+          : undefined,
+      publishFailed: optsPersist.publishFailed,
+    };
+  }
+
+  if (intent.kind === 'help') {
+    return persistAndReturn({
+      assistantMessage: authoringCapabilitiesReply(inventory),
+      tools: ['answer_question'],
+    });
+  }
+
+  if (intent.kind === 'out_of_scope') {
+    return persistAndReturn({
+      assistantMessage: authoringOutOfScopeReply(intent.outOfScope ?? 'other'),
+      tools: ['answer_question'],
+    });
+  }
+
+  if (intent.kind === 'clarify') {
+    const targets = resolveAuthoringTargets(message, inventory, {
+      preferFocus: Boolean(inventory.focus),
+    });
+    return persistAndReturn({
+      assistantMessage: authoringClarifyReply(
+        targets.question ??
+          'What should I change — name an assignment, or say publish / release / refine / schedule?',
+      ),
+      tools: ['answer_question'],
+    });
+  }
+
+  if (intent.kind === 'advise') {
+    const answer = await runAnswerTool({
+      question: message,
+      inventory,
+      materialsContext,
+      courseId: outlineRow.courseId,
+      mode: 'advise',
+    });
+    return persistAndReturn({
+      assistantMessage: answer,
+      tools: ['answer_question'],
+    });
+  }
+
+  if (intent.kind === 'status') {
+    const answer = await runAnswerTool({
+      question: message,
+      inventory,
+      materialsContext,
+      courseId: outlineRow.courseId,
+      mode: 'status',
+    });
+    return persistAndReturn({
+      assistantMessage: answer,
+      tools: ['answer_question'],
+    });
+  }
+
+  if (intent.kind === 'undo') {
+    const plan: PlannerPlan = {
+      tools: [{ name: 'restore_revision', args: { latest: true } }],
+    };
+    return executePlanAndPersist({
+      plan,
+      user,
+      opts,
+      audit,
+      outlineRow,
+      detail,
+      inventory,
+      message,
+      materialsContext,
+      history,
+      applyOutlineBuildDefiner,
+      persistAndReturn,
+    });
+  }
+
+  let plan: PlannerPlan;
+  if (intent.kind === 'repeat' && lastAction) {
+    plan = planFromLastAction(lastAction, message);
+  } else {
+    plan = normalizePlan(
+      message,
+      await planTools({
+        message,
+        inventory,
+        history,
+        materialsContext,
+        courseId: outlineRow.courseId,
+        intent,
+      }),
+    );
+    plan = applyTargetResolution(message, inventory, plan);
+    if (plan.tools.length === 1 && plan.tools[0]?.name === 'answer_question') {
+      const q = plan.tools[0].args.question;
+      // Target resolver converted the act into a clarify question.
+      if (q && q !== message) {
+        return persistAndReturn({
+          assistantMessage: authoringClarifyReply(q),
+          tools: ['answer_question'],
+        });
+      }
+    }
+  }
+
+  return executePlanAndPersist({
+    plan,
+    user,
+    opts,
+    audit,
+    outlineRow,
+    detail,
     inventory,
-    history,
+    message,
     materialsContext,
-    courseId: outlineRow.courseId,
+    history,
+    applyOutlineBuildDefiner,
+    persistAndReturn,
+  });
+}
+
+function stripForClient(content: string): string {
+  return stripLastActionMarker(content);
+}
+
+function planFromLastAction(
+  last: AuthoringLastAction,
+  message: string,
+): PlannerPlan {
+  const tools: ToolCall[] = [];
+  const selector =
+    last.itemIds.length > 0
+      ? { scope: 'ids' as const, itemIds: last.itemIds }
+      : { scope: 'all' as const };
+  for (const name of last.tools) {
+    if (name === 'publish_items') {
+      tools.push({ name: 'publish_items', args: { selector } });
+    } else if (name === 'release_items') {
+      tools.push({ name: 'release_items', args: { selector } });
+    } else if (name === 'schedule_items') {
+      tools.push({
+        name: 'schedule_items',
+        args: { selector, schedule: {} },
+      });
+    } else if (name === 'refine_items') {
+      tools.push({
+        name: 'refine_items',
+        args: {
+          selector,
+          instruction: last.instruction || message,
+        },
+      });
+    }
+  }
+  if (tools.length === 0) {
+    return {
+      tools: [
+        {
+          name: 'answer_question',
+          args: {
+            question:
+              'I don’t have a previous action to repeat. Tell me what to publish, release, refine, or schedule.',
+            mode: 'decline',
+          },
+        },
+      ],
+    };
+  }
+  return { tools };
+}
+
+/** If mutating tools lack tight selectors, resolve from the prompt or ask. */
+export function applyTargetResolution(
+  message: string,
+  inventory: ReturnType<typeof buildOutlineInventory>,
+  plan: PlannerPlan,
+): PlannerPlan {
+  const mutating = plan.tools.filter((t) =>
+    (
+      [
+        'publish_items',
+        'release_items',
+        'schedule_items',
+        'refine_items',
+      ] as string[]
+    ).includes(t.name),
+  );
+  if (mutating.length === 0) return plan;
+
+  const needsResolve = mutating.some((t) => {
+    if (
+      t.name === 'publish_items' ||
+      t.name === 'release_items' ||
+      t.name === 'schedule_items' ||
+      t.name === 'refine_items'
+    ) {
+      const sel = t.args.selector;
+      if (sel.scope === 'ids' && (sel.itemIds?.length ?? 0) > 0) return false;
+      if (sel.scope === 'first' || sel.scope === 'last') return false;
+      if (sel.scope === 'all' && /\b(all|every|entire|whole)\b/i.test(message)) {
+        return false;
+      }
+      if (sel.scope === 'focus' && inventory.focus) return false;
+      // Broad refine/publish without quantity → resolve
+      return sel.scope === 'all' || sel.scope === 'focus';
+    }
+    return false;
   });
 
+  if (!needsResolve) return plan;
+
+  const resolved = resolveAuthoringTargets(message, inventory, {
+    preferFocus: Boolean(inventory.focus),
+  });
+  if (resolved.confidence < 0.7 || resolved.itemIds.length === 0) {
+    return {
+      tools: [
+        {
+          name: 'answer_question',
+          args: {
+            question:
+              resolved.question ??
+              'Which assignment should I change? Name it or open it in the outline.',
+            mode: 'decline',
+          },
+        },
+      ],
+    };
+  }
+
+  return {
+    tools: plan.tools.map((t) => {
+      if (
+        t.name === 'publish_items' ||
+        t.name === 'release_items' ||
+        t.name === 'schedule_items' ||
+        t.name === 'refine_items'
+      ) {
+        return {
+          ...t,
+          args: {
+            ...t.args,
+            selector: resolved.selector,
+          },
+        } as ToolCall;
+      }
+      return t;
+    }),
+  };
+}
+
+async function executePlanAndPersist(ctx: {
+  plan: PlannerPlan;
+  user: AuthUser;
+  opts: {
+    outlineId: string;
+    message: string;
+    focusItemId?: string;
+    materialIds?: string[];
+  };
+  audit?: { ip?: string | null; userAgent?: string | null };
+  outlineRow: { courseId: string; tenantId: string | null };
+  detail: OutlineDetail;
+  inventory: ReturnType<typeof buildOutlineInventory>;
+  message: string;
+  materialsContext: string;
+  history: Array<{ role: string; content: string }>;
+  applyOutlineBuildDefiner: (payload: {
+    outlineId: string;
+    patches: Array<{ itemId: string; title?: string; body: OutlineItemBody }>;
+    hasPriorCorpus: boolean;
+  }) => Promise<unknown>;
+  persistAndReturn: (opts: {
+    assistantMessage: string;
+    tools: string[];
+    lastAction?: AuthoringLastAction | null;
+    patchedItemIds?: string[];
+    publishedItemIds?: string[];
+    releasedItemIds?: string[];
+    publishFailed?: AuthoringAgentResult['publishFailed'];
+  }) => Promise<AuthoringAgentResult>;
+}): Promise<AuthoringAgentResult> {
+  let { detail, inventory } = ctx;
   const results: ToolResult[] = [];
   const patchedItemIds: string[] = [];
   const publishedItemIds: string[] = [];
   const releasedItemIds: string[] = [];
   const publishFailed: NonNullable<AuthoringAgentResult['publishFailed']> = [];
+  let refineInstruction: string | undefined;
 
-  for (const call of plan.tools) {
-    // Refresh inventory after mutating tools so later tools see new state.
+  for (const call of ctx.plan.tools) {
     if (
       call.name === 'release_items' ||
       call.name === 'publish_items' ||
       call.name === 'schedule_items' ||
-      call.name === 'refine_items'
+      call.name === 'refine_items' ||
+      call.name === 'restore_revision'
     ) {
-      detail = await getOutlineDetail(user, opts.outlineId);
-      inventory = buildOutlineInventory(detail, opts.focusItemId);
+      detail = await getOutlineDetail(ctx.user, ctx.opts.outlineId);
+      inventory = buildOutlineInventory(detail, ctx.opts.focusItemId);
     }
 
     if (call.name === 'refine_items') {
+      refineInstruction = call.args.instruction;
       const refineResult = await runContentRefineTool({
-        user,
-        outlineId: opts.outlineId,
+        user: ctx.user,
+        outlineId: ctx.opts.outlineId,
         detail,
         inventory,
         call,
-        message,
-        materialsContext,
-        history,
-        courseId: outlineRow.courseId,
-        applyOutlineBuildDefiner,
+        message: ctx.message,
+        materialsContext: ctx.materialsContext,
+        history: ctx.history,
+        courseId: ctx.outlineRow.courseId,
+        applyOutlineBuildDefiner: ctx.applyOutlineBuildDefiner,
         hasPriorCorpus: detail.hasPriorCorpus,
       });
       results.push(refineResult.result);
@@ -163,29 +520,43 @@ export async function runAuthoringAgent(
     }
 
     if (call.name === 'answer_question') {
-      const answer = await runAnswerTool({
-        question: call.args.question || message,
-        inventory,
-        materialsContext,
-        courseId: outlineRow.courseId,
-      });
+      const question = call.args.question || ctx.message;
+      const mode = call.args.mode;
+      let answer: string;
+      if (mode === 'help' || looksLikeHelpOrCapabilitiesRequest(question)) {
+        answer = authoringCapabilitiesReply(inventory);
+      } else if (mode === 'decline') {
+        answer = question;
+      } else {
+        answer = await runAnswerTool({
+          question,
+          inventory,
+          materialsContext: ctx.materialsContext,
+          courseId: ctx.outlineRow.courseId,
+          mode: mode === 'advise' ? 'advise' : 'status',
+        });
+      }
       results.push({ name: 'answer_question', ok: true, answer });
       continue;
     }
 
     let toolCall = call;
     if (call.name === 'schedule_items') {
-      toolCall = await enrichScheduleCall(call, message, outlineRow.courseId);
+      toolCall = await enrichScheduleCall(
+        call,
+        ctx.message,
+        ctx.outlineRow.courseId,
+      );
     }
 
     const executed = await executeToolCall({
-      user,
-      outlineId: opts.outlineId,
+      user: ctx.user,
+      outlineId: ctx.opts.outlineId,
       detail,
       inventory,
       call: toolCall,
-      audit,
-      materialsContext,
+      audit: ctx.audit,
+      materialsContext: ctx.materialsContext,
     });
     results.push(executed);
 
@@ -208,46 +579,34 @@ export async function runAuthoringAgent(
   }
 
   const assistantMessage = formatToolResultsReply(results);
+  const actionItemIds = [
+    ...new Set([
+      ...patchedItemIds,
+      ...publishedItemIds,
+      ...releasedItemIds,
+    ]),
+  ];
+  const lastAction: AuthoringLastAction | null =
+    actionItemIds.length > 0
+      ? {
+          tools: ctx.plan.tools
+            .map((t) => t.name)
+            .filter((n) => n !== 'answer_question' && n !== 'list_outline'),
+          itemIds: actionItemIds,
+          instruction: refineInstruction,
+          at: new Date().toISOString(),
+        }
+      : null;
 
-  await insertAuthoringMessagesDefiner({
-    outlineId: opts.outlineId,
-    tenantId: outlineRow.tenantId,
-    messages: [
-      { role: 'user', content: message },
-      { role: 'assistant', content: assistantMessage },
-    ],
-  });
-
-  await logAudit({
-    actorUserId: user.id,
-    actorClerkId: user.clerkId,
-    action: 'professor.authoring.refine',
-    targetType: 'course_outline',
-    targetId: opts.outlineId,
-    tenantId: outlineRow.tenantId,
-    metadata: {
-      agentHarness: true,
-      tools: plan.tools.map((t) => t.name),
-      publishedCount: publishedItemIds.length,
-      releasedCount: releasedItemIds.length,
-      patchedCount: patchedItemIds.length,
-      focusItemId: opts.focusItemId ?? null,
-    },
-    ip: audit?.ip ?? null,
-    userAgent: audit?.userAgent ?? null,
-  });
-
-  const updated = await getOutlineDetail(user, opts.outlineId);
-  return {
+  return ctx.persistAndReturn({
     assistantMessage,
-    outline: updated,
-    patchedItemIds: [...new Set(patchedItemIds)],
-    publishedItemIds:
-      publishedItemIds.length > 0 ? [...new Set(publishedItemIds)] : undefined,
-    releasedItemIds:
-      releasedItemIds.length > 0 ? [...new Set(releasedItemIds)] : undefined,
+    tools: ctx.plan.tools.map((t) => t.name),
+    lastAction,
+    patchedItemIds,
+    publishedItemIds,
+    releasedItemIds,
     publishFailed: publishFailed.length > 0 ? publishFailed : undefined,
-  };
+  });
 }
 
 async function planTools(opts: {
@@ -256,7 +615,14 @@ async function planTools(opts: {
   history: Array<{ role: string; content: string }>;
   materialsContext: string;
   courseId: string;
+  intent?: AuthoringIntent;
 }): Promise<PlannerPlan> {
+  // Compound verb plans can be built deterministically without the LLM.
+  if (opts.intent?.kind === 'act' && opts.intent.verbs?.length) {
+    const fromIntent = planFromIntentVerbs(opts.message, opts.inventory, opts.intent);
+    if (fromIntent) return fromIntent;
+  }
+
   const openai = getAiClientForTask('refine', { timeout: 45_000 });
   const model = resolveModel('refine').model;
   const courseCtx = await loadCoursePromptContext(opts.courseId);
@@ -273,7 +639,7 @@ async function planTools(opts: {
     },
     ...opts.history.map((h) => ({
       role: h.role as 'user' | 'assistant',
-      content: h.content,
+      content: stripLastActionMarker(h.content),
     })),
     { role: 'user', content: opts.message },
   ];
@@ -291,11 +657,107 @@ async function planTools(opts: {
     const raw = JSON.parse(content) as unknown;
     const parsed = plannerPlanSchema.safeParse(raw);
     if (!parsed.success) throw new Error(parsed.error.message);
-    return parsed.data;
+    return normalizePlan(opts.message, parsed.data);
   } catch (err) {
     console.error('[authoring agent] plan failed; falling back', err);
     return fallbackPlan(opts.message, opts.inventory);
   }
+}
+
+function planFromIntentVerbs(
+  message: string,
+  inventory: ReturnType<typeof buildOutlineInventory>,
+  intent: AuthoringIntent,
+): PlannerPlan | null {
+  const verbs = intent.verbs ?? [];
+  if (verbs.length === 0) return null;
+  const quantity = parseQuantityLimit(message);
+  const scope =
+    quantity == null
+      ? inventory.focus
+        ? ('focus' as const)
+        : ('all' as const)
+      : quantity.fromEnd
+        ? ('last' as const)
+        : ('first' as const);
+  const count = quantity?.count;
+  const m = message.toLowerCase();
+  const types = /\bquiz/.test(m)
+    ? (['QUIZ'] as const)
+    : /\bdiscussion/.test(m)
+      ? (['DISCUSSION'] as const)
+      : undefined;
+  const tools: ToolCall[] = [];
+  for (const verb of verbs) {
+    if (verb === 'publish') {
+      tools.push({
+        name: 'publish_items',
+        args: {
+          selector: {
+            scope,
+            count,
+            types: types ? [...types] : ['QUIZ'],
+            published: false,
+          },
+        },
+      });
+    } else if (verb === 'release') {
+      tools.push({
+        name: 'release_items',
+        args: {
+          selector: {
+            scope,
+            count,
+            types: types ? [...types] : ['QUIZ'],
+            published: true,
+          },
+        },
+      });
+    } else if (verb === 'schedule') {
+      tools.push({
+        name: 'schedule_items',
+        args: {
+          selector: {
+            scope,
+            count,
+            types: types ? [...types] : undefined,
+          },
+          schedule: {},
+        },
+      });
+    } else if (verb === 'refine') {
+      tools.push({
+        name: 'refine_items',
+        args: {
+          selector: {
+            scope,
+            count,
+            types: types ? [...types] : undefined,
+          },
+          instruction: message,
+        },
+      });
+    } else if (verb === 'restore') {
+      tools.push({ name: 'restore_revision', args: { latest: true } });
+    }
+  }
+  return tools.length > 0 ? { tools } : null;
+}
+
+/** Force help/meta prompts onto answer_question only (no inventory dump). */
+export function normalizePlan(
+  message: string,
+  plan: PlannerPlan,
+): PlannerPlan {
+  if (!looksLikeHelpOrCapabilitiesRequest(message)) return plan;
+  return {
+    tools: [
+      {
+        name: 'answer_question',
+        args: { question: message },
+      },
+    ],
+  };
 }
 
 /** Deterministic fallback when the planner JSON is invalid. */
@@ -303,6 +765,17 @@ export function fallbackPlan(
   message: string,
   inventory: ReturnType<typeof buildOutlineInventory>,
 ): PlannerPlan {
+  if (looksLikeHelpOrCapabilitiesRequest(message)) {
+    return {
+      tools: [
+        {
+          name: 'answer_question',
+          args: { question: message },
+        },
+      ],
+    };
+  }
+
   const m = message.toLowerCase();
   const quantity = parseQuantityLimit(message);
   const scope =
@@ -402,6 +875,7 @@ export function fallbackPlan(
     /\?$/.test(message.trim()) ||
     /^(what|which|how many|list|show|status)\b/i.test(message.trim())
   ) {
+    // Status / inventory questions only — help already returned above.
     return {
       tools: [
         { name: 'list_outline', args: {} },
@@ -413,16 +887,15 @@ export function fallbackPlan(
     };
   }
 
+  // Never default to refine-all — ask instead.
   return {
     tools: [
       {
-        name: 'refine_items',
+        name: 'answer_question',
         args: {
-          selector: {
-            scope: inventory.focus ? 'focus' : 'all',
-            types: types ? [...types] : undefined,
-          },
-          instruction: message,
+          question:
+            'What should I do — refine content, publish drafts, release to students, or update schedule? Name an assignment if you can.',
+          mode: 'decline',
         },
       },
     ],
@@ -643,21 +1116,35 @@ async function runAnswerTool(opts: {
   inventory: ReturnType<typeof buildOutlineInventory>;
   materialsContext: string;
   courseId: string;
+  mode?: 'status' | 'advise';
 }): Promise<string> {
+  const mode = opts.mode ?? 'status';
+  if (mode === 'status' && /\b(list|show)\b.{0,24}\b(all|everything|outline|quizzes|items)\b/i.test(opts.question)) {
+    return inventoryHumanSummary(opts.inventory);
+  }
+
   const openai = getAiClientForTask('refine', { timeout: 30_000 });
   const model = resolveModel('refine').model;
   const courseCtx = await loadCoursePromptContext(opts.courseId);
+  const system =
+    mode === 'advise'
+      ? `You are SOL's instructional coach for ${courseCtx.courseTitle ?? 'this course'}.
+Give practical teaching advice grounded in the outline inventory and materials.
+Do not claim you published/released/changed anything. Suggest concrete next chat commands when useful.
+Keep it concise (under ~180 words). Return JSON { "answer": string }.`
+      : `You answer professor questions about their SOL course outline for ${courseCtx.courseTitle ?? 'this course'}.
+Use ONLY the inventory facts for counts, titles, and publish/release state — never invent side effects.
+Answer in a short, natural paragraph (or a tight bullet list). Do NOT paste the full inventory unless they asked to list everything.
+Return JSON { "answer": string }.`;
+
   try {
-    const temp = temperatureForModel(model, 0.2);
+    const temp = temperatureForModel(model, mode === 'advise' ? 0.4 : 0.2);
     const completion = await openai.chat.completions.create({
       model,
       ...(temp != null ? { temperature: temp } : {}),
       response_format: { type: 'json_object' },
       messages: [
-        {
-          role: 'system',
-          content: `You answer professor questions about their SOL course outline. Use ONLY the inventory facts. Do not invent publish/release. Return JSON { "answer": string }. Course: ${courseCtx.courseTitle ?? 'course'}.`,
-        },
+        { role: 'system', content: system },
         {
           role: 'user',
           content: `Inventory:\n${inventoryHumanSummary(opts.inventory)}\n\nMaterials:\n${opts.materialsContext || '(none)'}\n\nQuestion: ${opts.question}`,
@@ -665,11 +1152,21 @@ async function runAnswerTool(opts: {
       ],
     });
     const content = completion.choices[0]?.message?.content;
-    if (!content) return inventoryHumanSummary(opts.inventory);
+    if (!content) {
+      return mode === 'advise'
+        ? 'I could not form advice from the current materials. Try asking about a specific quiz or module.'
+        : 'I could not answer from the current outline. Ask about counts, publish status, or a specific assignment.';
+    }
     const parsed = answerSchema.safeParse(JSON.parse(content));
-    if (!parsed.success) return inventoryHumanSummary(opts.inventory);
+    if (!parsed.success) {
+      return mode === 'advise'
+        ? 'I could not form advice from the current materials. Try asking about a specific quiz or module.'
+        : 'I could not answer from the current outline. Ask about counts, publish status, or a specific assignment.';
+    }
     return parsed.data.answer;
   } catch {
-    return inventoryHumanSummary(opts.inventory);
+    return mode === 'advise'
+      ? 'I could not form advice from the current materials. Try asking about a specific quiz or module.'
+      : 'I could not answer from the current outline. Ask about counts, publish status, or a specific assignment.';
   }
 }

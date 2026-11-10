@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  authoringCapabilitiesReply,
   buildOutlineInventory,
   resolveItemSelector,
   formatToolResultsReply,
   fallbackPlan,
+  normalizePlan,
 } from '@/lib/authoring/agent';
-import { parseQuantityLimit } from '@/lib/authoring/intent';
+import {
+  looksLikeHelpOrCapabilitiesRequest,
+  parseQuantityLimit,
+} from '@/lib/authoring/intent';
 import type { OutlineDetail } from '@/lib/authoring/outlines';
 
 function quiz(
@@ -111,7 +116,7 @@ describe('authoring agent harness', () => {
       },
     ]);
     expect(reply).toMatch(/Released 3/);
-    expect(reply).toContain('“A”');
+    expect(reply).toContain('- A');
   });
 
   it('fallback plan for first three release uses first/count', () => {
@@ -127,5 +132,42 @@ describe('authoring agent harness', () => {
       expect(plan.tools[0].args.selector.scope).toBe('first');
       expect(plan.tools[0].args.selector.count).toBe(3);
     }
+  });
+
+  it('detects help prompts without treating status questions as help', () => {
+    expect(looksLikeHelpOrCapabilitiesRequest('what things can you do')).toBe(
+      true,
+    );
+    expect(looksLikeHelpOrCapabilitiesRequest('How can you help?')).toBe(true);
+    expect(looksLikeHelpOrCapabilitiesRequest('help')).toBe(true);
+    expect(
+      looksLikeHelpOrCapabilitiesRequest('how many quizzes are published?'),
+    ).toBe(false);
+    expect(
+      looksLikeHelpOrCapabilitiesRequest('what quizzes are unpublished'),
+    ).toBe(false);
+  });
+
+  it('help prompts never list_outline or dump published drafts', () => {
+    const inventory = buildOutlineInventory(detail);
+    const plan = fallbackPlan('what things can you do', inventory);
+    expect(plan.tools.map((t) => t.name)).toEqual(['answer_question']);
+
+    const normalized = normalizePlan('what things can you do', {
+      tools: [
+        { name: 'list_outline', args: {} },
+        {
+          name: 'answer_question',
+          args: { question: 'what things can you do' },
+        },
+      ],
+    });
+    expect(normalized.tools.map((t) => t.name)).toEqual(['answer_question']);
+
+    const reply = authoringCapabilitiesReply(inventory);
+    expect(reply.toLowerCase()).toMatch(/refine|publish|release|schedule/);
+    expect(reply).not.toMatch(/Published drafts \(course order\)/i);
+    expect(reply).not.toContain('[QUIZ]');
+    expect(reply).not.toContain('QUIZ: ');
   });
 });

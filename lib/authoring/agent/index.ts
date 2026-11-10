@@ -19,7 +19,35 @@ export {
   type ToolResult,
 } from '@/lib/authoring/agent/tools';
 export {
+  authoringCapabilitiesReply,
+  authoringClarifyReply,
+  authoringOutOfScopeReply,
+} from '@/lib/authoring/agent/capabilities';
+export {
+  classifyAuthoringIntent,
+  type AuthoringIntent,
+  type AuthoringIntentKind,
+  type OutOfScopeAction,
+} from '@/lib/authoring/agent/classify';
+export {
+  encodeLastActionMarker,
+  findLastActionInHistory,
+  parseLastActionMarker,
+  stripLastActionMarker,
+  type AuthoringLastAction,
+} from '@/lib/authoring/agent/lastAction';
+export {
+  buildAuthoringFollowUps,
+  type AuthoringFollowUp,
+} from '@/lib/authoring/agent/followUps';
+export {
+  resolveAuthoringTargets,
+  type TargetResolution,
+} from '@/lib/authoring/agent/resolveTargets';
+export {
+  applyTargetResolution,
   fallbackPlan,
+  normalizePlan,
   runAuthoringAgent,
   type AuthoringAgentResult,
 } from '@/lib/authoring/agent/run';
