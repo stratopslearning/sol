@@ -12,6 +12,8 @@ import {
 } from "@/components/ui/sheet";
 import { apiUrl } from "@/lib/basePath";
 import type { OutlineDetail, OutlineItemSummary } from "@/lib/authoring";
+import { buildAuthoringFollowUps } from "@/lib/authoring/agent/followUps";
+import { buildOutlineInventory } from "@/lib/authoring/agent/inventory";
 import { buildChatProgressPlan } from "@/lib/authoring/intent";
 import type { OutlineItemBody } from "@/app/db/schema";
 import { AuthoringArtifactStage } from "./AuthoringArtifactStage";
@@ -22,11 +24,13 @@ import type {
   CourseCorpusItem,
 } from "./AuthoringMaterialsPanel";
 import {
+  authoringProgressAt,
   newMessageId,
   outlineAssignmentStats,
   typeLabel,
   type ArtifactTab,
   type AuthoringChatMessage,
+  type AuthoringProgress,
   type AuthoringSessionListItem,
   type AuthoringSuggestedAction,
   type ItemPreview,
@@ -108,7 +112,9 @@ export default function AuthoringClient({
   // Closed by default — user opens the artifact from the chat toolbar.
   const [artifactPanelOpen, setArtifactPanelOpen] = useState(false);
   const [highlightItemId, setHighlightItemId] = useState<string | null>(null);
-  const [buildProgress, setBuildProgress] = useState<string | null>(null);
+  const [buildProgress, setBuildProgress] = useState<AuthoringProgress | null>(
+    null,
+  );
   const [materialsReady, setMaterialsReady] = useState(initialMaterialsReady);
   const [materialsTotal, setMaterialsTotal] = useState(initialMaterialsTotal);
   const [attachableDocuments, setAttachableDocuments] = useState(
@@ -608,14 +614,10 @@ export default function AuthoringClient({
       brief: nextBrief,
     });
     let generateIndex = 0;
-    setBuildProgress(
-      `${generateSteps[0]} (1/${generateSteps.length})…`,
-    );
+    setBuildProgress(authoringProgressAt(generateSteps, 0));
     const generateTick = window.setInterval(() => {
       generateIndex = Math.min(generateIndex + 1, generateSteps.length - 1);
-      setBuildProgress(
-        `${generateSteps[generateIndex]} (${generateIndex + 1}/${generateSteps.length})…`,
-      );
+      setBuildProgress(authoringProgressAt(generateSteps, generateIndex));
     }, 1600);
     try {
       const res = await fetch(apiUrl("/api/professor/authoring/outlines"), {
@@ -726,15 +728,14 @@ export default function AuthoringClient({
     setApproving(true);
     const buildItems = outline.modules.flatMap((m) => m.items);
     const total = buildItems.length;
+    const buildSteps =
+      total === 0
+        ? ["Building assignments"]
+        : buildItems.map((item) => `Building “${item.title}”`);
     let buildIndex = 0;
     const showBuild = (i: number) => {
-      if (total === 0) {
-        setBuildProgress("Building assignments…");
-        return;
-      }
-      const item = buildItems[Math.min(i, total - 1)]!;
       setBuildProgress(
-        `Building “${item.title}” (${i + 1}/${total})…`,
+        authoringProgressAt(buildSteps, i, "Building assignments…"),
       );
     };
     showBuild(0);
@@ -1030,47 +1031,29 @@ export default function AuthoringClient({
         }
       }
 
-      const suggestedActions =
-        publishedIds.length > 0
-          ? [
-              {
-                id: `open-outline-after-publish-${newMessageId()}`,
-                label: "Open outline",
-                action: "open_outline" as const,
-              },
-              ...(focusItem
-                ? [
-                    {
-                      id: `open-${focusItem.id}`,
-                      label: "Open assignment",
-                      action: "open_item" as const,
-                      itemId: focusItem.id,
-                    },
-                  ]
-                : []),
-            ]
-          : focusItem
-            ? [
-                {
-                  id: `open-${focusItem.id}`,
-                  label: "Open assignment",
-                  action: "open_item" as const,
-                  itemId: focusItem.id,
-                },
-                {
-                  id: `preview-${focusItem.id}`,
-                  label: "As student",
-                  action: "preview_student" as const,
-                  itemId: focusItem.id,
-                },
-              ]
-            : [
-                {
-                  id: "open-outline-refine",
-                  label: "Open outline",
-                  action: "open_outline" as const,
-                },
-              ];
+      const nextOutline = (data.outline as OutlineDetail | undefined) ?? outline;
+      const inventory = buildOutlineInventory(
+        nextOutline,
+        focusItem?.id ?? selectedItemId ?? undefined,
+      );
+      const suggestedActions: AuthoringSuggestedAction[] =
+        buildAuthoringFollowUps({
+          userMessage: message,
+          inventory,
+          patchedItemIds: patchedIds,
+          publishedItemIds: publishedIds,
+          releasedItemIds: releasedIds,
+          focusItemId: focusItem?.id ?? null,
+          focusTitle: focusItem?.title ?? null,
+          needsApproval,
+          bodiesBuilt: Boolean(nextOutline?.bodiesBuilt),
+        }).map((fu) => ({
+          id: `${fu.id}-${newMessageId()}`,
+          label: fu.label,
+          action: fu.action,
+          itemId: fu.itemId,
+          prompt: fu.prompt,
+        }));
 
       appendMessage({
         role: "assistant",
@@ -1453,6 +1436,12 @@ export default function AuthoringClient({
       case "show_artifact":
         openArtifactPanel();
         break;
+      case "prompt": {
+        const text = action.prompt?.trim();
+        if (!text || busy) return;
+        void runRefine(text);
+        break;
+      }
       default:
         break;
     }
@@ -1521,7 +1510,7 @@ export default function AuthoringClient({
             setChatInput(`Make “${item.title}” harder and clearer.`);
           }
         }}
-        buildProgress={buildProgress}
+        buildProgress={buildProgress?.label ?? null}
       />
     );
   }
@@ -1598,7 +1587,8 @@ export default function AuthoringClient({
             focusLabel={artifactTab === "assignment" ? focusLabel : null}
             showMobileArtifactButton={Boolean(outline) && !artifactPanelOpen}
             artifactOpen={artifactOpen}
-            toolStatus={buildProgress}
+            toolStatus={buildProgress?.label ?? null}
+            progress={buildProgress}
           />
         }
         artifact={renderArtifactStage({ showClose: true })}
@@ -1709,7 +1699,7 @@ function startChatActionProgress(opts: {
   outline: OutlineDetail;
   message: string;
   focusItemId?: string;
-  setBuildProgress: (value: string | null) => void;
+  setBuildProgress: (value: AuthoringProgress | null) => void;
 }): number | null {
   const plan = buildChatProgressPlan(
     opts.outline,
@@ -1717,14 +1707,17 @@ function startChatActionProgress(opts: {
     opts.focusItemId,
   );
   if (plan.steps.length === 0) {
-    opts.setBuildProgress(plan.idleLabel);
+    opts.setBuildProgress({
+      label: plan.idleLabel,
+      steps: [plan.idleLabel.replace(/…$/, "")],
+      index: 0,
+    });
     return null;
   }
 
   let index = 0;
   const show = (i: number) => {
-    const step = plan.steps[Math.min(i, plan.steps.length - 1)]!;
-    opts.setBuildProgress(`${step} (${i + 1}/${plan.steps.length})…`);
+    opts.setBuildProgress(authoringProgressAt(plan.steps, i));
   };
   show(0);
   return window.setInterval(() => {

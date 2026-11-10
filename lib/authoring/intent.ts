@@ -37,6 +37,35 @@ export function looksLikeRewriteRequest(message: string): boolean {
   );
 }
 
+/**
+ * Meta / help prompts ("what can you do") — not outline status or refine.
+ * Keep narrower than /^what/ so "what quizzes are published" stays a status question.
+ */
+export function looksLikeHelpOrCapabilitiesRequest(message: string): boolean {
+  const m = message.toLowerCase().trim();
+  if (!m) return false;
+  // Explicit outline-status questions win over help phrasing.
+  if (
+    /\b(how many|published|unpublished|drafts?|outline|quiz(zes)?|discussion|module|assignment)\b/.test(
+      m,
+    ) &&
+    !/\b(can you|could you|are you able|help me|what do you)\b/.test(m)
+  ) {
+    return false;
+  }
+  return (
+    /\bwhat (things |else )?(can|could|do) you (do|help|handle|support)\b/.test(
+      m,
+    ) ||
+    /\bwhat are you (able|good) (to do|at)\b/.test(m) ||
+    /\b(how can you help|how do (i|you) use (you|this)|what(?:'s| is) your (job|role))\b/.test(
+      m,
+    ) ||
+    /^(help|capabilities|commands|what now)\??$/.test(m) ||
+    /\b(list|show) (your )?(capabilities|commands|what you can do)\b/.test(m)
+  );
+}
+
 export function looksLikeScheduleRequest(message: string): boolean {
   return /due date|start date|end date|opens|timing|time limit|timelimit|schedule|deadline|attempts|passing score|pass %|points|minutes/.test(
     message.toLowerCase(),
@@ -253,6 +282,35 @@ export function buildChatProgressPlan(
   message: string,
   focusItemId?: string,
 ): ChatProgressPlan {
+  if (looksLikeHelpOrCapabilitiesRequest(message)) {
+    return {
+      idleLabel: 'Explaining what I can help with…',
+      steps: ['Reviewing authoring capabilities'],
+    };
+  }
+
+  const m = message.toLowerCase();
+  if (
+    /\b(too hard|too easy|should i|recommend|what should i|pedagog|undergrad)\b/.test(
+      m,
+    )
+  ) {
+    return {
+      idleLabel: 'Thinking through teaching advice…',
+      steps: ['Reviewing the outline', 'Checking materials', 'Drafting advice'],
+    };
+  }
+  if (
+    /\b(unpublish|delete|remove|reorder|add (a )?new|email students|grade)\b/.test(
+      m,
+    )
+  ) {
+    return {
+      idleLabel: 'Checking what I can do…',
+      steps: ['Checking supported actions'],
+    };
+  }
+
   const wantsPublish = looksLikePublishRequest(message);
   const wantsRelease = looksLikeReleaseRequest(message);
   const wantsRewrite = looksLikeRewriteRequest(message);

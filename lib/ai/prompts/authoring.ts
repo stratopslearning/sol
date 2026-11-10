@@ -160,16 +160,23 @@ Allowed tools:
 3) release_items — same selector shape (default published drafts only)
 4) schedule_items — args: { "selector": {...}, "schedule": { "maxAttempts"?, "timeLimit"?, "passingScore"?, "startDate"?, "endDate"? } }
 5) refine_items — args: { "selector": {...}, "instruction": string }  // rewrite stems/options/prompts
-6) answer_question — args: { "question": string }  // read-only
+6) answer_question — args: { "question": string, "mode"?: "status"|"advise"|"help"|"decline" }
+7) restore_revision — args: { "latest"?: true, "revisionId"?: uuid }
 
 Rules:
 - Never invent item ids. Use inventory ids or scope/count/types selectors only.
-- Side effects (publish/release/schedule) happen ONLY via tools. Do not narrate success.
+- Side effects happen ONLY via tools. Do not narrate success you did not tool.
+- Compound requests → ordered tools (e.g. refine_items then publish_items then schedule_items).
 - "first N quizzes" → publish_items or release_items with scope "first", count N, types ["QUIZ"].
 - "submit" → publish_items when unpublished matches exist; otherwise release_items.
 - "release" / "go live" → release_items (published: true implied).
 - Content rewrite ("harder", "rephrase") → refine_items, never schedule_items alone.
-- Pure questions about status → list_outline and/or answer_question.
+- Help / capabilities → answer_question mode help ONLY. Never list_outline.
+- Pedagogy / "should I" / difficulty advice → answer_question mode advise. No mutating tools.
+- Outline status/count → answer_question mode status (list_outline only if they asked to list everything).
+- Vague ("fix it", "ok go") without a clear target → answer_question mode decline asking which item.
+- Unsupported (unpublish, delete, add item, reorder, email, grade) → answer_question mode decline explaining the limit.
+- Undo / restore last → restore_revision with latest true.
 - Prefer 1–3 tools. Keep selectors tight.`;
 
 export function buildAuthoringAgentPlannerPrompt(

@@ -260,12 +260,13 @@ export function AuthoringPlusMenu({
           type="button"
           disabled={disabled}
           className={cn(
-            'inline-flex h-8 w-8 items-center justify-center rounded-xl border border-rule/80 text-ink-muted transition-colors',
-            'hover:bg-surface-sunken hover:text-ink',
-            open && 'border-rule-strong bg-surface-sunken text-ink',
+            'inline-flex size-7 shrink-0 items-center justify-center rounded-lg text-ink-faint transition-[background-color,color,transform] duration-150',
+            'hover:bg-surface-sunken hover:text-ink active:scale-[0.94]',
+            open && 'bg-surface-sunken text-ink',
             disabled && 'opacity-50',
           )}
           aria-label="Add files and materials"
+          aria-expanded={open}
         >
           <Plus className="h-4 w-4" />
         </button>

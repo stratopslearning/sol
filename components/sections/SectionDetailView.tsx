@@ -3,24 +3,17 @@ import type { ReactNode } from 'react';
 import { Calendar, FileText, Users } from '@/components/icons';
 
 import CopyEnrollmentButton from '@/components/CopyEnrollmentButton';
+import { AddFacultyDialog } from '@/components/sections/AddFacultyDialog';
+import { AddLearnersDialog } from '@/components/sections/AddLearnersDialog';
+import { SectionCourseworkTable } from '@/components/sections/SectionCourseworkTable';
 import { SectionEndsAtEditor } from '@/components/sections/SectionEndsAtEditor';
 import { SectionRosterTable } from '@/components/sections/SectionRosterTable';
 import { SectionHeading } from '@/components/layout/SectionHeading';
-import { EmptyState } from '@/components/patterns/EmptyState';
 import { StatCard } from '@/components/patterns/StatCard';
-import { LocalDateTime, TIMESTAMP_CELL_CLASS } from '@/components/timezone/LocalDateTime';
+import { LocalDateTime } from '@/components/timezone/LocalDateTime';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import { isSectionConcluded } from '@/lib/sectionAvailability';
-import { cleanQuizDescription } from '@/lib/utils';
 import type { SectionDetailData } from '@/lib/sectionDetailData';
 
 type SectionDetailViewProps = {
@@ -53,7 +46,7 @@ export function SectionDetailView({
     role === 'admin'
       ? `/dashboard/admin/sections/${sectionId}/gradebook`
       : `/dashboard/professor/sections/${sectionId}/gradebook`;
-  const quizResultsBase = '/dashboard/professor/quiz';
+  const canInvite = role === 'professor';
 
   return (
     <>
@@ -163,13 +156,14 @@ export function SectionDetailView({
           description={`${facultyEnrollments.length} ${
             facultyEnrollments.length === 1 ? 'member' : 'members'
           }`}
+          actions={canInvite ? <AddFacultyDialog sectionId={sectionId} /> : null}
         />
         <div className="mt-6">
           <SectionRosterTable
             title="Faculty roster"
             enrollments={facultyEnrollments}
             emptyTitle="No faculty enrolled yet."
-            emptyDescription="Share the faculty enrolment code with instructors who should join this section."
+            emptyDescription="Use Add faculty to invite a TA or grader, or share the faculty enrolment code."
           />
         </div>
       </section>
@@ -181,13 +175,16 @@ export function SectionDetailView({
           description={`${learnerEnrollments.length} ${
             learnerEnrollments.length === 1 ? 'learner' : 'learners'
           } · ${data.activeLearnerCount} active`}
+          actions={
+            canInvite ? <AddLearnersDialog sectionId={sectionId} /> : null
+          }
         />
         <div className="mt-6">
           <SectionRosterTable
             title="Learner roster"
             enrollments={learnerEnrollments}
             emptyTitle="No learners enrolled yet."
-            emptyDescription="Share the learner enrolment code with students to get them enrolled."
+            emptyDescription="Use Add learners to invite by email or CSV, or share the learner enrolment code."
             sectionId={sectionId}
             canRemoveStudents={role === 'professor'}
           />
@@ -204,112 +201,13 @@ export function SectionDetailView({
           actions={courseworkActions}
         />
         <div className="mt-6">
-          {courseworkCount === 0 ? (
-            <EmptyState
-              eyebrow="Empty"
-              title="No assignments yet."
-              description="Use Assign existing, or create one from Assignments / Authoring."
-            />
-          ) : (
-            <div className="paper paper-shadow overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Assignment</TableHead>
-                    <TableHead>Detail</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {quizzes.map((quiz) => (
-                    <TableRow key={`quiz-${quiz.id}`}>
-                      <TableCell>
-                        <Badge variant="outline" className="font-normal">
-                          Quiz
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col gap-0.5">
-                          <span className="font-medium text-ink">{quiz.title}</span>
-                          {cleanQuizDescription(quiz.description) ? (
-                            <span className="text-xs text-ink-faint line-clamp-1">
-                              {cleanQuizDescription(quiz.description)}
-                            </span>
-                          ) : null}
-                        </div>
-                      </TableCell>
-                      <TableCell className={`text-sm text-ink-muted ${TIMESTAMP_CELL_CLASS}`}>
-                        <div className="flex flex-col gap-0.5">
-                          <span>
-                            {quiz.endDate ? (
-                              <>
-                                Due <LocalDateTime value={quiz.endDate} />
-                              </>
-                            ) : (
-                              'No due date'
-                            )}
-                          </span>
-                          <span className="tnum text-xs text-ink-faint">
-                            {quiz.submissionCount} submission
-                            {quiz.submissionCount === 1 ? '' : 's'}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="inline-flex items-center gap-2">
-                          <Button asChild variant="ghost" size="sm">
-                            <Link
-                              href={`${quizResultsBase}/${quiz.id}/results`}
-                            >
-                              Results
-                            </Link>
-                          </Button>
-                          {quizRowActions?.(quiz.id)}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {discussions.map((d) => (
-                    <TableRow key={`discussion-${d.id}`}>
-                      <TableCell>
-                        <Badge variant="outline" className="font-normal">
-                          Discussion
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="font-medium text-ink">
-                        {d.title}
-                      </TableCell>
-                      <TableCell className="text-sm text-ink-muted">
-                        <div className="flex flex-col gap-0.5">
-                          <span>{d.personaName}</span>
-                          {d.relatedQuizTitle ? (
-                            <span className="text-xs text-ink-faint">
-                              Linked quiz · {d.relatedQuizTitle}
-                            </span>
-                          ) : null}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="inline-flex items-center gap-2">
-                          {role === 'professor' ? (
-                            <Button asChild variant="ghost" size="sm">
-                              <Link
-                                href={`/dashboard/professor/discussions/${d.id}`}
-                              >
-                                Sessions
-                              </Link>
-                            </Button>
-                          ) : null}
-                          {discussionRowActions?.(d.id)}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+          <SectionCourseworkTable
+            role={role}
+            quizzes={quizzes}
+            discussions={discussions}
+            quizRowActions={quizRowActions}
+            discussionRowActions={discussionRowActions}
+          />
         </div>
       </section>
     </>
