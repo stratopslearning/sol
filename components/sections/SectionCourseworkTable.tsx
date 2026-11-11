@@ -126,8 +126,9 @@ export function SectionCourseworkTable({
   role: 'admin' | 'professor';
   quizzes: SectionQuizRow[];
   discussions: SectionDiscussionRow[];
-  quizRowActions?: (quizId: string) => ReactNode;
-  discussionRowActions?: (chatbotId: string) => ReactNode;
+  /** Pre-rendered per-id nodes (must not be functions — this is a Client Component). */
+  quizRowActions?: Record<string, ReactNode>;
+  discussionRowActions?: Record<string, ReactNode>;
 }) {
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('ALL');
@@ -293,7 +294,7 @@ export function SectionCourseworkTable({
                               Results
                             </Link>
                           </Button>
-                          {quizRowActions?.(quiz.id)}
+                          {quizRowActions?.[quiz.id]}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -332,7 +333,7 @@ export function SectionCourseworkTable({
                             </Link>
                           </Button>
                         ) : null}
-                        {discussionRowActions?.(d.id)}
+                        {discussionRowActions?.[d.id]}
                       </div>
                     </TableCell>
                   </TableRow>

@@ -205,8 +205,23 @@ export function SectionDetailView({
             role={role}
             quizzes={quizzes}
             discussions={discussions}
-            quizRowActions={quizRowActions}
-            discussionRowActions={discussionRowActions}
+            quizRowActions={
+              quizRowActions
+                ? Object.fromEntries(
+                    quizzes.map((q) => [q.id, quizRowActions(q.id)]),
+                  )
+                : undefined
+            }
+            discussionRowActions={
+              discussionRowActions
+                ? Object.fromEntries(
+                    discussions.map((d) => [
+                      d.id,
+                      discussionRowActions(d.id),
+                    ]),
+                  )
+                : undefined
+            }
           />
         </div>
       </section>
