@@ -21,6 +21,7 @@ import {
   type ResolvedModel,
 } from '@/lib/ai/modelRouter';
 import { reserveRedisBudget } from '@/lib/ai/redisBudget';
+import { surfaceFromPurpose, tracedAi } from '@/lib/ai/tracing';
 
 export type { AiPurpose, AiTask, ResolvedModel };
 export { purposeForTask, resolveModel, temperatureForModel };
@@ -66,6 +67,7 @@ export async function runAi<T>(opts: {
   tenantId?: string | null;
   units?: number;
   clientOptions?: AiClientOptions;
+  task?: AiTask;
   fn: (client: OpenAI) => Promise<T>;
 }): Promise<T> {
   if (opts.tenantId && process.env.AI_GATEWAY_ENFORCE_BUDGET !== '0') {
@@ -74,7 +76,16 @@ export async function runAi<T>(opts: {
       throw ApiError.tooMany('AI budget exceeded for this workspace. Try again shortly.');
     }
   }
-  return opts.fn(getAiClient(opts.purpose, opts.clientOptions));
+  const surface = surfaceFromPurpose(opts.purpose);
+  return tracedAi(
+    opts.task ? `ai.${opts.task}` : `ai.${opts.purpose}`,
+    surface,
+    {
+      purpose: opts.purpose,
+      ...(opts.task ? { task: opts.task } : {}),
+    },
+    async () => opts.fn(getAiClient(opts.purpose, opts.clientOptions)),
+  );
 }
 
 /** Like runAi but resolves purpose + model from task. */
@@ -92,6 +103,7 @@ export async function runAiTask<T>(opts: {
     tenantId: opts.tenantId,
     units: opts.units,
     clientOptions: opts.clientOptions,
+    task: opts.task,
     fn: (client) => opts.fn(client, resolved),
   });
 }

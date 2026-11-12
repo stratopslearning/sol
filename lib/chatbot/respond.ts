@@ -1,5 +1,6 @@
 import type { ChatbotMessage } from '@/app/db/schema';
 import type { CoursePromptContext } from '@/lib/ai/prompts/courseContext';
+import { temperatureForModel } from '@/lib/ai/modelRouter';
 import { logAiSpan } from '@/lib/ai/tracing';
 import { chatbotOpenAI, CHATBOT_MODEL } from '@/lib/chatbot/client';
 import {
@@ -97,9 +98,11 @@ export async function generateChatbotReply(opts: {
   const messages = buildMessages(opts);
 
   try {
+    const model = opts.model ?? CHATBOT_MODEL;
+    const temperature = temperatureForModel(model, 0.5);
     const completion = await chatbotOpenAI.chat.completions.create({
-      model: opts.model ?? CHATBOT_MODEL,
-      temperature: 0.5,
+      model,
+      ...(temperature != null ? { temperature } : {}),
       max_completion_tokens: 800,
       messages,
     } as never);
@@ -175,9 +178,11 @@ export async function streamChatbotReply(opts: {
   const messages = buildMessages(opts);
 
   try {
+    const model = opts.model ?? CHATBOT_MODEL;
+    const temperature = temperatureForModel(model, 0.5);
     const completion = await chatbotOpenAI.chat.completions.create({
-      model: opts.model ?? CHATBOT_MODEL,
-      temperature: 0.5,
+      model,
+      ...(temperature != null ? { temperature } : {}),
       max_completion_tokens: 800,
       messages,
       stream: true,

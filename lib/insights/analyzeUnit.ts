@@ -22,6 +22,7 @@ import {
   INSIGHTS_PROMPT_VERSION,
 } from '@/lib/ai/prompts/insights';
 import { completeJsonSchema } from '@/lib/ai/structured';
+import { hashId, logAiSpan } from '@/lib/ai/tracing';
 import { ApiError } from '@/lib/api/errors';
 import { minimizeStudentTextForAi } from '@/lib/ai/minimizeEducationPayload';
 
@@ -58,7 +59,7 @@ const insightsJsonSchema = {
           summary: { type: 'string' },
           evidenceCount: { type: 'number' },
         },
-        required: ['topic', 'summary'],
+        required: ['topic', 'summary', 'evidenceCount'],
         additionalProperties: false,
       },
     },
@@ -74,7 +75,7 @@ const insightsJsonSchema = {
             items: { type: 'string' },
           },
         },
-        required: ['target', 'revision'],
+        required: ['target', 'revision', 'relatedQuestionIds'],
         additionalProperties: false,
       },
     },
@@ -345,6 +346,13 @@ export async function analyzeUnitInsights(opts: {
       promptVersion: INSIGHTS_PROMPT_VERSION,
     })
     .returning();
+
+  void logAiSpan('insights.analyze', 'insights', {
+    courseId: hashId(opts.courseId),
+    misconceptionCount: result.value.misconceptions.length,
+    suggestionCount: result.value.suggestions.length,
+    model: resolved.model,
+  });
 
   return row!;
 }

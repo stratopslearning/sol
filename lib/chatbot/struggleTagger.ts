@@ -18,6 +18,7 @@ import {
   STRUGGLE_TAGGER_PROMPT_VERSION,
 } from '@/lib/ai/prompts/struggleTagger';
 import { completeJsonSchema } from '@/lib/ai/structured';
+import { hashId, logAiSpan } from '@/lib/ai/tracing';
 import { extractStruggleTopics } from '@/lib/chatbot/assessmentLock';
 
 const struggleZod = z.object({
@@ -136,6 +137,12 @@ export async function tagSessionStruggles(opts: {
         },
       })
       .where(eq(chatbotSessions.id, opts.sessionId));
+
+    void logAiSpan('insights.struggle_tagger', 'insights', {
+      sessionId: hashId(opts.sessionId),
+      topicCount: merged.length,
+      escalated,
+    });
 
     return { topics: merged, escalated };
   } catch (err) {

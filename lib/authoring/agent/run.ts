@@ -57,6 +57,7 @@ import {
 import { buildAuthoringAgentPlannerPrompt } from '@/lib/authoring/prompts';
 import { authoringScheduleContext } from '@/lib/authoring/schedule';
 import type { UserData } from '@/lib/getOrCreateUser';
+import { hashId, logAiSpan } from '@/lib/ai/tracing';
 
 type AuthUser = Pick<UserData, 'id' | 'clerkId'> & { platformStaff?: boolean | null };
 
@@ -183,6 +184,14 @@ export async function runAuthoringAgent(
       userAgent: audit?.userAgent ?? null,
     });
     const updated = await getOutlineDetail(user, opts.outlineId);
+    void logAiSpan('authoring.agent', 'authoring', {
+      outlineId: hashId(opts.outlineId),
+      intent: intent.kind,
+      tools: optsPersist.tools,
+      patchedCount: optsPersist.patchedItemIds?.length ?? 0,
+      publishedCount: optsPersist.publishedItemIds?.length ?? 0,
+      releasedCount: optsPersist.releasedItemIds?.length ?? 0,
+    });
     return {
       assistantMessage: stripForClient(assistantMessage),
       outline: updated,

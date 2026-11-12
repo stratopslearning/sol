@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { outlineItems, type OutlineItemBody } from '@/app/db/schema';
 import { getAiClientForTask, resolveModel } from '@/lib/ai/gateway';
 import { temperatureForModel } from '@/lib/ai/modelRouter';
+import { hashId, logAiSpan } from '@/lib/ai/tracing';
 import { ApiError } from '@/lib/api/errors';
 import { logAudit } from '@/lib/audit';
 import { AUTHORING_PROMPT_VERSION } from '@/lib/authoring/constants';
@@ -553,6 +554,11 @@ Return a corrected JSON object for these same itemIds. Every quiz needs 5–8 qu
   }
 
   const built = await getOutlineDetail(user, outlineId);
+  void logAiSpan('authoring.build', 'authoring', {
+    outlineId: hashId(outlineId),
+    patchCount: scheduledPatches.length,
+    hasPriorCorpus: hasPriorCorpus || detail.hasPriorCorpus,
+  });
   try {
     return await reviewOutlineDraft(built);
   } catch (err) {
