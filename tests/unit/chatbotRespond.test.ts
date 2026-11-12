@@ -11,8 +11,10 @@ vi.mock('openai', () => {
   return { default: OpenAI };
 });
 
-import { generateChatbotReply } from '@/lib/chatbot/respond';
+import { temperatureForModel } from '@/lib/ai/modelRouter';
 import { SOCRATIC_LEARNING_RULES } from '@/lib/chatbot/baseRules';
+import { CHATBOT_MODEL } from '@/lib/chatbot/constants';
+import { generateChatbotReply } from '@/lib/chatbot/respond';
 
 beforeEach(() => {
   mocks.create.mockReset();
@@ -60,7 +62,8 @@ describe('generateChatbotReply', () => {
     expect(mocks.create).toHaveBeenCalledTimes(1);
     const args = mocks.create.mock.calls[0][0];
     expect(args.model).toBeTruthy();
-    expect(args.temperature).toBe(0.5);
+    // gpt-5 / o-series omit temperature; other models send 0.5
+    expect(args.temperature).toBe(temperatureForModel(CHATBOT_MODEL, 0.5));
     const system = args.messages[0].content as string;
     expect(system.startsWith(SOCRATIC_LEARNING_RULES)).toBe(true);
     expect(system).toContain('Chapter 1 flow.');
