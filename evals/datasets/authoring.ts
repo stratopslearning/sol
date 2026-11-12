@@ -52,6 +52,13 @@ export const AUTHORING_BUILD_EVAL_DATASET: AuthoringBuildCase[] = [
     expectHasRubric: false,
     expectHasCitation: false,
   },
+  {
+    id: 'live-build-quiz-body',
+    body: { questions: [] },
+    sourceMaterialIds: ['m1'],
+    expectHasRubric: true,
+    expectHasCitation: true,
+  },
 ];
 
 export type SwitchUpEvalCase = {
@@ -125,6 +132,30 @@ export const SWITCH_UP_EVAL_DATASET: SwitchUpEvalCase[] = [
     },
     expectOk: true,
   },
+  {
+    id: 'live-switch-capital',
+    before: {
+      questions: [
+        {
+          type: 'MULTIPLE_CHOICE',
+          question: 'Capital of France?',
+          options: ['Paris', 'Lyon'],
+          correctAnswer: 'Paris',
+        },
+      ],
+    },
+    after: {
+      questions: [
+        {
+          type: 'MULTIPLE_CHOICE',
+          question: 'Capital of France?',
+          options: ['Paris', 'Lyon'],
+          correctAnswer: 'Paris',
+        },
+      ],
+    },
+    expectOk: true,
+  },
 ];
 
 export type ReviewerEvalCase = {
@@ -154,6 +185,6 @@ export const REVIEWER_EVAL_DATASET: ReviewerEvalCase[] = [
       ],
     },
     sourceMaterialIds: [],
-    expectCodes: ['answer_in_stem', 'missing_source'],
+    expectCodes: ['answer_leak', 'missing_source'],
   },
 ];

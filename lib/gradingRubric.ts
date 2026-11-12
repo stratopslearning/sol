@@ -279,6 +279,8 @@ export async function callRubricModelFull(
       : '';
 
   const model = resolveModel('rubric').model;
+  const supportsReasoningEffort =
+    /^gpt-5/i.test(model) || /^o\d/i.test(model) || /reasoning/i.test(model);
   const completion = await openai.chat.completions.create({
     model,
     messages: [
@@ -293,7 +295,7 @@ export async function callRubricModelFull(
         schema: rubricJsonSchema,
       },
     },
-    reasoning_effort: 'low',
+    ...(supportsReasoningEffort ? { reasoning_effort: 'low' as const } : {}),
     max_completion_tokens: 1200,
     seed: 7,
   } as never);

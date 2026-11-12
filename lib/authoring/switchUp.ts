@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { outlineItems, type OutlineItemBody } from '@/app/db/schema';
 import { getAiClientForTask, resolveModel } from '@/lib/ai/gateway';
 import { temperatureForModel } from '@/lib/ai/modelRouter';
+import { hashId, logAiSpan } from '@/lib/ai/tracing';
 import { ApiError } from '@/lib/api/errors';
 import { logAudit } from '@/lib/audit';
 import { assertCanManageOutline } from '@/lib/authoring/access';
@@ -232,6 +233,11 @@ ${materialsContext || '(none)'}${policyBlock}`;
     metadata: { itemCount: diffs.length },
     ip: audit?.ip ?? null,
     userAgent: audit?.userAgent ?? null,
+  });
+
+  void logAiSpan('authoring.switch_up', 'authoring', {
+    outlineId: hashId(opts.outlineId),
+    itemCount: diffs.length,
   });
 
   return { diffs, outline: detail };

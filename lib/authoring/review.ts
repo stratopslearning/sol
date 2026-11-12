@@ -20,6 +20,7 @@ import {
   loadCoursePromptContext,
 } from '@/lib/ai/prompts/courseContext';
 import { completeJsonSchema } from '@/lib/ai/structured';
+import { hashId, logAiSpan } from '@/lib/ai/tracing';
 import { AUTHORING_PROMPT_VERSION } from '@/lib/authoring/constants';
 import type { OutlineDetail } from '@/lib/authoring/outlines';
 import { withOutlineTenant } from '@/lib/authoring/tenant';
@@ -253,6 +254,13 @@ export async function reviewOutlineDraft(
   }
 
   const resolved = resolveModel('review');
+  const flagCount = [...byId.values()].reduce((n, f) => n + f.length, 0);
+  void logAiSpan('authoring.review', 'authoring', {
+    outlineId: hashId(detail.id),
+    itemCount: flat.length,
+    flagCount,
+    model: resolved.model,
+  });
   await withOutlineTenant(detail.id, null, async (tx) => {
     for (const [itemId, flags] of byId) {
       await tx
