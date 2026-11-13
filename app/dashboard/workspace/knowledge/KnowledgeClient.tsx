@@ -24,6 +24,10 @@ import {
 } from "@/components/icons";
 import { toast } from "sonner";
 
+import {
+  MaterialPreviewDialog,
+  type MaterialPreviewTarget,
+} from "@/components/knowledge/MaterialPreviewDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -37,7 +41,7 @@ import type {
 import { cn } from "@/lib/utils";
 
 const ACCEPTED = ".pdf,.docx,.txt,.md,.zip";
-const MAX_BYTES = 10 * 1024 * 1024;
+const MAX_BYTES = 50 * 1024 * 1024;
 const MAX_ZIP_BYTES = 50 * 1024 * 1024;
 const UNFILED = "Unfiled";
 
@@ -155,12 +159,15 @@ export default function KnowledgeClient({
   initialConnectors,
   initialProviders,
   initialTab = "library",
+  teachingBlocked = false,
 }: {
   workspaceId: string;
   initialDocuments: KnowledgeDocumentSummary[];
   initialConnectors: ConnectorSummary[];
   initialProviders: ConnectorProviderStatus[];
   initialTab?: "library" | "connections";
+  /** When true, hide/disable uploads and mutations (reads still shown). */
+  teachingBlocked?: boolean;
 }) {
   const router = useRouter();
   const fileInputId = useId();
@@ -170,6 +177,9 @@ export default function KnowledgeClient({
   const [connectors, setConnectors] = useState(initialConnectors);
   const [providers, setProviders] = useState(initialProviders);
   const [tab, setTab] = useState(initialTab);
+  const [previewTarget, setPreviewTarget] =
+    useState<MaterialPreviewTarget | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [addingLink, setAddingLink] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -232,7 +242,7 @@ export default function KnowledgeClient({
       return;
     }
     if (!zip && next.size > MAX_BYTES) {
-      toast.error("File must be 10 MB or smaller");
+      toast.error("File must be 50 MB or smaller");
       return;
     }
     setFile(next);
@@ -300,7 +310,7 @@ export default function KnowledgeClient({
             : res.status === 413
               ? zip
                 ? "Zip is too large (max 50 MB)"
-                : "File is too large (max 10 MB)"
+                : "File is too large (max 50 MB)"
               : data.error || "Upload failed",
         );
         return;
@@ -717,9 +727,10 @@ export default function KnowledgeClient({
             ) : (
               <button
                 type="button"
-                title="Click to rename"
+                title={teachingBlocked ? name : "Click to rename"}
+                disabled={teachingBlocked}
                 onClick={() => beginEditDoc(d)}
-                className="block max-w-full truncate text-left text-sm font-medium text-foreground hover:underline"
+                className="block max-w-full truncate text-left text-sm font-medium text-foreground hover:underline disabled:cursor-default disabled:hover:no-underline"
               >
                 {name}
               </button>
@@ -746,12 +757,31 @@ export default function KnowledgeClient({
           </div>
         </div>
         <div className="flex flex-wrap gap-1.5 sm:opacity-70 sm:transition-opacity sm:group-hover:opacity-100">
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              setPreviewTarget({
+                kind: "knowledge",
+                id: d.id,
+                title: d.title,
+                mimeType: d.mimeType,
+                externalUrl: d.externalUrl,
+                sourceKind: d.sourceKind,
+                status: d.status,
+              });
+              setPreviewOpen(true);
+            }}
+          >
+            Preview
+          </Button>
           {d.visibility === "personal" ? (
             <Button
               type="button"
               size="sm"
               variant="ghost"
-              disabled={busyId === d.id}
+              disabled={teachingBlocked || busyId === d.id}
               onClick={() => void onShare(d.id)}
             >
               Share
@@ -770,7 +800,7 @@ export default function KnowledgeClient({
             type="button"
             size="sm"
             variant="ghost"
-            disabled={busyId === d.id}
+            disabled={teachingBlocked || busyId === d.id}
             onClick={() => void onReprocess(d.id)}
           >
             Reprocess
@@ -779,7 +809,7 @@ export default function KnowledgeClient({
             type="button"
             size="sm"
             variant="ghost"
-            disabled={busyId === d.id}
+            disabled={teachingBlocked || busyId === d.id}
             onClick={() => void onDelete(d.id)}
             aria-label="Remove"
           >
@@ -792,6 +822,11 @@ export default function KnowledgeClient({
 
   return (
     <div className="flex flex-col gap-8">
+      <MaterialPreviewDialog
+        target={previewTarget}
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+      />
       <Tabs
         value={tab}
         onValueChange={(v) => setTab(v as "library" | "connections")}
@@ -802,6 +837,12 @@ export default function KnowledgeClient({
         </TabsList>
 
         <TabsContent value="library" className="mt-6 flex flex-col gap-6">
+          {teachingBlocked ? (
+            <p className="rounded-xl border border-border bg-muted/30 px-3 py-2.5 text-sm text-muted-foreground">
+              Viewing is available. Finish billing or wait for pilot approval to
+              upload, share, or sync documents.
+            </p>
+          ) : (
           <section className="rounded-xl border border-border bg-card/40">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
               <div className="flex items-center gap-1 rounded-lg border border-border bg-background p-0.5">
@@ -1018,6 +1059,7 @@ export default function KnowledgeClient({
               </form>
             )}
           </section>
+          )}
 
           <section>
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
@@ -1383,6 +1425,7 @@ export default function KnowledgeClient({
                       <Button
                         type="button"
                         size="sm"
+                        disabled={teachingBlocked}
                         onClick={() => void onConnect(p.provider)}
                       >
                         Connect
@@ -1393,7 +1436,7 @@ export default function KnowledgeClient({
                           type="button"
                           size="sm"
                           variant="outline"
-                          disabled={busyId === c.id}
+                          disabled={teachingBlocked || busyId === c.id}
                           onClick={() => void onSync(c.id)}
                         >
                           Sync now
@@ -1402,7 +1445,7 @@ export default function KnowledgeClient({
                           type="button"
                           size="sm"
                           variant="outline"
-                          disabled={busyId === c.id}
+                          disabled={teachingBlocked || busyId === c.id}
                           onClick={() => void onDisconnect(c.id)}
                         >
                           Disconnect

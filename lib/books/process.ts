@@ -6,6 +6,7 @@ import { indexBookChaptersAsSingleMaterial } from '@/lib/books/bookKnowledge';
 import { crawlWebbook } from '@/lib/books/crawlWebbook';
 import { flattenParsedChapters } from '@/lib/books/hierarchy';
 import { parseEpub } from '@/lib/books/parseEpub';
+import { parsePdf } from '@/lib/books/parsePdf';
 import { clearYoutubeTitleCache } from '@/lib/books/resolveYoutubeByTitle';
 import { parsePressbooksXml } from '@/lib/books/parsePressbooksXml';
 import type { ParsedBook } from '@/lib/books/types';
@@ -124,6 +125,10 @@ export async function processBook(bookId: string): Promise<void> {
       if (!book.s3Key) throw new Error('XML book has no stored file');
       const buf = await getMaterialObjectBytes(book.s3Key);
       parsed = await parsePressbooksXml(buf.toString('utf8'));
+    } else if (book.sourceKind === 'PDF') {
+      if (!book.s3Key) throw new Error('PDF book has no stored file');
+      const buf = await getMaterialObjectBytes(book.s3Key);
+      parsed = await parsePdf(buf, { title: book.title, fileName: 'book.pdf' });
     } else {
       throw new Error(`Unknown source kind: ${book.sourceKind}`);
     }
@@ -147,7 +152,7 @@ export async function processBook(bookId: string): Promise<void> {
 export async function processBookFromBuffer(
   bookId: string,
   buffer: Buffer,
-  kind: 'EPUB' | 'PRESSBOOKS_XML',
+  kind: 'EPUB' | 'PRESSBOOKS_XML' | 'PDF',
 ): Promise<void> {
   const claimed = await db
     .update(hostedBooks)
@@ -173,7 +178,9 @@ export async function processBookFromBuffer(
     const parsed =
       kind === 'EPUB'
         ? await parseEpub(buffer)
-        : await parsePressbooksXml(buffer.toString('utf8'));
+        : kind === 'PDF'
+          ? await parsePdf(buffer, { title: book.title, fileName: 'book.pdf' })
+          : await parsePressbooksXml(buffer.toString('utf8'));
     await persistParsedBook(book, parsed);
   } catch (err) {
     const message =

@@ -184,7 +184,7 @@ export async function addMaterialFromUpload(
     );
   }
   if (opts.buffer.byteLength > MAX_UPLOAD_BYTES) {
-    throw ApiError.badRequest('File exceeds 10 MB limit');
+    throw ApiError.badRequest('File exceeds 50 MB limit');
   }
   const mime = opts.mimeType || 'application/octet-stream';
   const lowerName = opts.fileName.toLowerCase();

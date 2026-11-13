@@ -185,7 +185,15 @@ export async function getStudentChapter(
   }
 
   return {
-    book: { id: book.id, title: book.title },
+    book: {
+      id: book.id,
+      title: book.title,
+      sourceKind: book.sourceKind as
+        | 'WEBBOOK_URL'
+        | 'EPUB'
+        | 'PRESSBOOKS_XML'
+        | 'PDF',
+    },
     chapter: {
       id: chapter.id,
       title: chapter.title,

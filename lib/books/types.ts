@@ -19,7 +19,7 @@ export type BookSummary = {
   id: string;
   courseId: string;
   title: string;
-  sourceKind: 'WEBBOOK_URL' | 'EPUB' | 'PRESSBOOKS_XML';
+  sourceKind: 'WEBBOOK_URL' | 'EPUB' | 'PRESSBOOKS_XML' | 'PDF';
   sourceUrl: string | null;
   status: 'PENDING' | 'PROCESSING' | 'READY' | 'FAILED';
   errorMessage: string | null;

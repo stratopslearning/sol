@@ -18,3 +18,5 @@ export const BOOK_XML_MIME = new Set([
   'text/xml',
   'application/xhtml+xml',
 ]);
+
+export const BOOK_PDF_MIME = new Set(['application/pdf']);

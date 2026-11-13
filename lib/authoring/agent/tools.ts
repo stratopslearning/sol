@@ -170,7 +170,7 @@ export function resolveItemSelector(
       ? new Set(selector.types)
       : null;
 
-  let pool = inventory.items.filter((item) => {
+  const pool = inventory.items.filter((item) => {
     if (types && !types.has(item.type)) return false;
     if (selector.published === true && !item.published) return false;
     if (selector.published === false && item.published) return false;

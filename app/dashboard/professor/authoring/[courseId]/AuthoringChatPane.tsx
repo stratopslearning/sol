@@ -151,10 +151,12 @@ export function AuthoringChatPane({
   const modHint = formatShortcutKeys('⌘.', isMacPlatform());
   const historyHint = formatShortcutKeys('⌘⇧H', isMacPlatform());
 
+  // Welcome / pre-outline: always allow send so empty focus or zero materials
+  // doesn't trap the composer — the client guides in-chat if materials are missing.
   const canSend =
     !busy &&
     Boolean(chatInput.trim()) &&
-    ((!hasOutline && canPropose) ||
+    ((!hasOutline) ||
       needsApproval ||
       (hasOutline && bodiesBuilt));
 
@@ -208,11 +210,7 @@ export function AuthoringChatPane({
   const placeholder = streaming
     ? 'Working…'
     : isWelcome
-      ? !hasOutline
-        ? canPropose
-          ? 'How should we build this course?'
-          : 'Add Ready materials first (use +), then describe what to build…'
-        : 'How should we build this course?'
+      ? 'How should we build this course?'
       : needsApproval
         ? 'Reply'
         : focusLabel
@@ -635,9 +633,7 @@ export function AuthoringChatPane({
           </h2>
           <p className="mt-2 max-w-md text-center text-sm text-ink-muted">
             {courseTitle}
-            {canPropose
-              ? ' — draft an outline from your materials, then edit in the artifact panel.'
-              : ' — add Ready materials with +, then propose an outline.'}
+            {' — describe what to build. Add Ready materials with + before proposing an outline.'}
           </p>
           <div className="mt-8 w-full">{composer}</div>
         </div>

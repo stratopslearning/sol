@@ -130,7 +130,7 @@ export async function extractKnowledgeZipEntries(
     if (member.byteLength > MAX_UPLOAD_BYTES) {
       skipped.push({
         path: relativePath,
-        reason: 'File exceeds 10 MB limit',
+        reason: 'File exceeds 50 MB limit',
       });
       continue;
     }

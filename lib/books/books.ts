@@ -15,6 +15,7 @@ import {
 } from '@/lib/books/access';
 import {
   BOOK_EPUB_MIME,
+  BOOK_PDF_MIME,
   BOOK_XML_MIME,
   MAX_BOOK_UPLOAD_BYTES,
 } from '@/lib/books/constants';
@@ -215,18 +216,27 @@ export async function importBookFromUpload(
     lower.endsWith('.epub') || BOOK_EPUB_MIME.has(mime);
   const isXml =
     lower.endsWith('.xml') || BOOK_XML_MIME.has(mime);
+  const isPdf =
+    lower.endsWith('.pdf') || BOOK_PDF_MIME.has(mime);
 
-  if (!isEpub && !isXml) {
+  if (!isEpub && !isXml && !isPdf) {
     throw ApiError.badRequest(
-      'Unsupported book file. Upload an EPUB or Pressbooks XML export (PDF is not chapter-structured — add it as a regular material instead).',
+      'Unsupported book file. Upload an EPUB, Pressbooks XML export, or PDF.',
     );
   }
 
-  const sourceKind = isEpub ? 'EPUB' : 'PRESSBOOKS_XML';
+  const sourceKind = isEpub ? 'EPUB' : isPdf ? 'PDF' : 'PRESSBOOKS_XML';
   const title =
     opts.title?.trim() ||
     opts.fileName.replace(/\.[^.]+$/, '') ||
     'Imported book';
+
+  // PDF reading requires the stored object (pdf.js); fail fast without S3.
+  if (isPdf && !isS3Configured()) {
+    throw ApiError.badRequest(
+      'PDF books require file storage to be configured.',
+    );
+  }
 
   const [row] = await db
     .insert(hostedBooks)
@@ -239,19 +249,23 @@ export async function importBookFromUpload(
     })
     .returning();
 
-  // Best-effort S3 archive. Chapter markdown lives in Postgres — import must
-  // not fail when local AWS credentials are expired or S3 is unreachable.
+  // Best-effort S3 archive for EPUB/XML. PDF requires a successful store.
   if (isS3Configured()) {
     const key = buildMaterialS3Key(
       opts.courseId,
       row.id,
-      opts.fileName || (isEpub ? 'book.epub' : 'book.xml'),
+      opts.fileName ||
+        (isEpub ? 'book.epub' : isPdf ? 'book.pdf' : 'book.xml'),
     );
     try {
       await putMaterialObject({
         key,
         body: opts.buffer,
-        contentType: isEpub ? 'application/epub+zip' : 'application/xml',
+        contentType: isEpub
+          ? 'application/epub+zip'
+          : isPdf
+            ? 'application/pdf'
+            : 'application/xml',
       });
       await db
         .update(hostedBooks)
@@ -262,11 +276,24 @@ export async function importBookFromUpload(
         bookId: row.id,
         err: err instanceof Error ? err.message : err,
       });
+      if (isPdf) {
+        await db
+          .update(hostedBooks)
+          .set({
+            status: 'FAILED',
+            errorMessage: 'Could not store PDF for reading',
+            updatedAt: new Date(),
+          })
+          .where(eq(hostedBooks.id, row.id));
+        throw ApiError.badRequest(
+          'Could not store PDF. Try again or contact support.',
+        );
+      }
     }
   }
 
   // Always parse from the upload buffer — avoids a second S3 round-trip and
-  // works when S3 is misconfigured.
+  // works when S3 is misconfigured (EPUB/XML).
   await processBookFromBuffer(row.id, opts.buffer, sourceKind);
 
   await logAudit({

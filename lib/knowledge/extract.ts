@@ -1,5 +1,6 @@
 import mammoth from 'mammoth';
 
+import { MAX_UPLOAD_BYTES } from '@/lib/knowledge/constants';
 import { assertSafeMaterialUrlResolved } from '@/lib/knowledge/urlSafety';
 
 /**
@@ -103,8 +104,8 @@ export async function extractTextFromUrl(url: string): Promise<string> {
     }
     const contentType = (res.headers.get('content-type') ?? '').toLowerCase();
     const buf = Buffer.from(await res.arrayBuffer());
-    if (buf.byteLength > 10 * 1024 * 1024) {
-      throw new Error('Remote file exceeds 10 MB limit');
+    if (buf.byteLength > MAX_UPLOAD_BYTES) {
+      throw new Error('Remote file exceeds 50 MB limit');
     }
     if (contentType.includes('pdf') || current.toLowerCase().endsWith('.pdf')) {
       return extractTextFromUpload({
