@@ -67,7 +67,7 @@ export function DisclosureRecordForm() {
             value={subjectDescription}
             onChange={(e) => setSubjectDescription(e.target.value)}
             required
-            placeholder="e.g. Student Jane Doe — Fall 2025 section grades"
+            placeholder="e.g. Student Jane Doe, Fall 2025 section grades"
           />
         </div>
         <div className="flex flex-col gap-2">

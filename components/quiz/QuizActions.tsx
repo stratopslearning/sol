@@ -9,7 +9,7 @@ import {
   Edit,
   Eye,
   MessagesSquare,
-} from "lucide-react";
+} from "@/components/icons";
 import { toast } from "sonner";
 
 import { Button, buttonVariants } from "@/components/ui/button";

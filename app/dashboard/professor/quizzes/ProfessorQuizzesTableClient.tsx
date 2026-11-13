@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { FileText, Plus, TrendingUp, Users } from "lucide-react";
+import { FileText, Plus, TrendingUp, Users } from "@/components/icons";
 
 import { QuizActions } from "@/components/quiz/QuizActions";
 import { EmptyState } from "@/components/patterns/EmptyState";
@@ -114,12 +114,12 @@ export default function ProfessorQuizzesTableClient({
         icon={<FileText className="h-5 w-5" />}
         eyebrow="Empty"
         title="No quizzes assigned yet."
-        description="Compose your first quiz, or wait until an administrator assigns one to a section you teach."
+        description="Create your first quiz from Assignments, or create a section in Workspace so you have somewhere to assign it."
         actions={
           <Button asChild>
             <Link href="/dashboard/professor/quiz/new">
               <Plus className="h-4 w-4" />
-              Compose quiz
+              New quiz
             </Link>
           </Button>
         }
@@ -208,7 +208,7 @@ export default function ProfessorQuizzesTableClient({
                           .map((sa: any) => sa.section?.name)
                           .filter(Boolean)
                           .join(", ")
-                      : "—";
+                      : "-";
                   return (
                     <TableRow key={quiz.id}>
                       <TableCell className="align-top">

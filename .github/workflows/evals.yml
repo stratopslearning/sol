@@ -18,11 +18,18 @@ jobs:
       NODE_ENV: test
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
-      BRAINTRUST_PROJECT: "SOL"
+      BRAINTRUST_PROJECT: "teachwithsol"
       BRAINTRUST_SAMPLE_RATE: '1'
+      BRAINTRUST_WRAP: '1'
       EVAL_GRADING_BAND_FLOOR: '0.8'
       EVAL_CHATBOT_FLOOR: '0.75'
       EVAL_MCP_FLOOR: '0.7'
+      EVAL_AUTHORING_FLOOR: '0.7'
+      EVAL_AUTHORING_AGENT_FLOOR: '0.7'
+      EVAL_SWITCH_UP_FLOOR: '0.7'
+      EVAL_REVIEWER_FLOOR: '0.7'
+      EVAL_RUBRIC_FLOOR: '0.7'
+      EVAL_INSIGHTS_FLOOR: '0.7'
       DATABASE_URL: https://example.com
       CLERK_SECRET_KEY: test_clerk_secret
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: test_clerk_pub
@@ -32,6 +39,21 @@ jobs:
         with:
           node-version: 20
           cache: npm
+      - name: Preflight secrets
+        run: |
+          missing=0
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "::error::OPENAI_API_KEY secret is missing — add it to stratopslearning/teachwithsol"
+            missing=1
+          fi
+          if [ -z "$BRAINTRUST_API_KEY" ]; then
+            echo "::error::BRAINTRUST_API_KEY secret is missing — add it to stratopslearning/teachwithsol"
+            missing=1
+          fi
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+          echo "Secrets present; project=$BRAINTRUST_PROJECT"
       - run: npm ci
       - name: Run Braintrust evals
         run: npm run eval

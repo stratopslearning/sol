@@ -20,8 +20,12 @@ import { neonConfig, Pool } from '@neondatabase/serverless';
 import Stripe from 'stripe';
 import ws from 'ws';
 
+import { assertDevDatabaseOrExit } from './lib/assertDevDatabase';
+
 loadEnv({ path: '.env', quiet: true });
 loadEnv({ path: '.env.local', override: true, quiet: true });
+
+assertDevDatabaseOrExit({ urlEnvVars: ['DATABASE_URL'] });
 
 if (typeof WebSocket === 'undefined') {
   neonConfig.webSocketConstructor = ws as any;

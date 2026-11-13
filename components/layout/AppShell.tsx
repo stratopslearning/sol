@@ -22,6 +22,8 @@ interface AppShellProps {
   topbarActions?: React.ReactNode;
   /** Constrain main content width. Defaults to the fluid page rail. */
   maxWidth?: "default" | "wide" | "narrow" | "full";
+  /** Edge-to-edge main (no page padding). */
+  flush?: boolean;
   className?: string;
   children: React.ReactNode;
 }

@@ -1,45 +1,129 @@
-import { and, eq, inArray } from 'drizzle-orm';
-
-import { db } from '@/app/db';
+import { authorize, userHasAnyBinding } from '@/lib/authz/authorize';
+import { authorizeOnSection } from '@/lib/authz/courseAccess';
+import { TEACHING_ROLES } from '@/lib/authz/permissions';
 import {
-  professorSections,
-  quizSections,
-  quizzes,
-} from '@/app/db/schema';
-import { activeOnly } from '@/lib/db/filters';
+  fetchQuizById,
+  fetchQuizSectionIds,
+  fetchSectionById,
+  fetchCourseById,
+} from '@/lib/db/entityScopedReads';
 import type { UserData } from '@/lib/getOrCreateUser';
 import { shouldHideFeedbackForStudent } from '@/lib/utils';
 
+async function resolveQuizTenantId(quizId: string): Promise<string | null> {
+  const quiz = await fetchQuizById(quizId);
+  if (quiz?.tenantId) return quiz.tenantId;
+
+  const sectionIds = await fetchQuizSectionIds(quizId);
+  if (sectionIds.length === 0) return null;
+
+  const section = await fetchSectionById(sectionIds[0]!);
+  if (section?.tenantId) return section.tenantId;
+  if (section?.workspaceId) return section.workspaceId;
+  if (!section?.courseId) return null;
+
+  const course = await fetchCourseById(section.courseId);
+  return course?.workspaceId ?? null;
+}
+
 /**
- * Whether a professor may view attempts/questions for a quiz (owner or
- * teaches a section the quiz is assigned to). Admins always may.
+ * Whether the user may view attempts/questions for a quiz (11b/11d cutover).
+ * Access comes from role bindings only.
  */
 export async function professorCanAccessQuiz(
-  user: Pick<UserData, 'id' | 'role'>,
+  user: Pick<UserData, 'id'> & { platformStaff?: boolean | null },
   quizId: string,
 ): Promise<boolean> {
-  if (user.role === 'ADMIN') return true;
-  if (user.role !== 'PROFESSOR') return false;
-
-  const quiz = await db.query.quizzes.findFirst({
-    where: and(eq(quizzes.id, quizId), activeOnly(quizzes.deletedAt)),
-  });
+  const quiz = await fetchQuizById(quizId);
   if (!quiz) return false;
-  if (quiz.professorId === user.id) return true;
 
-  const links = await db.query.quizSections.findMany({
-    where: eq(quizSections.quizId, quizId),
-  });
-  const sectionIds = links.map((l) => l.sectionId);
-  if (sectionIds.length === 0) return false;
+  const tenantId = quiz.tenantId ?? (await resolveQuizTenantId(quizId));
+  if (!tenantId) return false;
 
-  const enrollment = await db.query.professorSections.findFirst({
-    where: and(
-      eq(professorSections.professorId, user.id),
-      inArray(professorSections.sectionId, sectionIds),
-    ),
-  });
-  return Boolean(enrollment);
+  if (quiz.offeringId) {
+    if (
+      await authorize(user, 'content.read', {
+        tenantId,
+        scopeType: 'offering',
+        scopeId: quiz.offeringId,
+      })
+    ) {
+      return true;
+    }
+  }
+
+  const links = await fetchQuizSectionIds(quizId);
+  for (const sectionId of links) {
+    if (
+      (await authorizeOnSection(user, 'content.read', sectionId)) ||
+      (await authorizeOnSection(user, 'grade.write', sectionId))
+    ) {
+      return true;
+    }
+  }
+
+  const authorId = String(quiz.professorId ?? '');
+  if (authorId && authorId === String(user.id)) {
+    return userHasAnyBinding(user.id, tenantId, TEACHING_ROLES);
+  }
+  return false;
+}
+
+/**
+ * Sections of this quiz the user may read results for.
+ */
+export async function accessibleQuizSectionIds(
+  user: Pick<UserData, 'id'> & { platformStaff?: boolean | null },
+  quizId: string,
+): Promise<string[]> {
+  const links = await fetchQuizSectionIds(quizId);
+  const out: string[] = [];
+  for (const sectionId of links) {
+    if (await authorizeOnSection(user, 'content.read', sectionId)) {
+      out.push(sectionId);
+    }
+  }
+  return out;
+}
+
+/** Content-write variant used by authoring surfaces (calibration, edit). */
+export async function userCanWriteQuiz(
+  user: Pick<UserData, 'id'> & { platformStaff?: boolean | null },
+  quizId: string,
+): Promise<boolean> {
+  const quiz = await fetchQuizById(quizId);
+  if (!quiz) return false;
+  const tenantId = quiz.tenantId ?? (await resolveQuizTenantId(quizId));
+  if (!tenantId) return false;
+  if (
+    quiz.offeringId &&
+    (await authorize(user, 'content.write', {
+      tenantId,
+      scopeType: 'offering',
+      scopeId: quiz.offeringId,
+    }))
+  ) {
+    return true;
+  }
+  const links = await fetchQuizSectionIds(quizId);
+  for (const sectionId of links) {
+    if (await authorizeOnSection(user, 'content.write', sectionId)) return true;
+  }
+  const authorId = String(quiz.professorId ?? '');
+  if (authorId && authorId === String(user.id)) {
+    return userHasAnyBinding(user.id, tenantId, TEACHING_ROLES);
+  }
+  return false;
+}
+
+/** Legacy STUDENT/PROFESSOR/ADMIN label for shouldHideFeedbackForStudent only. */
+export async function resolveQuizFeedbackViewerRole(
+  user: Pick<UserData, 'id'> & { platformStaff?: boolean | null },
+  quizId: string,
+): Promise<string> {
+  if (user.platformStaff) return 'ADMIN';
+  if (await professorCanAccessQuiz(user, quizId)) return 'PROFESSOR';
+  return 'STUDENT';
 }
 
 export type AttemptFeedbackFields = {

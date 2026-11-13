@@ -2,10 +2,10 @@
 
 import { useCallback, useState } from "react";
 
+import { AdminFilterBar } from "@/components/admin/AdminFilterBar";
 import BulkImportModal from "@/components/admin/BulkImportModal";
 import { UserActions } from "@/components/admin/UserActions";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import {
   Pagination,
   PaginationContent,
@@ -14,13 +14,6 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -36,23 +29,25 @@ import {
   formatPersonName,
 } from "@/lib/personName";
 
-const ROLE_VARIANT: Record<string, "default" | "info" | "success" | "accent"> = {
-  ADMIN: "accent",
-  PROFESSOR: "info",
-  STUDENT: "success",
-};
-
 const ROWS_PER_PAGE = 15;
+
+type AccessSummaryLine = {
+  key: string;
+  title: string;
+  roles: string[];
+  detail?: string;
+};
 
 type UserRow = {
   id: string;
   firstName: string | null;
   lastName: string | null;
   email: string | null;
-  role: string;
+  platformStaff?: boolean | null;
+  accessSummary?: AccessSummaryLine[];
 };
 
-type UserSortMode = "LAST_NAME" | "FIRST_NAME" | "EMAIL" | "ROLE";
+type UserSortMode = "LAST_NAME" | "FIRST_NAME" | "EMAIL" | "ACCESS";
 
 function userCompare(a: UserRow, b: UserRow, mode: UserSortMode) {
   switch (mode) {
@@ -60,16 +55,22 @@ function userCompare(a: UserRow, b: UserRow, mode: UserSortMode) {
       return compareStringsIgnoreCase(a.firstName ?? "", b.firstName ?? "");
     case "EMAIL":
       return compareStringsIgnoreCase(a.email ?? "", b.email ?? "");
-    case "ROLE":
-      return compareStringsIgnoreCase(a.role, b.role);
+    case "ACCESS":
+      return Number(Boolean(b.platformStaff)) - Number(Boolean(a.platformStaff));
     case "LAST_NAME":
     default:
       return comparePersonsByLastName(a, b);
   }
 }
 
-export default function UserTableWithFilters({ users }: { users: UserRow[] }) {
-  const [role, setRole] = useState<string>("ALL");
+export default function UserTableWithFilters({
+  users,
+  canGrantPlatformStaff = false,
+}: {
+  users: UserRow[];
+  canGrantPlatformStaff?: boolean;
+}) {
+  const [accessFilter, setAccessFilter] = useState<string>("ALL");
   const [search, setSearch] = useState<string>("");
   const [sortMode, setSortMode] = useState<UserSortMode>("LAST_NAME");
 
@@ -82,8 +83,11 @@ export default function UserTableWithFilters({ users }: { users: UserRow[] }) {
     rows: users,
     search,
     filterFn: useCallback((user: UserRow, q: string) => {
-      const matchesRole = role === "ALL" || user.role === role;
-      if (!q.trim()) return matchesRole;
+      const matchesAccess =
+        accessFilter === "ALL" ||
+        (accessFilter === "STAFF" && Boolean(user.platformStaff)) ||
+        (accessFilter === "STANDARD" && !user.platformStaff);
+      if (!q.trim()) return matchesAccess;
       const searchLower = q.toLowerCase();
       const fullName = formatPersonName(user).toLowerCase();
       const matchesSearch =
@@ -91,8 +95,8 @@ export default function UserTableWithFilters({ users }: { users: UserRow[] }) {
         (user.firstName?.toLowerCase().includes(searchLower) ?? false) ||
         (user.lastName?.toLowerCase().includes(searchLower) ?? false) ||
         (user.email?.toLowerCase().includes(searchLower) ?? false);
-      return matchesRole && matchesSearch;
-    }, [role]),
+      return matchesAccess && matchesSearch;
+    }, [accessFilter]),
     compareFn: useCallback(
       (a: UserRow, b: UserRow) => userCompare(a, b, sortMode),
       [sortMode],
@@ -102,43 +106,29 @@ export default function UserTableWithFilters({ users }: { users: UserRow[] }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center">
-        <div className="md:w-48">
-          <Select value={role} onValueChange={setRole}>
-            <SelectTrigger className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">All roles</SelectItem>
-              <SelectItem value="STUDENT">Student</SelectItem>
-              <SelectItem value="PROFESSOR">Professor</SelectItem>
-              <SelectItem value="ADMIN">Admin</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <Select
-          value={sortMode}
-          onValueChange={(v) => setSortMode(v as UserSortMode)}
-        >
-          <SelectTrigger className="md:w-48">
-            <SelectValue placeholder="Sort by" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="LAST_NAME">Last name A–Z</SelectItem>
-            <SelectItem value="FIRST_NAME">First name A–Z</SelectItem>
-            <SelectItem value="EMAIL">Email A–Z</SelectItem>
-            <SelectItem value="ROLE">Role</SelectItem>
-          </SelectContent>
-        </Select>
-        <Input
-          type="search"
-          placeholder="Search by name or email…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="flex-1"
-        />
-        <BulkImportModal />
-      </div>
+      <AdminFilterBar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search by name or email…"
+        filterValue={accessFilter}
+        onFilterChange={setAccessFilter}
+        filterLabel="Access"
+        filterOptions={[
+          { value: "ALL", label: "All accounts" },
+          { value: "STAFF", label: "Platform staff" },
+          { value: "STANDARD", label: "Standard" },
+        ]}
+        secondaryValue={sortMode}
+        onSecondaryChange={(v) => setSortMode(v as UserSortMode)}
+        secondaryLabel="Sort"
+        secondaryOptions={[
+          { value: "LAST_NAME", label: "Last name A–Z" },
+          { value: "FIRST_NAME", label: "First name A–Z" },
+          { value: "EMAIL", label: "Email A–Z" },
+          { value: "ACCESS", label: "Platform staff first" },
+        ]}
+        trailing={<BulkImportModal />}
+      />
 
       <div className="paper paper-shadow overflow-hidden">
         <Table>
@@ -146,7 +136,7 @@ export default function UserTableWithFilters({ users }: { users: UserRow[] }) {
             <TableRow>
               <TableHead>Name</TableHead>
               <TableHead>Email</TableHead>
-              <TableHead>Role</TableHead>
+              <TableHead>Access</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -159,13 +149,38 @@ export default function UserTableWithFilters({ users }: { users: UserRow[] }) {
                 <TableCell className="text-ink-muted font-mono text-xs">
                   {user.email}
                 </TableCell>
-                <TableCell>
-                  <Badge variant={ROLE_VARIANT[user.role] ?? "secondary"}>
-                    {user.role}
-                  </Badge>
+                <TableCell className="align-top">
+                  <div className="min-w-[14rem] max-w-sm space-y-1.5">
+                    {user.platformStaff ? (
+                      <Badge variant="accent">Platform staff</Badge>
+                    ) : (
+                      <Badge variant="secondary">Standard</Badge>
+                    )}
+                    {(user.accessSummary ?? []).length === 0 ? (
+                      <p className="text-xs text-ink-faint">No workspace roles</p>
+                    ) : (
+                      <ul className="space-y-1">
+                        {(user.accessSummary ?? []).map((line) => (
+                          <li key={line.key} className="text-xs leading-snug">
+                            <span className="font-medium text-ink">
+                              {line.title}
+                            </span>
+                            <span className="text-ink-muted">
+                              {" · "}
+                              {line.roles.join(", ")}
+                              {line.detail ? ` (${line.detail})` : ""}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
                 </TableCell>
                 <TableCell className="text-right">
-                  <UserActions user={user} />
+                  <UserActions
+                    user={user}
+                    canGrantPlatformStaff={canGrantPlatformStaff}
+                  />
                 </TableCell>
               </TableRow>
             ))}
@@ -185,29 +200,27 @@ export default function UserTableWithFilters({ users }: { users: UserRow[] }) {
 
       {totalPages > 1 ? (
         <Pagination>
-          <PaginationContent className="gap-1">
+          <PaginationContent>
             <PaginationItem>
               <PaginationPrevious
                 href="#"
                 onClick={(e) => {
                   e.preventDefault();
-                  if (page > 1) setPage(page - 1);
+                  setPage(Math.max(1, page - 1));
                 }}
-                className={
-                  page <= 1 ? "pointer-events-none opacity-50" : "cursor-pointer"
-                }
+                aria-disabled={page <= 1}
+                className={page <= 1 ? "pointer-events-none opacity-50" : ""}
               />
             </PaginationItem>
             {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
               <PaginationItem key={p}>
                 <PaginationLink
                   href="#"
+                  isActive={p === page}
                   onClick={(e) => {
                     e.preventDefault();
                     setPage(p);
                   }}
-                  isActive={p === page}
-                  className="cursor-pointer"
                 >
                   {p}
                 </PaginationLink>
@@ -218,12 +231,11 @@ export default function UserTableWithFilters({ users }: { users: UserRow[] }) {
                 href="#"
                 onClick={(e) => {
                   e.preventDefault();
-                  if (page < totalPages) setPage(page + 1);
+                  setPage(Math.min(totalPages, page + 1));
                 }}
+                aria-disabled={page >= totalPages}
                 className={
-                  page >= totalPages
-                    ? "pointer-events-none opacity-50"
-                    : "cursor-pointer"
+                  page >= totalPages ? "pointer-events-none opacity-50" : ""
                 }
               />
             </PaginationItem>

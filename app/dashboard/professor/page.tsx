@@ -1,23 +1,16 @@
 import Link from 'next/link';
-import { and, eq, inArray, isNotNull } from 'drizzle-orm';
 import {
   AlertTriangle,
   ArrowRight,
-  Download,
+  BookOpen,
   FileText,
   KeyRound,
   Layers,
   Plus,
   TrendingUp,
-} from 'lucide-react';
+} from '@/components/icons';
 
-import { db } from '@/app/db';
-import {
-  attempts,
-  professorSections,
-  quizSections,
-  quizzes,
-} from '@/app/db/schema';
+import { TeacherHomeChecklist } from '@/components/professor/TeacherHomeChecklist';
 import ExportResultsWrapper from '@/components/ExportResultsWrapper';
 import ProfessorEnrollForm from '@/components/ProfessorEnrollForm';
 import { AppShell } from '@/components/layout/AppShell';
@@ -27,51 +20,51 @@ import { StatCard } from '@/components/patterns/StatCard';
 import { QuickRegradeButton } from '@/components/quiz/QuickRegradeButton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { activeOnly } from '@/lib/db/filters';
 import { appPath, withBasePath } from '@/lib/basePath';
-import { getOrCreateUser } from '@/lib/getOrCreateUser';
+import { requireTeachingAccess } from '@/lib/authz/gates';
 import { getAttentionItemsForProfessor } from '@/lib/professorAttention';
 import { partitionEnrollmentsByConclusion } from '@/lib/sectionAvailability';
+import { getTeacherHomeChecklistSteps } from '@/lib/professor/teacherHomeChecklist';
+import {
+  getActiveWorkspaceId,
+  listActiveMembershipsForUser,
+} from '@/lib/workspace';
 
 export default async function ProfessorDashboard() {
-  const user = await getOrCreateUser();
-  if (!user || user.role !== 'PROFESSOR') return null;
+  const user = await requireTeachingAccess();
 
-  const professorEnrollments = await db.query.professorSections.findMany({
-    where: eq(professorSections.professorId, user.id),
-    with: {
-      section: { with: { course: true } },
+  const { listTeachingSectionIds } = await import(
+    '@/lib/professor/graderSections'
+  );
+  const { fetchSectionsByIds } = await import('@/lib/db/entityScopedReads');
+  const {
+    fetchQuizIdsForSections,
+    fetchQuizzesByIds,
+    fetchRecentAttemptsForSections,
+    fetchAttemptScoreRowsForSections,
+  } = await import('@/lib/db/facultyStudentReads');
+
+  const teachingSectionIds = await listTeachingSectionIds(user);
+  const teachingSections = await fetchSectionsByIds(teachingSectionIds);
+  const sectionRows = teachingSections.map((section) => ({
+    sectionId: section.id,
+    section: {
+      id: section.id,
+      name: section.name,
+      endsAt: section.endsAt,
+      course: section.course
+        ? { id: section.course.id, title: section.course.title }
+        : null,
     },
-  });
+  }));
   const { active: ongoingEnrollments } =
-    partitionEnrollmentsByConclusion(professorEnrollments);
+    partitionEnrollmentsByConclusion(sectionRows);
 
   const sectionIds = ongoingEnrollments.map((e) => e.sectionId);
 
-  const sectionQuizLinks =
-    sectionIds.length > 0
-      ? await db.query.quizSections.findMany({
-          where: inArray(quizSections.sectionId, sectionIds),
-        })
-      : [];
-  const assignedQuizIds = [
-    ...new Set(sectionQuizLinks.map((qs) => qs.quizId)),
-  ];
-
-  const professorQuizzes =
-    assignedQuizIds.length > 0
-      ? await db.query.quizzes.findMany({
-          where: and(
-            inArray(quizzes.id, assignedQuizIds),
-            activeOnly(quizzes.deletedAt),
-          ),
-          with: {
-            sectionAssignments: {
-              with: { section: { with: { course: true } } },
-            },
-          },
-        })
-      : [];
+  const sectionQuizLinks = await fetchQuizIdsForSections(sectionIds);
+  const assignedQuizIds = [...new Set(sectionQuizLinks.map((qs) => qs.quizId))];
+  const professorQuizzes = await fetchQuizzesByIds(assignedQuizIds);
 
   const attentionItems = await getAttentionItemsForProfessor(user.id, {
     limit: 8,
@@ -81,47 +74,19 @@ export default async function ProfessorDashboard() {
     0,
   );
 
-  const recentAttempts =
-    professorQuizzes.length > 0 && sectionIds.length > 0
-      ? await db.query.attempts.findMany({
-          where: and(
-            inArray(
-              attempts.quizId,
-              professorQuizzes.map((q) => q.id),
-            ),
-            isNotNull(attempts.submittedAt),
-            inArray(attempts.sectionId, sectionIds),
-          ),
-          with: {
-            student: true,
-            quiz: true,
-            section: { with: { course: true } },
-          },
-          orderBy: (attempts, { desc }) => desc(attempts.submittedAt),
-          limit: 5,
-        })
-      : [];
+  const recentAttemptRows = await fetchRecentAttemptsForSections(sectionIds, 5);
+  const recentAttempts = recentAttemptRows.map((attempt) => ({
+    ...attempt,
+    student: {
+      firstName: attempt.student.firstName,
+      lastName: attempt.student.lastName,
+      email: attempt.student.email,
+    },
+    passed: (attempt.percentage ?? 0) >= 70,
+  }));
 
   const submittedAttemptsList =
-    professorQuizzes.length > 0 && sectionIds.length > 0
-      ? await db.query.attempts.findMany({
-          where: and(
-            inArray(
-              attempts.quizId,
-              professorQuizzes.map((q) => q.id),
-            ),
-            isNotNull(attempts.submittedAt),
-            inArray(attempts.sectionId, sectionIds),
-          ),
-          columns: {
-            studentId: true,
-            quizId: true,
-            percentage: true,
-            score: true,
-            maxScore: true,
-          },
-        })
-      : [];
+    await fetchAttemptScoreRowsForSections(sectionIds);
 
   const totalSections = ongoingEnrollments.length;
   const activeQuizzes = professorQuizzes.filter((q) => q.isActive).length;
@@ -147,18 +112,34 @@ export default async function ProfessorDashboard() {
   const deskSections = ongoingEnrollments.slice(0, 6);
   const firstName = user.firstName || user.email;
 
+  const facultyMemberships = await listActiveMembershipsForUser(user.id);
+  const activeWorkspaceId = await getActiveWorkspaceId(user.id);
+  const activeMembership =
+    facultyMemberships.find((m) => m.workspaceId === activeWorkspaceId) ??
+    facultyMemberships[0];
+  const activeWorkspace = activeMembership?.workspace;
+  const checklistSteps = activeWorkspace
+    ? await getTeacherHomeChecklistSteps(activeWorkspace.id)
+    : [];
+
   const shortcuts = [
     {
-      href: appPath('/dashboard/professor/quiz/new'),
-      label: 'New quiz',
-      hint: 'Scored assignment',
-      icon: Plus,
+      href: appPath('/dashboard/workspace/knowledge'),
+      label: 'Knowledge',
+      hint: 'Library & course materials',
+      icon: FileText,
     },
     {
-      href: appPath('/dashboard/professor/discussions'),
-      label: 'Discussions',
-      hint: 'Socratic sessions',
-      icon: FileText,
+      href: appPath('/dashboard/professor/authoring'),
+      label: 'Authoring',
+      hint: 'Draft from materials',
+      icon: BookOpen,
+    },
+    {
+      href: appPath('/dashboard/professor/assignments'),
+      label: 'Assignments',
+      hint: 'Quizzes & discussions',
+      icon: Plus,
     },
     {
       href: appPath('/dashboard/professor/attention'),
@@ -168,12 +149,6 @@ export default async function ProfessorDashboard() {
           ? `${attentionTotalPreview} waiting`
           : 'Queue clear',
       icon: AlertTriangle,
-    },
-    {
-      href: appPath('/dashboard/professor/quiz-results'),
-      label: 'Results',
-      hint: 'Section performance',
-      icon: TrendingUp,
     },
   ];
 
@@ -186,7 +161,7 @@ export default async function ProfessorDashboard() {
             <span className="text-ink-muted font-normal">’s desk</span>
           </>
         }
-        description="See your sections, attention queue, and recent work in one place."
+        description="Use Knowledge, Authoring, and Assignments from the sidebar. Open a course for sections, analytics, and insights. Attention and results stay global."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button asChild>
@@ -211,7 +186,12 @@ export default async function ProfessorDashboard() {
       />
 
       <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:items-stretch">
-        <ProfessorEnrollForm />
+        <div className="flex flex-col gap-6">
+          <ProfessorEnrollForm />
+          {checklistSteps.length > 0 ? (
+            <TeacherHomeChecklist steps={checklistSteps} />
+          ) : null}
+        </div>
         <div className="rounded-xl border border-rule bg-surface-sunken/50 px-5 py-5 sm:px-6">
           <p className="eyebrow">Shortcuts</p>
           <p
@@ -261,14 +241,14 @@ export default async function ProfessorDashboard() {
             value={totalSections}
             icon={<Layers className="h-4 w-4" />}
             hint="Active this term"
-            href="/dashboard/professor/sections"
+            href="/dashboard/professor/courses"
           />
           <StatCard
             label="Live quizzes"
             value={activeQuizzes}
             icon={<FileText className="h-4 w-4" />}
             hint="Open scored work"
-            href="/dashboard/professor/quizzes"
+            href="/dashboard/professor/courses"
           />
           <StatCard
             label="Attention"
@@ -390,10 +370,10 @@ export default async function ProfessorDashboard() {
             title="Where you teach"
             actions={
               <Link
-                href={appPath('/dashboard/professor/sections')}
+                href={appPath('/dashboard/professor/courses')}
                 className="text-sm text-ink-muted underline-offset-2 hover:text-ink hover:underline"
               >
-                View all
+                All courses
               </Link>
             }
           />
@@ -408,7 +388,18 @@ export default async function ProfessorDashboard() {
                   >
                     <div className="min-w-0 flex-1">
                       <div className="text-sm font-medium text-ink truncate">
-                        {section.course?.title ?? 'Course'}
+                        {section.course?.id ? (
+                          <Link
+                            href={appPath(
+                              `/dashboard/professor/courses/${section.course.id}`,
+                            )}
+                            className="hover:text-brand"
+                          >
+                            {section.course.title}
+                          </Link>
+                        ) : (
+                          (section.course?.title ?? 'Course')
+                        )}
                       </div>
                       <div className="text-xs text-ink-muted truncate mt-0.5">
                         {section.name}
@@ -492,11 +483,11 @@ export default async function ProfessorDashboard() {
         </div>
       </section>
 
-      <section className="mt-12 flex flex-col gap-4">
+      <section className="mt-10 flex flex-col gap-3">
         <SectionHeading
           eyebrow="Export"
           title="Download results"
-          description="CSV export for the quizzes assigned to your sections."
+          description="CSV for quizzes assigned to your sections."
           actions={
             <Link
               href={appPath('/dashboard/professor/agent-access')}
@@ -507,13 +498,7 @@ export default async function ProfessorDashboard() {
             </Link>
           }
         />
-        <div className="rounded-xl border border-rule bg-surface paper-shadow p-5 flex flex-col gap-3">
-          <div className="flex items-center gap-2 text-ink-muted">
-            <Download className="h-4 w-4" />
-            <span className="text-sm">Download quiz results as CSV</span>
-          </div>
-          <ExportResultsWrapper quizzes={professorQuizzes} />
-        </div>
+        <ExportResultsWrapper quizzes={professorQuizzes} />
       </section>
     </AppShell>
   );

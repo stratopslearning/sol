@@ -1,17 +1,18 @@
-import { and, eq } from 'drizzle-orm';
 import { notFound } from 'next/navigation';
 
-import { appRedirect } from '@/lib/serverRedirect';
-
-import { db } from '@/app/db';
-import { professorSections } from '@/app/db/schema';
+import { AssignActivityToSectionDialog } from '@/components/sections/AssignActivityToSectionDialog';
 import { SectionDetailView } from '@/components/sections/SectionDetailView';
 import { AppShell } from '@/components/layout/AppShell';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
-import { requireAuth, getDashboardUrl } from '@/lib/auth';
+import { listCourseActivities } from '@/lib/assignments';
+import { requireTeachingAccess } from '@/lib/authz/gates';
 import { withBasePath } from '@/lib/basePath';
+import { entityIdForActivity } from '@/lib/professor/activityEntity';
+import { assertTeachesSection } from '@/lib/professor/sections';
 import { loadSectionDetailData } from '@/lib/sectionDetailData';
+
+import { CanvasLinkPanel } from '@/components/sections/CanvasLinkPanel';
 
 import LeaveSectionButton from './LeaveSectionButton';
 import UnassignQuizButton from './UnassignQuizButton';
@@ -24,38 +25,72 @@ export default async function SectionDetailsPage({
 }) {
   const { sectionId } = await params;
 
-  const me = await requireAuth();
-  if (me.role !== 'PROFESSOR' && me.role !== 'ADMIN') {
-    appRedirect(getDashboardUrl(me.role));
-  }
-
-  if (me.role !== 'ADMIN') {
-    const enrollment = await db.query.professorSections.findFirst({
-      where: and(
-        eq(professorSections.sectionId, sectionId),
-        eq(professorSections.professorId, me.id),
-      ),
-    });
-    if (!enrollment) return notFound();
+  const me = await requireTeachingAccess();
+  try {
+    await assertTeachesSection(me, sectionId);
+  } catch {
+    return notFound();
   }
 
   const data = await loadSectionDetailData(sectionId);
   if (!data) return notFound();
 
+  const courseId = data.section.course?.id;
+  const courseTitle = data.section.course?.title;
+
+  const courseActivities = courseId
+    ? await listCourseActivities({ courseId })
+    : [];
+  const assignableSeen = new Set<string>();
+  const assignableActivities: Array<{
+    type: 'QUIZ' | 'DISCUSSION' | 'INTERACTIVE';
+    entityId: string;
+    title: string;
+    assigned: boolean;
+  }> = [];
+  for (const a of courseActivities) {
+    if (
+      a.type !== 'QUIZ' &&
+      a.type !== 'DISCUSSION' &&
+      a.type !== 'INTERACTIVE'
+    ) {
+      continue;
+    }
+    const entityId = entityIdForActivity(a);
+    if (!entityId) continue;
+    const key = `${a.type}:${entityId}`;
+    if (assignableSeen.has(key)) continue;
+    assignableSeen.add(key);
+    assignableActivities.push({
+      type: a.type,
+      entityId,
+      title: a.title,
+      assigned: a.sectionIds.includes(sectionId),
+    });
+  }
+
   return (
     <AppShell
       role="professor"
-      active="sections"
-      topbarEyebrow="Faculty"
+      active="courses"
       topbarTitle={data.section.name}
     >
       <PageHeader
         breadcrumbs={[
-          { label: 'Dashboard', href: withBasePath('/dashboard/professor') },
           {
-            label: 'My sections',
-            href: withBasePath('/dashboard/professor/sections'),
+            label: 'Courses',
+            href: withBasePath('/dashboard/professor/courses'),
           },
+          ...(courseId && courseTitle
+            ? [
+                {
+                  label: courseTitle,
+                  href: withBasePath(
+                    `/dashboard/professor/courses/${courseId}/sections`,
+                  ),
+                },
+              ]
+            : []),
           { label: data.section.name },
         ]}
         eyebrow="Section"
@@ -87,6 +122,15 @@ export default async function SectionDetailsPage({
         role="professor"
         sectionId={sectionId}
         enrollmentActions={<LeaveSectionButton sectionId={data.section.id} />}
+        courseworkActions={
+          courseId ? (
+            <AssignActivityToSectionDialog
+              sectionId={sectionId}
+              sectionName={data.section.name}
+              activities={assignableActivities}
+            />
+          ) : null
+        }
         quizRowActions={(quizId) => (
           <UnassignQuizButton quizId={quizId} sectionId={sectionId} />
         )}
@@ -97,6 +141,8 @@ export default async function SectionDetailsPage({
           />
         )}
       />
+
+      <CanvasLinkPanel sectionId={sectionId} />
     </AppShell>
   );
 }

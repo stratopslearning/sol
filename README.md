@@ -67,11 +67,26 @@ npm run migrate
 npm run dev
 ```
 
-Local / StratOps production use Next.js **`basePath` `/learning`** (default when `NEXT_PUBLIC_BASE_PATH` is unset):
+**Default local / StratOps** use Next.js **`basePath` `/learning`** (when `NEXT_PUBLIC_BASE_PATH` is unset):
 
 ```
 http://localhost:3000/learning
 ```
+
+**Local teachwithsol host map** (mirrors prod www / app / docs / trust): copy
+[`scripts/sol-local-hosts.env.example`](./scripts/sol-local-hosts.env.example)
+into `.env.local`, restart `npm run dev`, then open:
+
+```
+http://www.localhost:3000
+http://app.localhost:3000
+http://docs.localhost:3000/docs
+http://trust.localhost:3000/security
+```
+
+`*.localhost` resolves to `127.0.0.1` in modern browsers (no `/etc/hosts`). Keep
+`NEXT_PUBLIC_BASE_PATH` empty and `NEXT_PUBLIC_SOL_DEMO_ONLY=false` so `/login`
+still works locally.
 
 The parallel **teachwithsol.com** Vercel project sets `NEXT_PUBLIC_BASE_PATH` to empty (no `/learning`) and enables the www / app / docs / trust host map. See [`PRODUCTION_DEPLOY.md`](./PRODUCTION_DEPLOY.md) §0.
 
@@ -94,6 +109,8 @@ Validated at boot via Zod in [`lib/env.ts`](./lib/env.ts). The full production c
 | `NEXT_PUBLIC_CLERK_SIGN_UP_URL` | `/learning/signup` (StratOps) or `/signup` (Sol) |
 | `NEXT_PUBLIC_BASE_URL` | Absolute origin (e.g. `https://www.strat-ops.net` or `https://app.teachwithsol.com`), no trailing slash, no basePath. |
 | `NEXT_PUBLIC_SOL_*_HOST` | Optional Sol multi-host map (`MARKETING` / `APP` / `DOCS` / `TRUST`). |
+| `JOBS_BACKEND` | `after` (default) or `inngest`. Local durable jobs: `inngest` + `npm run jobs:dev`. |
+| `INNGEST_EVENT_KEY` / `INNGEST_SIGNING_KEY` | Inngest Cloud only (optional with local Dev Server). |
 | `OPENAI_API_KEY` | Optional in dev; **required in production** (boot fails without it). |
 | `CRON_SECRET` | Optional in dev; **required in production** (Vercel Cron `Authorization` bearer). |
 | `CLERK_WEBHOOK_SIGNING_SECRET` | Optional in dev; **required in production** (Clerk session → audit_log webhook). |
@@ -101,8 +118,13 @@ Validated at boot via Zod in [`lib/env.ts`](./lib/env.ts). The full production c
 | `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / `STRIPE_PRICE_ID` | Required only when payments are enabled. |
 | `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | Optional in dev (in-memory rate limit). **Required in production.** |
 | `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN` | Optional but recommended in production. Session replay is disabled in app code. |
+| `FIELD_ENCRYPTION_ENABLED` | Set to `true` locally to encrypt quiz attempt answers at submit (`FIELD_ENCRYPTION_KEY` or `CONNECTOR_TOKEN_SECRET` required). |
 | `NEXT_PUBLIC_LEGAL_STREET` / `NEXT_PUBLIC_LEGAL_CITY_LINE` | Registered U.S. mailing address for footer, privacy, DMCA, and CAN-SPAM email footers. |
 | `NEXT_PUBLIC_LEGAL_DMCA_EMAIL` / `NEXT_PUBLIC_LEGAL_PRIVACY_EMAIL` | Optional overrides (defaults: `dmca@strat-ops.net`, `privacy@strat-ops.net`). |
+| `EMAIL_ENABLED` | `false` (default). Set `true` to send transactional invite/ops mail via AWS SES. Invite APIs still return claim links when off or send fails. |
+| `EMAIL_FROM` | Verified SES identity (required when `EMAIL_ENABLED=true`), e.g. `invites@teachwithsol.com`. |
+| `EMAIL_REPLY_TO` | Optional reply-to address for transactional mail. |
+| `AWS_REGION` | Required for S3 Knowledge and for SES when email is enabled. Until SES leaves sandbox, verify recipient addresses in AWS. |
 
 ---
 

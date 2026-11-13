@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import { useState } from "react";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -13,7 +12,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { QuizUnavailable } from "@/components/quiz/QuizUnavailable";
 import { QuizTimer } from "@/components/quiz/QuizTimer";
-import { Clock } from "lucide-react";
+import { Clock } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useRef, useEffect, useCallback } from "react";
 import { LocalDateTime } from "@/components/timezone/LocalDateTime";
@@ -54,14 +53,13 @@ type ResultMap = {
   feedback?: string;
 };
 
-export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole = 'STUDENT' }: QuizTakeFormProps) {
+export function QuizTakeForm({ quiz, questions, assignmentId, userId: _userId, userRole = 'STUDENT' }: QuizTakeFormProps) {
   const [answers, setAnswers] = useState<AnswerMap>({});
   const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const [results, setResults] = useState<Record<string, ResultMap> | null>(null);
-  const [score, setScore] = useState<number | null>(null);
-  const [percentage, setPercentage] = useState<number | null>(null);
-  const [gptFeedback, setGptFeedback] = useState<Record<string, string>>({});
+  const [submitted] = useState(false);
+  const [results] = useState<Record<string, ResultMap> | null>(null);
+  const [score] = useState<number | null>(null);
+  const [gptFeedback] = useState<Record<string, string>>({});
   const [timeUp, setTimeUp] = useState(false);
   const [startedAt, setStartedAt] = useState<string | null>(null);
   const [timerInitialSeconds, setTimerInitialSeconds] = useState<number | null>(null);
@@ -261,7 +259,7 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
     window.addEventListener("beforeunload", handleBeforeUnload);
 
     // For in-app navigation (Next.js)
-    const handleRouteChange = (url: string) => {
+    const handleRouteChange = (_url: string) => {
       if (Object.keys(answers).length < questions.length) {
         if (!window.confirm("You haven’t answered all questions. Submit before leaving?")) {
           throw "Route change aborted by quiz lock";
@@ -270,12 +268,12 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
         }
       }
     };
-    // @ts-ignore: router.events may not exist in App Router, but add for compatibility
+    // @ts-expect-error App Router has no router.events; kept for Pages Router compatibility
     router.events?.on("routeChangeStart", handleRouteChange);
 
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
-      // @ts-ignore
+      // @ts-expect-error App Router has no router.events; kept for Pages Router compatibility
       router.events?.off("routeChangeStart", handleRouteChange);
     };
   }, [answers, questions.length, assignmentId, quiz.id, router, startedAt, timeUp]);
@@ -284,7 +282,7 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
   const progress = Math.round((answeredCount / questions.length) * 100);
 
   // Auto-submit when time is up (only once). We flag the submission as
-  // auto-submitted so the server accepts it even past the grace period —
+  // auto-submitted so the server accepts it even past the grace period : 
   // the alternative is locking the student out of submitting at all.
   React.useEffect(() => {
     if (!timeUp || submitting || autoSubmitTriggeredRef.current) return;
@@ -362,7 +360,7 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
       console.error('Quiz submission error:', err);
       const message =
         err instanceof Error && err.name === "TimeoutError"
-          ? "Grading took too long. Please try again — your answers may have been saved."
+          ? "Grading took too long. Please try again. Your answers may have been saved."
           : (err as Error).message;
       toast.error("Submission failed", { description: message });
     } finally {
@@ -477,7 +475,7 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
         <Alert className="mb-6">
           <Clock className="h-4 w-4" />
           <AlertDescription>
-            Resuming a session that started earlier — the timer reflects your total
+            Resuming a session that started earlier. The timer reflects your total
             time allowed for this attempt.
           </AlertDescription>
         </Alert>
@@ -486,7 +484,7 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
         <Alert className="mb-6">
           <Clock className="h-4 w-4" />
           <AlertDescription>
-            Grading your answers — this may take 1–2 minutes for short-answer quizzes.
+            Grading your answers. This may take 1–2 minutes for short-answer quizzes.
             Please keep this tab open.
           </AlertDescription>
         </Alert>
@@ -495,7 +493,7 @@ export function QuizTakeForm({ quiz, questions, assignmentId, userId, userRole =
         <Alert variant="destructive" className="mb-6">
           <Clock className="h-4 w-4" />
           <AlertDescription>
-            Time&apos;s up — your quiz is being submitted automatically.
+            Time&apos;s up. Your quiz is being submitted automatically.
           </AlertDescription>
         </Alert>
       )}

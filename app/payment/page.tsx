@@ -1,7 +1,8 @@
-import { CheckCircle2, Lock } from 'lucide-react';
+import { CheckCircle2, Lock } from '@/components/icons';
 
 import { AuthShell } from '@/components/auth/AuthShell';
 import { Button } from '@/components/ui/button';
+import { resolveDashboardPath } from '@/lib/auth';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import { apiUrl, withBasePath } from '@/lib/basePath';
 import { paymentsEnabled } from '@/lib/featureFlags';
@@ -33,9 +34,7 @@ export default async function PaymentPage() {
   // bookmark, or a stale link in an email) is sent straight to their
   // dashboard so they don't see a checkout flow that wouldn't process.
   if (!paymentsEnabled()) {
-    if (user.role === 'PROFESSOR') appRedirect('/dashboard/professor');
-    if (user.role === 'ADMIN') appRedirect('/dashboard/admin');
-    appRedirect('/dashboard/student');
+    appRedirect(await resolveDashboardPath(user));
   }
 
   if (user.paid) {

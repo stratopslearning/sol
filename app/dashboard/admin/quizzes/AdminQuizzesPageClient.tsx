@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { MoreHorizontal, Plus } from "lucide-react";
+import { MoreHorizontal, Plus } from "@/components/icons";
 import { toast } from "sonner";
 
 import { QuizEditForm } from "@/components/quiz/QuizEditForm";
@@ -211,22 +211,26 @@ export default function AdminQuizzesPageClient({
       <PageHeader
         breadcrumbs={[
           { label: "Overview", href: withBasePath("/dashboard/admin") },
-          { label: "Quizzes" },
+          { label: "Assignments" },
         ]}
-        eyebrow="Coursework"
-        title="Quizzes."
-        description="Compose, assign, and audit every quiz across the platform. Each quiz can belong to one or more sections."
+        eyebrow="Assignments"
+        title="Quizzes"
+        description="Quiz audit for the default workspace. Faculty author lessons and discussions in their own workspace."
         actions={
           <Button asChild>
             <Link href="/dashboard/admin/quizzes/new">
               <Plus className="h-4 w-4" />
-              Compose quiz
+              New quiz
             </Link>
           </Button>
         }
       />
 
-      <div className="mt-10 flex flex-col gap-4">
+      <p className="mt-4 text-xs text-ink-faint">
+        Scoped to the default workspace catalog.
+      </p>
+
+      <div className="mt-6 flex flex-col gap-4">
         <div className="flex flex-col md:flex-row gap-3">
           <div className="md:w-56">
             <Select value={sectionFilter} onValueChange={setSectionFilter}>
@@ -331,16 +335,16 @@ export default function AdminQuizzesPageClient({
                             {quiz.endDate ? (
                               <LocalDateTime stacked value={quiz.endDate} />
                             ) : (
-                              "—"
+                              "-"
                             )}
                           </TableCell>
                           <TableCell className="tnum text-ink-muted align-top">
-                            {quiz.maxAttempts ?? "—"}
+                            {quiz.maxAttempts ?? "-"}
                           </TableCell>
                           <TableCell className="tnum text-ink-muted align-top">
                             {quiz.timeLimit != null
                               ? `${quiz.timeLimit} min`
-                              : "—"}
+                              : "-"}
                           </TableCell>
                           <TableCell className="tnum text-ink-muted align-top">
                             {quiz.questions?.length ?? 0}

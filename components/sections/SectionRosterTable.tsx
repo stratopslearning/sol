@@ -1,8 +1,11 @@
 'use client';
 
 import { useCallback, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   Pagination,
@@ -29,6 +32,7 @@ import {
 } from '@/components/ui/table';
 import { EmptyState } from '@/components/patterns/EmptyState';
 import { useFilteredSortedPage } from '@/hooks/useFilteredSortedPage';
+import { apiUrl } from '@/lib/basePath';
 import { compareDates, compareStringsIgnoreCase } from '@/lib/listSort';
 import {
   comparePersonsByLastName,
@@ -74,21 +78,75 @@ function rosterCompare(a: RosterEnrollmentRow, b: RosterEnrollmentRow, mode: Ros
   }
 }
 
+function DropStudentButton({
+  sectionId,
+  enrollmentId,
+  name,
+}: {
+  sectionId: string;
+  enrollmentId: string;
+  name: string;
+}) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+
+  async function onDrop() {
+    if (!confirm(`Remove ${name} from this section?`)) return;
+    setBusy(true);
+    try {
+      const res = await fetch(
+        apiUrl(
+          `/api/professor/section/${sectionId}/roster/${enrollmentId}`,
+        ),
+        { method: 'DELETE' },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error || 'Could not remove student');
+        return;
+      }
+      toast.success('Student removed from section');
+      router.refresh();
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      disabled={busy}
+      onClick={onDrop}
+    >
+      Remove
+    </Button>
+  );
+}
+
 export function SectionRosterTable({
   title,
   description,
   enrollments,
   emptyTitle,
   emptyDescription,
+  sectionId,
+  canRemoveStudents,
 }: {
   title: string;
   description?: string;
   enrollments: RosterEnrollmentRow[];
   emptyTitle: string;
   emptyDescription: string;
+  sectionId?: string;
+  canRemoveStudents?: boolean;
 }) {
   const [sortMode, setSortMode] = useState<RosterSortMode>('LAST_NAME');
   const [search, setSearch] = useState('');
+  const showActions = Boolean(canRemoveStudents && sectionId);
 
   const compareFn = useCallback(
     (a: RosterEnrollmentRow, b: RosterEnrollmentRow) =>
@@ -171,12 +229,16 @@ export function SectionRosterTable({
               <TableHead>Email</TableHead>
               <TableHead>Enrolled</TableHead>
               <TableHead>Status</TableHead>
+              {showActions ? <TableHead className="w-24" /> : null}
             </TableRow>
           </TableHeader>
           <TableBody>
             {paginated.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={4} className="text-center text-ink-muted py-8">
+                <TableCell
+                  colSpan={showActions ? 5 : 4}
+                  className="text-center text-ink-muted py-8"
+                >
                   No matches.
                 </TableCell>
               </TableRow>
@@ -187,7 +249,7 @@ export function SectionRosterTable({
                     {formatPersonName(row.person)}
                   </TableCell>
                   <TableCell className="text-ink-muted text-sm">
-                    {row.person.email ?? '—'}
+                    {row.person.email ?? '-'}
                   </TableCell>
                   <TableCell className="text-sm text-ink-muted tnum">
                     {new Date(row.enrolledAt).toLocaleDateString()}
@@ -199,6 +261,17 @@ export function SectionRosterTable({
                       {row.status}
                     </Badge>
                   </TableCell>
+                  {showActions ? (
+                    <TableCell>
+                      {row.status === 'ACTIVE' && sectionId ? (
+                        <DropStudentButton
+                          sectionId={sectionId}
+                          enrollmentId={row.id}
+                          name={formatPersonName(row.person)}
+                        />
+                      ) : null}
+                    </TableCell>
+                  ) : null}
                 </TableRow>
               ))
             )}

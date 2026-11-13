@@ -5,7 +5,7 @@
  * client code because `NEXT_PUBLIC_*` vars are inlined at build time.
  *
  * Defaults are chosen so the platform behaves as if the flag is OFF when the
- * env var is unset — production toggles are then a single env change, not a
+ * env var is unset: production toggles are then a single env change, not a
  * code change.
  */
 

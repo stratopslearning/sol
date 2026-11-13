@@ -1,19 +1,37 @@
 /**
- * Unit tests for the in-memory rate limiter fallback. We don't test Upstash
- * here — the integration test environment can swap in the real driver.
+ * Unit tests for the in-memory rate limiter fallback. We don't test a live
+ * Upstash instance here — runtime errors are mocked.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { rateLimit } from '@/lib/rateLimit';
+const limitMock = vi.fn();
+
+vi.mock('@upstash/redis', () => ({
+  Redis: class Redis {
+    constructor(_opts: unknown) {}
+  },
+}));
+
+vi.mock('@upstash/ratelimit', () => ({
+  Ratelimit: class Ratelimit {
+    static slidingWindow() {
+      return { type: 'sliding' };
+    }
+    async limit(key: string) {
+      return limitMock(key);
+    }
+  },
+}));
+
+import { rateLimit, resetRateLimitForTests } from '@/lib/rateLimit';
 
 const baseKey = () => `${Date.now()}-${Math.random()}`;
 
 beforeEach(() => {
-  // Make sure Upstash env vars are unset so rateLimit() takes the in-memory
-  // path. Vitest gives each test a fresh process.env unless we mutate it.
+  resetRateLimitForTests();
+  limitMock.mockReset();
   delete process.env.UPSTASH_REDIS_REST_URL;
   delete process.env.UPSTASH_REDIS_REST_TOKEN;
-  // Fail-closed production path must not trigger in unit tests.
   vi.stubEnv('NODE_ENV', 'test');
 });
 
@@ -60,5 +78,51 @@ describe('rateLimit (production fail-closed)', () => {
     });
     expect(r.success).toBe(false);
     expect(r.remaining).toBe(0);
+  });
+});
+
+describe('rateLimit (Upstash runtime errors)', () => {
+  function stubUpstashEnv() {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('UPSTASH_REDIS_REST_URL', 'https://example.upstash.io');
+    vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', 'token');
+  }
+
+  it('falls back to in-memory when Upstash quota is exceeded', async () => {
+    stubUpstashEnv();
+    limitMock.mockRejectedValue(
+      new Error(
+        'Command failed: ERR max requests limit exceeded. Limit: 500000, Usage: 500001',
+      ),
+    );
+    const key = baseKey();
+    const first = await rateLimit({ key, limit: 3, windowMs: 60_000 });
+    expect(first.success).toBe(true);
+    expect(limitMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('circuit-breaks so later calls skip Upstash after a quota error', async () => {
+    stubUpstashEnv();
+    limitMock.mockRejectedValue(
+      new Error(
+        'Command failed: ERR max requests limit exceeded. Limit: 500000, Usage: 500001',
+      ),
+    );
+    await rateLimit({ key: baseKey(), limit: 5, windowMs: 60_000 });
+    await rateLimit({ key: baseKey(), limit: 5, windowMs: 60_000 });
+    expect(limitMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('still enforces the in-memory cap after falling back', async () => {
+    stubUpstashEnv();
+    limitMock.mockRejectedValue(
+      new Error(
+        'Command failed: ERR max requests limit exceeded. Limit: 500000, Usage: 500001',
+      ),
+    );
+    const key = baseKey();
+    await rateLimit({ key, limit: 1, windowMs: 60_000 });
+    const over = await rateLimit({ key, limit: 1, windowMs: 60_000 });
+    expect(over.success).toBe(false);
   });
 });

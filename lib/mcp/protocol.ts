@@ -32,7 +32,7 @@ const SERVER_INSTRUCTIONS = `Tools for SOL (academic coursework platform) facult
 authenticated professor: their sections, quizzes, gradebooks, and discussion
 bots. Start with list_sections / list_quizzes to discover ids before calling
 detail or mutation tools. Grades, attempts, and transcripts are FERPA
-education records — every access is logged to the institution's audit trail.
+education records: every access is logged to the institution's audit trail.
 Destructive tools (archive_quiz, leave_section, unassign_*, section_copy_quiz,
 regrade_attention) require confirm=true; ask the user before setting it.`;
 
@@ -217,7 +217,7 @@ export async function handleMcpMessage(
   }
 
   if (isNotification(message)) {
-    // notifications/initialized, notifications/cancelled, etc. — nothing to do.
+    // notifications/initialized, notifications/cancelled, etc.. nothing to do.
     return null;
   }
 

@@ -16,8 +16,12 @@ import { config as loadEnv } from 'dotenv';
 import { neonConfig, Pool } from '@neondatabase/serverless';
 import ws from 'ws';
 
+import { assertDevDatabaseOrExit } from './lib/assertDevDatabase';
+
 loadEnv({ path: '.env', quiet: true });
 loadEnv({ path: '.env.local', override: true, quiet: true });
+
+assertDevDatabaseOrExit({ urlEnvVars: ['DATABASE_URL'] });
 
 if (typeof WebSocket === 'undefined') {
   neonConfig.webSocketConstructor = ws as any;

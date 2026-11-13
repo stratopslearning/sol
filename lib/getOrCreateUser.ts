@@ -31,17 +31,35 @@ export interface UserData {
   email: string;
   firstName: string | null;
   lastName: string | null;
-  role: 'STUDENT' | 'PROFESSOR' | 'ADMIN';
+  platformStaff: boolean;
   paid: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
 
-/** Public client payload — never includes stripeCustomerId / lastSyncedAt. */
+/** Public client payload: never includes stripeCustomerId / lastSyncedAt. */
 export type PublicUserDto = Pick<
   UserData,
-  'id' | 'role' | 'paid' | 'firstName' | 'lastName' | 'email'
+  'id' | 'platformStaff' | 'paid' | 'firstName' | 'lastName' | 'email'
 >;
+
+/**
+ * Platform staff = `users.platform_staff` only.
+ * Legacy role='ADMIN' fallback is off unless LEGACY_ADMIN_ROLE_FALLBACK=1
+ * (escape hatch during rollback). Migration 0044 / backfill-platform-staff
+ * must have run before relying on this.
+ */
+export function resolvePlatformStaff(row: {
+  platformStaff?: boolean | null;
+  role?: string | null;
+}): boolean {
+  if (row.platformStaff) return true;
+  if (process.env.LEGACY_ADMIN_ROLE_FALLBACK === '1') {
+    const { role: legacyUsersRoleColumn } = row;
+    return legacyUsersRoleColumn === 'ADMIN';
+  }
+  return false;
+}
 
 export function toUserData(row: {
   id: string;
@@ -49,10 +67,11 @@ export function toUserData(row: {
   email: string;
   firstName: string | null;
   lastName: string | null;
-  role: 'STUDENT' | 'PROFESSOR' | 'ADMIN';
+  platformStaff?: boolean | null;
   paid: boolean;
   createdAt: Date;
   updatedAt: Date;
+  role?: string | null;
 }): UserData {
   return {
     id: row.id,
@@ -60,7 +79,7 @@ export function toUserData(row: {
     email: row.email,
     firstName: row.firstName,
     lastName: row.lastName,
-    role: row.role,
+    platformStaff: resolvePlatformStaff(row),
     paid: row.paid,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -70,7 +89,7 @@ export function toUserData(row: {
 export function toPublicUserDto(user: UserData): PublicUserDto {
   return {
     id: user.id,
-    role: user.role,
+    platformStaff: user.platformStaff,
     paid: user.paid,
     firstName: user.firstName,
     lastName: user.lastName,
@@ -113,7 +132,7 @@ function getCachedByUserId(userId: string): UserData | undefined {
 
 /**
  * Drop cached UserData. Pass nothing to clear the isolate maps (tests).
- * Call on any write to `role` or `paid`.
+ * Call on any write to `paid` or `platformStaff`.
  */
 export function invalidateUserCache(args: {
   clerkId?: string;
@@ -147,7 +166,8 @@ export function invalidateUserCache(args: {
  *     and recreated without creating a second SOL profile.
  *   - Insert uses `ON CONFLICT (clerk_id) DO UPDATE` for concurrent first logins.
  *   - Partial unique index on `lower(email)` prevents duplicate non-empty emails.
- *   - `role` and `paid` are NEVER overwritten on sync — admins / Stripe own those.
+ *   - `paid` and `platformStaff` are NEVER overwritten on sync: admins / Stripe own those.
+ *   - Workspace membership and scoped grants are the authority for what someone can do.
  */
 /**
  * Staging k6 path: resolve a pre-seeded user from load-test headers.
@@ -195,7 +215,7 @@ export const getOrCreateUser = cache(getOrCreateUserImpl);
 /**
  * Same upsert as `getOrCreateUser`, but for callers that already resolved the
  * Clerk user id themselves (e.g. the MCP OAuth bearer path, where there is no
- * Clerk session cookie — `auth({ acceptsToken: 'oauth_token' })` returns the
+ * Clerk session cookie. `auth({ acceptsToken: 'oauth_token' })` returns the
  * token subject instead).
  */
 async function getOrCreateUserByClerkIdUncached(
@@ -259,7 +279,6 @@ async function getOrCreateUserByClerkIdUncached(
         email,
         firstName,
         lastName,
-        role: 'STUDENT',
         paid: false,
         lastSyncedAt: new Date(),
       })
@@ -316,10 +335,39 @@ async function getUserImpl(): Promise<UserData | null> {
 export const getUser = cache(getUserImpl);
 
 /**
+ * Fresh DB read of paid/platformStaff for entitlement checks.
+ * Bypasses the isolate TTL cache so Stripe/admin updates are visible across
+ * warm Lambdas without waiting for USER_CACHE_TTL_MS.
+ */
+export async function refreshUserEntitlements(
+  user: UserData,
+): Promise<UserData> {
+  const row = await db.query.users.findFirst({
+    where: eq(dbUsers.id, user.id),
+    columns: { id: true, paid: true, platformStaff: true },
+  });
+  if (!row) return user;
+  const platformStaff = resolvePlatformStaff(row);
+  if (row.paid === user.paid && platformStaff === user.platformStaff) {
+    return user;
+  }
+  const next: UserData = {
+    ...user,
+    paid: row.paid,
+    platformStaff,
+  };
+  invalidateUserCache({ clerkId: user.clerkId, userId: user.id });
+  rememberUser(next);
+  return next;
+}
+
+/**
  * Updates user data in the database
  */
 export async function updateUser(
-  updates: Partial<Pick<UserData, 'role' | 'paid' | 'firstName' | 'lastName'>>,
+  updates: Partial<
+    Pick<UserData, 'paid' | 'firstName' | 'lastName' | 'platformStaff'>
+  >,
 ): Promise<UserData | null> {
   try {
     const { userId } = await auth();

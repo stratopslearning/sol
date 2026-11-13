@@ -1,15 +1,18 @@
 "use client";
 
+import Link from "next/link";
 import { motion, useReducedMotion } from "framer-motion";
 
-import LeaveSectionButton from "@/components/LeaveSectionButton";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { withBasePath } from "@/lib/basePath";
 
 interface Enrollment {
   id: string;
   section: {
     id: string;
     name: string;
+    course?: { title: string } | null;
   };
 }
 
@@ -52,17 +55,31 @@ export function EnrollmentList({ enrollments }: EnrollmentListProps) {
           className="flex items-center justify-between gap-3 px-4 py-3.5"
         >
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-medium text-ink truncate">
-              {enrollment.section.name}
-            </div>
-            <div className="text-xs text-ink-faint mt-0.5">Section</div>
+            <Link
+              href={withBasePath(
+                `/dashboard/student/sections/${enrollment.section.id}`,
+              )}
+              className="block min-w-0"
+            >
+              <div className="truncate text-sm font-medium text-ink underline-offset-2 hover:underline">
+                {enrollment.section.name}
+              </div>
+              <div className="mt-0.5 truncate text-xs text-ink-faint">
+                {enrollment.section.course?.title || "Section"}
+              </div>
+            </Link>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex shrink-0 items-center gap-1.5">
             <Badge variant="success">Enrolled</Badge>
-            <LeaveSectionButton
-              sectionId={enrollment.section.id}
-              sectionName={enrollment.section.name}
-            />
+            <Button asChild size="sm">
+              <Link
+                href={withBasePath(
+                  `/dashboard/student/sections/${enrollment.section.id}`,
+                )}
+              >
+                Open
+              </Link>
+            </Button>
           </div>
         </motion.li>
       ))}

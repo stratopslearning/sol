@@ -2,7 +2,7 @@
 
 Visual system for marketing, auth, and any surface that should feel like the public brand. Product identity and voice live in [`IDENTITY.md`](./IDENTITY.md). Prefer CSS tokens in `app/globals.css` (scoped under `.mkt` for marketing) over hard-coded colors.
 
-**North star:** Academic retro / pastel vintage SaaS. Warm paper, Instrument Serif display, olive CTAs, impressionist oil paintings as the main visual idea. Calm, not cartoon; editorial, not enterprise gray.
+**North star:** Academic retro / pastel vintage SaaS. Warm cream paper, Instrument Serif display, ink-black CTAs, impressionist oil paintings as the main visual idea. Calm, not cartoon; editorial, not enterprise gray.
 
 ---
 
@@ -10,7 +10,7 @@ Visual system for marketing, auth, and any surface that should feel like the pub
 
 | Surface | Wrapper | Theme |
 | --- | --- | --- |
-| App-wide (`:root`) | Global CSS tokens | Academic cream / olive / Instrument Serif + Geist |
+| App-wide (`:root`) | Global CSS tokens | Academic cream / ink / Instrument Serif + Geist |
 | Landing | `.mkt` on the page root | Academic palette; **theme toggle** in nav (warm dark) |
 | Auth (login / signup / payment) | `.auth-page.mkt` | Follows theme; painting overlays use tokens |
 | Docs / legal / security | `.mkt` + solid glass nav | Follows theme |
@@ -34,18 +34,18 @@ Marketing and product share the warm academic light/dark tokens. Painting sectio
 | `--ink-faint` | `#8a877c` | Eyebrows, captions |
 | `--rule` | `#ddd6c6` | Hairlines, borders |
 | `--rule-strong` | `#c9c0ad` | Stronger borders |
-| `--brand` | `#4a5240` | Olive primary / CTAs |
-| `--brand-hover` | `#3b4234` | CTA hover |
-| `--brand-soft` | `#e4e7dc` | Soft brand wash |
+| `--brand` | `#1c1b17` | Ink primary / CTAs |
+| `--brand-hover` | `#000000` | CTA hover |
+| `--brand-soft` | `#ebe6da` | Soft cream wash |
 | `--brand-fg` | `#f7f4ec` | Text on brand |
 | `--accent` | `#c47a3a` | Terracotta, sparingly |
 | `--accent-soft` | `#f3e6d6` | Soft accent wash |
-| `--mkt-leaf` | `#6d7f5c` | Atmosphere / haze |
+| `--mkt-leaf` | `#c9c0ad` | Atmosphere / haze |
 | `--mkt-sky` | `#c5d5e0` | Atmosphere / haze |
 
 Shadows: `--shadow-paper`, `--shadow-paper-lg` (soft, warm, low contrast).
 
-Avoid purple gradients, neon glow, pure black/white, and default “AI purple” themes.
+Avoid purple gradients, neon glow, olive/green accents, and default “AI purple” themes. Prefer ink on cream.
 
 ---
 
@@ -77,7 +77,7 @@ Clamp examples already in use:
 - Radius: generous. Cards ~`1.15rem`–`1.5rem` (`.mkt-card`). Pills `999px` (`.mkt-pill`) for CTAs, nav shell when solid, auth inputs.
 - Cards: only when they hold interaction (FAQ accordion, step list). Prefer open layout + painting over card grids of product chrome.
 - Borders: hairline `--rule`, never heavy frames.
-- Buttons: olive filled primary; ghost / frosted outline secondary. Pill shape on marketing and auth.
+- Buttons: ink filled primary; ghost / frosted outline secondary. Pill shape on marketing and auth.
 - Scrollbar: thin floating pill thumb, invisible track (global).
 
 ---

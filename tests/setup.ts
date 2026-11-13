@@ -35,6 +35,18 @@ for (const [key, value] of Object.entries(DEFAULT_ENV)) {
   if (!process.env[key]) process.env[key] = value;
 }
 
+// Unit project must load modules that import `@/app/db` / `lib/env` without a
+// real database. CI often injects empty secrets.TEST_DATABASE_URL as "".
+// This stub is never meant to be connected — unit tests mock DB I/O.
+const UNIT_DB_STUB =
+  'postgresql://unit_unused:unit@127.0.0.1:5432/unit_unused';
+if (!process.env.DATABASE_URL?.trim()) {
+  process.env.DATABASE_URL = UNIT_DB_STUB;
+}
+if (!process.env.TEST_DATABASE_URL?.trim()) {
+  process.env.TEST_DATABASE_URL = UNIT_DB_STUB;
+}
+
 if (typeof globalThis.WebSocket === 'undefined') {
   neonConfig.webSocketConstructor = ws as any;
 }

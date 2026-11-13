@@ -16,9 +16,13 @@ Complete in the OpenAI organization that holds the production `OPENAI_API_KEY`:
 
 - **No profile PII in prompts:** grading and chatbot paths must not send student name, email, or Clerk IDs to OpenAI.
 - **Minimization:** [`lib/ai/minimizeEducationPayload.ts`](../lib/ai/minimizeEducationPayload.ts) redacts email-shaped strings from outbound student text.
-- **Chatbots:** [`lib/chatbot/safeQuizContext.ts`](../lib/chatbot/safeQuizContext.ts) never injects answer keys or attempt feedback.
+- **Student text as data:** prompts wrap student content in delimiters; injection answers score 0 in code ([`lib/gradingEvidence.ts`](../lib/gradingEvidence.ts)).
+- **Chatbots:** hard assessment lock omits quiz context during open attempts ([`lib/chatbot/assessmentLock.ts`](../lib/chatbot/assessmentLock.ts)); [`safeQuizContext.ts`](../lib/chatbot/safeQuizContext.ts) never injects keys.
 - **Access:** AI feedback (`gptFeedback`) is part of the education record and is role-gated via [`lib/quizAccess.ts`](../lib/quizAccess.ts).
-- **Integrity:** scores are computed in TypeScript from rubric matches; model output alone is not trusted as a raw numeric grade.
+- **Integrity:** scores are computed in TypeScript from rubric matches; evidence quotes are substring-checked; low-confidence / dual-run disagreement → `manual_review`.
+- **Provenance:** store `promptVersion` + resolved model/tier on grading and authoring outputs; router in [`lib/ai/modelRouter.ts`](../lib/ai/modelRouter.ts).
+- **Override few-shot:** instructor overrides may be stored as tenant-scoped examples in `grading_override_examples` (never cross-tenant).
+- **Grading materials context:** short-answer grading may include retrieved course-material excerpts for terminology only; the reference answer remains the sole scoring standard. Materials text is ephemeral (not stored on the attempt).
 
 ## Braintrust (LLM/agent observability + evals)
 

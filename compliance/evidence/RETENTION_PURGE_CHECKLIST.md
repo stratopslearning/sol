@@ -15,7 +15,7 @@
 ## Scope
 
 Tables/entities to purge (example dry-run scope):  
-Soft-deleted quiz / section / course rows past retention, or a specific student education-record set named by the institution.
+Soft-deleted quiz / section / course / **course_material** rows past retention, or a specific student education-record set named by the institution. Material purge must delete S3 objects via `/api/admin/materials/[id]/purge`.
 
 ## Steps
 

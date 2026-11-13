@@ -3,10 +3,12 @@ import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { db } from '@/app/db';
-import { attempts, professorSections } from '@/app/db/schema';
+import { attempts } from '@/app/db/schema';
 import { ApiError, jsonError } from '@/lib/api/errors';
 import { requireProfessorApi } from '@/lib/api/professorAuth';
+import { authorizeOnSection } from '@/lib/authz/courseAccess';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
+import { extractRequestMeta, logAudit } from '@/lib/audit';
 import { regradeAttempt } from '@/lib/regradeAttempt';
 
 export const dynamic = 'force-dynamic';
@@ -62,21 +64,32 @@ export async function POST(
       );
     }
 
-    if (user.role !== 'ADMIN') {
-      const professorSectionsList = await db.query.professorSections.findMany({
-        where: eq(professorSections.professorId, user.id),
-      });
-      const enrolledSectionIds = professorSectionsList.map(
-        (section) => section.sectionId,
-      );
-
-      if (!enrolledSectionIds.includes(attempt.sectionId)) {
-        return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-      }
+    if (
+      !(await authorizeOnSection(user, 'regrade.resolve', attempt.sectionId))
+    ) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
     const result = await regradeAttempt(attemptId, {
       fallbackOnly: parsed.data.fallbackOnly,
+    });
+
+    const { ip, userAgent } = extractRequestMeta(_req);
+    await logAudit({
+      actorUserId: user.id,
+      actorClerkId: user.clerkId,
+      action: 'education.attempt.regrade',
+      targetType: 'attempt',
+      targetId: attemptId,
+      metadata: {
+        fallbackOnly: parsed.data.fallbackOnly,
+        regradedQuestionCount: result.regradedQuestionCount,
+        pendingQuestionCount: result.pendingQuestionCount,
+        score: result.score,
+        gradingStatus: result.gradingStatus,
+      },
+      ip,
+      userAgent,
     });
 
     return NextResponse.json({

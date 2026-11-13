@@ -67,14 +67,18 @@ async function main() {
         email: `professor${LOADTEST_EMAIL_DOMAIN}`,
         firstName: 'Load',
         lastName: 'Professor',
-        role: 'PROFESSOR',
         paid: true,
       })
       .returning();
 
+    const { DEFAULT_WORKSPACE_ID } = await import('@/app/db/schema');
+    const { ensureDefaultWorkspace } = await import('@/lib/workspace');
+    await ensureDefaultWorkspace();
     const [course] = await db
       .insert(courses)
       .values({
+        workspaceId: DEFAULT_WORKSPACE_ID,
+        tenantId: DEFAULT_WORKSPACE_ID,
         title: 'Load Test Course',
         description: 'Synthetic course for k6 exam simulation',
         status: 'ACTIVE',
@@ -190,7 +194,7 @@ async function main() {
         email: `student${n}${LOADTEST_EMAIL_DOMAIN}`,
         firstName: 'Load',
         lastName: `Student${n}`,
-        role: 'STUDENT' as const,
+        
         paid: true,
       };
     });

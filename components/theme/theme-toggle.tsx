@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Moon, Sun } from "lucide-react";
+import { Monitor, Moon, Sun } from "@/components/icons";
 import { useTheme } from "next-themes";
 
 import { cn } from "@/lib/utils";
@@ -12,25 +12,42 @@ interface ThemeToggleProps {
   variant?: "default" | "ghost";
 }
 
+const CYCLE = ["light", "dark", "system"] as const;
+type ThemeChoice = (typeof CYCLE)[number];
+
+function nextTheme(current: string | undefined): ThemeChoice {
+  const i = CYCLE.indexOf((current as ThemeChoice) ?? "system");
+  return CYCLE[(i + 1) % CYCLE.length]!;
+}
+
 export function ThemeToggle({
   className,
   variant = "default",
 }: ThemeToggleProps) {
-  const { resolvedTheme, setTheme } = useTheme();
+  const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = React.useState(false);
 
   React.useEffect(() => {
     setMounted(true);
   }, []);
 
-  const isDark = mounted && resolvedTheme === "dark";
+  const active: ThemeChoice = mounted
+    ? ((CYCLE.includes(theme as ThemeChoice) ? theme : "system") as ThemeChoice)
+    : "system";
+
+  const label =
+    active === "light"
+      ? "Light mode (click for dark)"
+      : active === "dark"
+        ? "Dark mode (click for system)"
+        : "System theme (click for light)";
 
   return (
     <button
       type="button"
-      onClick={() => setTheme(isDark ? "light" : "dark")}
-      aria-label={isDark ? "Switch to light theme" : "Switch to dark theme"}
-      title={isDark ? "Light mode" : "Dark mode"}
+      onClick={() => setTheme(nextTheme(theme))}
+      aria-label={label}
+      title={label}
       className={cn(
         "relative inline-flex h-9 w-9 items-center justify-center rounded-full transition-colors",
         variant === "default" && [
@@ -47,17 +64,25 @@ export function ThemeToggle({
       <Sun
         className={cn(
           "h-4 w-4 transition-all",
-          isDark
-            ? "scale-0 -rotate-90 opacity-0"
-            : "scale-100 rotate-0 opacity-100",
+          active === "light"
+            ? "scale-100 rotate-0 opacity-100"
+            : "scale-0 -rotate-90 opacity-0",
         )}
       />
       <Moon
         className={cn(
           "absolute h-4 w-4 transition-all",
-          isDark
+          active === "dark"
             ? "scale-100 rotate-0 opacity-100"
             : "scale-0 rotate-90 opacity-0",
+        )}
+      />
+      <Monitor
+        className={cn(
+          "absolute h-4 w-4 transition-all",
+          active === "system"
+            ? "scale-100 rotate-0 opacity-100"
+            : "scale-0 opacity-0",
         )}
       />
     </button>

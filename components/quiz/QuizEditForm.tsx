@@ -3,7 +3,6 @@
 import { apiUrl, withBasePath } from '@/lib/basePath';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,13 +14,12 @@ import {
   Plus, 
   Trash2, 
   Save, 
-  Eye,
   FileText,
   Clock,
   Users,
   Target,
   AlertCircle
-} from 'lucide-react';
+} from '@/components/icons';
 import { SectionMultiSelect } from '@/components/ui/SectionMultiSelect';
 import {
   buildQuizDescriptionWithMetadata,
@@ -279,7 +277,16 @@ export function QuizEditForm({ quiz, courses, apiEndpoint = `/api/professor/quiz
           startDate: startDateTime,
           endDate: endDateTime,
           questions: questions.map((q, index) => ({
-            ...q,
+            id: q.id,
+            type: q.type,
+            question: q.question,
+            // Only send options for MCQ — null breaks Zod array validation.
+            options:
+              q.type === 'MULTIPLE_CHOICE' && Array.isArray(q.options)
+                ? q.options
+                : undefined,
+            correctAnswer: q.correctAnswer ?? undefined,
+            points: q.points,
             order: index + 1,
           })),
           sectionIds,
@@ -290,7 +297,9 @@ export function QuizEditForm({ quiz, courses, apiEndpoint = `/api/professor/quiz
         if (onSuccess) {
           onSuccess();
         } else {
-          router.push(`/dashboard/professor/quizzes?success=true&quizId=${quiz.id}`);
+          router.push(
+            `/dashboard/professor/assignments?type=QUIZ&success=true&quizId=${quiz.id}`,
+          );
         }
       } else {
         let message = 'Failed to update quiz';

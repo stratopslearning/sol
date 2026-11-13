@@ -8,24 +8,26 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import {
-  attempts,
   auditLog,
   courses,
   questions,
   quizzes,
   sections,
   users,
+  workspaceLicenses,
+  workspaces,
 } from '@/app/db/schema';
-import { logAudit } from '@/lib/audit';
 import { activeOnly } from '@/lib/db/filters';
 
 import { closeTestDb, getTestDb, type TestDb } from '../helpers/db';
 import {
   makeCourse,
+  makeLicense,
   makeQuestion,
   makeQuiz,
   makeSection,
   makeUser,
+  makeWorkspace,
 } from '../helpers/factories';
 
 const skip = !process.env.TEST_DATABASE_URL;
@@ -35,6 +37,9 @@ describe.skipIf(skip)('admin CRUD soft-delete + audit', () => {
   const cleanup: Array<() => Promise<unknown>> = [];
 
   beforeAll(() => {
+    // App helpers (logAudit → @/app/db) must hit the same DB as factories.
+    process.env.DATABASE_URL = process.env.TEST_DATABASE_URL!;
+    (globalThis as { __neonPool__?: unknown }).__neonPool__ = undefined;
     db = getTestDb();
   });
 
@@ -50,7 +55,7 @@ describe.skipIf(skip)('admin CRUD soft-delete + audit', () => {
   });
 
   it('soft-deleting a quiz hides it from active-only reads', async () => {
-    const professor = await makeUser(db, { role: 'PROFESSOR' });
+    const professor = await makeUser(db, {});
     const quiz = await makeQuiz(db, professor.id, { title: 'SoftDelete Test' });
     cleanup.push(() => db.delete(quizzes).where(eq(quizzes.id, quiz.id)));
     cleanup.push(() => db.delete(users).where(eq(users.id, professor.id)));
@@ -79,7 +84,7 @@ describe.skipIf(skip)('admin CRUD soft-delete + audit', () => {
   });
 
   it('purging a quiz cascades to its questions', async () => {
-    const professor = await makeUser(db, { role: 'PROFESSOR' });
+    const professor = await makeUser(db, {});
     const quiz = await makeQuiz(db, professor.id);
     const q1 = await makeQuestion(db, quiz.id);
     cleanup.push(() => db.delete(users).where(eq(users.id, professor.id)));
@@ -102,23 +107,29 @@ describe.skipIf(skip)('admin CRUD soft-delete + audit', () => {
   });
 
   it('logAudit writes an audit row', async () => {
-    const admin = await makeUser(db, { role: 'ADMIN' });
-    cleanup.push(() => db.delete(auditLog).where(eq(auditLog.actorUserId, admin.id)));
-    cleanup.push(() => db.delete(users).where(eq(users.id, admin.id)));
+    const ws = await makeWorkspace(db, { type: 'department' });
+    await makeLicense(db, ws.id);
+    const action = `admin.test.action.${Date.now()}`;
+    cleanup.push(() => db.delete(auditLog).where(eq(auditLog.action, action)));
+    cleanup.push(() =>
+      db.delete(workspaceLicenses).where(eq(workspaceLicenses.workspaceId, ws.id)),
+    );
+    cleanup.push(() => db.delete(workspaces).where(eq(workspaces.id, ws.id)));
 
-    await logAudit({
-      actorUserId: admin.id,
-      actorClerkId: admin.clerkId,
-      action: 'admin.test.action',
+    // Import after DATABASE_URL pin so @/app/db shares TEST_DATABASE_URL.
+    const { logAudit: logAuditFresh } = await import('@/lib/audit');
+    await logAuditFresh({
+      action,
       targetType: 'test',
       targetId: 'abc-123',
       metadata: { foo: 'bar' },
+      tenantId: ws.id,
     });
 
     const rows = await db.query.auditLog.findMany({
-      where: eq(auditLog.actorUserId, admin.id),
+      where: eq(auditLog.action, action),
     });
     expect(rows.length).toBeGreaterThanOrEqual(1);
-    expect(rows.find((r) => r.action === 'admin.test.action')).toBeTruthy();
+    expect(rows[0]?.tenantId).toBe(ws.id);
   });
 });

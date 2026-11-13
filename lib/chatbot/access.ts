@@ -1,34 +1,30 @@
-import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 
 import { db } from '@/app/db';
+import { questions, quizzes } from '@/app/db/schema';
+import { authorize, userHasAnyBinding } from '@/lib/authz/authorize';
+import { authorizeOnSection } from '@/lib/authz/courseAccess';
+import { TEACHING_ROLES } from '@/lib/authz/permissions';
+import { fetchActiveSectionIdsForStudentDefiner } from '@/lib/db/bookWriteDefiners';
+import { fetchSectionsByIds } from '@/lib/db/entityScopedReads';
 import {
-  chatbotSections,
-  chatbots,
-  professorSections,
-  questions,
-  quizSections,
-  quizzes,
-  studentSections,
-} from '@/app/db/schema';
+  fetchChatbotByIdDefiner,
+  fetchChatbotSectionIdsDefiner,
+} from '@/lib/db/studentReadDefiners';
+import type { UserData } from '@/lib/getOrCreateUser';
+import { professorCanAccessQuiz } from '@/lib/quizAccess';
 import type { SafeQuizInput } from '@/lib/chatbot/safeQuizContext';
 import { isSectionConcluded } from '@/lib/sectionAvailability';
 
 export async function getActiveChatbot(chatbotId: string) {
-  return db.query.chatbots.findFirst({
-    where: and(
-      eq(chatbots.id, chatbotId),
-      eq(chatbots.isActive, true),
-      isNull(chatbots.deletedAt),
-    ),
-  });
+  const bot = await fetchChatbotByIdDefiner(chatbotId);
+  if (!bot || !bot.isActive) return null;
+  return bot;
 }
 
 /** Sections where this chatbot is assigned. */
 export async function getChatbotAssignedSectionIds(chatbotId: string) {
-  const rows = await db.query.chatbotSections.findMany({
-    where: eq(chatbotSections.chatbotId, chatbotId),
-  });
-  return rows.map((r) => r.sectionId);
+  return fetchChatbotSectionIdsDefiner(chatbotId);
 }
 
 /** Student's enrolled section IDs that also have this chatbot assigned. */
@@ -36,17 +32,13 @@ export async function getStudentAccessSectionIds(
   studentId: string,
   chatbotId: string,
 ): Promise<string[]> {
-  const enrollments = await db.query.studentSections.findMany({
-    where: and(
-      eq(studentSections.studentId, studentId),
-      eq(studentSections.status, 'ACTIVE'),
-    ),
-    with: { section: true },
-  });
+  const enrolledIds = await fetchActiveSectionIdsForStudentDefiner(studentId);
+  if (enrolledIds.length === 0) return [];
+  const sections = await fetchSectionsByIds(enrolledIds);
   const enrolled = new Set(
-    enrollments
-      .filter((e) => e.section && !isSectionConcluded(e.section))
-      .map((e) => e.sectionId),
+    sections
+      .filter((s) => !isSectionConcluded(s))
+      .map((s) => s.id),
   );
   const assigned = await getChatbotAssignedSectionIds(chatbotId);
   return assigned.filter((id) => enrolled.has(id));
@@ -60,35 +52,72 @@ export async function studentCanAccessChatbot(
   return sections.length > 0;
 }
 
+/** @deprecated Prefer userCanWriteChatbot with a full user actor. */
 export async function professorOwnsOrTeachesChatbot(
   professorId: string,
   chatbotId: string,
 ): Promise<boolean> {
   const bot = await getActiveChatbot(chatbotId);
   if (!bot) return false;
-  if (bot.professorId === professorId) return true;
-
-  const taught = await db.query.professorSections.findMany({
-    where: eq(professorSections.professorId, professorId),
-  });
-  const taughtIds = new Set(taught.map((t) => t.sectionId));
-  const assigned = await getChatbotAssignedSectionIds(chatbotId);
-  return assigned.some((id) => taughtIds.has(id));
+  return userCanWriteChatbot({ id: professorId }, bot);
 }
 
+type ChatbotActor = Pick<UserData, 'id'> & {
+  platformStaff?: boolean | null;
+};
+
+/**
+ * Binding-based (Wave 2 item 11b): the actor must hold content.write on every
+ * target section (inherited from offering/org bindings). `professor_sections`
+ * is metadata only and confers no authority.
+ */
 export async function professorEnrolledInSections(
-  professorId: string,
+  user: ChatbotActor,
   sectionIds: string[],
 ): Promise<boolean> {
-  if (sectionIds.length === 0) return true;
-  const enrollments = await db.query.professorSections.findMany({
-    where: eq(professorSections.professorId, professorId),
-  });
-  const enrolled = new Set(enrollments.map((e) => e.sectionId));
-  return sectionIds.every((id) => enrolled.has(id));
+  for (const id of sectionIds) {
+    if (!(await authorizeOnSection(user, 'content.write', id))) return false;
+  }
+  return true;
 }
 
-/** Load quiz stems only — strips correctAnswer and rubric. */
+/**
+ * Whether the actor may edit/assign/read-config a (non-template) chatbot:
+ * content.write at its offering, or on any section it is assigned to, or
+ * authorship combined with a teaching binding in the chatbot's tenant.
+ */
+export async function userCanWriteChatbot(
+  user: ChatbotActor,
+  bot: {
+    id: string;
+    professorId: string | null;
+    tenantId: string | null;
+    offeringId: string | null;
+  },
+): Promise<boolean> {
+  if (bot.tenantId && bot.offeringId) {
+    if (
+      await authorize(user, 'content.write', {
+        tenantId: bot.tenantId,
+        scopeType: 'offering',
+        scopeId: bot.offeringId,
+      })
+    ) {
+      return true;
+    }
+  }
+  const sectionIds = await getChatbotAssignedSectionIds(bot.id);
+  for (const sectionId of sectionIds) {
+    if (await authorizeOnSection(user, 'content.write', sectionId)) return true;
+  }
+  const authorId = bot.professorId;
+  if (authorId && authorId === user.id && bot.tenantId) {
+    return userHasAnyBinding(user.id, bot.tenantId, TEACHING_ROLES);
+  }
+  return false;
+}
+
+/** Load quiz stems only: strips correctAnswer and rubric. */
 export async function loadSafeQuizForChatbot(
   relatedQuizId: string | null | undefined,
 ): Promise<SafeQuizInput | null> {
@@ -122,23 +151,8 @@ export async function loadSafeQuizForChatbot(
 }
 
 export async function professorCanLinkQuiz(
-  professorId: string,
+  user: ChatbotActor,
   quizId: string,
 ): Promise<boolean> {
-  const quiz = await db.query.quizzes.findFirst({
-    where: and(eq(quizzes.id, quizId), isNull(quizzes.deletedAt)),
-  });
-  if (!quiz) return false;
-  if (quiz.professorId === professorId) return true;
-
-  const taught = await db.query.professorSections.findMany({
-    where: eq(professorSections.professorId, professorId),
-  });
-  if (taught.length === 0) return false;
-  const taughtIds = taught.map((t) => t.sectionId);
-
-  const links = await db.query.quizSections.findMany({
-    where: inArray(quizSections.sectionId, taughtIds),
-  });
-  return links.some((l) => l.quizId === quizId);
+  return professorCanAccessQuiz(user, quizId);
 }

@@ -9,8 +9,11 @@ const mocks = vi.hoisted(() => ({
   resolveAttemptSectionId: vi.fn(),
   scoreSubmittedQuestions: vi.fn(),
   scheduleAttemptRetry: vi.fn(),
+  fetchSectionById: vi.fn(),
   sectionsFindFirst: vi.fn(),
   questionsFindMany: vi.fn(),
+  dbExecute: vi.fn(),
+  getLatestQuizVersionId: vi.fn(),
   txAttemptsFindMany: vi.fn(),
   txUpdateReturning: vi.fn(),
   gradeMultipleQuestions: vi.fn(),
@@ -37,6 +40,27 @@ vi.mock('@/lib/backgroundRetry', () => ({
     mocks.scheduleAttemptRetry(...args),
 }));
 
+vi.mock('@/lib/db/entityScopedReads', () => ({
+  fetchSectionById: (...args: unknown[]) => mocks.fetchSectionById(...args),
+}));
+
+vi.mock('@/lib/authz/authorize', () => ({
+  authorize: vi.fn(async () => true),
+}));
+
+vi.mock('@/lib/offerings', () => ({
+  assertOfferingWritable: vi.fn(async () => undefined),
+}));
+
+vi.mock('@/lib/quiz/versions', () => ({
+  getLatestQuizVersionId: (...args: unknown[]) =>
+    mocks.getLatestQuizVersionId(...args),
+}));
+
+vi.mock('@/lib/lti/passback', () => ({
+  enqueueQuizPassback: vi.fn(async () => undefined),
+}));
+
 vi.mock('@/lib/grading', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/grading')>();
   return { ...actual, gradeMultipleQuestions: mocks.gradeMultipleQuestions };
@@ -56,7 +80,9 @@ vi.mock('@/app/db', () => ({
       questions: {
         findMany: (...args: unknown[]) => mocks.questionsFindMany(...args),
       },
+      quizVersions: { findFirst: async () => null },
     },
+    execute: (...args: unknown[]) => mocks.dbExecute(...args),
     transaction: async (fn: (tx: unknown) => Promise<unknown>) => {
       const whereResult = {
         returning: (...args: unknown[]) => mocks.txUpdateReturning(...args),
@@ -80,6 +106,7 @@ vi.mock('@/app/db', () => ({
             returning: (...args: unknown[]) => mocks.txUpdateReturning(...args),
           }),
         }),
+        execute: (...args: unknown[]) => mocks.dbExecute(...args),
       };
       return fn(tx);
     },
@@ -140,7 +167,29 @@ beforeEach(() => {
     quizSectionLinks: [{ sectionId: 'sec-1' }],
   });
   mocks.resolveAttemptSectionId.mockResolvedValue('sec-1');
-  mocks.sectionsFindFirst.mockResolvedValue({ id: 'sec-1', endsAt: null });
+  mocks.fetchSectionById.mockResolvedValue({
+    id: 'sec-1',
+    endsAt: null,
+    tenantId: 'tenant-1',
+    workspaceId: 'tenant-1',
+  });
+  mocks.sectionsFindFirst.mockResolvedValue({
+    id: 'sec-1',
+    endsAt: null,
+    tenantId: 'tenant-1',
+    workspaceId: 'tenant-1',
+  });
+  mocks.getLatestQuizVersionId.mockResolvedValue(null);
+  mocks.dbExecute.mockImplementation(async () => ({
+    rows: [
+      {
+        row: {
+          attempt: { id: 'att-1', score: 0 },
+          allAttempts: [{ score: 0 }],
+        },
+      },
+    ],
+  }));
   mocks.questionsFindMany.mockResolvedValue([]);
   mocks.txAttemptsFindMany
     .mockResolvedValueOnce([inProgress])

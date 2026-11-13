@@ -160,6 +160,9 @@ async function mergeLoserIntoKeeper(
 }
 
 async function main() {
+  const { assertDevDatabaseOrExit } = await import('./lib/assertDevDatabase');
+  assertDevDatabaseOrExit({ urlEnvVars: ['DATABASE_URL'] });
+
   const url = process.env.DATABASE_URL;
   if (!url) {
     console.error('DATABASE_URL is required');

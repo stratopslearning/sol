@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import React, { useCallback, useEffect, useState } from "react";
-import { Eye, GraduationCap } from "lucide-react";
+import { Eye, GraduationCap } from "@/components/icons";
 
 import CopyEnrollmentButton from "@/components/CopyEnrollmentButton";
 import { SectionFormModal } from "@/components/admin/SectionFormModal";
@@ -137,8 +137,8 @@ export default function SectionsPageContentClient({
           { label: "Sections" },
         ]}
         eyebrow="Catalog"
-        title="Sections."
-        description="Ongoing sections across every course, with enrolment codes ready to share with faculty and learners."
+        title="Sections"
+        description="Ongoing sections in the default workspace. Enrolment codes for faculty and learners."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {pastSectionsHref ? (
@@ -155,7 +155,11 @@ export default function SectionsPageContentClient({
         }
       />
 
-      <div className="mt-10 flex flex-col gap-4">
+      <p className="mt-4 text-xs text-ink-faint">
+        Scoped via ?workspaceId= (default workspace when omitted).
+      </p>
+
+      <div className="mt-6 flex flex-col gap-4">
         <div className="flex flex-col md:flex-row gap-3">
           <div className="md:w-56">
             <Select value={courseId} onValueChange={setCourseId}>

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { requireTeachingAccess } from '@/lib/authz/gates';
 import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 
 import { db } from '@/app/db';
@@ -33,8 +34,7 @@ interface PageProps {
 }
 
 export default async function DiscussionSessionsPage(props: PageProps) {
-  const user = await getOrCreateUser();
-  if (!user || user.role !== 'PROFESSOR') return null;
+  const user = await requireTeachingAccess();
 
   const { id } = await props.params;
   const bot = await db.query.chatbots.findFirst({
@@ -47,10 +47,10 @@ export default async function DiscussionSessionsPage(props: PageProps) {
   });
   if (!bot) appRedirect('/dashboard/professor/discussions');
 
-  const taught = await db.query.professorSections.findMany({
-    where: eq(professorSections.professorId, user.id),
-  });
-  const taughtIds = taught.map((t) => t.sectionId);
+  const { listTeachingSectionIds } = await import(
+    '@/lib/professor/graderSections'
+  );
+  const taughtIds = await listTeachingSectionIds(user);
 
   const assigned = await db.query.chatbotSections.findMany({
     where: eq(chatbotSections.chatbotId, id),
@@ -75,16 +75,15 @@ export default async function DiscussionSessionsPage(props: PageProps) {
   return (
     <AppShell
       role="professor"
-      active="discussions"
-      topbarEyebrow="Faculty"
+      active="assignments"
       topbarTitle="Discussion sessions"
     >
       <PageHeader
         breadcrumbs={[
           { label: 'Dashboard', href: withBasePath('/dashboard/professor') },
           {
-            label: 'Discussions',
-            href: withBasePath('/dashboard/professor/discussions'),
+            label: 'Assignments',
+            href: withBasePath('/dashboard/professor/assignments'),
           },
           { label: bot.title },
         ]}
@@ -134,7 +133,7 @@ export default async function DiscussionSessionsPage(props: PageProps) {
                   <TableCell className={TIMESTAMP_CELL_CLASS}>
                     {s.completedAt
                       ? <LocalDateTime stacked value={s.completedAt} />
-                      : '—'}
+                      : '-'}
                   </TableCell>
                   <TableCell>
                     {Array.isArray(s.messages) ? s.messages.length : 0}

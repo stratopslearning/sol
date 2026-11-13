@@ -1,4 +1,4 @@
-import { ChevronDown } from "lucide-react";
+import { ChevronDown } from "@/components/icons";
 import { useState } from "react";
 
 import { Badge } from "./badge";

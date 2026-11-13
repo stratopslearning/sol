@@ -7,12 +7,13 @@ import {
   LogOut,
   Search,
   X,
-} from "lucide-react";
-import { SignOutButton, useUser } from "@clerk/nextjs";
+} from "@/components/icons";
+import { SignOutButton } from "@clerk/nextjs";
 import { AnimatePresence, motion } from "framer-motion";
 import { usePathname } from "next/navigation";
 
 import { SolMark } from "@/components/brand/SolMark";
+import { useShortcutsOptional } from "@/components/shortcuts/ShortcutsProvider";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Tooltip,
@@ -48,24 +49,24 @@ interface AppSidebarProps {
   onMobileClose?: () => void;
 }
 
-const STUDY_KEYS = new Set([
-  "quizzes",
-  "discussions",
-  "grades",
-]);
+const STUDY_KEYS = new Set(["calendar"]);
 
+// Keys must be listed in ROLE_CONFIG; only these sets are rendered.
 const FACULTY_TEACHING_KEYS = new Set([
   "dashboard",
-  "sections",
-  "quizzes",
-  "discussions",
+  "knowledge",
+  "authoring",
+  "assignments",
+  "courses",
 ]);
-const FACULTY_CONTENT_KEYS = new Set<string>([]);
-const FACULTY_REVIEW_KEYS = new Set([
-  "attention",
-  "quiz-results",
-]);
+const FACULTY_CONTENT_KEYS = new Set<string>();
+const FACULTY_REVIEW_KEYS = new Set(["attention", "quiz-results"]);
+const FACULTY_TENANT_KEYS = new Set(["workspace"]);
 const FACULTY_TOOLS_KEYS = new Set(["agent-access"]);
+
+/** Admin ops console groups — provision tenants, then platform tools. */
+const ADMIN_OPS_KEYS = new Set(["dashboard", "workspaces"]);
+const ADMIN_PLATFORM_KEYS = new Set(["users", "lti", "audit"]);
 
 function SidebarTip({
   label,
@@ -107,12 +108,21 @@ export function AppSidebar({
   const [collapsed, setCollapsed] = React.useState(false);
   const [query, setQuery] = React.useState("");
   const searchRef = React.useRef<HTMLInputElement>(null);
-  const { user: clerkUser } = useUser();
   const pathname = usePathname();
+  const shortcuts = useShortcutsOptional();
 
   React.useEffect(() => {
     try {
       setCollapsed(localStorage.getItem(COLLAPSE_KEY) === "1");
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const expandSidebar = React.useCallback(() => {
+    setCollapsed(false);
+    try {
+      localStorage.setItem(COLLAPSE_KEY, "0");
     } catch {
       /* ignore */
     }
@@ -131,10 +141,56 @@ export function AppSidebar({
     });
   }, []);
 
-  const profileFirstName = user?.firstName ?? clerkUser?.firstName ?? "";
-  const profileLastName = user?.lastName ?? clerkUser?.lastName ?? "";
-  const profileEmail =
-    user?.email ?? clerkUser?.primaryEmailAddress?.emailAddress ?? "";
+  const registerSidebarToggle = shortcuts?.registerSidebarToggle;
+  const registerJumpTo = shortcuts?.registerJumpTo;
+
+  React.useEffect(() => {
+    if (!registerSidebarToggle) return;
+    registerSidebarToggle(toggleCollapsed);
+    return () => registerSidebarToggle(null);
+  }, [registerSidebarToggle, toggleCollapsed]);
+
+  React.useEffect(() => {
+    if (!registerJumpTo) return;
+    registerJumpTo({
+      focus: () => {
+        if (collapsed) expandSidebar();
+        requestAnimationFrame(() => searchRef.current?.focus());
+      },
+      clear: () => {
+        setQuery("");
+        searchRef.current?.blur();
+      },
+      isFocused: () => document.activeElement === searchRef.current,
+    });
+    return () => registerJumpTo(null);
+  }, [collapsed, expandSidebar, registerJumpTo]);
+
+  // Fallback when mounted outside ShortcutsProvider (legacy sidebars).
+  React.useEffect(() => {
+    if (registerJumpTo) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "[" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        toggleCollapsed();
+        return;
+      }
+      if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey) return;
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      e.preventDefault();
+      if (collapsed) expandSidebar();
+      requestAnimationFrame(() => searchRef.current?.focus());
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [collapsed, expandSidebar, registerJumpTo, toggleCollapsed]);
+
+  // Prefer server-passed user — avoid useUser() so a missed ClerkProvider
+  // (error overlay / layout edge) cannot crash the whole shell.
+  const profileFirstName = user?.firstName ?? "";
+  const profileLastName = user?.lastName ?? "";
+  const profileEmail = user?.email ?? "";
 
   const initials = React.useMemo(() => {
     if (profileFirstName && profileLastName) {
@@ -167,33 +223,8 @@ export function AppSidebar({
     );
   }, [config.items, query]);
 
-  React.useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "[" && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        toggleCollapsed();
-        return;
-      }
-      if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey) return;
-      const tag = (e.target as HTMLElement | null)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-      e.preventDefault();
-      if (collapsed) {
-        setCollapsed(false);
-        try {
-          localStorage.setItem(COLLAPSE_KEY, "0");
-        } catch {
-          /* ignore */
-        }
-      }
-      requestAnimationFrame(() => searchRef.current?.focus());
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [collapsed, toggleCollapsed]);
-
   const footerProps = {
-    clerkImage: clerkUser?.imageUrl,
+    clerkImage: undefined as string | undefined,
     firstName: profileFirstName,
     email: profileEmail,
     initials,
@@ -301,6 +332,7 @@ function SidebarBody(props: {
 
   const isStudent = role === "student";
   const isProfessor = role === "professor";
+  const isAdmin = role === "admin";
 
   const studentWorkspace = isStudent
     ? filteredItems.filter(
@@ -320,12 +352,19 @@ function SidebarBody(props: {
   const facultyReview = isProfessor
     ? filteredItems.filter((i) => FACULTY_REVIEW_KEYS.has(i.key))
     : [];
+  const facultyTenant = isProfessor
+    ? filteredItems.filter((i) => FACULTY_TENANT_KEYS.has(i.key))
+    : [];
   const facultyTools = isProfessor
     ? filteredItems.filter((i) => FACULTY_TOOLS_KEYS.has(i.key))
     : [];
 
-  const flatItems =
-    !isStudent && !isProfessor ? filteredItems : [];
+  const adminOps = isAdmin
+    ? filteredItems.filter((i) => ADMIN_OPS_KEYS.has(i.key))
+    : [];
+  const adminPlatform = isAdmin
+    ? filteredItems.filter((i) => ADMIN_PLATFORM_KEYS.has(i.key))
+    : [];
 
   return (
     <div
@@ -430,7 +469,7 @@ function SidebarBody(props: {
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Jump to…  /"
+            placeholder="Jump to…  /  ⌘K"
             className={cn(
               "w-full rounded-xl border border-rule bg-surface-sunken/70 py-2 pl-8 pr-2",
               "text-xs text-ink placeholder:text-ink-faint",
@@ -454,14 +493,16 @@ function SidebarBody(props: {
               indicatorId={indicatorId}
               collapsed={collapsed}
             />
-            <NavGroup
-              label={!collapsed ? "Study" : undefined}
-              items={studentStudy}
-              isItemActive={isItemActive}
-              onItemClick={onItemClick}
-              indicatorId={`${indicatorId}-study`}
-              collapsed={collapsed}
-            />
+            {studentStudy.length > 0 ? (
+              <NavGroup
+                label={!collapsed ? "Schedule" : undefined}
+                items={studentStudy}
+                isItemActive={isItemActive}
+                onItemClick={onItemClick}
+                indicatorId={`${indicatorId}-study`}
+                collapsed={collapsed}
+              />
+            ) : null}
           </>
         ) : null}
         {isProfessor ? (
@@ -474,20 +515,30 @@ function SidebarBody(props: {
               indicatorId={indicatorId}
               collapsed={collapsed}
             />
-            <NavGroup
-              label={!collapsed ? "Content" : undefined}
-              items={facultyContent}
-              isItemActive={isItemActive}
-              onItemClick={onItemClick}
-              indicatorId={`${indicatorId}-content`}
-              collapsed={collapsed}
-            />
+            {facultyContent.length > 0 ? (
+              <NavGroup
+                label={!collapsed ? "Content" : undefined}
+                items={facultyContent}
+                isItemActive={isItemActive}
+                onItemClick={onItemClick}
+                indicatorId={`${indicatorId}-content`}
+                collapsed={collapsed}
+              />
+            ) : null}
             <NavGroup
               label={!collapsed ? "Review" : undefined}
               items={facultyReview}
               isItemActive={isItemActive}
               onItemClick={onItemClick}
               indicatorId={`${indicatorId}-review`}
+              collapsed={collapsed}
+            />
+            <NavGroup
+              label={!collapsed ? "Tenant" : undefined}
+              items={facultyTenant}
+              isItemActive={isItemActive}
+              onItemClick={onItemClick}
+              indicatorId={`${indicatorId}-tenant`}
               collapsed={collapsed}
             />
             <NavGroup
@@ -500,14 +551,25 @@ function SidebarBody(props: {
             />
           </>
         ) : null}
-        {flatItems.length > 0 ? (
-          <NavGroup
-            items={flatItems}
-            isItemActive={isItemActive}
-            onItemClick={onItemClick}
-            indicatorId={indicatorId}
-            collapsed={collapsed}
-          />
+        {isAdmin ? (
+          <>
+            <NavGroup
+              label={!collapsed ? "Ops" : undefined}
+              items={adminOps}
+              isItemActive={isItemActive}
+              onItemClick={onItemClick}
+              indicatorId={indicatorId}
+              collapsed={collapsed}
+            />
+            <NavGroup
+              label={!collapsed ? "Platform" : undefined}
+              items={adminPlatform}
+              isItemActive={isItemActive}
+              onItemClick={onItemClick}
+              indicatorId={`${indicatorId}-platform`}
+              collapsed={collapsed}
+            />
+          </>
         ) : null}
         {!collapsed && filteredItems.length === 0 ? (
           <p className="px-2 text-xs text-ink-faint">No matching pages.</p>
@@ -550,12 +612,12 @@ function NavGroup(props: {
               aria-label={collapsed ? item.label : undefined}
               className={cn(
                 "relative flex items-center rounded-xl text-[0.8125rem]",
-                "transition-colors",
+                "transition-[color,background-color,box-shadow] duration-150",
                 collapsed
                   ? "justify-center px-0 py-2.5"
                   : "gap-2.5 px-2.5 py-2",
                 active
-                  ? "bg-brand-soft/80 font-medium text-ink"
+                  ? "bg-brand-soft/90 font-medium text-ink shadow-[inset_0_0_0_1px_color-mix(in_oklch,var(--brand)_18%,transparent)]"
                   : "text-ink-muted hover:bg-surface-sunken hover:text-ink",
               )}
             >
@@ -568,10 +630,12 @@ function NavGroup(props: {
                 />
               ) : null}
               <Icon
+                active={active}
                 className={cn(
                   "h-4 w-4 shrink-0",
                   active ? "text-brand" : "text-ink-faint",
                 )}
+                strokeWidth={active ? 2.25 : 1.75}
                 aria-hidden
               />
               {!collapsed ? <span className="truncate">{item.label}</span> : null}

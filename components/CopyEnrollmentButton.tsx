@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Copy, Check } from "lucide-react";
+import { Copy, Check } from "@/components/icons";
 
 export default function CopyEnrollmentButton({ code }: { code: string }) {
   const [copied, setCopied] = useState(false);
@@ -14,7 +14,7 @@ export default function CopyEnrollmentButton({ code }: { code: string }) {
 
   return (
     <Button type="button" size="sm" variant="secondary" onClick={handleCopy}>
-      {copied ? <Check className="w-4 h-4 mr-1 text-green-400" /> : <Copy className="w-4 h-4 mr-1" />}
+      {copied ? <Check className="w-4 h-4 mr-1 text-ink" /> : <Copy className="w-4 h-4 mr-1" />}
       {copied ? "Copied!" : "Copy"}
     </Button>
   );

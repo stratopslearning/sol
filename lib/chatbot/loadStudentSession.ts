@@ -1,14 +1,16 @@
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 
 import { db } from '@/app/db';
 import {
   chatbotAssignments,
-  chatbotSections,
   chatbotSessions,
-  chatbots,
-  studentSections,
   type ChatbotMessage,
 } from '@/app/db/schema';
+import {
+  getStudentAccessSectionIds,
+  studentCanAccessChatbot,
+} from '@/lib/chatbot/access';
+import { fetchChatbotByIdDefiner } from '@/lib/db/studentReadDefiners';
 
 export type StudentChatbotPageData = {
   session: {
@@ -28,25 +30,12 @@ export type StudentChatbotPageData = {
   };
 };
 
-/** Single-query access check (enrollment ∩ assignment). */
+/** Access check (enrollment ∩ assignment) via DEFINER helpers. */
 export async function studentHasChatbotAccess(
   studentId: string,
   chatbotId: string,
 ): Promise<boolean> {
-  const rows = await db
-    .select({ id: chatbotSections.id })
-    .from(chatbotSections)
-    .innerJoin(
-      studentSections,
-      and(
-        eq(studentSections.sectionId, chatbotSections.sectionId),
-        eq(studentSections.studentId, studentId),
-        eq(studentSections.status, 'ACTIVE'),
-      ),
-    )
-    .where(eq(chatbotSections.chatbotId, chatbotId))
-    .limit(1);
-  return rows.length > 0;
+  return studentCanAccessChatbot(studentId, chatbotId);
 }
 
 /**
@@ -58,23 +47,8 @@ export async function loadStudentChatbotPageData(opts: {
   chatbotId: string;
   sessionId?: string;
 }): Promise<StudentChatbotPageData | null> {
-  const bot = await db.query.chatbots.findFirst({
-    where: and(
-      eq(chatbots.id, opts.chatbotId),
-      eq(chatbots.isActive, true),
-      isNull(chatbots.deletedAt),
-    ),
-    columns: {
-      id: true,
-      title: true,
-      description: true,
-      personaName: true,
-      instructions: true,
-      relatedQuizId: true,
-      isTemplate: true,
-    },
-  });
-  if (!bot || bot.isTemplate) return null;
+  const bot = await fetchChatbotByIdDefiner(opts.chatbotId);
+  if (!bot || !bot.isActive || bot.isTemplate) return null;
 
   const canAccess = await studentHasChatbotAccess(opts.studentId, opts.chatbotId);
   if (!canAccess) return null;
@@ -130,21 +104,11 @@ export async function loadStudentChatbotPageData(opts: {
     }
 
     if (!session) {
-      const sectionRow = await db
-        .select({ sectionId: chatbotSections.sectionId })
-        .from(chatbotSections)
-        .innerJoin(
-          studentSections,
-          and(
-            eq(studentSections.sectionId, chatbotSections.sectionId),
-            eq(studentSections.studentId, opts.studentId),
-            eq(studentSections.status, 'ACTIVE'),
-          ),
-        )
-        .where(eq(chatbotSections.chatbotId, opts.chatbotId))
-        .limit(1);
-
-      const sectionId = sectionRow[0]?.sectionId;
+      const accessSections = await getStudentAccessSectionIds(
+        opts.studentId,
+        opts.chatbotId,
+      );
+      const sectionId = accessSections[0];
       if (!sectionId) return null;
 
       const [created] = await db

@@ -59,8 +59,7 @@ export function HumanSafety() {
               <em className="mkt-italic text-ink-muted">human judgment</em>
             </h2>
             <p className="mx-auto mt-4 max-w-[42ch] text-base leading-relaxed text-ink-muted">
-              SOL does the draft work. You keep the final say: on what ships, and
-              on every grade that is not clear-cut.
+              SOL drafts. You decide what ships and what scores.
             </p>
           </div>
         </ScrollReveal>
@@ -77,8 +76,8 @@ export function HumanSafety() {
               Nothing is final without you
             </h3>
             <p className="mt-3 text-sm leading-relaxed text-ink-muted md:ml-auto md:max-w-[32ch]">
-              Drafts stay hidden until you release them. Unsure answers wait in
-              Attention. You remain the grader of record.
+              Nothing reaches students until you release it. Unsure grades wait
+              in Attention.
             </p>
           </div>
 
@@ -105,9 +104,8 @@ export function HumanSafety() {
               Fits the LMS you already run
             </h3>
             <p className="mt-3 max-w-[32ch] text-sm leading-relaxed text-ink-muted">
-              Built for Canvas first: teaching work in SOL, grades designed to
-              pass back. FERPA-minded by default. We do not train on your
-              students’ work.
+              Teaching in SOL. Grades ready for your LMS. FERPA-minded. We never
+              train on student work.
             </p>
           </div>
         </div>

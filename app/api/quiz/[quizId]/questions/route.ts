@@ -11,6 +11,7 @@ import {
 import { activeOnly } from '@/lib/db/filters';
 import { isStudentEntitled } from '@/lib/featureFlags';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
+import { professorCanAccessQuiz, userCanWriteQuiz } from '@/lib/quizAccess';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,29 +26,24 @@ export async function GET(
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    if (user.role === 'STUDENT' && !isStudentEntitled(user)) {
+    if (!isStudentEntitled(user)) {
       return NextResponse.json({ error: 'Payment required' }, { status: 402 });
     }
 
-    const isAdmin = user.role === 'ADMIN';
-
-    // Admins keep visibility into soft-deleted quizzes (for restore/audit).
-    // Everyone else sees them as 404.
+    // Soft-deleted quizzes are 404 for everyone here (restore/audit tooling
+    // lives on the admin surfaces, which require a support grant).
     const quiz = await db.query.quizzes.findFirst({
-      where: isAdmin
-        ? eq(quizzes.id, quizId)
-        : and(eq(quizzes.id, quizId), activeOnly(quizzes.deletedAt)),
+      where: and(eq(quizzes.id, quizId), activeOnly(quizzes.deletedAt)),
     });
     if (!quiz) {
       return NextResponse.json({ error: 'Quiz not found' }, { status: 404 });
     }
 
-    const isOwnerProfessor =
-      user.role === 'PROFESSOR' && quiz.professorId === user.id;
+    // Staff access is binding-based (role bindings / support grant).
+    const isStaff = await professorCanAccessQuiz(user, quizId);
 
-    // For students (and non-owner professors), enforce that the caller is
-    // currently enrolled in at least one section the quiz is assigned to.
-    if (!isAdmin && !isOwnerProfessor) {
+    // Everyone else must be actively enrolled in a section the quiz is assigned to.
+    if (!isStaff) {
       const quizSectionLinks = await db.query.quizSections.findMany({
         where: eq(quizSections.quizId, quizId),
       });
@@ -56,31 +52,14 @@ export async function GET(
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
 
-      if (user.role === 'STUDENT') {
-        const enrollment = await db.query.studentSections.findFirst({
-          where: and(
-            eq(studentSections.studentId, user.id),
-            eq(studentSections.status, 'ACTIVE'),
-            inArray(studentSections.sectionId, quizSectionIds),
-          ),
-        });
-        if (!enrollment) {
-          return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-        }
-      } else if (user.role === 'PROFESSOR') {
-        // Co-teaching professor: require professor enrollment in one of the
-        // sections the quiz is assigned to.
-        const { professorSections } = await import('@/app/db/schema');
-        const profEnrollment = await db.query.professorSections.findFirst({
-          where: and(
-            eq(professorSections.professorId, user.id),
-            inArray(professorSections.sectionId, quizSectionIds),
-          ),
-        });
-        if (!profEnrollment) {
-          return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-        }
-      } else {
+      const enrollment = await db.query.studentSections.findFirst({
+        where: and(
+          eq(studentSections.studentId, user.id),
+          eq(studentSections.status, 'ACTIVE'),
+          inArray(studentSections.sectionId, quizSectionIds),
+        ),
+      });
+      if (!enrollment) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
     }
@@ -90,9 +69,9 @@ export async function GET(
       orderBy: (questions, { asc }) => [asc(questions.order)],
     });
 
-    // Strip answer key + rubric for callers who must not see them. Admins and
-    // the quiz's own author keep the full row (editor / reports).
-    const includeAnswerKey = isAdmin || isOwnerProfessor;
+    // Strip answer key + rubric unless the caller may WRITE this quiz
+    // (content.write binding) — read-only staff and students never see the key.
+    const includeAnswerKey = isStaff && (await userCanWriteQuiz(user, quizId));
     const responseQuestions = includeAnswerKey
       ? quizQuestions
       : quizQuestions.map((q) => ({

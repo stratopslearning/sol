@@ -3,7 +3,7 @@
  *
  * Newer MCP clients follow `authorization_servers` from the protected
  * resource metadata straight to Clerk; older ones probe the resource host
- * itself (with or without the resource path suffix — hence the catch-all).
+ * itself (with or without the resource path suffix: hence the catch-all).
  * We proxy Clerk's metadata so both generations resolve the same authorize /
  * token / registration endpoints, including Dynamic Client Registration.
  */

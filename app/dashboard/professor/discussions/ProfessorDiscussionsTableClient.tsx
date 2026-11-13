@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { MessagesSquare } from "lucide-react";
+import { MessagesSquare } from "@/components/icons";
 import { toast } from "sonner";
 
 import { EmptyState } from "@/components/patterns/EmptyState";
@@ -113,7 +113,7 @@ export default function ProfessorDiscussionsTableClient({
                 </TableCell>
                 <TableCell>{d.personaName}</TableCell>
                 <TableCell className="text-ink-muted">
-                  {d.sectionNames.join(", ") || "—"}
+                  {d.sectionNames.join(", ") || "-"}
                 </TableCell>
                 <TableCell>
                   {d.isTemplate ? (

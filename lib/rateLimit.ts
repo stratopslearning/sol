@@ -4,12 +4,24 @@
  * - Production: backed by Upstash Redis when UPSTASH_REDIS_REST_URL +
  *   UPSTASH_REDIS_REST_TOKEN are set. Sliding window so bursts don't get a
  *   free pass at the boundary of fixed windows.
- * - Dev / single-instance fallback: in-memory map. NOT safe across multiple
- *   instances (each Lambda has its own counter), but a sane safety net so
- *   the app never crashes when Upstash is unconfigured.
+ * - If Upstash throws at runtime (quota, network), fall back to an in-memory
+ *   map for this isolate rather than 429ing every caller. Missing Upstash in
+ *   production still fails closed: that is a misconfigured deploy.
+ * - Dev / test: in-memory map when Upstash is unset.
  */
 import { Ratelimit } from '@upstash/ratelimit';
 import { Redis } from '@upstash/redis';
+
+/** Include tenant/workspace in Redis keys for fair multi-tenant throttling. */
+export function tenantRateLimitKey(
+  tenantId: string | null | undefined,
+  userId: string,
+  action: string,
+): string {
+  const tenant =
+    tenantId && tenantId !== 'default' ? tenantId.trim() : 'unknown-tenant';
+  return `${tenant}:${userId}:${action}`;
+}
 
 export interface RateLimitResult {
   success: boolean;
@@ -24,6 +36,16 @@ interface InMemoryWindow {
 }
 
 const inMemoryStore = new Map<string, InMemoryWindow>();
+
+/** Skip Upstash for a short window after a runtime error so exams stay up. */
+const TRANSIENT_CIRCUIT_MS = 10_000;
+/**
+ * Quota errors: keep a short circuit so we retry Upstash soon, while still
+ * enforcing per-isolate in-memory caps (weaker than Redis, but not unbounded).
+ */
+const QUOTA_CIRCUIT_MS = 60_000;
+
+let upstashCircuitOpenUntil = 0;
 
 function inMemoryLimit(
   key: string,
@@ -61,6 +83,27 @@ function failClosed(limit: number, windowMs: number): RateLimitResult {
   };
 }
 
+function isUpstashQuotaError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /max requests limit exceeded/i.test(message);
+}
+
+function isCircuitOpen(): boolean {
+  return Date.now() < upstashCircuitOpenUntil;
+}
+
+function openCircuit(error: unknown): void {
+  const quota = isUpstashQuotaError(error);
+  const ms = quota ? QUOTA_CIRCUIT_MS : TRANSIENT_CIRCUIT_MS;
+  upstashCircuitOpenUntil = Date.now() + ms;
+  console.error(
+    quota
+      ? `Rate limit: Upstash quota exceeded: falling back to in-memory for ${ms / 1000}s`
+      : `Rate limit: Upstash error: falling back to in-memory for ${ms / 1000}s`,
+    error,
+  );
+}
+
 let redisClient: Redis | undefined;
 const upstashLimiters = new Map<string, Ratelimit>();
 
@@ -84,7 +127,7 @@ function getUpstashLimiter(
   const cacheKey = `${prefix}:${limit}:${windowMs}`;
   let limiter = upstashLimiters.get(cacheKey);
   if (!limiter) {
-    // Prefer second-based windows — Upstash docs use "10 s" / "1 m".
+    // Prefer second-based windows. Upstash docs use "10 s" / "1 m".
     const window =
       windowMs % 60_000 === 0
         ? (`${windowMs / 60_000} m` as `${number} m`)
@@ -100,15 +143,24 @@ function getUpstashLimiter(
   return limiter;
 }
 
+/** Test-only: drop isolate state so cases do not leak counters or a circuit. */
+export function resetRateLimitForTests(): void {
+  inMemoryStore.clear();
+  upstashLimiters.clear();
+  redisClient = undefined;
+  upstashCircuitOpenUntil = 0;
+}
+
 /**
  * Rate-limit by an arbitrary key (e.g. `${userId}:submit` or `${ip}:login`).
  *
  * Returns a RateLimitResult; the caller is responsible for translating a
  * `success: false` into a 429 (or whatever response shape the route uses).
  *
- * Prefer Upstash when configured. In production, Upstash errors (or a missing
- * Redis client at runtime) fail closed so each isolate cannot independently
- * allow the full burst. Dev/test keep the in-memory fallback.
+ * Prefer Upstash when configured. A missing Redis client in production fails
+ * closed so a misconfigured deploy cannot silently run without a limiter.
+ * Runtime Upstash errors (quota, timeouts) fall back to in-memory so a Redis
+ * outage cannot brick exam start/save/submit.
  */
 export async function rateLimit(opts: {
   key: string;
@@ -117,6 +169,12 @@ export async function rateLimit(opts: {
   prefix?: string;
 }): Promise<RateLimitResult> {
   const prefix = opts.prefix ?? 'rl';
+  const memoryKey = `${prefix}:${opts.key}`;
+
+  if (isCircuitOpen()) {
+    return inMemoryLimit(memoryKey, opts.limit, opts.windowMs);
+  }
+
   const upstash = getUpstashLimiter(prefix, opts.limit, opts.windowMs);
   if (upstash) {
     try {
@@ -128,17 +186,14 @@ export async function rateLimit(opts: {
         reset: res.reset,
       };
     } catch (error) {
-      if (isProdRuntime()) {
-        console.error('Rate limit: Upstash error — failing closed', error);
-        return failClosed(opts.limit, opts.windowMs);
-      }
-      console.error('Rate limit: Upstash error — falling back to in-memory', error);
+      openCircuit(error);
+      return inMemoryLimit(memoryKey, opts.limit, opts.windowMs);
     }
   } else if (isProdRuntime()) {
     console.error(
-      'Rate limit: Upstash not configured in production — failing closed',
+      'Rate limit: Upstash not configured in production: failing closed',
     );
     return failClosed(opts.limit, opts.windowMs);
   }
-  return inMemoryLimit(`${prefix}:${opts.key}`, opts.limit, opts.windowMs);
+  return inMemoryLimit(memoryKey, opts.limit, opts.windowMs);
 }

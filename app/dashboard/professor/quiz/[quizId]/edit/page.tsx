@@ -1,9 +1,11 @@
-import { and, eq } from "drizzle-orm";
-import { Copy, Eye, ShieldCheck } from "lucide-react";
+import { and, eq, inArray } from "drizzle-orm";
+import { requireTeachingAccess } from '@/lib/authz/gates';
+import { authorizeOnSection } from '@/lib/authz/courseAccess';
+import { Copy, Eye, ShieldCheck } from "@/components/icons";
 import { notFound } from "next/navigation";
 
 import { db } from "@/app/db";
-import { professorSections, questions, quizzes } from "@/app/db/schema";
+import { questions, quizzes, sections } from "@/app/db/schema";
 import { AppShell } from "@/components/layout/AppShell";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { SectionHeading } from "@/components/layout/SectionHeading";
@@ -12,7 +14,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { activeOnly } from "@/lib/db/filters";
 import { withBasePath } from "@/lib/basePath";
-import { getOrCreateUser } from "@/lib/getOrCreateUser";
+import { listTeachingSectionIds } from "@/lib/professor/graderSections";
+import { professorCanAccessQuiz, userCanWriteQuiz } from "@/lib/quizAccess";
 import { cleanQuizDescription } from "@/lib/utils";
 import { isSectionConcluded } from "@/lib/sectionAvailability";
 
@@ -24,16 +27,23 @@ export default async function EditQuizPage({
   params: Promise<{ quizId: string }>;
 }) {
   const { quizId } = await params;
-  const user = await getOrCreateUser();
-  if (!user || user.role !== "PROFESSOR") return null;
+  const user = await requireTeachingAccess();
 
-  const professorSectionsList = await db.query.professorSections.findMany({
-    where: eq(professorSections.professorId, user.id),
-    with: { section: { with: { course: true } } },
+  if (!(await professorCanAccessQuiz(user, quizId))) notFound();
+  if (!(await userCanWriteQuiz(user, quizId))) notFound();
+
+  const teachingIds = await listTeachingSectionIds(user);
+  const writableSectionIds = new Set<string>();
+  for (const sectionId of teachingIds) {
+    if (await authorizeOnSection(user, "content.write", sectionId)) {
+      writableSectionIds.add(sectionId);
+    }
+  }
+
+  const teachingSections = await db.query.sections.findMany({
+    where: inArray(sections.id, teachingIds),
+    with: { course: true },
   });
-  const enrolledSectionIds = new Set(
-    professorSectionsList.map((ps) => ps.section.id),
-  );
 
   const quiz = await db.query.quizzes.findFirst({
     where: and(
@@ -51,14 +61,15 @@ export default async function EditQuizPage({
 
   if (!quiz) notFound();
 
-  const isOwner = quiz.professorId === user.id;
+  const authorId = quiz.professorId;
+  const isAuthor = Boolean(authorId && authorId === user.id);
   const editableSectionAssignments = quiz.sectionAssignments.filter((sa) =>
-    enrolledSectionIds.has(sa.section.id),
+    writableSectionIds.has(sa.section.id),
   );
 
-  if (!isOwner && editableSectionAssignments.length === 0) notFound();
+  if (!isAuthor && editableSectionAssignments.length === 0) notFound();
 
-  if (!isOwner) {
+  if (!isAuthor) {
     const editableSectionNames = editableSectionAssignments
       .map((sa) => sa.section.name)
       .join(", ");
@@ -66,8 +77,7 @@ export default async function EditQuizPage({
     return (
       <AppShell
         role="professor"
-        active="quizzes"
-        topbarEyebrow="Faculty"
+        active="assignments"
         topbarTitle={quiz.title}
         maxWidth="wide"
       >
@@ -75,16 +85,16 @@ export default async function EditQuizPage({
           breadcrumbs={[
             { label: "Dashboard", href: withBasePath("/dashboard/professor") },
             {
-              label: "My quizzes",
-              href: withBasePath("/dashboard/professor/quizzes"),
+              label: "Assignments",
+              href: withBasePath("/dashboard/professor/assignments"),
             },
-            { label: "Edit" },
+            { label: "Edit quiz" },
           ]}
           eyebrow="Shared quiz"
           title={quiz.title}
           description={`This quiz was created by ${
             quiz.professor?.email ?? "another instructor"
-          }. Click Edit to work on a version for your section only — other sections keep the original.`}
+          }. Click Edit to work on a version for your section only. Other sections keep the original.`}
           actions={
             <Button asChild variant="outline">
               <a
@@ -187,21 +197,20 @@ export default async function EditQuizPage({
 
   // Prefer ongoing sections for assignment; keep currently assigned concluded
   // sections visible so edit doesn't silently drop them.
-  const sectionOptionsSource = professorSectionsList.filter(
-    (ps) =>
-      !isSectionConcluded(ps.section) || assignedIdSet.has(ps.section.id),
+  const sectionOptionsSource = teachingSections.filter(
+    (section) =>
+      !isSectionConcluded(section) || assignedIdSet.has(section.id),
   );
-  const enrolledSections = sectionOptionsSource.map((ps) => ({
-    id: ps.section.id,
-    title: `${ps.section.course.title} - ${ps.section.name}`,
-    description: ps.section.course.description,
+  const enrolledSections = sectionOptionsSource.map((section) => ({
+    id: section.id,
+    title: `${section.course.title} - ${section.name}`,
+    description: section.course.description,
   }));
 
   return (
     <AppShell
       role="professor"
-      active="quizzes"
-      topbarEyebrow="Faculty"
+      active="assignments"
       topbarTitle={quiz.title}
       maxWidth="wide"
     >
@@ -209,10 +218,10 @@ export default async function EditQuizPage({
         breadcrumbs={[
           { label: "Dashboard", href: withBasePath("/dashboard/professor") },
           {
-            label: "My quizzes",
-            href: withBasePath("/dashboard/professor/quizzes"),
+            label: "Assignments",
+            href: withBasePath("/dashboard/professor/assignments"),
           },
-          { label: "Edit" },
+          { label: "Edit quiz" },
         ]}
         eyebrow="Revise"
         title={quiz.title}
@@ -224,16 +233,27 @@ export default async function EditQuizPage({
             : "Not yet assigned to a section."
         }
         actions={
-          <Button asChild variant="outline">
-            <a
-              href={withBasePath(
-                `/dashboard/professor/quiz/${quiz.id}/results`,
-              )}
-            >
-              <Eye className="h-4 w-4" />
-              View results
-            </a>
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild variant="outline">
+              <a
+                href={withBasePath(
+                  `/dashboard/professor/quiz/${quiz.id}/calibration`,
+                )}
+              >
+                Calibration
+              </a>
+            </Button>
+            <Button asChild variant="outline">
+              <a
+                href={withBasePath(
+                  `/dashboard/professor/quiz/${quiz.id}/results`,
+                )}
+              >
+                <Eye className="h-4 w-4" />
+                View results
+              </a>
+            </Button>
+          </div>
         }
       />
 
@@ -263,7 +283,7 @@ export default async function EditQuizPage({
           <div>
             <dt className="eyebrow text-ink-faint">Time limit</dt>
             <dd className="mt-2 stat-numeral text-2xl text-ink">
-              {quiz.timeLimit ? `${quiz.timeLimit}m` : "—"}
+              {quiz.timeLimit ? `${quiz.timeLimit}m` : "-"}
             </dd>
           </div>
         </dl>

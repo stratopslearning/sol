@@ -8,6 +8,7 @@
  */
 import { z } from 'zod';
 
+import { ApiError } from '@/lib/api/errors';
 import type { ProfessorApiAuth } from '@/lib/api/professorAuth';
 import type { TokenScope } from '@/lib/professorApiTokens';
 import {
@@ -52,6 +53,46 @@ import {
 } from '@/lib/professor/mutations';
 import { getAttentionItemsForProfessor } from '@/lib/professorAttention';
 import { isoDateTimeRequired, quizWindowSuperRefine } from '@/lib/quizSchemas';
+import {
+  addMaterialFromUrl,
+  getCourseMaterial,
+  linkDocumentToCourse,
+  listCourseLinkedDocuments,
+  listCourseMaterials,
+  listTeachableCourses,
+  softDeleteMaterial,
+  unlinkDocumentFromCourse,
+} from '@/lib/knowledge';
+import {
+  acceptSwitchUp,
+  approveAndBuildOutline,
+  archiveOutline,
+  generateCourseOutline,
+  getCurrentOutlineForCourse,
+  getOutlineDetail,
+  listAuthoringRevisions,
+  listOutlinesForCourse,
+  previewOutlineItem,
+  proposeOutlineSkeleton,
+  proposeSwitchUp,
+  publishOutlineItem,
+  refineOutlineChat,
+  releaseOutlineItem,
+  restoreAuthoringRevision,
+  runRolloverChecks,
+  searchCourseMaterialsForAuthoring,
+  updateOutlineItem,
+  updateOutlineMeta,
+} from '@/lib/authoring';
+import { assertCanManageCourse } from '@/lib/knowledge/access';
+import {
+  getConceptMastery,
+  getLessonCompletion,
+} from '@/lib/analytics';
+import { logAudit } from '@/lib/audit';
+import { db } from '@/app/db';
+import { lessons } from '@/app/db/schema';
+import { and, desc, eq, isNull } from 'drizzle-orm';
 
 export interface McpToolContext {
   auth: ProfessorApiAuth;
@@ -95,7 +136,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   {
     name: 'whoami',
     description:
-      'Who am I? Returns the authenticated professor (name, email, role) and the scopes this token has.',
+      'Who am I? Returns the authenticated professor (name, email, platformStaff) and the scopes this token has.',
     schema: z.object({}),
     scope: null,
     handler: async (_args, ctx) => ({
@@ -105,7 +146,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
           .filter(Boolean)
           .join(' ') || ctx.auth.user.email,
       email: ctx.auth.user.email,
-      role: ctx.auth.user.role,
+      platformStaff: ctx.auth.user.platformStaff,
       scopes: ctx.auth.scopes,
     }),
   },
@@ -149,10 +190,21 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       'Enroll me (as teaching faculty) into a section using its professor enrollment code.',
     schema: z.object({
       enrollmentCode: z.string().min(1).describe('Professor enrollment code'),
+      workspaceId: z
+        .string()
+        .uuid()
+        .optional()
+        .describe(
+          'Optional: disambiguate when you already belong to that workspace. Faculty codes also resolve across workspaces without this.',
+        ),
     }),
     scope: 'sections:write',
     handler: (args, ctx) =>
-      enrollInSection(ctx.auth.user, args.enrollmentCode as string),
+      enrollInSection(
+        ctx.auth.user,
+        args.enrollmentCode as string,
+        args.workspaceId as string | undefined,
+      ),
   },
   {
     name: 'leave_section',
@@ -444,7 +496,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   {
     name: 'regrade_attention',
     description:
-      'Re-grade a batch from my attention queue (up to 20 attempts, processed synchronously — may take a minute). Destructive: requires confirm=true because it calls the AI grader.',
+      'Re-grade a batch from my attention queue (up to 20 attempts, processed synchronously: may take a minute). Destructive: requires confirm=true because it calls the AI grader.',
     schema: z.object({
       limit: z.number().int().min(1).max(20).default(10),
       confirm: confirmField,
@@ -596,6 +648,454 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     scope: 'read',
     handler: (args, ctx) =>
       getDiscussionSession(ctx.auth.user, args.sessionId as string),
+  },
+
+  // ---- Materials (Knowledge) ------------------------------------------
+  {
+    name: 'list_teachable_courses',
+    description:
+      'List courses I teach (via section enrollment), for choosing a materials library.',
+    schema: z.object({}),
+    scope: 'read',
+    handler: async (_args, ctx) => ({
+      courses: await listTeachableCourses(ctx.auth.user),
+    }),
+  },
+  {
+    name: 'list_materials',
+    description:
+      'List course materials and attached workspace Knowledge documents for a course I can manage.',
+    schema: z.object({ courseId: z.string().uuid() }),
+    scope: 'read',
+    handler: async (args, ctx) => {
+      const courseId = args.courseId as string;
+      const [materials, documents] = await Promise.all([
+        listCourseMaterials(ctx.auth.user, courseId),
+        listCourseLinkedDocuments(ctx.auth.user, courseId),
+      ]);
+      return { materials, documents };
+    },
+  },
+  {
+    name: 'attach_knowledge_document',
+    description:
+      'Attach a workspace Knowledge document to a course for RAG (tutor + authoring).',
+    schema: z.object({
+      courseId: z.string().uuid(),
+      documentId: z.string().uuid(),
+    }),
+    scope: 'materials:write',
+    handler: async (args, ctx) => {
+      await linkDocumentToCourse(
+        ctx.auth.user,
+        args.courseId as string,
+        args.documentId as string,
+      );
+      return { success: true };
+    },
+  },
+  {
+    name: 'detach_knowledge_document',
+    description:
+      'Detach a workspace Knowledge document from a course (document remains in the library).',
+    schema: z.object({
+      courseId: z.string().uuid(),
+      documentId: z.string().uuid(),
+      confirm: confirmField,
+    }),
+    scope: 'materials:write',
+    destructive: true,
+    handler: async (args, ctx) => {
+      await unlinkDocumentFromCourse(
+        ctx.auth.user,
+        args.courseId as string,
+        args.documentId as string,
+      );
+      return { success: true };
+    },
+  },
+  {
+    name: 'get_material',
+    description: 'Get one course material by id (metadata; not file bytes).',
+    schema: z.object({ materialId: z.string().uuid() }),
+    scope: 'read',
+    handler: async (args, ctx) => ({
+      material: await getCourseMaterial(
+        ctx.auth.user,
+        args.materialId as string,
+      ),
+    }),
+  },
+  {
+    name: 'add_material_url',
+    description:
+      'Add a public http(s) URL to a course materials library I teach. Indexes asynchronously.',
+    schema: z.object({
+      courseId: z.string().uuid(),
+      url: z.string().url(),
+      title: z.string().min(1).max(200).optional(),
+    }),
+    scope: 'materials:write',
+    handler: (args, ctx) =>
+      addMaterialFromUrl(ctx.auth.user, {
+        courseId: args.courseId as string,
+        url: args.url as string,
+        title: args.title as string | undefined,
+      }),
+  },
+  {
+    name: 'delete_material',
+    description:
+      'Soft-delete a course material (removed from tutor retrieval). Destructive; requires confirm.',
+    schema: z.object({
+      materialId: z.string().uuid(),
+      confirm: confirmField,
+    }),
+    scope: 'materials:write',
+    destructive: true,
+    handler: async (args, ctx) => {
+      await softDeleteMaterial(ctx.auth.user, args.materialId as string);
+      return { success: true };
+    },
+  },
+
+  // ---- Authoring ------------------------------------------------------
+  {
+    name: 'search_course_materials',
+    description:
+      'Semantic search over indexed course material chunks (faculty authoring context; not student tutor).',
+    schema: z.object({
+      courseId: z.string().uuid(),
+      query: z.string().min(1).max(2000),
+      k: z.number().int().min(1).max(20).optional(),
+    }),
+    scope: 'authoring:write',
+    handler: async (args, ctx) => {
+      await assertCanManageCourse(ctx.auth.user, args.courseId as string);
+      const chunks = await searchCourseMaterialsForAuthoring(
+        args.courseId as string,
+        args.query as string,
+        { k: args.k as number | undefined },
+      );
+      return { chunks };
+    },
+  },
+  {
+    name: 'list_outlines',
+    description: 'List non-archived authoring outlines for a course I teach.',
+    schema: z.object({ courseId: z.string().uuid() }),
+    scope: 'read',
+    handler: async (args, ctx) => ({
+      outlines: await listOutlinesForCourse(
+        ctx.auth.user,
+        args.courseId as string,
+      ),
+    }),
+  },
+  {
+    name: 'list_lessons',
+    description:
+      'List published lessons for a course I teach (active and inactive drafts).',
+    schema: z.object({ courseId: z.string().uuid() }),
+    scope: 'read',
+    handler: async (args, ctx) => {
+      await assertCanManageCourse(ctx.auth.user, args.courseId as string);
+      const rows = await db.query.lessons.findMany({
+        where: and(
+          eq(lessons.courseId, args.courseId as string),
+          isNull(lessons.deletedAt),
+        ),
+        orderBy: [desc(lessons.updatedAt)],
+        columns: {
+          id: true,
+          title: true,
+          isActive: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+      return { lessons: rows };
+    },
+  },
+  {
+    name: 'get_concept_mastery',
+    description:
+      'Concept mastery and gaps for a course I teach (from quiz question tags + submitted attempts). Optional sectionId filter.',
+    schema: z.object({
+      courseId: z.string().uuid(),
+      sectionId: z.string().uuid().optional(),
+    }),
+    scope: 'read',
+    handler: async (args, ctx) => {
+      const result = await getConceptMastery(
+        ctx.auth.user,
+        args.courseId as string,
+        { sectionId: args.sectionId as string | undefined },
+      );
+      await logAudit({
+        actorUserId: ctx.auth.user.id,
+        actorClerkId: ctx.auth.user.clerkId,
+        action: 'professor.analytics.view',
+        targetType: 'course',
+        targetId: args.courseId as string,
+        metadata: {
+          tool: 'get_concept_mastery',
+          sectionId: (args.sectionId as string | undefined) ?? null,
+          conceptCount: result.concepts.length,
+        },
+      });
+      return result;
+    },
+  },
+  {
+    name: 'get_lesson_completion',
+    description:
+      'Lesson completion rates for a course I teach (started / completed vs roster). Optional sectionId filter.',
+    schema: z.object({
+      courseId: z.string().uuid(),
+      sectionId: z.string().uuid().optional(),
+    }),
+    scope: 'read',
+    handler: async (args, ctx) => {
+      const lessonsRows = await getLessonCompletion(
+        ctx.auth.user,
+        args.courseId as string,
+        { sectionId: args.sectionId as string | undefined },
+      );
+      await logAudit({
+        actorUserId: ctx.auth.user.id,
+        actorClerkId: ctx.auth.user.clerkId,
+        action: 'professor.analytics.view',
+        targetType: 'course',
+        targetId: args.courseId as string,
+        metadata: {
+          tool: 'get_lesson_completion',
+          sectionId: (args.sectionId as string | undefined) ?? null,
+          lessonCount: lessonsRows.length,
+        },
+      });
+      return { lessons: lessonsRows };
+    },
+  },
+  {
+    name: 'get_outline',
+    description:
+      'Get the current or a specific course authoring outline (modules and items).',
+    schema: z.object({
+      outlineId: z.string().uuid().optional(),
+      courseId: z.string().uuid().optional(),
+    }),
+    scope: 'read',
+    handler: async (args, ctx) => {
+      if (args.outlineId) {
+        return {
+          outline: await getOutlineDetail(
+            ctx.auth.user,
+            args.outlineId as string,
+          ),
+        };
+      }
+      if (!args.courseId) {
+        throw ApiError.badRequest('outlineId or courseId is required');
+      }
+      return {
+        outline: await getCurrentOutlineForCourse(
+          ctx.auth.user,
+          args.courseId as string,
+        ),
+      };
+    },
+  },
+  {
+    name: 'propose_outline',
+    description:
+      'Propose an outline SKELETON from READY materials (prior-course tagged materials mirror last term). Does not build assignment bodies until approve_outline.',
+    schema: z.object({
+      courseId: z.string().uuid(),
+      brief: z.string().max(2000).optional(),
+    }),
+    scope: 'authoring:write',
+    handler: (args, ctx) =>
+      proposeOutlineSkeleton(ctx.auth.user, {
+        courseId: args.courseId as string,
+        brief: args.brief as string | undefined,
+      }),
+  },
+  {
+    name: 'approve_outline',
+    description:
+      'Approve a DRAFT skeleton and faithfully build assignment bodies (mimics prior-course materials when tagged).',
+    schema: z.object({ outlineId: z.string().uuid() }),
+    scope: 'authoring:write',
+    handler: (args, ctx) =>
+      approveAndBuildOutline(ctx.auth.user, args.outlineId as string),
+  },
+  {
+    name: 'generate_outline',
+    description:
+      'One-shot full outline generate (secondary). Prefer propose_outline + approve_outline. Archives the previous current outline.',
+    schema: z.object({
+      courseId: z.string().uuid(),
+      brief: z.string().max(2000).optional(),
+    }),
+    scope: 'authoring:write',
+    handler: (args, ctx) =>
+      generateCourseOutline(ctx.auth.user, {
+        courseId: args.courseId as string,
+        brief: args.brief as string | undefined,
+      }),
+  },
+  {
+    name: 'list_outline_revisions',
+    description: 'List authoring revisions for an outline (for rollback).',
+    schema: z.object({ outlineId: z.string().uuid() }),
+    scope: 'read',
+    handler: async (args, ctx) => ({
+      revisions: await listAuthoringRevisions(
+        ctx.auth.user,
+        args.outlineId as string,
+      ),
+    }),
+  },
+  {
+    name: 'restore_outline_revision',
+    description: 'Restore an outline to a prior revision snapshot.',
+    schema: z.object({ revisionId: z.string().uuid() }),
+    scope: 'authoring:write',
+    handler: (args, ctx) =>
+      restoreAuthoringRevision(ctx.auth.user, args.revisionId as string),
+  },
+  {
+    name: 'propose_switch_up',
+    description:
+      'Propose anti-cheat assignment variants (same structure, new questions) with similarity scores. Does not apply until accept_switch_up.',
+    schema: z.object({
+      outlineId: z.string().uuid(),
+      itemIds: z.array(z.string().uuid()).optional(),
+    }),
+    scope: 'authoring:write',
+    handler: (args, ctx) =>
+      proposeSwitchUp(ctx.auth.user, {
+        outlineId: args.outlineId as string,
+        itemIds: args.itemIds as string[] | undefined,
+      }),
+  },
+  {
+    name: 'accept_switch_up',
+    description: 'Apply accepted switch-up item bodies to the outline.',
+    schema: z.object({
+      outlineId: z.string().uuid(),
+      items: z.array(
+        z.object({
+          itemId: z.string().uuid(),
+          title: z.string().optional(),
+          body: z.record(z.string(), z.unknown()),
+        }),
+      ),
+    }),
+    scope: 'authoring:write',
+    handler: (args, ctx) =>
+      acceptSwitchUp(ctx.auth.user, {
+        outlineId: args.outlineId as string,
+        items: args.items as Parameters<typeof acceptSwitchUp>[1]['items'],
+      }),
+  },
+  {
+    name: 'rollover_checks',
+    description:
+      'SOL-native pre-publish checks: stale/missing dates, duplicates, inactive quizzes, missing-work zeros.',
+    schema: z.object({ courseId: z.string().uuid() }),
+    scope: 'read',
+    handler: (args, ctx) =>
+      runRolloverChecks(ctx.auth.user, args.courseId as string),
+  },
+  {
+    name: 'update_outline',
+    description: 'Update outline title or status (DRAFT/READY/ARCHIVED).',
+    schema: z.object({
+      outlineId: z.string().uuid(),
+      title: z.string().min(1).max(200).optional(),
+      status: z.enum(['DRAFT', 'READY', 'ARCHIVED']).optional(),
+    }),
+    scope: 'authoring:write',
+    handler: async (args, ctx) => {
+      if (args.status === 'ARCHIVED' && args.title == null) {
+        return archiveOutline(ctx.auth.user, args.outlineId as string);
+      }
+      return updateOutlineMeta(ctx.auth.user, args.outlineId as string, {
+        title: args.title as string | undefined,
+        status: args.status as 'DRAFT' | 'READY' | 'ARCHIVED' | undefined,
+      });
+    },
+  },
+  {
+    name: 'update_outline_item',
+    description: 'Manually edit an outline item title or body JSON.',
+    schema: z.object({
+      itemId: z.string().uuid(),
+      title: z.string().min(1).max(200).optional(),
+      body: z.record(z.string(), z.unknown()).optional(),
+    }),
+    scope: 'authoring:write',
+    handler: (args, ctx) =>
+      updateOutlineItem(ctx.auth.user, args.itemId as string, {
+        title: args.title as string | undefined,
+        body: args.body as Parameters<typeof updateOutlineItem>[2]['body'],
+      }),
+  },
+  {
+    name: 'refine_outline',
+    description:
+      'Chat-refine an outline: natural-language edit that may patch item bodies.',
+    schema: z.object({
+      outlineId: z.string().uuid(),
+      message: z.string().min(1).max(4000),
+      focusItemId: z.string().uuid().optional(),
+    }),
+    scope: 'authoring:write',
+    handler: (args, ctx) =>
+      refineOutlineChat(ctx.auth.user, {
+        outlineId: args.outlineId as string,
+        message: args.message as string,
+        focusItemId: args.focusItemId as string | undefined,
+      }),
+  },
+  {
+    name: 'preview_outline_item',
+    description:
+      'Mark an item PREVIEW and return a preview DTO. mode=student strips answer keys (no grade write).',
+    schema: z.object({
+      itemId: z.string().uuid(),
+      mode: z.enum(['faculty', 'student']).optional(),
+    }),
+    scope: 'authoring:write',
+    handler: (args, ctx) =>
+      previewOutlineItem(ctx.auth.user, args.itemId as string, {
+        mode: args.mode as 'faculty' | 'student' | undefined,
+      }),
+  },
+  {
+    name: 'publish_outline_item',
+    description:
+      'Create an inactive quiz or discussion from a QUIZ/DISCUSSION item (not visible to students until release).',
+    schema: z.object({
+      itemId: z.string().uuid(),
+      sectionIds: z.array(z.string().uuid()).optional(),
+    }),
+    scope: 'authoring:write',
+    handler: (args, ctx) =>
+      publishOutlineItem(ctx.auth.user, args.itemId as string, {
+        sectionIds: args.sectionIds as string[] | undefined,
+      }),
+  },
+  {
+    name: 'release_outline_item',
+    description:
+      'Release a published outline item to students (sets linked quiz/discussion isActive true).',
+    schema: z.object({ itemId: z.string().uuid() }),
+    scope: 'authoring:write',
+    handler: (args, ctx) =>
+      releaseOutlineItem(ctx.auth.user, args.itemId as string),
   },
 ];
 

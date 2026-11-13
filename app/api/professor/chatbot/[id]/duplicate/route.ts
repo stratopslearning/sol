@@ -1,13 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { eq } from 'drizzle-orm';
 
-import { db } from '@/app/db';
-import { chatbots } from '@/app/db/schema';
-import { getActiveChatbot } from '@/lib/chatbot/access';
-import { CHATBOT_MODEL } from '@/lib/chatbot/constants';
 import { ApiError, jsonError } from '@/lib/api/errors';
 import { requireProfessorApi } from '@/lib/api/professorAuth';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
+import { duplicateDiscussion } from '@/lib/professor/mutations';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,33 +25,7 @@ export async function POST(
     if (limited) return limited;
 
     const { id } = await context.params;
-    const source = await getActiveChatbot(id);
-    if (!source) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    }
-    if (
-      user.role === 'PROFESSOR' &&
-      !source.isTemplate &&
-      source.professorId !== user.id
-    ) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
-    const [created] = await db
-      .insert(chatbots)
-      .values({
-        professorId: user.id,
-        title: source.isTemplate ? source.title : `${source.title} (copy)`,
-        description: source.description,
-        personaName: source.personaName,
-        instructions: source.instructions,
-        systemPrompt: source.systemPrompt,
-        relatedQuizId: source.relatedQuizId,
-        isTemplate: false,
-        model: source.model || CHATBOT_MODEL,
-        isActive: true,
-      })
-      .returning();
+    const created = await duplicateDiscussion(user, id);
 
     return NextResponse.json({
       success: true,

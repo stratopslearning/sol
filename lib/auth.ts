@@ -1,107 +1,109 @@
 import { paymentsEnabled } from './featureFlags';
 import { appRedirect } from './serverRedirect';
-import { getOrCreateUser, getUser, UserData } from './getOrCreateUser';
+import {
+  getOrCreateUser,
+  getUser,
+  refreshUserEntitlements,
+  UserData,
+} from './getOrCreateUser';
+import {
+  getDashboardAreas,
+  requireLearningAccess,
+  requirePlatformStaff,
+  requireTeachingAccess,
+  userCanAccessLearningArea,
+  userCanAccessTeachingArea,
+} from '@/lib/authz/gates';
 
 /**
  * Middleware helper to ensure user is authenticated and synced
  */
 export async function requireAuth(): Promise<UserData> {
   const user = await getOrCreateUser();
-  
+
   if (!user) {
     appRedirect('/login');
   }
-  
+
   return user;
 }
 
 /**
- * Middleware helper to check if user has required role.
- *
- * On role mismatch we redirect users to their own role's dashboard rather than
- * to `/unauthorized` (which doesn't exist). This mirrors the behavior the edge
- * middleware used to provide before the DB-aware checks were moved here for
- * edge-runtime compatibility.
+ * @deprecated Prefer requireTeachingAccess / requireLearningAccess / requirePlatformStaff.
+ * Kept for gradual migration of call sites.
  */
-export async function requireRole(requiredRole: UserData['role']): Promise<UserData> {
-  const user = await requireAuth();
+export type LegacyDashboardRole = 'STUDENT' | 'PROFESSOR' | 'ADMIN';
 
-  if (user.role !== requiredRole && user.role !== 'ADMIN') {
-    appRedirect(getDashboardUrl(user.role));
+export async function requireRole(
+  requiredRole: LegacyDashboardRole,
+): Promise<UserData> {
+  const user = await refreshUserEntitlements(await requireAuth());
+
+  if (requiredRole === 'ADMIN') {
+    return requirePlatformStaff();
+  }
+  if (requiredRole === 'PROFESSOR') {
+    return requireTeachingAccess();
+  }
+  if (requiredRole === 'STUDENT') {
+    return requireLearningAccess();
   }
 
-  return user;
+  appRedirect(await resolveDashboardPath(user));
 }
 
 /**
  * Middleware helper to check if student has paid.
- *
- * No-op when the payments feature flag is disabled — all authenticated
- * students are treated as entitled.
  */
 export async function requirePayment(): Promise<UserData> {
-  const user = await requireAuth();
-  
-  if (paymentsEnabled() && user.role === 'STUDENT' && !user.paid) {
-    appRedirect('/payment');
+  const user = await refreshUserEntitlements(await requireAuth());
+
+  if (paymentsEnabled() && !user.paid) {
+    const learning = await userCanAccessLearningArea(user.id);
+    const teaching = await userCanAccessTeachingArea(user.id);
+    if (learning && !teaching && !user.paid) {
+      appRedirect('/payment');
+    }
   }
-  
+
   return user;
 }
 
-/**
- * Middleware helper for professor access
- */
 export async function requireProfessor(): Promise<UserData> {
-  return requireRole('PROFESSOR');
+  return requireTeachingAccess();
 }
 
-/**
- * Middleware helper for admin access
- */
 export async function requireAdmin(): Promise<UserData> {
-  return requireRole('ADMIN');
+  return requirePlatformStaff();
 }
 
-/**
- * Middleware helper for student access (with payment check)
- */
 export async function requireStudent(): Promise<UserData> {
-  const user = await requireRole('STUDENT');
+  await requireLearningAccess();
   return requirePayment();
 }
 
-/**
- * Check if user can access a specific resource
- */
 export async function canAccessResource(
   resourceUserId: string,
-  allowedRoles: UserData['role'][] = ['ADMIN']
+  _allowedRoles: LegacyDashboardRole[] = ['ADMIN'],
 ): Promise<boolean> {
   const user = await getUser();
-  
+
   if (!user) {
     return false;
   }
-  
-  // Admin can access everything
-  if (user.role === 'ADMIN') {
-    return true;
-  }
-  
-  // User can access their own resources
+
+  // No platform_staff / ADMIN bypass for tenant or user resources.
+  // Cross-tenant admin access must use requireSupportGrant(tenantId).
+
   if (user.id === resourceUserId) {
     return true;
   }
-  
-  // Check if user has required role
-  return allowedRoles.includes(user.role);
+
+  return false;
 }
 
-/**
- * Get user's dashboard URL based on their role
- */
-export function getDashboardUrl(role: UserData['role']): string {
+/** @deprecated Prefer resolveDashboardPath(user) from bindings. */
+export function getDashboardUrl(role: LegacyDashboardRole): string {
   switch (role) {
     case 'STUDENT':
       return '/dashboard/student';
@@ -112,4 +114,16 @@ export function getDashboardUrl(role: UserData['role']): string {
     default:
       return '/';
   }
-} 
+}
+
+/** Dashboard path from bindings + enrollments (not global users.role). */
+export async function resolveDashboardPath(
+  user: Pick<UserData, 'id'> & { platformStaff?: boolean | null },
+): Promise<string> {
+  const areas = await getDashboardAreas(user);
+  if (areas.platformStaff) return '/dashboard/admin';
+  if (areas.teaching && areas.learning) return '/dashboard/home';
+  if (areas.teaching) return '/dashboard/professor';
+  if (areas.learning) return '/dashboard/student';
+  return '/onboarding';
+}

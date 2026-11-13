@@ -22,7 +22,11 @@ export function createOpenAIClient(
 
   // Skip wrapping in Vitest / when Braintrust is unset. wrapOpenAI expects a
   // real OpenAI SDK instance and breaks on vi.mock('openai') constructors.
-  if (isBraintrustEnabled() && process.env.NODE_ENV !== 'test') {
+  // BRAINTRUST_WRAP=1 opts evals (NODE_ENV=test) back into auto-instrumentation.
+  const allowWrap =
+    isBraintrustEnabled() &&
+    (process.env.NODE_ENV !== 'test' || process.env.BRAINTRUST_WRAP === '1');
+  if (allowWrap) {
     initBraintrustLogger();
     return wrapOpenAI(client);
   }

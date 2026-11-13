@@ -2,15 +2,28 @@ import type { Metadata } from 'next';
 
 import { LegalShell } from '@/components/legal/LegalShell';
 import { withBasePath } from '@/lib/basePath';
+import {
+  LEGAL_ENTITY,
+  publicPrivacyContactEmail,
+  legalMailingLines,
+} from '@/lib/legal';
+import { socialMetadata, titledPage } from '@/lib/pageMeta';
 import { absoluteUrl } from '@/lib/siteUrl';
 
+const privacyDescription =
+  'How SOL collects, uses, retains, and protects education records and account data for faculty, students, and institutions.';
+
 export const metadata: Metadata = {
-  title: 'Privacy Policy · SOL',
-  description:
-    'How SOL collects, uses, retains, and protects education records and account data.',
+  title: 'Privacy Policy',
+  description: privacyDescription,
   alternates: {
     canonical: absoluteUrl('/privacy'),
   },
+  ...socialMetadata({
+    title: titledPage('Privacy Policy'),
+    description: privacyDescription,
+    url: absoluteUrl('/privacy'),
+  }),
 };
 
 export default function PrivacyPage() {
@@ -29,7 +42,7 @@ export default function PrivacyPage() {
       <h2>2. Education records (FERPA)</h2>
       <p>
         When SOL is used for coursework, we process <strong>education records</strong>{' '}
-        on behalf of the institution — for example section rosters, quiz
+        on behalf of the institution: for example section rosters, quiz
         attempts, scores, AI grading rationale, discussion transcripts, and
         related audit events. Under FERPA, the institution is typically the
         education agency/institution; SOL acts as a service provider /
@@ -58,7 +71,8 @@ export default function PrivacyPage() {
         <li>
           <strong>Technical data:</strong> IP address and user-agent on
           security-relevant audit events; error diagnostics via Sentry (PII
-          scrubbing defaults in production); rate-limit counters in Upstash.
+          scrubbing defaults in production; <strong>session replay is off</strong>);
+          rate-limit counters in Upstash.
         </li>
       </ul>
 
@@ -127,7 +141,8 @@ export default function PrivacyPage() {
       <h2>10. Children</h2>
       <p>
         SOL is designed for higher-education and adult learners in institutional
-        deployments. It is not directed at children under 13.
+        deployments. It is not directed at children under 13. Sign-up requires
+        confirmation that the user is at least 13 years old.
       </p>
 
       <h2>11. Changes</h2>
@@ -140,10 +155,26 @@ export default function PrivacyPage() {
       <h2>12. Contact</h2>
       <p>
         Privacy and education-record requests: contact your institution’s SOL
-        administrator, or the operations contact named in your institution’s
-        agreement with SOL. Product documentation:{' '}
-        <a href={withBasePath('/docs')}>Docs</a>. Terms of use:{' '}
-        <a href={withBasePath('/terms')}>Terms</a>.
+        administrator, email{' '}
+        <a href={`mailto:${publicPrivacyContactEmail()}`}>{publicPrivacyContactEmail()}</a>, or
+        the operations contact named in your institution’s agreement with SOL.
+        Optional email outreach:{" "}
+        <a href={withBasePath('/unsubscribe')}>Unsubscribe</a>.
+      </p>
+      <p>
+        {LEGAL_ENTITY}:
+        <br />
+        {legalMailingLines().map((line) => (
+          <span key={line}>
+            {line}
+            <br />
+          </span>
+        ))}
+      </p>
+      <p>
+        Product documentation: <a href={withBasePath('/docs')}>Docs</a>. Terms:{' '}
+        <a href={withBasePath('/terms')}>Terms</a>. Copyright:{' '}
+        <a href={withBasePath('/dmca')}>DMCA</a>.
       </p>
     </LegalShell>
   );

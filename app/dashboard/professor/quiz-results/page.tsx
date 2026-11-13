@@ -1,5 +1,6 @@
 import { eq, inArray } from "drizzle-orm";
-import { Eye, FileText, TrendingUp, Users } from "lucide-react";
+import { requireTeachingAccess } from '@/lib/authz/gates';
+import { Eye, FileText, TrendingUp, Users } from "@/components/icons";
 
 import { db } from "@/app/db";
 import { professorSections, quizSections } from "@/app/db/schema";
@@ -21,16 +22,26 @@ import { withBasePath } from "@/lib/basePath";
 import { getOrCreateUser } from "@/lib/getOrCreateUser";
 import { fetchSubmittedAttemptsForProfessorSections } from "@/lib/professorVisibleAttempts";
 import { partitionEnrollmentsByConclusion } from "@/lib/sectionAvailability";
+import { listTeachingSectionIds } from '@/lib/professor/graderSections';
+import { fetchSectionsByIds } from '@/lib/db/entityScopedReads';
 import { cleanQuizDescription } from "@/lib/utils";
 
 export default async function QuizResultsPage() {
-  const user = await getOrCreateUser();
-  if (!user || user.role !== "PROFESSOR") return null;
+  const user = await requireTeachingAccess();
 
-  const professorSectionsList = await db.query.professorSections.findMany({
-    where: eq(professorSections.professorId, user.id),
-    with: { section: { with: { course: true } } },
-  });
+  const teachingIds = await listTeachingSectionIds(user);
+  const sectionRows = teachingIds.length ? await fetchSectionsByIds(teachingIds) : [];
+  const professorSectionsList = sectionRows.map((section) => ({
+    section: {
+      id: section.id,
+      name: section.name,
+      endsAt: section.endsAt,
+      createdAt: new Date(),
+      courseId: section.courseId,
+      course: section.course ?? { id: section.courseId, title: 'Course', description: null },
+    },
+    enrolledAt: new Date(),
+  }));
   const { active: ongoingEnrollments } =
     partitionEnrollmentsByConclusion(professorSectionsList);
 
@@ -41,7 +52,6 @@ export default async function QuizResultsPage() {
       <AppShell
         role="professor"
         active="quiz-results"
-        topbarEyebrow="Faculty"
         topbarTitle="All results"
       >
         <PageHeader
@@ -76,18 +86,26 @@ export default async function QuizResultsPage() {
     where: inArray(quizSections.sectionId, enrolledSectionIds),
     with: {
       quiz: {
+        columns: {
+          id: true,
+          title: true,
+          description: true,
+          isActive: true,
+          professorId: true,
+          deletedAt: true,
+        },
         with: {
-          professor: true,
-          questions: true,
-          attempts: {
-            with: {
-              student: true,
-              section: { with: { course: true } },
+          professor: {
+            columns: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
             },
           },
         },
       },
-      section: { with: { course: true } },
+      section: { with: { course: { columns: { id: true, title: true } } } },
     },
     orderBy: (quizSections, { desc }) => desc(quizSections.assignedAt),
   });
@@ -159,7 +177,6 @@ export default async function QuizResultsPage() {
     <AppShell
       role="professor"
       active="quiz-results"
-      topbarEyebrow="Faculty"
       topbarTitle="All results"
     >
       <PageHeader
@@ -281,7 +298,7 @@ export default async function QuizResultsPage() {
                     <TableCell className="text-sm text-ink-muted tnum">
                       {stat.lastAttempt
                         ? stat.lastAttempt.toLocaleDateString()
-                        : "—"}
+                        : "-"}
                     </TableCell>
                     <TableCell className="text-right">
                       <Button asChild variant="ghost" size="sm">

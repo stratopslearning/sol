@@ -15,6 +15,23 @@ vi.mock('@/app/db', () => ({
       },
       users: { findFirst: async () => state.userRow },
     },
+    // resolve_api_token(...) SECURITY DEFINER function + set_config.
+    execute: async () => {
+      const t = state.tokenRow;
+      if (!t) return { rows: [] };
+      return {
+        rows: [
+          {
+            token_id: t.id,
+            user_id: t.userId,
+            tenant_id: 'tenant-1',
+            scopes: t.scopes,
+            revoked_at: t.revokedAt,
+            expires_at: t.expiresAt,
+          },
+        ],
+      };
+    },
     insert: () => ({
       values: () => ({ returning: async () => [state.tokenRow] }),
     }),
@@ -50,7 +67,7 @@ const baseUser = {
   email: 'prof@example.edu',
   firstName: 'Pat',
   lastName: 'Professor',
-  role: 'PROFESSOR' as const,
+  platformStaff: false,
   paid: false,
   createdAt: new Date(),
   updatedAt: new Date(),
@@ -139,11 +156,15 @@ describe('verifyProfessorApiToken', () => {
     expect(await verifyProfessorApiToken(secret)).toBeNull();
   });
 
-  it('rejects tokens whose owner lost the professor role', async () => {
+  it('does not consult users.role: authority comes from bindings (Wave 2 item 14)', async () => {
     const secret = generateTokenSecret();
     state.tokenRow = tokenRowFor(secret);
-    state.userRow = { ...baseUser, role: 'STUDENT' };
-    expect(await verifyProfessorApiToken(secret)).toBeNull();
+    state.userRow = { ...baseUser };
+    const verified = await verifyProfessorApiToken(secret);
+    // Token still resolves; effectiveScopesForUser() later intersects with bindings
+    // (a user with no teaching bindings ends up with zero effective scopes).
+    expect(verified?.user.id).toBe('user-1');
+    expect(verified?.tenantId).toBe('tenant-1');
   });
 
   it('filters unknown scopes from stored rows', async () => {

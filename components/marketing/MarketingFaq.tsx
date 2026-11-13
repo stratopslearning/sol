@@ -14,7 +14,25 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { withBasePath } from "@/lib/basePath";
+import { FOUNDERS_EMAIL } from "@/lib/legal";
 import { MARKETING_FAQS } from "@/lib/marketingFaq";
+
+function FaqAnswer({ text }: { text: string }) {
+  if (!text.includes(FOUNDERS_EMAIL)) return text;
+  const [before, after] = text.split(FOUNDERS_EMAIL);
+  return (
+    <>
+      {before}
+      <a
+        href={`mailto:${FOUNDERS_EMAIL}`}
+        className="underline decoration-ink/30 underline-offset-2 transition-colors hover:text-ink hover:decoration-ink/60"
+      >
+        {FOUNDERS_EMAIL}
+      </a>
+      {after}
+    </>
+  );
+}
 
 const GROVE = withBasePath("/marketing/hero-grove.jpg");
 
@@ -59,7 +77,7 @@ export function MarketingFaq() {
       <div className="absolute inset-0" aria-hidden data-faq-bg>
         <Image
           src={GROVE}
-          alt=""
+          alt="Oil painting of a tree-lined academic path in soft morning light"
           fill
           className="object-cover object-[center_35%] opacity-90"
           sizes="100vw"
@@ -103,8 +121,11 @@ export function MarketingFaq() {
                 <AccordionTrigger className="py-5 font-display text-[1.05rem] font-normal text-ink hover:no-underline md:text-[1.15rem] [&[data-state=open]]:text-ink">
                   {item.q}
                 </AccordionTrigger>
-                <AccordionContent className="pb-5 text-[0.95rem] leading-relaxed text-ink-muted">
-                  {item.a}
+                <AccordionContent
+                  data-speakable="faq-answer"
+                  className="pb-5 text-[0.95rem] leading-relaxed text-ink-muted"
+                >
+                  <FaqAnswer text={item.a} />
                 </AccordionContent>
               </AccordionItem>
             ))}

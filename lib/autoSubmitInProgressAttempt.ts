@@ -1,8 +1,7 @@
 import { eq, isNull } from 'drizzle-orm';
 
 import { db } from '@/app/db';
-import { assignments, attempts, quizzes } from '@/app/db/schema';
-import { activeOnly } from '@/lib/db/filters';
+import { attempts } from '@/app/db/schema';
 import {
   executeQuizSubmit,
   MaxAttemptsExceededError,

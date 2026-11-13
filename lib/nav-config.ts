@@ -1,25 +1,35 @@
+import type { ComponentType } from "react";
+
 import {
   AlertTriangle,
   BarChart2,
-  FileText,
+  BookOpen,
+  Building2,
+  CalendarDays,
+  ClipboardList,
   KeyRound,
+  LayoutDashboard,
   Layers,
+  Library,
+  Link2,
+  PenLine,
   Users,
   TrendingUp,
-  CheckCircle,
-  MessagesSquare,
   ScrollText,
-  type LucideIcon,
-} from "lucide-react";
+} from "@/components/icons";
 
 import { withBasePath } from "@/lib/basePath";
 
 export type AppRole = "admin" | "professor" | "student";
 
+/** Icons may be lucide-animated (hover/press) or static Lucide fallbacks. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type AppNavIcon = ComponentType<any>;
+
 export interface NavItem {
   href: string;
   label: string;
-  icon: LucideIcon;
+  icon: AppNavIcon;
   /** Match key: also used for legacy `active` prop on old sidebars. */
   key: string;
   /** Optional description shown only at top of sidebar group, not in row. */
@@ -36,46 +46,36 @@ export interface RoleConfig {
   items: NavItem[];
 }
 
-/**
- * Production route map for the UI refresh.
- * New module routes (assignments / materials / authoring / LTI / analytics)
- * intentionally stay off this list until those features ship.
- */
+/** Sidebar routes for admin / professor / student (includes new modules). */
 export const ROLE_CONFIG: Record<AppRole, RoleConfig> = {
   admin: {
     role: "admin",
-    subtitle: "Administration",
+    subtitle: "Platform ops",
     badge: "Administrator",
     items: [
       {
         href: withBasePath("/dashboard/admin"),
         label: "Overview",
-        icon: BarChart2,
+        icon: LayoutDashboard,
         key: "dashboard",
       },
       {
-        href: withBasePath("/dashboard/admin/courses"),
-        label: "Courses",
-        icon: FileText,
-        key: "courses",
-      },
-      {
-        href: withBasePath("/dashboard/admin/sections"),
-        label: "Sections",
-        icon: Layers,
-        key: "sections",
-      },
-      {
-        href: withBasePath("/dashboard/admin/quizzes"),
-        label: "Quizzes",
-        icon: FileText,
-        key: "quizzes",
+        href: withBasePath("/dashboard/admin/workspaces"),
+        label: "Workspaces",
+        icon: Building2,
+        key: "workspaces",
       },
       {
         href: withBasePath("/dashboard/admin/users"),
         label: "People",
         icon: Users,
         key: "users",
+      },
+      {
+        href: withBasePath("/dashboard/admin/lti"),
+        label: "Canvas LTI",
+        icon: Link2,
+        key: "lti",
       },
       {
         href: withBasePath("/dashboard/admin/audit"),
@@ -93,26 +93,32 @@ export const ROLE_CONFIG: Record<AppRole, RoleConfig> = {
       {
         href: withBasePath("/dashboard/professor"),
         label: "Overview",
-        icon: BarChart2,
+        icon: LayoutDashboard,
         key: "dashboard",
       },
       {
-        href: withBasePath("/dashboard/professor/sections"),
-        label: "Sections",
-        icon: Layers,
-        key: "sections",
+        href: withBasePath("/dashboard/workspace/knowledge"),
+        label: "Knowledge",
+        icon: Library,
+        key: "knowledge",
       },
       {
-        href: withBasePath("/dashboard/professor/quizzes"),
-        label: "Quizzes",
-        icon: FileText,
-        key: "quizzes",
+        href: withBasePath("/dashboard/professor/authoring"),
+        label: "Authoring",
+        icon: PenLine,
+        key: "authoring",
       },
       {
-        href: withBasePath("/dashboard/professor/discussions"),
-        label: "Discussions",
-        icon: MessagesSquare,
-        key: "discussions",
+        href: withBasePath("/dashboard/professor/assignments"),
+        label: "Assignments",
+        icon: ClipboardList,
+        key: "assignments",
+      },
+      {
+        href: withBasePath("/dashboard/professor/courses"),
+        label: "Courses",
+        icon: BookOpen,
+        key: "courses",
       },
       {
         href: withBasePath("/dashboard/professor/attention"),
@@ -125,6 +131,12 @@ export const ROLE_CONFIG: Record<AppRole, RoleConfig> = {
         label: "Results",
         icon: TrendingUp,
         key: "quiz-results",
+      },
+      {
+        href: withBasePath("/dashboard/workspace"),
+        label: "Workspace",
+        icon: Layers,
+        key: "workspace",
       },
       {
         href: withBasePath("/dashboard/professor/agent-access"),
@@ -152,22 +164,10 @@ export const ROLE_CONFIG: Record<AppRole, RoleConfig> = {
         key: "sections",
       },
       {
-        href: withBasePath("/dashboard/student/quizzes"),
-        label: "Quizzes",
-        icon: FileText,
-        key: "quizzes",
-      },
-      {
-        href: withBasePath("/dashboard/student/discussions"),
-        label: "Discussions",
-        icon: MessagesSquare,
-        key: "discussions",
-      },
-      {
-        href: withBasePath("/dashboard/student/grades"),
-        label: "Grades",
-        icon: CheckCircle,
-        key: "grades",
+        href: withBasePath("/dashboard/student/calendar"),
+        label: "Calendar",
+        icon: CalendarDays,
+        key: "calendar",
       },
     ],
   },

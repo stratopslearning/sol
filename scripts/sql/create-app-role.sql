@@ -4,15 +4,18 @@
 -- DO NOT run from the app or CI. Replace CHANGE_ME_APP_PASSWORD and
 -- CHANGE_ME_MIGRATE_PASSWORD before executing.
 --
--- After creating roles:
+-- Local/dev often keeps neondb_owner as DATABASE_URL until roles are created on
+-- the target branch (role creation requires owner). After creating roles:
 --   1. Build a pooled connection string for sol_app → Vercel DATABASE_URL
 --   2. Build a (pooled or direct) connection string for sol_migrator →
 --      Vercel / CI DATABASE_MIGRATE_URL (migrations + drizzle-kit only)
 --   3. Smoke-test login, quiz submit, and `npm run migrate` with the migrator URL
+--
+-- Drizzle rehearsal: drizzle/0034_app_roles.sql (same privileges, idempotent).
 
 BEGIN;
 
--- Application runtime role: DML only (no DDL).
+-- Application runtime role: DML only (no DDL, no BYPASSRLS, no table ownership).
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'sol_app') THEN
@@ -27,6 +30,19 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'sol_migrator') THEN
     CREATE ROLE sol_migrator LOGIN PASSWORD 'CHANGE_ME_MIGRATE_PASSWORD';
   END IF;
+END
+$$;
+
+-- Neon rejects ALTER ROLE that toggles SUPERUSER. Encode attributes on CREATE
+-- (see drizzle/0034_app_roles.sql). Optional NOBYPASSRLS when the host allows:
+DO $$
+BEGIN
+  BEGIN
+    EXECUTE 'ALTER ROLE sol_app NOBYPASSRLS';
+  EXCEPTION
+    WHEN insufficient_privilege OR undefined_object THEN
+      RAISE NOTICE 'Skipping ALTER ROLE sol_app NOBYPASSRLS';
+  END;
 END
 $$;
 
@@ -46,7 +62,8 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
   GRANT USAGE, SELECT ON SEQUENCES TO sol_app;
 
--- Migrator: full DDL on public (owner-equivalent for schema changes).
+-- Migrator: full DDL on public (schema changes). Does not own objects unless
+-- explicitly transferred; prefer neondb_owner for one-off superuser DDL.
 GRANT CREATE ON SCHEMA public TO sol_migrator;
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO sol_migrator;
 GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO sol_migrator;
@@ -62,6 +79,6 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public
 COMMIT;
 
 -- Optional verification (run as owner after the transaction):
---   SELECT rolname FROM pg_roles WHERE rolname IN ('sol_app', 'sol_migrator');
+--   SELECT rolname, rolbypassrls FROM pg_roles WHERE rolname IN ('sol_app', 'sol_migrator');
 --   SET ROLE sol_app; CREATE TABLE _should_fail (id int);  -- must ERROR
 --   RESET ROLE;

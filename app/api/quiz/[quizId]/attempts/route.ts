@@ -22,7 +22,7 @@ export async function GET(
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    if (user.role === 'STUDENT' && !isStudentEntitled(user)) {
+    if (!isStudentEntitled(user)) {
       return NextResponse.json({ error: 'Payment required' }, { status: 402 });
     }
 
@@ -47,14 +47,9 @@ export async function GET(
 
     const isOwner = assignment.studentId === user.id;
     if (!isOwner) {
-      if (user.role === 'ADMIN') {
-        // ok
-      } else if (user.role === 'PROFESSOR') {
-        const allowed = await professorCanAccessQuiz(user, quizId);
-        if (!allowed) {
-          return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-        }
-      } else {
+      // Binding-based (incl. platform staff via support grant inside authorize()).
+      const allowed = await professorCanAccessQuiz(user, quizId);
+      if (!allowed) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
     }
@@ -90,7 +85,7 @@ export async function GET(
       ? { endDate: quiz.endDate, description: quiz.description }
       : { endDate: null, description: null };
     const hideFeedback =
-      isOwner && shouldHideFeedbackForStudent(quizForHide, user.role);
+      isOwner && shouldHideFeedbackForStudent(quizForHide, 'STUDENT');
 
     const bestScoreRaw = Math.max(...submittedAttempts.map((a) => a.score || 0));
     const candidateMaxScore =
@@ -111,7 +106,7 @@ export async function GET(
         gptFeedback: attempt.gptFeedback,
       };
       return hideFeedback
-        ? redactAttemptFeedbackForViewer(base, quizForHide, user.role)
+        ? redactAttemptFeedbackForViewer(base, quizForHide, 'STUDENT')
         : base;
     });
 

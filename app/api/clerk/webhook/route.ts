@@ -1,5 +1,5 @@
 /**
- * Clerk auth-event webhook — mirrors session lifecycle into audit_log.
+ * Clerk auth-event webhook: mirrors session lifecycle into audit_log.
  *
  * Pattern matches Stripe: verify signature → insert-first idempotency →
  * process → mark processed. On handler failure delete the row so retries

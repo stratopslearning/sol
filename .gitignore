@@ -49,3 +49,7 @@ next-env.d.ts
 .env.sentry-build-plugin
 # Added by Braintrust Wizard
 .braintrust.json
+
+# pdf.js workers (copied from node_modules by postinstall / prebuild)
+/public/pdf.worker.min.mjs
+/public/pdf.worker.legacy.min.mjs

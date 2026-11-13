@@ -4,17 +4,19 @@ import * as React from "react";
 import { ThemeProvider as NextThemesProvider } from "next-themes";
 import type { ThemeProviderProps } from "next-themes";
 
+import { IconInteractionProvider } from "@/components/icons";
+
 export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
   return (
     <NextThemesProvider
       attribute="class"
-      defaultTheme="light"
+      defaultTheme="system"
       enableSystem
       disableTransitionOnChange
       storageKey="sol-theme"
       {...props}
     >
-      {children}
+      <IconInteractionProvider>{children}</IconInteractionProvider>
     </NextThemesProvider>
   );
 }

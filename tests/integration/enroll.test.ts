@@ -51,7 +51,7 @@ describe.skipIf(skip)('student_sections unique constraint', () => {
   });
 
   it('blocks duplicate (studentId, sectionId) inserts', async () => {
-    const student = await makeUser(db, { role: 'STUDENT' });
+    const student = await makeUser(db, {});
     const course = await makeCourse(db, { title: 'Enroll Test' });
     const section = await makeSection(db, course.id);
 
@@ -63,7 +63,11 @@ describe.skipIf(skip)('student_sections unique constraint', () => {
     await enrollStudent(db, student.id, section.id);
     // Direct insert of the same pair should violate the unique index.
     await expect(
-      db.insert(studentSections).values({ studentId: student.id, sectionId: section.id }),
+      db.insert(studentSections).values({
+        studentId: student.id,
+        sectionId: section.id,
+        tenantId: section.tenantId ?? course.tenantId ?? course.workspaceId,
+      }),
     ).rejects.toThrow();
   });
 });

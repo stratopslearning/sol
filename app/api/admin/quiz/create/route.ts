@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/app/db';
-import { quizzes, questions, quizSections, users } from '@/app/db/schema';
-import { eq } from 'drizzle-orm';
+import { sections, users } from '@/app/db/schema';
+import { eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { auth } from '@clerk/nextjs/server';
 
+import { apiErrorResponse } from '@/lib/api/errors';
 import { readJsonBody } from '@/lib/api/readJsonBody';
+import { requireSupportGrant } from '@/lib/authz/requireSupportGrant';
+import {
+  createQuizDefiner,
+  fetchOfferingIdsForCourse,
+  fetchSectionById,
+} from '@/lib/db/entityScopedReads';
 import { quizCreateBaseSchema } from '@/lib/quizSchemas';
 
 export const dynamic = 'force-dynamic';
@@ -19,60 +26,91 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     const user = await db.query.users.findFirst({ where: eq(users.clerkId, userId) });
-    if (!user || user.role !== 'ADMIN') {
+    if (!user || !user.platformStaff) {
       return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
     }
     const body = await readJsonBody(req);
     const validatedData = createQuizSchema.parse(body);
 
     if (!validatedData.sectionIds || validatedData.sectionIds.length === 0) {
-      return NextResponse.json({ error: 'At least one section must be assigned to the quiz.' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'At least one section must be assigned to the quiz.' },
+        { status: 400 },
+      );
     }
 
-    // Atomic creation: quiz + questions + section assignments.
-    const newQuiz = await db.transaction(async (tx) => {
-      const [created] = await tx.insert(quizzes).values({
-        title: validatedData.title,
-        description: validatedData.description,
-        professorId: user.id,
-        maxAttempts: validatedData.maxAttempts,
-        timeLimit: validatedData.timeLimit,
-        passingScore: validatedData.passingScore,
-        startDate: new Date(validatedData.startDate),
-        endDate: new Date(validatedData.endDate),
-        isActive: true,
-      }).returning();
-
-      if (validatedData.questions.length > 0) {
-        await tx.insert(questions).values(
-          validatedData.questions.map((q) => ({
-            quizId: created.id,
-            type: q.type,
-            question: q.question,
-            options: q.options,
-            correctAnswer: q.correctAnswer,
-            points: q.points,
-            order: q.order,
-          })),
-        );
-      }
-
-      await tx.insert(quizSections).values(
-        validatedData.sectionIds.map((sectionId: string) => ({
-          quizId: created.id,
-          sectionId,
-          assignedBy: user.id,
-        })),
+    const assignedSections = await db.query.sections.findMany({
+      where: inArray(sections.id, validatedData.sectionIds),
+      columns: { id: true, tenantId: true, workspaceId: true },
+    });
+    if (assignedSections.length !== validatedData.sectionIds.length) {
+      return NextResponse.json({ error: 'One or more sections not found' }, { status: 404 });
+    }
+    const tenantId =
+      assignedSections[0]?.tenantId ?? assignedSections[0]?.workspaceId ?? null;
+    if (!tenantId) {
+      return NextResponse.json({ error: 'Section missing tenant' }, { status: 400 });
+    }
+    if (
+      assignedSections.some(
+        (s) => (s.tenantId ?? s.workspaceId) !== tenantId,
+      )
+    ) {
+      return NextResponse.json(
+        { error: 'All sections must belong to the same tenant' },
+        { status: 400 },
       );
+    }
+    await requireSupportGrant(
+      {
+        id: user.id,
+        clerkId: user.clerkId,
+        platformStaff: user.platformStaff,
+      },
+      tenantId,
+      { action: 'support.tenant_access', targetType: 'workspace', targetId: tenantId },
+    );
 
-      return created;
+    const targetSection = await fetchSectionById(validatedData.sectionIds[0]!);
+    if (!targetSection) {
+      return NextResponse.json({ error: 'Section not found' }, { status: 404 });
+    }
+    let offeringId: string | null = targetSection.offeringId ?? null;
+    if (!offeringId && targetSection.courseId) {
+      const offeringIds = await fetchOfferingIdsForCourse(targetSection.courseId);
+      offeringId = offeringIds[0] ?? null;
+    }
+    const courseId: string | null = targetSection.courseId ?? null;
+
+    const quizId = await createQuizDefiner({
+      title: validatedData.title,
+      description: validatedData.description ?? null,
+      professorId: user.id,
+      tenantId,
+      offeringId,
+      courseId,
+      maxAttempts: validatedData.maxAttempts,
+      timeLimit: validatedData.timeLimit ?? null,
+      passingScore: validatedData.passingScore,
+      startDate: new Date(validatedData.startDate).toISOString(),
+      endDate: new Date(validatedData.endDate).toISOString(),
+      isActive: true,
+      sectionIds: validatedData.sectionIds,
+      questions: validatedData.questions.map((q) => ({
+        type: q.type,
+        question: q.question,
+        options: q.options,
+        correctAnswer: q.correctAnswer,
+        points: q.points,
+        order: q.order,
+      })),
     });
 
     return NextResponse.json({
       success: true,
       quiz: {
-        id: newQuiz.id,
-        title: newQuiz.title,
+        id: quizId,
+        title: validatedData.title,
         sectionIds: validatedData.sectionIds,
       },
     });
@@ -81,6 +119,6 @@ export async function POST(req: NextRequest) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: 'Invalid data', details: error.errors }, { status: 400 });
     }
-    return NextResponse.json({ error: 'Failed to create quiz' }, { status: 500 });
+    return apiErrorResponse(error);
   }
-} 
+}

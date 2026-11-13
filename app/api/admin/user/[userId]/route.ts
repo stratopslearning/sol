@@ -4,21 +4,17 @@ import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { db } from '@/app/db';
-import {
-  chatbotSections,
-  chatbots,
-  quizSections,
-  quizzes,
-  users,
-} from '@/app/db/schema';
+import { users } from '@/app/db/schema';
+import { apiErrorResponse } from '@/lib/api/errors';
 import { extractRequestMeta, logAudit } from '@/lib/audit';
+import { canGrantPlatformStaff } from '@/lib/env';
 import type { UserData } from '@/lib/getOrCreateUser';
 import { invalidateUserCache, toUserData } from '@/lib/getOrCreateUser';
 
 export const dynamic = 'force-dynamic';
 
 const updateUserSchema = z.object({
-  role: z.enum(['STUDENT', 'PROFESSOR', 'ADMIN']).optional(),
+  platformStaff: z.boolean().optional(),
 });
 
 async function requireAdminActor(): Promise<
@@ -31,7 +27,7 @@ async function requireAdminActor(): Promise<
   const admin = await db.query.users.findFirst({
     where: eq(users.clerkId, adminClerkId),
   });
-  if (!admin || admin.role !== 'ADMIN') {
+  if (!admin || !admin.platformStaff) {
     return {
       response: NextResponse.json(
         { error: 'Forbidden - Admin access required' },
@@ -69,9 +65,31 @@ export async function PATCH(
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
+    const patch: { platformStaff?: boolean; updatedAt: Date } = {
+      updatedAt: new Date(),
+    };
+    if (validatedData.platformStaff !== undefined) {
+      if (!canGrantPlatformStaff(admin.email)) {
+        return NextResponse.json(
+          {
+            error:
+              'PLATFORM_STAFF_GRANTORS allowlist required to change platform staff',
+          },
+          { status: 403 },
+        );
+      }
+      if (targetUserId === admin.id) {
+        return NextResponse.json(
+          { error: 'Cannot grant or revoke your own platform staff flag' },
+          { status: 403 },
+        );
+      }
+      patch.platformStaff = validatedData.platformStaff;
+    }
+
     const [updatedUser] = await db
       .update(users)
-      .set({ ...validatedData, updatedAt: new Date() })
+      .set(patch)
       .where(eq(users.id, targetUserId))
       .returning();
 
@@ -88,8 +106,8 @@ export async function PATCH(
       targetType: 'user',
       targetId: targetUserId,
       metadata: {
-        before: { role: before.role },
-        after: { role: updatedUser.role },
+        before: { platformStaff: before.platformStaff },
+        after: { platformStaff: updatedUser.platformStaff },
       },
       ip: meta.ip,
       userAgent: meta.userAgent,
@@ -104,7 +122,7 @@ export async function PATCH(
         { status: 400 },
       );
     }
-    return NextResponse.json({ error: 'Failed to update user' }, { status: 500 });
+    return apiErrorResponse(error);
   }
 }
 
@@ -149,7 +167,7 @@ export async function DELETE(
       return NextResponse.json(
         {
           error:
-            'SOL profile has an invalid Clerk id — cannot delete the Clerk account.',
+            'SOL profile has an invalid Clerk id: cannot delete the Clerk account.',
         },
         { status: 400 },
       );
@@ -220,7 +238,7 @@ export async function DELETE(
         return NextResponse.json(
           {
             error:
-              'Clerk user still exists after deleteUser — SOL row left intact. Check Clerk Dashboard / API keys.',
+              'Clerk user still exists after deleteUser. SOL row left intact. Check Clerk Dashboard / API keys.',
             clerkId: clerkIdToDelete,
           },
           { status: 502 },
@@ -244,7 +262,7 @@ export async function DELETE(
       return NextResponse.json(
         {
           error: usingDevKeys
-            ? `No Clerk user found for ${target.email || target.clerkId} with Development API keys. This profile was likely created in Production — use Production Clerk keys locally, or delete from the live site. SOL row left intact.`
+            ? `No Clerk user found for ${target.email || target.clerkId} with Development API keys. This profile was likely created in Production: use Production Clerk keys locally, or delete from the live site. SOL row left intact.`
             : `No Clerk user found for this profile with the current CLERK_SECRET_KEY (wrong instance/key, or already deleted). SOL row left intact. Retry with orphan cleanup if you only need to remove the Neon row.`,
           clerkId: target.clerkId,
           email: target.email,
@@ -264,7 +282,7 @@ export async function DELETE(
       targetId: targetUserId,
       metadata: {
         email: target.email,
-        role: target.role,
+        platformStaff: target.platformStaff,
         clerkId: target.clerkId,
         clerkIdDeleted: clerkIdToDelete,
         clerkDeleted: clerkUserExists,
@@ -274,24 +292,12 @@ export async function DELETE(
       userAgent: meta.userAgent,
     });
 
-    await db
-      .update(quizSections)
-      .set({ assignedBy: admin.id })
-      .where(eq(quizSections.assignedBy, targetUserId));
-    await db
-      .update(chatbotSections)
-      .set({ assignedBy: admin.id })
-      .where(eq(chatbotSections.assignedBy, targetUserId));
-    await db
-      .update(quizzes)
-      .set({ professorId: admin.id, updatedAt: new Date() })
-      .where(eq(quizzes.professorId, targetUserId));
-    await db
-      .update(chatbots)
-      .set({ professorId: admin.id, updatedAt: new Date() })
-      .where(eq(chatbots.professorId, targetUserId));
-
-    await db.delete(users).where(eq(users.id, targetUserId));
+    const {
+      adminReassignUserContentDefiner,
+      adminDeleteUserDefiner,
+    } = await import('@/lib/db/tenantWriteDefiners');
+    await adminReassignUserContentDefiner(targetUserId, admin.id);
+    await adminDeleteUserDefiner(targetUserId);
 
     return NextResponse.json({
       success: true,

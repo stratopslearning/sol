@@ -51,6 +51,8 @@ describe('lib/env', () => {
   it('accepts a valid dev configuration', async () => {
     vi.stubEnv('NODE_ENV', 'development');
     vi.stubEnv('DATABASE_URL', 'postgres://localhost/test');
+    // Dev-DB allowlist (sol-knowledge-dev only) must include the test host.
+    vi.stubEnv('DEV_DB_HOSTS', 'localhost');
     vi.stubEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'pk_dev');
     vi.stubEnv('CLERK_SECRET_KEY', 'sk_dev');
     vi.stubEnv('STRIPE_SECRET_KEY', 'sk_dev');

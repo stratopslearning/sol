@@ -1,4 +1,6 @@
 import type { ChatbotMessage } from '@/app/db/schema';
+import type { CoursePromptContext } from '@/lib/ai/prompts/courseContext';
+import { temperatureForModel } from '@/lib/ai/modelRouter';
 import { logAiSpan } from '@/lib/ai/tracing';
 import { chatbotOpenAI, CHATBOT_MODEL } from '@/lib/chatbot/client';
 import {
@@ -33,11 +35,23 @@ function buildMessages(opts: {
   quiz: SafeQuizInput | null;
   history: ChatbotMessage[];
   userMessage: string;
+  materialsContext?: string;
+  lessonsContext?: string;
+  tutorPolicyRules?: string;
+  courseCtx?: CoursePromptContext;
+  assessmentLocked?: boolean;
 }) {
   const safeQuiz = buildSafeQuizContext(opts.quiz);
   const systemContent = assembleSystemPrompt(
     opts.professorSystemPrompt,
     safeQuiz,
+    opts.materialsContext ?? '',
+    opts.lessonsContext ?? '',
+    opts.tutorPolicyRules ?? '',
+    {
+      courseCtx: opts.courseCtx,
+      assessmentLocked: opts.assessmentLocked,
+    },
   );
   return toOpenAiMessages(systemContent, opts.history, opts.userMessage);
 }
@@ -65,6 +79,13 @@ export async function generateChatbotReply(opts: {
   history: ChatbotMessage[];
   userMessage: string;
   model?: string;
+  /** Optional course-materials excerpts (already budgeted / safe). */
+  materialsContext?: string;
+  /** Optional released-lesson excerpts (already budgeted / safe). */
+  lessonsContext?: string;
+  tutorPolicyRules?: string;
+  courseCtx?: CoursePromptContext;
+  assessmentLocked?: boolean;
 }): Promise<ChatbotRespondResult> {
   if (!process.env.OPENAI_API_KEY) {
     return {
@@ -77,9 +98,11 @@ export async function generateChatbotReply(opts: {
   const messages = buildMessages(opts);
 
   try {
+    const model = opts.model ?? CHATBOT_MODEL;
+    const temperature = temperatureForModel(model, 0.5);
     const completion = await chatbotOpenAI.chat.completions.create({
-      model: opts.model ?? CHATBOT_MODEL,
-      temperature: 0.5,
+      model,
+      ...(temperature != null ? { temperature } : {}),
       max_completion_tokens: 800,
       messages,
     } as never);
@@ -131,13 +154,18 @@ export async function generateChatbotReply(opts: {
   }
 }
 
-/** Streaming reply — yields text deltas as they arrive from OpenAI. */
+/** Streaming reply: yields text deltas as they arrive from OpenAI. */
 export async function streamChatbotReply(opts: {
   professorSystemPrompt: string;
   quiz: SafeQuizInput | null;
   history: ChatbotMessage[];
   userMessage: string;
   model?: string;
+  materialsContext?: string;
+  lessonsContext?: string;
+  tutorPolicyRules?: string;
+  courseCtx?: CoursePromptContext;
+  assessmentLocked?: boolean;
 }): Promise<ChatbotStreamResult> {
   if (!process.env.OPENAI_API_KEY) {
     return {
@@ -150,9 +178,11 @@ export async function streamChatbotReply(opts: {
   const messages = buildMessages(opts);
 
   try {
+    const model = opts.model ?? CHATBOT_MODEL;
+    const temperature = temperatureForModel(model, 0.5);
     const completion = await chatbotOpenAI.chat.completions.create({
-      model: opts.model ?? CHATBOT_MODEL,
-      temperature: 0.5,
+      model,
+      ...(temperature != null ? { temperature } : {}),
       max_completion_tokens: 800,
       messages,
       stream: true,

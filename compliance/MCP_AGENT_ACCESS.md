@@ -19,8 +19,9 @@ user row and run the same authorization checks.
   dashboard **Agent Access** page. Only a SHA-256 hash is stored
   (`professor_api_tokens.token_hash`); the plaintext is displayed once.
 - **Scopes**: `read`, `sections:write`, `quizzes:write`, `grades:write`,
-  `discussions:write`. Defaults to `read + quizzes:write`; grade-writing is
-  opt-in. Session (cookie) auth is unaffected by scopes.
+  `discussions:write`, `materials:write`, `authoring:write`. Defaults to
+  `read + quizzes:write`; grade-writing, materials, and authoring are opt-in.
+  Session (cookie) auth is unaffected by scopes.
 - **Revocation**: self-service on the Agent Access page (tombstone
   `revoked_at`); optional `expires_at`. Max 10 active tokens per user.
 
@@ -55,10 +56,11 @@ user row and run the same authorization checks.
 ## FERPA posture
 
 - MCP tool calls that disclose education records (gradebook, attempts,
-  attempt detail, transcripts, CSV export) write the same audit actions as
-  the dashboard (`education.gradebook.view`, `education.attempts.list`,
-  `education.attempt.view`, `education.discussion_session.view`,
-  `education.grades.export`).
+  attempt detail, transcripts, CSV export, analytics) write the same audit
+  actions as the dashboard (`education.gradebook.view`,
+  `education.attempts.list`, `education.attempt.view`,
+  `education.discussion_session.view`, `education.grades.export`,
+  `professor.analytics.view`).
 - Additionally every `tools/call` writes `mcp.tool.call` with the credential
   used (`via: pat` + token id, or `via: oauth`), so agent activity is
   distinguishable from interactive use and attributable per credential. The

@@ -16,6 +16,32 @@ export async function register() {
       }
     }
 
+    // Refuse Node boot when DATABASE_URL can bypass RLS or own tables.
+    try {
+      const { assertRuntimeRole, RuntimeRoleError } = await import(
+        "./lib/db/assertRuntimeRole"
+      );
+      const role = await assertRuntimeRole();
+      if (!role.ok) {
+        throw new RuntimeRoleError(role.reason);
+      }
+    } catch (error) {
+      console.error("[instrumentation] Runtime DB role guard failed:", error);
+      // Unsafe role always fails closed. Transient DB errors fail closed in
+      // production/preview; in local development log and continue so `next
+      // build` without a live DB still works.
+      const isUnsafeRole =
+        error instanceof Error && error.name === "RuntimeRoleError";
+      if (
+        isUnsafeRole ||
+        process.env.NODE_ENV === "production" ||
+        process.env.VERCEL_ENV === "production" ||
+        process.env.VERCEL_ENV === "preview"
+      ) {
+        throw error;
+      }
+    }
+
     await import("./sentry.server.config");
   }
 

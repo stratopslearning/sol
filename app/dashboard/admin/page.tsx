@@ -1,152 +1,148 @@
-import { FileText, Layers, Users as UsersIcon } from 'lucide-react';
+import Link from 'next/link';
+import {
+  FileText,
+  Layers,
+  Link2,
+  ScrollText,
+  Users as UsersIcon,
+} from '@/components/icons';
 
 import { db } from '@/app/db';
-import { courses, sections } from '@/app/db/schema';
-import { CourseFormModal } from '@/components/admin/CourseFormModal';
+import { AdminSection } from '@/components/admin/AdminSection';
 import { AppShell } from '@/components/layout/AppShell';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { SectionHeading } from '@/components/layout/SectionHeading';
-import { EmptyState } from '@/components/patterns/EmptyState';
 import { StatCard } from '@/components/patterns/StatCard';
-import { activeOnly } from '@/lib/db/filters';
+import { Button } from '@/components/ui/button';
+import { fetchAdminOverviewStats } from '@/lib/admin/platformReads';
 import { withBasePath } from '@/lib/basePath';
 import { requireAdmin } from '@/lib/auth';
-import {
-  getBalancedGridClass,
-  getBalancedItemClass,
-} from '@/lib/balancedGrid';
-import { partitionBySectionConclusion } from '@/lib/sectionAvailability';
 
 export default async function AdminDashboardPage() {
-  // Defense in depth: middleware also enforces admin-only on /dashboard/admin,
-  // but RSCs that read from the DB should re-check so a misconfigured matcher
-  // can never leak data.
-  await requireAdmin();
+  const admin = await requireAdmin();
 
-  const [allCourses, allSectionsRaw, allUsers] = await Promise.all([
-    db.query.courses.findMany({ where: activeOnly(courses.deletedAt) }),
-    db.query.sections.findMany({ where: activeOnly(sections.deletedAt) }),
+  const [stats, allUsers] = await Promise.all([
+    fetchAdminOverviewStats(),
     db.query.users.findMany(),
   ]);
-  const { active: ongoingSections } =
-    partitionBySectionConclusion(allSectionsRaw);
 
-  const studentCount = allUsers.filter((u) => u.role === 'STUDENT').length;
-  const professorCount = allUsers.filter((u) => u.role === 'PROFESSOR').length;
-  const courseCount = allCourses.length;
+  const platformStaffCount = allUsers.filter((u) => u.platformStaff).length;
 
   return (
-    <AppShell role="admin" topbarEyebrow="Administration" topbarTitle="Overview">
+    <AppShell
+      role="admin"
+      topbarTitle="Overview"
+      user={{
+        firstName: admin.firstName,
+        lastName: admin.lastName,
+        email: admin.email,
+      }}
+    >
       <PageHeader
-        eyebrow="Administration"
-        title="Institution overview."
-        description="A snapshot of the catalog, the cohort, and the people who keep both running."
+        eyebrow="Platform ops"
+        title="Provision, invite, support."
+        description="Multi-tenant control plane. Clients own teaching and Stripe; you create workspaces and help when needed."
       />
 
-      <section className="mt-12 flex flex-col gap-6">
-        <SectionHeading
-          eyebrow="At a glance"
-          title="Catalog & cohort"
-          description="Counts across every term, every section, every role."
-        />
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <AdminSection
+        first
+        eyebrow="Tenants"
+        title="At a glance"
+        description="Workspace health across Creator, Business, Department, and Institution."
+      >
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <StatCard
+            label="Workspaces"
+            value={stats.workspaceCount}
+            hint={`${stats.workspaceCount} total`}
+            icon={<Layers className="h-4 w-4" />}
+            href="/dashboard/admin/workspaces"
+          />
+          <StatCard
+            label="Open invites"
+            value={stats.pendingInviteCount}
+            hint="Unclaimed owner links"
+            icon={<UsersIcon className="h-4 w-4" />}
+            href="/dashboard/admin/workspaces"
+            accent={stats.pendingInviteCount > 0}
+          />
+          <StatCard
+            label="Awaiting Stripe"
+            value={stats.unpaidLicenseCount}
+            hint="Creator/Business licenses"
+            icon={<FileText className="h-4 w-4" />}
+            href="/dashboard/admin/workspaces"
+            accent={stats.unpaidLicenseCount > 0}
+          />
           <StatCard
             label="Courses"
-            value={allCourses.length}
-            hint="All published and draft courses"
+            value={stats.courseCount}
+            hint="Across all tenants"
             icon={<FileText className="h-4 w-4" />}
+            href="/dashboard/admin/workspaces"
           />
+        </div>
+      </AdminSection>
+
+      <AdminSection
+        eyebrow="People"
+        title="Who is on the platform"
+        description="Staff flags and accounts. Teaching inventory lives on each workspace — open Catalog from Workspaces."
+      >
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
           <StatCard
-            label="Sections"
-            value={ongoingSections.length}
-            hint="Ongoing sections across all terms"
+            label="Ongoing sections"
+            value={stats.ongoingSectionCount}
+            hint="All workspaces"
             icon={<Layers className="h-4 w-4" />}
+            href="/dashboard/admin/workspaces"
           />
           <StatCard
-            label="Students"
-            value={studentCount}
-            hint={`${professorCount} faculty also enrolled`}
+            label="Platform staff"
+            value={platformStaffCount}
+            hint="Ops accounts"
             icon={<UsersIcon className="h-4 w-4" />}
+            href="/dashboard/admin/users"
           />
           <StatCard
             label="Total people"
             value={allUsers.length}
-            hint="Students, faculty, administrators"
+            hint="All roles"
             icon={<UsersIcon className="h-4 w-4" />}
+            href="/dashboard/admin/users"
             accent
           />
         </div>
-      </section>
+      </AdminSection>
 
-      <section className="mt-16 flex flex-col gap-6">
-        <SectionHeading
-          eyebrow="Quick actions"
-          title="What needs doing"
-          actions={<CourseFormModal mode="create" />}
-        />
+      <AdminSection eyebrow="Quick actions" title="What needs doing">
+        <div className="flex flex-wrap gap-3">
+          <Button asChild>
+            <Link href={withBasePath('/dashboard/admin/workspaces')}>
+              Provision workspace
+            </Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href={withBasePath('/dashboard/admin/users')}>People</Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href={withBasePath('/dashboard/admin/lti')}>
+              <Link2 className="mr-1.5 h-3.5 w-3.5" />
+              Canvas LTI
+            </Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href={withBasePath('/dashboard/admin/audit')}>
+              <ScrollText className="mr-1.5 h-3.5 w-3.5" />
+              Audit log
+            </Link>
+          </Button>
+        </div>
         <p className="text-sm text-ink-muted max-w-[60ch]">
-          Create a new course, then assign sections from the{' '}
-          <a
-            href={withBasePath('/dashboard/admin/sections')}
-            className="text-brand underline underline-offset-4 decoration-brand-soft hover:decoration-brand"
-          >
-            sections page
-          </a>
-          . Bulk import students from <em>People</em> when registrations open.
+          New clients: create a workspace, copy the claim link, let them bill
+          and teach. Need a tenant’s courses or sections? Open Catalog from that
+          workspace row.
         </p>
-      </section>
-
-      <section className="mt-16 flex flex-col gap-6">
-        <SectionHeading eyebrow="Catalog" title="All courses" />
-
-        {allCourses.length === 0 ? (
-          <EmptyState
-            icon={<FileText className="h-5 w-5" />}
-            eyebrow="No courses yet"
-            title="The catalog is empty."
-            description="Create your first course to begin building sections and quizzes for the term."
-            actions={<CourseFormModal mode="create" />}
-          />
-        ) : (
-          <div className={`${getBalancedGridClass(courseCount)} items-stretch`}>
-            {allCourses.map((course, index) => {
-              const safeCourse = {
-                ...course,
-                description: course.description ?? undefined,
-              };
-              return (
-                <article
-                  key={course.id}
-                  className={`paper paper-shadow p-6 flex flex-col gap-3 hover:bg-surface-sunken/40 transition-colors ${getBalancedItemClass(
-                    courseCount,
-                    index,
-                  )}`}
-                >
-                  <h3
-                    className="font-display text-ink"
-                    style={{
-                      fontSize: '1.25rem',
-                      lineHeight: 1.25,
-                      fontVariationSettings: '"opsz" 36',
-                    }}
-                  >
-                    {course.title}
-                  </h3>
-                  {course.description ? (
-                    <p className="text-sm text-ink-muted leading-relaxed line-clamp-3">
-                      {course.description}
-                    </p>
-                  ) : null}
-                  <div className="mt-auto pt-3 flex gap-2">
-                    <CourseFormModal mode="edit" course={safeCourse} />
-                    <CourseFormModal mode="delete" course={safeCourse} />
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        )}
-      </section>
+      </AdminSection>
     </AppShell>
   );
 }

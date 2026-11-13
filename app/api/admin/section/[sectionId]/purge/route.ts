@@ -1,16 +1,20 @@
 /**
  * Hard delete (purge) of a section. FK CASCADE wipes attempts, quiz_sections,
  * professor_sections, and student_sections automatically.
- *
- * Use only for FERPA right-to-be-forgotten or to reset test fixtures.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { eq } from 'drizzle-orm';
 import { auth } from '@clerk/nextjs/server';
 
 import { db } from '@/app/db';
-import { sections, users } from '@/app/db/schema';
+import { users } from '@/app/db/schema';
+import { apiErrorResponse } from '@/lib/api/errors';
 import { extractRequestMeta, logAudit } from '@/lib/audit';
+import { requireSupportGrant } from '@/lib/authz/requireSupportGrant';
+import {
+  adminFetchSectionDefiner,
+  adminPurgeSectionDefiner,
+} from '@/lib/db/tenantWriteDefiners';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,21 +32,34 @@ export async function DELETE(
     const user = await db.query.users.findFirst({
       where: eq(users.clerkId, userId),
     });
-    if (!user || user.role !== 'ADMIN') {
+    if (!user || !user.platformStaff) {
       return NextResponse.json(
         { error: 'Forbidden - Admin access required' },
         { status: 403 },
       );
     }
 
-    const targetSection = await db.query.sections.findFirst({
-      where: eq(sections.id, sectionId),
-    });
+    const targetSection = await adminFetchSectionDefiner(sectionId);
     if (!targetSection) {
       return NextResponse.json({ error: 'Section not found' }, { status: 404 });
     }
+    const tenantId =
+      (targetSection.tenant_id as string | null) ??
+      (targetSection.workspace_id as string | null);
+    if (!tenantId) {
+      return NextResponse.json({ error: 'Section missing tenant' }, { status: 400 });
+    }
+    await requireSupportGrant(
+      {
+        id: user.id,
+        clerkId: user.clerkId,
+        platformStaff: user.platformStaff,
+      },
+      tenantId,
+      { action: 'support.tenant_access', targetType: 'section', targetId: sectionId },
+    );
 
-    await db.delete(sections).where(eq(sections.id, sectionId));
+    await adminPurgeSectionDefiner(sectionId);
 
     const meta = extractRequestMeta(request);
     await logAudit({
@@ -59,6 +76,6 @@ export async function DELETE(
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error purging section:', error);
-    return NextResponse.json({ error: 'Failed to purge section' }, { status: 500 });
+    return apiErrorResponse(error);
   }
 }

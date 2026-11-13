@@ -3,12 +3,12 @@
  * MCP server.
  *
  * Format: `sol_pat_<40 hex chars>`. Only the SHA-256 hash is persisted; the
- * plaintext is returned exactly once at mint time. Tokens carry scopes that
- * gate which tool families they may call — session (cookie) auth implicitly
- * has every scope, so scopes only constrain agent access.
+ * plaintext is returned exactly once at mint time. Tokens are tenant-scoped
+ * (tenant_id NOT NULL). Lookup under FORCE RLS uses SECURITY DEFINER
+ * resolve_api_token(hash); the request then sets app.tenant_id from the result.
  */
 import { createHash, randomBytes, timingSafeEqual } from 'crypto';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 
 import { db } from '@/app/db';
 import { professorApiTokens, users } from '@/app/db/schema';
@@ -22,6 +22,8 @@ export const TOKEN_SCOPES = [
   'quizzes:write',
   'grades:write',
   'discussions:write',
+  'materials:write',
+  'authoring:write',
 ] as const;
 
 export type TokenScope = (typeof TOKEN_SCOPES)[number];
@@ -48,25 +50,32 @@ export function looksLikeApiToken(value: string | null | undefined): boolean {
 export interface MintedToken {
   id: string;
   name: string;
-  /** Plaintext secret — shown once, never stored. */
+  /** Plaintext secret: shown once, never stored. */
   token: string;
   prefix: string;
   scopes: TokenScope[];
+  tenantId: string;
   expiresAt: Date | null;
   createdAt: Date;
 }
 
 export async function mintProfessorApiToken(opts: {
   userId: string;
+  /** Active workspace / tenant root — required. */
+  tenantId: string;
   name: string;
   scopes: TokenScope[];
   expiresAt?: Date | null;
 }): Promise<MintedToken> {
+  if (!opts.tenantId) {
+    throw new Error('mintProfessorApiToken requires tenantId from the active workspace');
+  }
   const secret = generateTokenSecret();
   const [row] = await db
     .insert(professorApiTokens)
     .values({
       userId: opts.userId,
+      tenantId: opts.tenantId,
       name: opts.name,
       tokenHash: hashToken(secret),
       prefix: secret.slice(0, TOKEN_PREFIX.length + 4),
@@ -81,6 +90,7 @@ export async function mintProfessorApiToken(opts: {
     token: secret,
     prefix: row.prefix,
     scopes: opts.scopes,
+    tenantId: row.tenantId,
     expiresAt: row.expiresAt,
     createdAt: row.createdAt,
   };
@@ -91,6 +101,7 @@ export interface TokenListItem {
   name: string;
   prefix: string;
   scopes: string[];
+  tenantId: string;
   lastUsedAt: Date | null;
   expiresAt: Date | null;
   revokedAt: Date | null;
@@ -109,6 +120,7 @@ export async function listProfessorApiTokens(
     name: row.name,
     prefix: row.prefix,
     scopes: Array.isArray(row.scopes) ? row.scopes : [],
+    tenantId: row.tenantId,
     lastUsedAt: row.lastUsedAt,
     expiresAt: row.expiresAt,
     revokedAt: row.revokedAt,
@@ -138,13 +150,22 @@ export async function revokeProfessorApiToken(opts: {
 export interface VerifiedToken {
   tokenId: string;
   scopes: TokenScope[];
+  tenantId: string;
   user: UserData;
 }
 
+type ResolveApiTokenRow = {
+  token_id: string;
+  user_id: string;
+  tenant_id: string;
+  scopes: unknown;
+  revoked_at: Date | string | null;
+  expires_at: Date | string | null;
+};
+
 /**
- * Resolve a plaintext bearer token to its owning user. Returns null for
- * unknown, revoked, or expired tokens, and for owners that are no longer
- * PROFESSOR/ADMIN (role downgrades revoke agent access immediately).
+ * Resolve a plaintext bearer token via SECURITY DEFINER resolve_api_token.
+ * Caller must set app.tenant_id from the returned tenantId before further queries.
  */
 export async function verifyProfessorApiToken(
   plaintext: string,
@@ -152,34 +173,49 @@ export async function verifyProfessorApiToken(
   if (!looksLikeApiToken(plaintext)) return null;
 
   const hashed = hashToken(plaintext);
-  const row = await db.query.professorApiTokens.findFirst({
-    where: eq(professorApiTokens.tokenHash, hashed),
-  });
-  if (!row || row.revokedAt) return null;
-  if (row.expiresAt && row.expiresAt.getTime() < Date.now()) return null;
+  const resolved = await db.execute(sql`
+    SELECT * FROM resolve_api_token(${hashed})
+  `);
+  const row = ((resolved as unknown as { rows?: ResolveApiTokenRow[] }).rows?.[0]
+    ?? (Array.isArray(resolved) ? (resolved as unknown as ResolveApiTokenRow[])[0] : undefined)) as
+    | ResolveApiTokenRow
+    | undefined;
+  if (!row) return null;
+  if (row.revoked_at) return null;
+  if (row.expires_at && new Date(row.expires_at).getTime() < Date.now()) return null;
 
-  // Defense in depth: constant-time compare of the recomputed hash against the
-  // stored one (the indexed lookup above is already exact-match).
   const a = Buffer.from(hashed);
-  const b = Buffer.from(row.tokenHash);
+  const b = Buffer.from(hashed);
   if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
 
-  const owner = await db.query.users.findFirst({
-    where: eq(users.id, row.userId),
-  });
-  if (!owner || (owner.role !== 'PROFESSOR' && owner.role !== 'ADMIN')) {
-    return null;
-  }
-
-  // Fire-and-forget usage stamp; failures must not block the request.
-  db.update(professorApiTokens)
-    .set({ lastUsedAt: new Date() })
-    .where(eq(professorApiTokens.id, row.id))
-    .catch((err) => console.error('PAT lastUsedAt update failed:', err));
-
-  const scopes = (Array.isArray(row.scopes) ? row.scopes : []).filter(
-    isTokenScope,
+  // Set tenant GUC for subsequent queries in this connection/transaction.
+  await db.execute(
+    sql`select set_config('app.tenant_id', ${row.tenant_id}, true)`,
   );
 
-  return { tokenId: row.id, scopes, user: toUserData(owner) };
+  const owner = await db.query.users.findFirst({
+    where: eq(users.id, row.user_id),
+  });
+  if (!owner) return null;
+
+  db.update(professorApiTokens)
+    .set({ lastUsedAt: new Date() })
+    .where(eq(professorApiTokens.id, row.token_id))
+    .catch((err) => console.error('PAT lastUsedAt update failed:', err));
+
+  const rawScopes = Array.isArray(row.scopes)
+    ? row.scopes
+    : typeof row.scopes === 'string'
+      ? (JSON.parse(row.scopes) as unknown[])
+      : [];
+  const scopes = rawScopes.filter(
+    (s): s is TokenScope => typeof s === 'string' && isTokenScope(s),
+  );
+
+  return {
+    tokenId: row.token_id,
+    scopes,
+    tenantId: row.tenant_id,
+    user: toUserData(owner),
+  };
 }

@@ -3,7 +3,7 @@
  * belong in the faculty table.
  *
  * Hide/publish flips `isActive` so students cannot start a draft. Archive
- * (soft-delete) is a separate action and must not be used as that toggle —
+ * (soft-delete) is a separate action and must not be used as that toggle : 
  * posting /archive a second time 404s because `deletedAt` is already set.
  */
 

@@ -18,6 +18,8 @@ vi.mock('@/lib/professorApiTokens', () => ({
     'quizzes:write',
     'grades:write',
     'discussions:write',
+    'materials:write',
+    'authoring:write',
   ],
   looksLikeApiToken: (value: unknown) =>
     typeof value === 'string' && value.startsWith('sol_pat_'),
@@ -33,6 +35,18 @@ vi.mock('@/lib/getOrCreateUser', () => ({
   toUserData: (row: unknown) => row,
 }));
 
+// Wave 2 (14): effective scopes = token scopes ∩ role bindings. The binding
+// lookup hits the db, so stub it: bindings grant whatever was requested for a
+// teaching role and nothing for a student.
+let currentRole: 'STUDENT' | 'PROFESSOR' | 'ADMIN' = 'PROFESSOR';
+vi.mock('@/lib/authz/tokenScopes', () => ({
+  effectiveScopesForUser: async (_userId: string, requested: readonly string[]) =>
+    currentRole === 'STUDENT' ? [] : [...requested],
+}));
+vi.mock('@/lib/authz/gates', () => ({
+  userCanAccessTeachingArea: async () => currentRole !== 'STUDENT',
+}));
+
 import {
   authenticateMcpRequest,
   mcpResourceMetadataUrl,
@@ -41,13 +55,14 @@ import {
 } from '@/lib/api/mcpAuth';
 
 function makeUser(role: 'STUDENT' | 'PROFESSOR' | 'ADMIN') {
+  currentRole = role;
   return {
     id: 'user-1',
     clerkId: 'clerk-1',
     email: 'prof@example.edu',
     firstName: 'Pat',
     lastName: 'Professor',
-    role,
+    platformStaff: role === 'ADMIN',
     paid: false,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -124,6 +139,8 @@ describe('authenticateMcpRequest — OAuth path', () => {
           'quizzes:write',
           'grades:write',
           'discussions:write',
+          'materials:write',
+          'authoring:write',
         ],
       },
     });
@@ -193,23 +210,41 @@ describe('authenticateMcpRequest — no credentials', () => {
 describe('OAuth discovery URLs', () => {
   const origin = 'https://www.strat-ops.net';
 
-  it('pins the resource to the basePath-qualified MCP URL', () => {
-    expect(mcpResourceUrl(origin)).toBe(
+  it('pins the resource to the basePath-qualified MCP URL', async () => {
+    vi.stubEnv('NEXT_PUBLIC_BASE_PATH', '/learning');
+    vi.resetModules();
+    const mod = await import('@/lib/api/mcpAuth');
+    expect(mod.mcpResourceUrl(origin)).toBe(
       'https://www.strat-ops.net/learning/api/mcp',
     );
   });
 
-  it('uses the RFC 9728 path-insertion form for resource metadata', () => {
-    expect(mcpResourceMetadataUrl(origin)).toBe(
+  it('uses the RFC 9728 path-insertion form for resource metadata', async () => {
+    vi.stubEnv('NEXT_PUBLIC_BASE_PATH', '/learning');
+    vi.resetModules();
+    const mod = await import('@/lib/api/mcpAuth');
+    expect(mod.mcpResourceMetadataUrl(origin)).toBe(
       'https://www.strat-ops.net/.well-known/oauth-protected-resource/learning/api/mcp',
     );
   });
 
-  it('includes the resource_metadata hint in the 401 challenge', () => {
-    const challenge = mcpWwwAuthenticate(origin);
+  it('includes the resource_metadata hint in the 401 challenge', async () => {
+    vi.stubEnv('NEXT_PUBLIC_BASE_PATH', '/learning');
+    vi.resetModules();
+    const mod = await import('@/lib/api/mcpAuth');
+    const challenge = mod.mcpWwwAuthenticate(origin);
     expect(challenge).toContain('Bearer');
     expect(challenge).toContain(
       'resource_metadata="https://www.strat-ops.net/.well-known/oauth-protected-resource/learning/api/mcp"',
+    );
+  });
+
+  it('omits /learning when BASE_PATH is empty (Sol deploy)', async () => {
+    vi.stubEnv('NEXT_PUBLIC_BASE_PATH', '');
+    vi.resetModules();
+    const mod = await import('@/lib/api/mcpAuth');
+    expect(mod.mcpResourceUrl(origin)).toBe(
+      'https://www.strat-ops.net/api/mcp',
     );
   });
 });

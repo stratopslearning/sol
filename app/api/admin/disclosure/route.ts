@@ -19,7 +19,7 @@ const bodySchema = z.object({
 
 /**
  * Record an institution-directed FERPA disclosure (who asked, what released).
- * Writes an append-only audit_log row — no separate mutable table.
+ * Writes an append-only audit_log row: no separate mutable table.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     const admin = await db.query.users.findFirst({
       where: eq(users.clerkId, adminClerkId),
     });
-    if (!admin || admin.role !== 'ADMIN') {
+    if (!admin || !admin.platformStaff) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

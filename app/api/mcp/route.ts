@@ -1,5 +1,5 @@
 /**
- * SOL professor MCP server — Streamable HTTP endpoint (stateless, JSON
+ * SOL professor MCP server. Streamable HTTP endpoint (stateless, JSON
  * responses).
  *
  * Two ways to authenticate:
@@ -36,8 +36,8 @@ export const maxDuration = 120;
 
 /**
  * Browser-based connectors (Claude.ai / ChatGPT) preflight cross-origin.
- * `*` is safe here because auth is Bearer (PAT or OAuth access token) — never
- * cookies — so credentials are not ambient. Credentials mode stays off.
+ * `*` is safe here because auth is Bearer (PAT or OAuth access token): never
+ * cookies: so credentials are not ambient. Credentials mode stays off.
  */
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -149,7 +149,7 @@ export async function GET() {
 }
 
 export async function DELETE() {
-  // Stateless server — there is no session to terminate.
+  // Stateless server: there is no session to terminate.
   return new NextResponse(null, {
     status: 405,
     headers: { Allow: 'POST', ...CORS_HEADERS },

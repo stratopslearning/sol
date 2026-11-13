@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1080" />
+    <title>SOL — Teaching, in a better light</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script src="audio-data.js"></script>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      :root {
+        --paper: #f4f1e8;
+        --surface: #fbfaf6;
+        --sunken: #ebe6da;
+        --ink: #1c1b17;
+        --ink-muted: #5c5a52;
+        --ink-faint: #8a877c;
+        --rule: #ddd6c6;
+        --rule-strong: #c9c0ad;
+        --brand: #4a5240;
+        --brand-fg: #f7f4ec;
+        --leaf: #6d7f5c;
+        --accent: #c47a3a;
+        --night: #15130f;
+        --serif: "Instrument Serif", Georgia, serif;
+        --sans: "Geist", "Inter", ui-sans-serif, system-ui, sans-serif;
+      }
+      html, body {
+        width: 1080px; height: 1080px; overflow: hidden;
+        background: var(--paper);
+        font-family: var(--sans);
+        color: var(--ink);
+        -webkit-font-smoothing: antialiased;
+      }
+      #root { position: relative; width: 1080px; height: 1080px; overflow: hidden; --amp: 0; }
+      .scene { position: absolute; inset: 0; width: 1080px; height: 1080px; overflow: hidden; }
+      .fill { position: absolute; inset: 0; width: 100%; height: 100%; }
+      .art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+      .serif { font-family: var(--serif); font-weight: 400; letter-spacing: -0.02em; line-height: 1.04; }
+      .it { font-style: italic; }
+      .eyebrow {
+        font-family: var(--sans); font-size: 28px; font-weight: 500;
+        letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-muted);
+      }
+      .block { display: block; }
+
+      /* ---------- Scene 1: lamplight ---------- */
+      #s1 { z-index: 1; }
+      #s1-bg { background: var(--night); }
+      #s1-art-wrap { position: absolute; inset: 0; transform-origin: 71% 18%; }
+      #s1-art { filter: brightness(0.58) saturate(0.88) sepia(0.15); }
+      #s1-shade {
+        background: linear-gradient(180deg, rgba(21,19,15,0) 30%, rgba(21,19,15,0.78) 78%, rgba(21,19,15,0.9) 100%);
+      }
+      .lamp-glow {
+        position: absolute; left: 770px; top: 190px; width: 900px; height: 900px;
+        margin: -450px 0 0 -450px; border-radius: 50%;
+        background: radial-gradient(circle, rgba(255,214,150,0.55) 0%, rgba(255,196,120,0.18) 35%, rgba(255,190,110,0) 65%);
+        mix-blend-mode: screen;
+        opacity: calc(0.55 + var(--amp) * 0.45);
+      }
+      #s1-copy {
+        position: absolute; left: 92px; right: 92px; bottom: 120px;
+        color: var(--brand-fg);
+      }
+      #s1-title { font-size: 128px; }
+      #s1-sub { font-size: 52px; margin-top: 22px; color: rgba(247,244,236,0.78); }
+
+      /* ---------- Bloom (lamp to sunrise) ---------- */
+      #bloom { z-index: 6; pointer-events: none; }
+      #bloom-disc {
+        position: absolute; left: 770px; top: 190px; width: 400px; height: 400px;
+        margin: -200px 0 0 -200px; border-radius: 50%;
+        background: radial-gradient(circle, #fffaf0 0%, #fff1d6 40%, rgba(255,236,200,0.85) 62%, rgba(255,236,200,0) 72%);
+      }
+
+      /* ---------- Scene 2: sunrise ---------- */
+      #s2 { z-index: 2; }
+      #s2-art-wrap { position: absolute; inset: 0; transform-origin: 50% 40%; }
+      #s2-art { object-position: 46% 50%; filter: saturate(0.95) sepia(0.06); }
+      #s2-scrim {
+        background: linear-gradient(180deg, rgba(244,241,232,0.92) 0%, rgba(244,241,232,0.82) 40%, rgba(244,241,232,0) 66%);
+      }
+      .sun-wash {
+        position: absolute; left: 540px; top: 260px; width: 1400px; height: 1400px;
+        margin: -700px 0 0 -700px; border-radius: 50%;
+        background: radial-gradient(circle, rgba(255,247,225,0.6) 0%, rgba(255,240,210,0.15) 40%, rgba(255,240,210,0) 65%);
+        mix-blend-mode: screen;
+        opacity: calc(0.45 + var(--amp) * 0.55);
+      }
+      #s2-copy {
+        position: absolute; left: 0; right: 0; top: 112px;
+        display: flex; flex-direction: column; align-items: center; text-align: center;
+      }
+      #s2-see { font-size: 54px; color: var(--ink-muted); }
+      #s2-mark-row { display: flex; align-items: center; gap: 22px; margin-top: 40px; }
+      #s2-mark { width: 96px; height: 99px; display: block; }
+      #s2-word { font-size: 128px; letter-spacing: 0.01em; color: var(--ink); line-height: 1; }
+      #s2-tag { font-size: 64px; margin-top: 22px; max-width: 900px; }
+      #s2-tag .it { color: #3b4234; }
+
+      /* ---------- Scene 3: plates ---------- */
+      #s3 { z-index: 3; }
+      #s3-bg { background: var(--paper); }
+      .plate {
+        position: absolute; inset: 0;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+      }
+      .plate-label { display: flex; align-items: center; gap: 18px; }
+      .plate-label .no { font-family: var(--serif); font-style: italic; font-size: 34px; color: #8f521f; letter-spacing: 0; text-transform: none; }
+      .plate-label .rule { width: 56px; height: 1px; background: var(--rule-strong); display: block; }
+      .mat {
+        margin-top: 30px; width: 780px; height: 600px; padding: 26px;
+        background: var(--surface);
+        border: 1px solid var(--rule);
+        box-shadow: 0 1px 0 rgba(0,0,0,0.02), 0 22px 50px -18px rgba(72,60,40,0.32);
+      }
+      .mat-inner { position: relative; width: 100%; height: 100%; overflow: hidden; outline: 1px solid var(--rule-strong); outline-offset: 6px; }
+      .mat-inner img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+      .plate-title { margin-top: 40px; font-size: 60px; text-align: center; max-width: 900px; }
+
+      /* ---------- Scene 4: grade explained ---------- */
+      #s4 { z-index: 4; }
+      #s4-bg { background: var(--paper); }
+      #s4-col {
+        position: absolute; inset: 0; padding: 0 100px 20px; justify-content: center;
+        display: flex; flex-direction: column; align-items: center;
+      }
+      #s4-stamp { width: 600px; height: 338px; display: block; mix-blend-mode: multiply; }
+      #s4-card {
+        margin-top: 34px; width: 820px; padding: 34px 44px 34px;
+        background: var(--surface); border: 1px solid var(--rule); border-radius: 22px;
+        box-shadow: 0 1px 0 rgba(0,0,0,0.02), 0 18px 48px -16px rgba(72,60,40,0.24);
+      }
+      #s4-top { display: flex; align-items: flex-end; justify-content: space-between; margin-top: 12px; }
+      #s4-score { font-size: 104px; line-height: 0.95; }
+      #s4-score .of { color: var(--ink-faint); }
+      #s4-dots { display: flex; gap: 14px; padding-bottom: 16px; }
+      .dot { width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--rule-strong); display: block; position: relative; }
+      .dot i { position: absolute; inset: -2px; border-radius: 50%; background: var(--brand); display: block; }
+      #s4-line { margin-top: 20px; font-size: 30px; line-height: 1.35; color: var(--ink-muted); }
+      #s4-head { margin-top: 44px; font-size: 54px; text-align: center; max-width: 860px; text-wrap: balance; }
+      #s4-head .it { color: var(--ink-muted); }
+
+      /* ---------- Scene 5: better light ---------- */
+      #s5 { z-index: 5; }
+      #s5-art-wrap { position: absolute; inset: 0; transform-origin: 58% 52%; }
+      #s5-art { object-position: 58% 50%; filter: saturate(0.95) sepia(0.05); }
+      #s5-scrim {
+        background: linear-gradient(180deg, rgba(244,241,232,0.88) 0%, rgba(244,241,232,0.62) 30%, rgba(244,241,232,0) 55%, rgba(244,241,232,0) 70%, rgba(244,241,232,0.55) 100%);
+      }
+      #s5 .sun-wash { left: 600px; top: 330px; }
+      #s5-copy {
+        position: absolute; left: 0; right: 0; top: 120px;
+        display: flex; flex-direction: column; align-items: center; text-align: center;
+      }
+      #s5-line { font-size: 92px; max-width: 920px; }
+      #s5-line .it { color: var(--brand); }
+      #s5-sign {
+        position: absolute; left: 0; right: 0; bottom: 92px;
+        display: flex; flex-direction: column; align-items: center;
+      }
+      #s5-mark-row { display: flex; align-items: center; gap: 16px; }
+      #s5-mark { width: 62px; height: 64px; display: block; }
+      #s5-word { font-size: 80px; line-height: 1; letter-spacing: 0.01em; }
+      #s5-url { margin-top: 16px; font-size: 30px; font-weight: 500; letter-spacing: 0.04em; color: var(--ink); }
+
+      /* ---------- Global retro finish ---------- */
+      #finish { z-index: 20; pointer-events: none; }
+      #grain {
+        position: absolute; left: -120px; top: -120px; width: 1320px; height: 1320px;
+        opacity: 0.16; mix-blend-mode: multiply;
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 300 300' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.35 0 0 0 0 0.28 0 0 0 0 0.18 0 0 0 1 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+        background-size: 300px 300px;
+      }
+      #vignette { background: radial-gradient(120% 120% at 50% 48%, rgba(60,45,25,0) 55%, rgba(60,45,25,0.28) 100%); }
+      #warm { background: rgba(196,122,58,0.05); mix-blend-mode: multiply; }
+      #frame { border: 22px solid var(--paper); }
+      #frame-rule { position: absolute; inset: 30px; border: 1px solid rgba(201,192,173,0.9); }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-width="1080" data-height="1080" data-duration="24">
+      <!-- Scene 1 — Lamplight -->
+      <section id="s1" class="scene clip" data-start="0" data-duration="4.4" data-track-index="1">
+        <div id="s1-bg" class="fill"></div>
+        <div id="s1-art-wrap" data-layout-allow-overflow><img id="s1-art" class="art" src="assets/img/loop-grades-gaps.jpg" alt="" /></div>
+        <div class="lamp-glow" id="s1-glow" data-layout-allow-overflow></div>
+        <div id="s1-shade" class="fill"></div>
+        <div id="s1-copy">
+          <h1 id="s1-title" class="serif block">Sol means sun.</h1>
+          <p id="s1-sub" class="serif it block">A sun doesn’t do the work for you.</p>
+        </div>
+      </section>
+
+      <!-- Bloom: lamp light swells into morning -->
+      <div id="bloom" class="scene clip" data-start="3.1" data-duration="1.9" data-track-index="3">
+        <div id="bloom-disc" data-layout-allow-overflow data-layout-allow-occlusion></div>
+      </div>
+
+      <!-- Scene 2 — Sunrise -->
+      <section id="s2" class="scene clip" data-start="3.6" data-duration="3.9" data-track-index="2">
+        <div id="s2-art-wrap" data-layout-allow-overflow><img id="s2-art" class="art" src="assets/img/classroom-morning.jpg" alt="" /></div>
+        <div class="sun-wash" data-layout-allow-overflow></div>
+        <div id="s2-scrim" class="fill"></div>
+        <div id="s2-copy">
+          <p id="s2-see" class="serif it block">It lets you see.</p>
+          <div id="s2-mark-row">
+            <img id="s2-mark" src="assets/img/sol-mark.svg" alt="" />
+            <span id="s2-word" class="serif block">SOL</span>
+          </div>
+          <h2 id="s2-tag" class="serif block">The operating system <span class="it">for teaching.</span></h2>
+        </div>
+      </section>
+
+      <!-- Scene 3 — The plates -->
+      <section id="s3" class="scene clip" data-start="7" data-duration="8.7" data-track-index="1">
+        <div id="s3-bg" class="fill"></div>
+        <div class="plate" id="p1">
+          <div class="plate-label"><span class="no">Plate i</span><span class="rule"></span><span class="eyebrow">Build</span></div>
+          <div class="mat"><div class="mat-inner" data-layout-allow-overflow><img id="p1-img" src="assets/img/loop-materials-draft.jpg" alt="" /></div></div>
+          <h3 class="plate-title serif block">Materials become a course draft</h3>
+        </div>
+        <div class="plate" id="p2">
+          <div class="plate-label"><span class="no">Plate ii</span><span class="rule"></span><span class="eyebrow">Tutor</span></div>
+          <div class="mat"><div class="mat-inner" data-layout-allow-overflow><img id="p2-img" src="assets/img/loop-course-tutor.jpg" alt="" /></div></div>
+          <h3 class="plate-title serif block">A tutor that only knows <span class="it">your course</span></h3>
+        </div>
+        <div class="plate" id="p3">
+          <div class="plate-label"><span class="no">Plate iii</span><span class="rule"></span><span class="eyebrow">Assess</span></div>
+          <div class="mat"><div class="mat-inner" data-layout-allow-overflow><img id="p3-img" src="assets/img/loop-assessments.jpg" alt="" /></div></div>
+          <h3 class="plate-title serif block">Assessments that reward <span class="it">understanding</span></h3>
+        </div>
+      </section>
+
+      <!-- Scene 4 — The grade, explained -->
+      <section id="s4" class="scene clip" data-start="15.2" data-duration="5.7" data-track-index="2">
+        <div id="s4-bg" class="fill"></div>
+        <div id="s4-col">
+          <img id="s4-stamp" src="assets/img/stamp-hands.jpg" alt="" />
+          <div id="s4-card">
+            <div class="eyebrow">Short answer · Question 4</div>
+            <div id="s4-top">
+              <div id="s4-score" class="serif">7 <span class="of">of 10</span></div>
+              <div id="s4-dots">
+                <span class="dot"><i id="d1"></i></span>
+                <span class="dot"><i id="d2"></i></span>
+                <span class="dot"><i id="d3"></i></span>
+                <span class="dot" id="d4"></span>
+              </div>
+            </div>
+            <p id="s4-line" class="block">You covered 3 of the 4 rubric points.</p>
+          </div>
+          <h2 id="s4-head" class="serif block">SOL drafts. <span class="it">You decide what ships and what scores.</span></h2>
+        </div>
+      </section>
+
+      <!-- Scene 5 — In a better light -->
+      <section id="s5" class="scene clip" data-start="20.4" data-duration="3.6" data-track-index="1">
+        <div id="s5-art-wrap" data-layout-allow-overflow><img id="s5-art" class="art" src="assets/img/path-light.jpg" alt="" /></div>
+        <div class="sun-wash" data-layout-allow-overflow></div>
+        <div id="s5-scrim" class="fill"></div>
+        <div id="s5-copy">
+          <h2 id="s5-line" class="serif block">Teaching, <span class="it">in a better light.</span></h2>
+        </div>
+        <div id="s5-sign">
+          <div id="s5-mark-row">
+            <img id="s5-mark" src="assets/img/sol-mark.svg" alt="" />
+            <span id="s5-word" class="serif block">SOL</span>
+          </div>
+          <div id="s5-url">teachwithsol.com</div>
+        </div>
+      </section>
+
+      <!-- Global retro finish: warm tint, grain, vignette, cream mat -->
+      <div id="finish" class="scene clip" data-start="0" data-duration="24" data-track-index="5">
+        <div id="warm" class="fill"></div>
+        <div id="grain"></div>
+        <div id="vignette" class="fill"></div>
+        <div id="frame" class="fill"></div>
+        <div id="frame-rule"></div>
+      </div>
+
+      <!-- Audio -->
+      <audio id="bgm" data-start="0" data-duration="24" data-track-index="10" data-volume="0.3" src="assets/music/happy-beats-business-moves-vol-12-by-ende-dot-app.mp3"></audio>
+      <audio id="sfx-word" data-start="4.85" data-duration="0.18" data-track-index="11" data-volume="0.55" src="assets/sfx/impact/impactSoft_medium_001.ogg"></audio>
+      <audio id="sfx-p1" data-start="7.05" data-duration="0.27" data-track-index="12" data-volume="0.6" src="assets/sfx/impact/impactWood_light_000.ogg"></audio>
+      <audio id="sfx-p2" data-start="9.79" data-duration="0.27" data-track-index="13" data-volume="0.6" src="assets/sfx/impact/impactWood_light_002.ogg"></audio>
+      <audio id="sfx-p3" data-start="12.51" data-duration="0.27" data-track-index="14" data-volume="0.6" src="assets/sfx/impact/impactWood_light_000.ogg"></audio>
+      <audio id="sfx-stamp" data-start="15.3" data-duration="0.27" data-track-index="15" data-volume="0.55" src="assets/sfx/impact/impactWood_light_002.ogg"></audio>
+      <audio id="sfx-d1" data-start="16.36" data-duration="0.11" data-track-index="16" data-volume="0.45" src="assets/sfx/interface/drop_001.ogg"></audio>
+      <audio id="sfx-d3" data-start="16.9" data-duration="0.19" data-track-index="17" data-volume="0.45" src="assets/sfx/interface/drop_002.ogg"></audio>
+      <audio id="sfx-bell" data-start="21.62" data-duration="0.65" data-track-index="18" data-volume="0.5" src="assets/sfx/impact/impactBell_heavy_003.ogg"></audio>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+      const E = "power3.out";
+
+      // ---------- Audio bed ----------
+      tl.fromTo("#bgm", { volume: 0 }, { volume: 0.3, duration: 1.5, ease: "none" }, 0);
+      tl.to("#bgm", { volume: 0, duration: 1.2, ease: "none" }, 22.8);
+
+      // ---------- Scene 1 — Lamplight (0–3.6) ----------
+      tl.fromTo("#s1-art-wrap", { scale: 1.0 }, { scale: 1.1, duration: 4.4, ease: "none" }, 0);
+      tl.from("#s1-title", { opacity: 0, y: 34, duration: 0.7, ease: E }, 0.2);
+      tl.from("#s1-sub", { opacity: 0, y: 22, duration: 0.6, ease: E }, 1.3);
+      tl.to("#s1-copy", { opacity: 0, duration: 0.4, ease: "power1.in" }, 3.3);
+
+      // ---------- Bloom (3.1–5.0) ----------
+      tl.fromTo("#bloom-disc", { scale: 0.6, opacity: 0 }, { scale: 6.5, opacity: 1, duration: 0.75, ease: "power2.in" }, 3.1);
+      tl.to("#bloom-disc", { opacity: 0, duration: 0.9, ease: "power2.out" }, 3.95);
+
+      // ---------- Scene 2 — Sunrise (3.6–7.0) ----------
+      tl.fromTo("#s2-art-wrap", { scale: 1.08 }, { scale: 1.0, duration: 3.9, ease: "power1.out" }, 3.6);
+      tl.from("#s2-see", { opacity: 0, y: 18, duration: 0.6, ease: E }, 3.85);
+      // beat-locked: 4.91s (wordmark)
+      tl.from("#s2-mark-row", { opacity: 0, y: 26, scale: 0.96, duration: 0.6, ease: E }, 4.86);
+      tl.from("#s2-mark", { rotation: -40, duration: 1.2, ease: "power2.out" }, 4.86);
+      tl.from("#s2-tag", { opacity: 0, y: 20, duration: 0.6, ease: E }, 5.2);
+      tl.to("#s2", { opacity: 0, duration: 0.5, ease: "power1.inOut" }, 7.0);
+
+      // ---------- Scene 3 — Plates (7.0–15.2) ----------
+      // beat-grid: plate 1 at 7.09s, plate 2 at 9.83s, plate 3 at 12.55s (every 5th beat, ~2.7s read each)
+      const plates = [["#p1", 7.09], ["#p2", 9.83], ["#p3", 12.55]];
+      tl.set(["#p2", "#p3"], { opacity: 0 }, 7.0);
+      tl.from("#s3-bg", { opacity: 0, duration: 0.4 }, 7.0);
+      plates.forEach(([id, t], i) => {
+        const card = id + " .mat", label = id + " .plate-label", title = id + " .plate-title";
+        if (i > 0) tl.set(id, { opacity: 1 }, t - 0.05);
+        tl.fromTo(card, { opacity: 0, x: 90, y: 14, rotation: 2.2 }, { opacity: 1, x: 0, y: 0, rotation: 0, duration: 0.6, ease: E }, t - 0.05);
+        tl.fromTo(id + "-img", { scale: 1.08 }, { scale: 1.0, duration: 2.9, ease: "none" }, t - 0.05);
+        tl.from(label, { opacity: 0, y: -10, duration: 0.45, ease: E }, t + 0.05);
+        tl.from(title, { opacity: 0, y: 16, duration: 0.5, ease: E }, t + 0.18);
+        if (i < plates.length - 1) {
+          const out = plates[i + 1][1] - 0.3;
+          tl.to(card, { opacity: 0, x: -90, rotation: -1.6, duration: 0.4, ease: "power2.in" }, out);
+          tl.to([label, title], { opacity: 0, duration: 0.3, ease: "power1.in" }, out);
+        }
+      });
+
+      // ---------- Scene 4 — Grade explained (15.2–20.4) ----------
+      tl.from("#s4-bg", { opacity: 0, duration: 0.5, ease: "power1.inOut" }, 15.2);
+      tl.from("#s4-stamp", { opacity: 0, y: -30, rotation: -6, scale: 1.08, duration: 0.6, ease: E }, 15.28);
+      tl.to("#s4-stamp", { rotation: -1.5, duration: 0.01 }, 15.88);
+      tl.from("#s4-card", { opacity: 0, y: 30, duration: 0.55, ease: E }, 15.5);
+      // beat-grid: rubric marks 16.38 / 16.65 / 16.93
+      ["#d1", "#d2", "#d3"].forEach((d, i) => {
+        tl.from(d, { scale: 0, duration: 0.35, ease: "back.out(2)" }, 16.38 + i * 0.27);
+      });
+      tl.from("#s4-line", { opacity: 0, y: 12, duration: 0.45, ease: E }, 16.4);
+      // beat-locked: 17.47s (trust heading)
+      tl.from("#s4-head", { opacity: 0, y: 22, duration: 0.6, ease: E }, 17.42);
+      tl.to("#s4", { opacity: 0, duration: 0.5, ease: "power1.inOut" }, 20.4);
+
+      // ---------- Scene 5 — In a better light (20.4–24.0) ----------
+      tl.from("#s5", { opacity: 0, duration: 0.5, ease: "power1.inOut" }, 20.4);
+      tl.fromTo("#s5-art-wrap", { scale: 1.0 }, { scale: 1.1, duration: 3.6, ease: "none" }, 20.4);
+      tl.from("#s5-line", { opacity: 0, y: 24, duration: 0.7, ease: E }, 20.75);
+      // beat-locked: 21.84s (final mark; held 2s+ before the end)
+      tl.from("#s5-mark-row", { opacity: 0, y: 18, duration: 0.5, ease: E }, 21.6);
+      tl.from("#s5-mark", { rotation: -40, duration: 1.2, ease: "power2.out" }, 21.6);
+      tl.from("#s5-url", { opacity: 0, duration: 0.4, ease: E }, 21.7);
+
+      // ---------- Retro finish: grain jitter (seeded, 12 steps/s) ----------
+      let seed = 20261028;
+      const rand = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+      for (let i = 0; i < 24 * 12; i++) {
+        tl.set("#grain", { x: Math.round(rand() * 200 - 100), y: Math.round(rand() * 200 - 100) }, i / 12);
+      }
+
+      // ---------- Audio-reactive light (RMS, 15 samples/s) ----------
+      const AD = window.AUDIO_DATA;
+      const root = document.getElementById("root");
+      if (AD && AD.frames) {
+        for (let f = 0; f < AD.frames.length; f += 2) {
+          const [rms, bass] = AD.frames[f];
+          const amp = Math.min(1, rms * 0.6 + bass * 0.4);
+          tl.set(root, { "--amp": Math.round(amp * 1000) / 1000 }, f / AD.fps);
+        }
+      }
+
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>

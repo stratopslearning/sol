@@ -20,7 +20,7 @@ export default function LeaveSectionButton({ sectionId }: { sectionId: string })
       } else {
         alert("Failed to leave section");
       }
-    } catch (err) {
+    } catch {
       alert("Failed to leave section");
     } finally {
       setLoading(false);

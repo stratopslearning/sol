@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Copy, KeyRound, Sparkles, Trash2 } from "lucide-react";
+import { Copy, KeyRound, Sparkles, Trash2 } from "@/components/icons";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -14,11 +14,13 @@ import { apiUrl } from "@/lib/basePath";
 import { LocalDateTime } from "@/components/timezone/LocalDateTime";
 
 const SCOPE_OPTIONS: { id: string; label: string; hint: string }[] = [
-  { id: "read", label: "Read", hint: "Sections, quizzes, gradebook, discussions" },
+  { id: "read", label: "Read", hint: "Sections, assignments, gradebook, discussions" },
   { id: "sections:write", label: "Sections", hint: "Enroll, leave, end dates, unassign" },
-  { id: "quizzes:write", label: "Quizzes", hint: "Create, edit, duplicate, archive" },
+  { id: "quizzes:write", label: "Quizzes", hint: "Create and edit scored quiz assignments" },
   { id: "grades:write", label: "Grading", hint: "Regrade attempts and attention queue" },
   { id: "discussions:write", label: "Discussions", hint: "Create, edit, assign discussion bots" },
+  { id: "materials:write", label: "Materials", hint: "Add or remove course knowledge materials" },
+  { id: "authoring:write", label: "Authoring", hint: "Generate and refine outlines from materials" },
 ];
 
 type TokenRow = {
@@ -37,7 +39,7 @@ export default function AgentAccessClient({
   mcpUrl,
 }: {
   initialTokens: TokenRow[];
-  /** Absolute MCP endpoint — computed on the server to avoid hydration mismatch. */
+  /** Absolute MCP endpoint: computed on the server to avoid hydration mismatch. */
   mcpUrl: string;
 }) {
   const router = useRouter();
@@ -90,7 +92,7 @@ export default function AgentAccessClient({
       }
       setMintedToken(data.token);
       setName("");
-      toast.success("Token created — copy it now, it won't be shown again");
+      toast.success("Token created. Copy it now; it won't be shown again");
       router.refresh();
     } finally {
       mintInFlight.current = false;
@@ -121,7 +123,7 @@ export default function AgentAccessClient({
         <div className="flex items-center gap-2">
           <Sparkles className="h-4 w-4" />
           <span className="eyebrow text-ink-faint">
-            Claude.ai &amp; ChatGPT — no token needed
+            Claude.ai &amp; ChatGPT. No token needed
           </span>
         </div>
         <p className="text-sm text-ink-muted leading-relaxed max-w-2xl">
@@ -209,7 +211,7 @@ export default function AgentAccessClient({
         {mintedToken ? (
           <div className="rounded-md border border-line bg-surface-raised p-4 flex flex-col gap-2">
             <p className="text-sm font-medium text-ink">
-              Copy this token now — it will not be shown again.
+              Copy this token now. It will not be shown again.
             </p>
             <div className="flex items-center gap-2">
               <code className="text-xs break-all bg-surface px-2 py-1.5 rounded flex-1">
@@ -233,7 +235,7 @@ export default function AgentAccessClient({
         <p className="text-sm text-ink-muted leading-relaxed max-w-2xl">
           Add SOL as a remote MCP server in Cursor, Claude Code, or any
           MCP-capable client with a headers field. Use the URL below with your
-          token as a Bearer header. Tokens let you limit scopes — use one for
+          token as a Bearer header. Tokens let you limit scopes. Use one for
           least-privilege access.
         </p>
         <div className="flex items-center gap-2">

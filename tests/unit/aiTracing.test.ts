@@ -104,4 +104,28 @@ describe('createOpenAIClient', () => {
     expect(client).toBeTruthy();
     expect(wrapOpenAI).not.toHaveBeenCalled();
   });
+
+  it('wraps when BRAINTRUST_WRAP=1 even if NODE_ENV=test', async () => {
+    vi.stubEnv('BRAINTRUST_API_KEY', 'sk-test-bt');
+    vi.stubEnv('BRAINTRUST_WRAP', '1');
+    vi.stubEnv('NODE_ENV', 'test');
+    vi.doMock('openai', () => {
+      function OpenAI(this: any) {
+        this.chat = { completions: { create: vi.fn() } };
+      }
+      return { default: OpenAI };
+    });
+    const wrapOpenAI = vi.fn((client: unknown) => client);
+    vi.doMock('braintrust', () => ({
+      wrapOpenAI,
+      initLogger: vi.fn(),
+      traced: vi.fn(async (fn: (span: { log: () => void }) => unknown) =>
+        fn({ log: () => undefined }),
+      ),
+    }));
+
+    const { createOpenAIClient } = await import('@/lib/ai/openai');
+    createOpenAIClient();
+    expect(wrapOpenAI).toHaveBeenCalled();
+  });
 });

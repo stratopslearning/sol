@@ -47,12 +47,16 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - name: Apply migrations
+      - name: Unit tests (no DB)
+        run: npm test
+      - name: Apply migrations (Neon optional)
         if: ${{ env.DATABASE_URL != '' }}
         run: npm run migrate
-      - name: Run tests
+      - name: DB tests against Neon (optional branch fidelity)
         if: ${{ env.DATABASE_URL != '' }}
-        run: npm test
+        run: npm run test:db
+      # Golden LLM grading scores: .github/workflows/evals.yml (Braintrust).
+      # Shape guard: tests/unit/goldenGradingShape.test.ts in unit project.
 
   lint:
     name: Lint
@@ -65,3 +69,94 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run lint -- --max-warnings 0 || echo "lint configured manually; skipping non-zero failure"
+      - name: Legacy authz ratchet
+        run: npm run check:legacy-authz
+
+  tenant-schema:
+    name: Tenant schema check
+    runs-on: ubuntu-latest
+    if: ${{ vars.RUN_TESTS == 'true' || github.event_name == 'pull_request' }}
+    env:
+      NODE_ENV: test
+      DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+      TEST_DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+      DEV_DB_HOSTS: ${{ secrets.DEV_DB_HOSTS }}
+      I_CONFIRM_DEV_DB: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Check tenant_id + FORCE RLS
+        if: ${{ env.TEST_DATABASE_URL != '' }}
+        run: npm run check:tenant-schema
+
+  # Wave 4 (26): isolation suite against an EPHEMERAL Postgres + pgvector
+  # service container — never the shared Neon dev database.
+  isolation-pgvector:
+    name: Isolation (Postgres + pgvector)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci_owner_pw
+          # Must be neondb: drizzle/0034_app_roles.sql GRANTs CONNECT ON DATABASE neondb.
+          POSTGRES_DB: neondb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d neondb"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      NODE_ENV: test
+      # Owner connection for migrate + factory seeding (BYPASSRLS). RLS suites use
+      # withTenantGuc → SET LOCAL ROLE sol_app + app.tenant_id for FORCE RLS checks.
+      DATABASE_MIGRATE_URL: postgresql://postgres:ci_owner_pw@localhost:5432/neondb
+      DATABASE_URL: postgresql://postgres:ci_owner_pw@localhost:5432/neondb
+      TEST_DATABASE_URL: postgresql://postgres:ci_owner_pw@localhost:5432/neondb
+      # assertDevDatabase allowlist: the ephemeral container only.
+      DEV_DB_HOSTS: localhost
+      I_CONFIRM_DEV_DB: '1'
+      ALLOW_OWNER_MIGRATE: '1'
+      CLERK_SECRET_KEY: test_clerk_secret
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: test_clerk_pub
+      OPENAI_API_KEY: sk-test-dummy
+      NEXT_PUBLIC_BASE_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Apply migrations (as owner)
+        env:
+          DATABASE_URL: postgresql://postgres:ci_owner_pw@localhost:5432/neondb
+        run: npm run migrate
+      - name: Ensure sol_app can be assumed (SET ROLE in RLS tests)
+        run: |
+          PGPASSWORD=ci_owner_pw psql -h localhost -U postgres -d neondb \
+            -c "ALTER ROLE sol_app WITH LOGIN PASSWORD 'ci_app_pw';" \
+            -c "GRANT sol_app TO postgres;"
+      - name: DB project (RLS + integration + tests/db)
+        env:
+          CI: 'true'
+        run: npm run test:db
+      - name: Tenant schema check
+        run: npm run check:tenant-schema
+
+  # Wave 4 (26): accessibility (axe) STUB — wire to Playwright + @axe-core/playwright
+  # once a seeded preview target exists. Intentionally non-blocking.
+  a11y-axe:
+    name: Accessibility (axe) — stub
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "TODO(26) axe-core/playwright against a seeded preview; stub passes."

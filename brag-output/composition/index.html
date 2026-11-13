@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="en" data-resolution="landscape">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      :root {
+        --paper: oklch(0.985 0.004 85);
+        --daylight: oklch(0.99 0.003 95);
+        --surface: oklch(1 0 0);
+        --surface-sunken: oklch(0.965 0.006 85);
+        --ink: oklch(0.22 0.012 60);
+        --ink-muted: oklch(0.45 0.01 60);
+        --ink-faint: oklch(0.65 0.008 60);
+        --rule: oklch(0.9 0.006 85);
+        --rule-strong: oklch(0.82 0.008 85);
+        --brand: oklch(0.42 0.075 162);
+        --success: oklch(0.5 0.11 150);
+        --danger: oklch(0.58 0.19 25);
+        --night: oklch(0.17 0.012 65);
+        --night-2: oklch(0.11 0.01 60);
+        --font-display: "Fraunces", Georgia, serif;
+        --font-sans: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+        --font-mono: "JetBrains Mono", ui-monospace, monospace;
+      }
+      html, body {
+        margin: 0; width: 1920px; height: 1080px; overflow: hidden;
+        background: var(--night-2);
+        font-family: var(--font-sans);
+        color: var(--ink);
+        -webkit-font-smoothing: antialiased;
+      }
+      .scene { position: absolute; inset: 0; }
+      .stage {
+        position: absolute; inset: 0;
+        display: flex; align-items: center; justify-content: center;
+        background: var(--paper);
+        will-change: transform, opacity;
+      }
+      .stage.dark { background: radial-gradient(120% 120% at 52% 44%, var(--night) 0%, var(--night-2) 82%); }
+      .stage.day  { background: var(--daylight); }
+      .wrap { width: 1360px; }
+      .display {
+        font-family: var(--font-display); color: var(--ink);
+        line-height: 1.0; letter-spacing: -0.035em; font-weight: 600;
+      }
+      .rule-line { height: 2px; background: var(--rule-strong); transform-origin: left center; }
+
+      /* ---- Scene 1: night desk cold open ---- */
+      .desk-scene { position: relative; width: 1920px; height: 1080px; overflow: hidden; }
+      .desk {
+        position: absolute; left: 0; right: 0; bottom: 0; height: 560px;
+        background: linear-gradient(180deg, oklch(0.17 0.02 58) 0%, oklch(0.10 0.012 52) 100%);
+      }
+      .lamp-pool {
+        position: absolute; inset: 0; mix-blend-mode: screen;
+        background: radial-gradient(760px 560px at 54% 40%,
+          oklch(0.82 0.10 78 / 0.55) 0%, oklch(0.68 0.08 72 / 0.20) 36%, transparent 62%);
+      }
+      .paper-stack {
+        position: absolute; left: 120px; top: 360px; width: 420px; height: 240px;
+        transform: rotate(-1.6deg); filter: blur(1.3px);
+        background: repeating-linear-gradient(179deg,
+          oklch(0.58 0.012 82) 0px, oklch(0.58 0.012 82) 12px,
+          oklch(0.46 0.01 78) 12px, oklch(0.46 0.01 78) 15px);
+        box-shadow: 0 44px 70px -24px oklch(0 0 0 / 0.8);
+      }
+      .work-paper {
+        position: absolute; left: 690px; top: 300px; width: 560px; height: 470px;
+        background: oklch(0.9 0.02 88); transform: rotate(-3deg);
+        box-shadow: 0 36px 90px -24px oklch(0 0 0 / 0.75);
+      }
+      .work-paper .wl { height: 2px; background: oklch(0.79 0.012 85); }
+      .work-paper .wls { position: absolute; left: 60px; right: 60px; top: 150px; }
+      .work-paper .wls .wl { margin-bottom: 66px; }
+      #s1-mark {
+        position: absolute; left: 300px; top: 214px; width: 150px; height: 40px;
+        transform: rotate(-4deg); transform-origin: left center;
+        font-family: var(--font-display); font-style: italic; font-weight: 600;
+        font-size: 52px; color: var(--danger);
+      }
+      .mote { position: absolute; width: 7px; height: 7px; border-radius: 50%;
+        background: oklch(0.96 0.03 80); filter: blur(1.5px); }
+      #s1-penrig { position: absolute; left: 885px; top: 360px; will-change: transform; }
+      .pain-line {
+        position: absolute; left: 0; right: 0; bottom: 132px; text-align: center;
+        font-family: var(--font-display); font-size: 62px; color: oklch(0.95 0.008 85);
+        letter-spacing: -0.02em; font-weight: 500; will-change: transform;
+        text-shadow: 0 2px 30px oklch(0 0 0 / 0.5);
+      }
+
+      /* ---- Wordmark ---- */
+      .mark {
+        font-family: var(--font-display); font-weight: 700;
+        font-size: 150px; letter-spacing: -0.04em; color: var(--ink);
+        line-height: 1; will-change: transform;
+      }
+      .mark .dot { color: var(--brand); }
+
+      /* ---- Quiz card ---- */
+      .quiz {
+        position: relative; width: 1180px; background: var(--surface);
+        border: 1px solid var(--rule); border-radius: 16px; padding: 52px 60px;
+        box-shadow: 0 44px 110px -55px oklch(0 0 0 / 0.45); z-index: 2;
+      }
+      .quiz .qhead { display: flex; align-items: center; justify-content: space-between; }
+      .quiz .qnum { font-family: var(--font-mono); font-size: 20px; color: var(--ink-faint); letter-spacing: 0.12em; }
+      .quiz .qtitle {
+        font-family: var(--font-display); font-size: 40px; font-weight: 600;
+        letter-spacing: -0.02em; margin-top: 22px; color: var(--ink);
+      }
+      .quiz .resp {
+        margin-top: 30px; font-size: 27px; line-height: 1.55; color: var(--ink-muted);
+        border-left: 3px solid var(--rule-strong); padding-left: 26px; max-width: 900px;
+      }
+      .chip {
+        display: inline-flex; align-items: baseline; gap: 8px;
+        background: oklch(0.94 0.04 150); color: var(--success);
+        border: 1px solid oklch(0.82 0.06 150); border-radius: 999px;
+        padding: 12px 26px; font-family: var(--font-mono); font-weight: 500;
+        will-change: transform, filter;
+      }
+      .chip .big { font-size: 34px; }
+      .chip .sm { font-size: 22px; opacity: 0.8; }
+      .reason {
+        margin-top: 30px; display: flex; gap: 16px; align-items: flex-start;
+        background: var(--surface-sunken); border: 1px solid var(--rule);
+        border-radius: 12px; padding: 22px 26px; max-width: 980px; will-change: filter;
+      }
+      .reason .tag {
+        font-family: var(--font-mono); font-size: 16px; letter-spacing: 0.14em;
+        text-transform: uppercase; color: var(--brand); white-space: nowrap; padding-top: 4px;
+      }
+      .reason .txt { font-size: 25px; line-height: 1.5; color: var(--ink); }
+      .caption {
+        margin-top: 42px; text-align: center; font-size: 30px; color: var(--ink-muted);
+        font-weight: 500; position: relative; z-index: 2;
+      }
+      .caption b { color: var(--ink); font-weight: 600; }
+
+      /* foreground desk clutter for rack focus (scene 3) */
+      #s3-fg { position: absolute; inset: 0; z-index: 3; pointer-events: none; will-change: filter, opacity; }
+      #s3-fg .coffee-ring {
+        position: absolute; left: -70px; bottom: -80px; width: 300px; height: 300px;
+        border: 20px solid oklch(0.5 0.06 55 / 0.5); border-radius: 50%;
+      }
+      #s3-fg .desk-pen {
+        position: absolute; right: 40px; bottom: -30px; width: 380px; height: 20px;
+        border-radius: 10px; transform: rotate(28deg);
+        background: linear-gradient(90deg, oklch(0.42 0.075 162) 0%, oklch(0.3 0.05 162) 70%, oklch(0.55 0.18 25) 100%);
+      }
+
+      .override {
+        position: absolute; right: 60px; bottom: -26px;
+        font-family: var(--font-mono); font-size: 20px; letter-spacing: 0.06em;
+        color: var(--brand); background: var(--surface);
+        border: 1px solid var(--brand); border-radius: 999px; padding: 10px 22px;
+        will-change: transform;
+      }
+      .cursor { position: absolute; width: 26px; height: 26px; z-index: 5;
+        filter: drop-shadow(0 2px 3px oklch(0 0 0 / 0.3)); will-change: transform; }
+      .gradebook { margin-top: 40px; display: flex; gap: 16px; justify-content: center; position: relative; z-index: 2; }
+      .cell { width: 200px; background: var(--surface); border: 1px solid var(--rule);
+        border-radius: 12px; padding: 18px 20px; text-align: left; will-change: transform; }
+      .cell .who { font-family: var(--font-mono); font-size: 17px; color: var(--ink-faint); letter-spacing: 0.1em; }
+      .cell .val { font-family: var(--font-display); font-weight: 600; font-size: 40px; margin-top: 6px; color: var(--ink); }
+      .cell .val em { color: var(--success); font-style: normal; }
+      .charge-line {
+        margin-top: 46px; text-align: center; font-family: var(--font-display);
+        font-size: 42px; font-weight: 500; letter-spacing: -0.02em; color: var(--ink);
+        position: relative; z-index: 2;
+      }
+      .footer-note {
+        font-family: var(--font-mono); font-size: 22px; letter-spacing: 0.14em;
+        color: var(--ink-faint); text-transform: lowercase;
+      }
+
+      /* ---- Global cinematic overlays ---- */
+      #grain {
+        position: absolute; inset: 0; pointer-events: none; z-index: 55; opacity: 0.05;
+        mix-blend-mode: overlay; background-size: 200px 200px;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      }
+      #vignette {
+        position: absolute; inset: 0; pointer-events: none; z-index: 60;
+        background: radial-gradient(118% 118% at 50% 48%, transparent 56%, oklch(0 0 0 / 0.26) 100%);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="22" data-width="1920" data-height="1080">
+
+      <!-- ===================== SCENE 1 — NIGHT DESK COLD OPEN (0–4) ===================== -->
+      <div id="s1" class="scene clip" data-start="0" data-duration="4.0" data-track-index="1">
+        <div id="s1-cam" class="stage dark">
+          <div class="desk-scene">
+            <div class="desk"></div>
+            <div class="paper-stack"></div>
+            <div class="work-paper">
+              <div class="wls"><div class="wl"></div><div class="wl"></div></div>
+              <div id="s1-mark">12/20</div>
+            </div>
+            <div id="s1-lamp" class="lamp-pool"></div>
+            <div class="mote" id="mote1" style="left:840px; top:360px;"></div>
+            <div class="mote" id="mote2" style="left:960px; top:300px;"></div>
+            <div class="mote" id="mote3" style="left:1040px; top:420px;"></div>
+            <div class="mote" id="mote4" style="left:900px; top:250px;"></div>
+            <div class="mote" id="mote5" style="left:1120px; top:340px;"></div>
+            <div class="mote" id="mote6" style="left:800px; top:300px;"></div>
+            <svg id="s1-penrig" width="900" height="740" viewBox="0 0 900 740">
+              <!-- hand / forearm in shadow, mostly off-frame bottom-right -->
+              <ellipse cx="700" cy="640" rx="320" ry="210" fill="oklch(0.07 0.01 55)" opacity="0.82" style="filter:blur(34px)" />
+              <!-- pen body -->
+              <line x1="130" y1="176" x2="520" y2="486" stroke="oklch(0.23 0.02 60)" stroke-width="26" stroke-linecap="round" />
+              <line x1="150" y1="176" x2="360" y2="342" stroke="oklch(0.34 0.03 60)" stroke-width="6" stroke-linecap="round" opacity="0.5" />
+              <!-- nib -->
+              <polygon points="98,150 142,172 118,200" fill="oklch(0.86 0.02 85)" />
+              <polygon points="98,150 124,166 112,188" fill="var(--danger)" />
+            </svg>
+            <div id="s1-line" class="pain-line">Grading short answers ate your weekend.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===================== SCENE 2 — WORDMARK TITLE CARD (4–7) ===================== -->
+      <div id="s2" class="scene clip" data-start="4.0" data-duration="3.0" data-track-index="2">
+        <div id="s2-cam" class="stage day">
+          <div class="wrap" style="text-align:center;">
+            <div id="s2-mark" class="mark">SOL<span class="dot">.</span></div>
+            <div id="s2-rule" class="rule-line" style="width:360px; margin:34px auto 46px;"></div>
+            <div id="s2-l1" class="display" style="font-size:76px;">Build the quizzes.</div>
+            <div id="s2-l2" class="display" style="font-size:76px; color:var(--brand); margin-top:10px; font-weight:600;">Let AI grade the hard ones.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===================== SCENE 3 — GRADING MOMENT (7–14) ===================== -->
+      <div id="s3" class="scene clip" data-start="7.0" data-duration="7.0" data-track-index="3">
+        <div id="s3-cam" class="stage day">
+          <div class="wrap" style="text-align:center;">
+            <div id="s3-card" class="quiz" style="margin:0 auto;">
+              <div class="qhead">
+                <div class="qnum">SHORT ANSWER · Q3</div>
+                <div id="s3-chip" class="chip"><span class="big">8</span><span class="sm">/ 10</span></div>
+              </div>
+              <div class="qtitle">Explain one tradeoff of optimistic concurrency control.</div>
+              <div id="s3-resp" class="resp">
+                It lets many users edit at once without locks, so it's fast under low contention.
+                Conflicts are only checked at commit, which can waste work when two writes collide.
+              </div>
+              <div id="s3-reason" class="reason">
+                <div class="tag">AI · reasoning</div>
+                <div class="txt">Correctly identifies the tradeoff; misses the second-order cost of retrying aborted transactions.</div>
+              </div>
+            </div>
+            <div id="s3-cap" class="caption">Short and long answers, scored — <b>with reasoning you can review.</b></div>
+          </div>
+          <div id="s3-fg"><div class="coffee-ring"></div><div class="desk-pen"></div></div>
+        </div>
+      </div>
+
+      <!-- ===================== SCENE 4 — YOU STAY IN CHARGE (14–18) ===================== -->
+      <div id="s4" class="scene clip" data-start="14.0" data-duration="4.0" data-track-index="4">
+        <div id="s4-cam" class="stage day">
+          <div class="wrap" style="text-align:center;">
+            <div id="s4-card" class="quiz" style="margin:0 auto; width:1080px;">
+              <div class="reason" style="margin-top:0; max-width:none;">
+                <div class="tag">AI · reasoning</div>
+                <div class="txt">Correctly identifies the tradeoff; misses the second-order cost of retrying aborted transactions.</div>
+              </div>
+              <div id="s4-override" class="override">Override</div>
+              <svg id="s4-cursor" class="cursor" viewBox="0 0 24 24" style="left:520px; top:60px;">
+                <path d="M4 2 L4 20 L9 15 L12.5 22 L15.5 20.5 L12 14 L19 14 Z" fill="var(--ink)" stroke="white" stroke-width="1.2"/>
+              </svg>
+            </div>
+            <div id="s4-line" class="charge-line">You stay the grader of record. The model does the first pass.</div>
+            <div class="gradebook">
+              <div id="s4-c1" class="cell"><div class="who">A. PATEL</div><div class="val"><em>9</em>/10</div></div>
+              <div id="s4-c2" class="cell"><div class="who">R. OKORO</div><div class="val"><em>8</em>/10</div></div>
+              <div id="s4-c3" class="cell"><div class="who">M. CHEN</div><div class="val"><em>7</em>/10</div></div>
+              <div id="s4-c4" class="cell"><div class="who">S. NOVA</div><div class="val"><em>10</em>/10</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===================== SCENE 5 — OUTRO TITLE CARD (18–22) ===================== -->
+      <div id="s5" class="scene clip" data-start="18.0" data-duration="4.0" data-track-index="5">
+        <div id="s5-cam" class="stage day">
+          <div class="wrap" style="text-align:center;">
+            <div id="s5-mark" class="mark" style="font-size:132px;">SOL<span class="dot">.</span></div>
+            <div id="s5-rule" class="rule-line" style="width:300px; margin:30px auto 40px;"></div>
+            <div id="s5-line" class="display" style="font-size:66px; font-weight:500;">
+              <span id="s5-l1">Less time grading. </span><span id="s5-l2" style="color:var(--brand);">More time teaching.</span>
+            </div>
+            <div id="s5-foot" class="footer-note" style="margin-top:44px;">strat-ops.net/learning</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===================== GLOBAL OVERLAYS ===================== -->
+      <div id="grain"></div>
+      <div id="vignette"></div>
+
+      <!-- ===================== AUDIO ===================== -->
+      <!-- music enters on the cut to the wordmark (its downbeat = the cut) -->
+      <audio id="music" class="clip" data-start="4.0" data-duration="18" data-track-index="10" data-volume="0.3"
+             src="assets/music/happy-beats-business-moves-vol-12-by-ende-dot-app.mp3"></audio>
+      <!-- cold open: single soft pen-contact as the pen touches paper -->
+      <audio id="sfx-pen" class="clip" data-start="3.55" data-duration="1" data-track-index="11" data-volume="0.5" src="assets/sfx/impact/impactWood_light_000.ogg"></audio>
+      <!-- wordmark cut: whisper-quiet soft accent on the downbeat -->
+      <audio id="sfx-title" class="clip" data-start="4.0" data-duration="1.5" data-track-index="12" data-volume="0.3" src="assets/sfx/impact/impactSoft_medium_001.ogg"></audio>
+      <!-- score chip payoff — beat-locked ≈ 11.09s -->
+      <audio id="sfx-score" class="clip" data-start="11.04" data-duration="2" data-track-index="13" data-volume="0.6" src="assets/sfx/interface/bong_001.ogg"></audio>
+      <!-- cursor rollover (scene 4) -->
+      <audio id="sfx-cursor" class="clip" data-start="14.5" data-duration="1" data-track-index="14" data-volume="0.4" src="assets/sfx/ui/rollover1.ogg"></audio>
+      <!-- gradebook cell ticks — beat grid 15.46 / 16.02 / 16.55 / 17.11 -->
+      <audio id="sfx-cell1" class="clip" data-start="15.46" data-duration="1" data-track-index="15" data-volume="0.4" src="assets/sfx/interface/drop_002.ogg"></audio>
+      <audio id="sfx-cell2" class="clip" data-start="16.02" data-duration="1" data-track-index="16" data-volume="0.4" src="assets/sfx/interface/drop_002.ogg"></audio>
+      <audio id="sfx-cell3" class="clip" data-start="16.55" data-duration="1" data-track-index="17" data-volume="0.4" src="assets/sfx/interface/drop_002.ogg"></audio>
+      <audio id="sfx-cell4" class="clip" data-start="17.11" data-duration="1" data-track-index="18" data-volume="0.4" src="assets/sfx/interface/drop_002.ogg"></audio>
+      <!-- outro tagline — beat-locked ≈ 21.47s (strong cue) -->
+      <audio id="sfx-outro" class="clip" data-start="21.42" data-duration="2.4" data-track-index="19" data-volume="0.5" src="assets/sfx/impact/impactBell_heavy_003.ogg"></audio>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+
+      // ---------- initial states (deterministic; seek-safe) ----------
+      tl.set("#s1-cam", { opacity: 0, scale: 1.0, transformOrigin: "54% 46%" }, 0);
+      tl.set("#s1-mark", { scaleX: 0, opacity: 0.9 }, 0);
+      tl.set("#s1-penrig", { x: 430, y: 340, opacity: 0 }, 0);
+      tl.set("#s1-line", { opacity: 0, y: 20 }, 0);
+      tl.set(["#mote1","#mote2","#mote3","#mote4","#mote5","#mote6"], { opacity: 0 }, 0);
+
+      tl.set("#s2-cam", { opacity: 0, transformOrigin: "50% 50%" }, 0); // static — no scale
+      tl.set("#s2-mark", { opacity: 0, scale: 1.03 }, 0);
+      tl.set("#s2-rule", { scaleX: 0 }, 0);
+      tl.set("#s2-l1", { opacity: 0, y: 24 }, 0);
+      tl.set("#s2-l2", { opacity: 0, y: 24 }, 0);
+
+      tl.set("#s3-cam", { opacity: 0, scale: 1.0, transformOrigin: "50% 48%" }, 0);
+      tl.set("#s3-card", { opacity: 0, scale: 0.965, y: 20 }, 0);
+      tl.set("#s3-resp", { opacity: 0, y: 16 }, 0);
+      tl.set("#s3-chip", { opacity: 0, scale: 0.5, filter: "blur(6px)" }, 0);
+      tl.set("#s3-reason", { opacity: 0, y: 16, filter: "blur(5px)" }, 0);
+      tl.set("#s3-cap", { opacity: 0, y: 14 }, 0);
+      tl.set("#s3-fg", { opacity: 0.45, filter: "blur(0px)" }, 0);
+
+      tl.set("#s4-cam", { opacity: 0, transformOrigin: "50% 50%" }, 0); // static
+      tl.set("#s4-card", { opacity: 0, scale: 0.985 }, 0);
+      tl.set("#s4-override", { opacity: 0, scale: 0.9 }, 0);
+      tl.set("#s4-cursor", { opacity: 0, x: 120, y: 40 }, 0);
+      tl.set("#s4-line", { opacity: 0, y: 20 }, 0);
+      tl.set(["#s4-c1","#s4-c2","#s4-c3","#s4-c4"], { opacity: 0, scale: 0.85, y: 14 }, 0);
+
+      tl.set("#s5-cam", { opacity: 0, transformOrigin: "50% 50%" }, 0); // static
+      tl.set("#s5-mark", { opacity: 0, scale: 1.03 }, 0);
+      tl.set("#s5-rule", { scaleX: 0 }, 0);
+      tl.set("#s5-l1", { opacity: 0, y: 20 }, 0);
+      tl.set("#s5-l2", { opacity: 0, y: 20 }, 0);
+      tl.set("#s5-foot", { opacity: 0 }, 0);
+
+      // ---------- SCENE 1 — cold open (0–4): stillness, then the pen ----------
+      tl.to("#s1-cam", { opacity: 1, duration: 0.7, ease: "power2.out" }, 0.0); // rise from black
+      tl.to("#s1-cam", { scale: 1.06, duration: 4.0, ease: "power1.inOut" }, 0.0); // slow push-in
+      // lamp flicker (subtle, early)
+      tl.to("#s1-lamp", { opacity: 0.82, duration: 0.06 }, 0.5);
+      tl.to("#s1-lamp", { opacity: 1, duration: 0.1 }, 0.56);
+      tl.to("#s1-lamp", { opacity: 0.88, duration: 0.05 }, 1.15);
+      tl.to("#s1-lamp", { opacity: 1, duration: 0.12 }, 1.2);
+      // dust drifting in the beam (finite, staggered)
+      tl.to("#mote1", { opacity: 0.55, y: -60, duration: 3.0, ease: "none" }, 0.2);
+      tl.to("#mote2", { opacity: 0.4,  y: -80, duration: 3.2, ease: "none" }, 0.0);
+      tl.to("#mote3", { opacity: 0.5,  y: -50, duration: 2.8, ease: "none" }, 0.6);
+      tl.to("#mote4", { opacity: 0.35, y: -70, duration: 3.4, ease: "none" }, 0.3);
+      tl.to("#mote5", { opacity: 0.45, y: -55, duration: 3.0, ease: "none" }, 0.8);
+      tl.to("#mote6", { opacity: 0.3,  y: -65, duration: 3.1, ease: "none" }, 0.1);
+      tl.to(["#mote1","#mote2","#mote3","#mote4","#mote5","#mote6"], { opacity: 0, duration: 0.6 }, 3.3);
+      // the hand + pen enter, make contact on the last beat
+      tl.to("#s1-penrig", { opacity: 1, duration: 0.5 }, 2.8);
+      tl.to("#s1-penrig", { x: 0, y: 0, duration: 0.9, ease: "power2.out" }, 2.8); // nib reaches paper ~3.6
+      tl.to("#s1-mark", { scaleX: 1, duration: 0.4, ease: "power2.out" }, 3.5); // red stroke drawn
+      tl.to("#s1-line", { opacity: 1, y: 0, duration: 0.55, ease: "power2.out" }, 3.55); // line lands mid-stroke
+      // hard cut to scene 2 (no fade-out) — runtime hides the clip at 4.0
+
+      // ---------- SCENE 2 — wordmark title card (4–7): static hold, music enters ----------
+      tl.set("#s2-cam", { opacity: 1 }, 4.0); // hard CUT in
+      tl.to("#s2-mark", { opacity: 1, scale: 1, duration: 0.6, ease: "power2.out" }, 4.15);
+      tl.to("#s2-rule", { scaleX: 1, duration: 0.45, ease: "power2.inOut" }, 4.6);
+      tl.to("#s2-l1", { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 5.0);
+      tl.to("#s2-l2", { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 5.5);
+      tl.to("#s2-cam", { opacity: 0, duration: 0.4, ease: "power2.inOut" }, 6.6); // quick crossfade
+      tl.set("#s2-cam", { opacity: 0 }, 7.0); // hard kill at boundary
+
+      // ---------- SCENE 3 — grading moment (7–14): push-in then rack focus ----------
+      tl.to("#s3-cam", { opacity: 1, duration: 0.5 }, 7.0);
+      tl.to("#s3-cam", { scale: 1.04, duration: 4.0, ease: "power1.inOut" }, 7.0); // push-in through first ~4s
+      tl.to("#s3-card", { opacity: 1, scale: 1, y: 0, duration: 0.6, ease: "power3.out" }, 7.3);
+      tl.to("#s3-cap", { opacity: 1, y: 0, duration: 0.45, ease: "power2.out" }, 7.9);
+      tl.to("#s3-resp", { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 8.2);
+      // rack focus at the payoff: foreground clutter softens out
+      tl.to("#s3-fg", { filter: "blur(9px)", opacity: 0.16, duration: 0.9, ease: "power2.inOut" }, 10.5);
+      // score chip lands (sharpens in) — beat-locked: 11.09s
+      tl.to("#s3-chip", { opacity: 1, scale: 1, filter: "blur(0px)", duration: 0.5, ease: "back.out(2)" }, 11.09);
+      tl.to("#s3-reason", { opacity: 1, y: 0, filter: "blur(0px)", duration: 0.55, ease: "power2.out" }, 11.6);
+      tl.to("#s3-cam", { opacity: 0, duration: 0.4, ease: "power2.inOut" }, 13.6);
+      tl.set("#s3-cam", { opacity: 0 }, 14.0); // hard kill
+
+      // ---------- SCENE 4 — you stay in charge (14–18): static ----------
+      tl.to("#s4-cam", { opacity: 1, duration: 0.45 }, 14.0);
+      tl.to("#s4-card", { opacity: 1, scale: 1, duration: 0.5, ease: "power3.out" }, 14.2);
+      tl.to("#s4-cursor", { opacity: 1, x: 0, y: 0, duration: 0.5, ease: "power2.inOut" }, 14.5);
+      tl.to("#s4-override", { opacity: 1, scale: 1, duration: 0.35, ease: "back.out(2)" }, 14.95);
+      tl.to("#s4-line", { opacity: 1, y: 0, duration: 0.45, ease: "power2.out" }, 15.15);
+      // gradebook cells snap to the beat grid — beat-grid: 15.46, 16.02, 16.55, 17.11
+      tl.to("#s4-c1", { opacity: 1, scale: 1, y: 0, duration: 0.3, ease: "back.out(2)" }, 15.46);
+      tl.to("#s4-c2", { opacity: 1, scale: 1, y: 0, duration: 0.3, ease: "back.out(2)" }, 16.02);
+      tl.to("#s4-c3", { opacity: 1, scale: 1, y: 0, duration: 0.3, ease: "back.out(2)" }, 16.55);
+      tl.to("#s4-c4", { opacity: 1, scale: 1, y: 0, duration: 0.3, ease: "back.out(2)" }, 17.11);
+      tl.to("#s4-cam", { opacity: 0, duration: 0.4, ease: "power2.inOut" }, 17.6);
+      tl.set("#s4-cam", { opacity: 0 }, 18.0); // hard kill
+
+      // ---------- SCENE 5 — outro title card (18–22): static, bookends scene 2 ----------
+      tl.to("#s5-cam", { opacity: 1, duration: 0.5 }, 18.0);
+      tl.to("#s5-mark", { opacity: 1, scale: 1, duration: 0.6, ease: "power2.out" }, 18.35);
+      tl.to("#s5-rule", { scaleX: 1, duration: 0.45, ease: "power2.inOut" }, 18.9);
+      tl.to("#s5-l1", { opacity: 1, y: 0, duration: 0.55, ease: "power2.out" }, 20.0);
+      // final tagline lands on the strongest cue — beat-locked: 21.47s
+      tl.to("#s5-l2", { opacity: 1, y: 0, duration: 0.6, ease: "power3.out" }, 21.47);
+      tl.to("#s5-foot", { opacity: 1, duration: 0.5 }, 21.95);
+
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>

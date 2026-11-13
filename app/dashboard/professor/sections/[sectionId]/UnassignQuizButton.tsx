@@ -20,7 +20,7 @@ export default function UnassignQuizButton({ quizId, sectionId }: { quizId: stri
       } else {
         alert("Failed to unassign quiz");
       }
-    } catch (err) {
+    } catch {
       alert("Failed to unassign quiz");
     } finally {
       setLoading(false);

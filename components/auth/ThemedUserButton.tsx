@@ -10,7 +10,7 @@ type ThemedUserButtonProps = {
   className?: string;
 };
 
-/** Clerk UserButton styled to SOL academic tokens (olive / cream). */
+/** Clerk UserButton styled to SOL academic tokens (ink / cream). */
 export function ThemedUserButton({ className }: ThemedUserButtonProps) {
   const { user } = useUser();
   const fallback = Boolean(user && !user.hasImage);

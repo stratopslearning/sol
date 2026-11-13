@@ -2,16 +2,18 @@
  * Unified auth for professor-facing API routes and MCP tools.
  *
  * Two ways in:
- *   1. Clerk browser session (the dashboard) — full access, all scopes.
- *   2. `Authorization: Bearer sol_pat_…` personal access token — scoped agent
+ *   1. Clerk browser session (the dashboard): full access, all scopes.
+ *   2. `Authorization: Bearer sol_pat_…` personal access token: scoped agent
  *      access (see `lib/professorApiTokens.ts`).
  *
- * Both resolve to the same DB user row so every downstream ownership check
- * (`professor_sections`, `quizzes.professorId`, …) behaves identically.
+ * Both resolve to the same DB user row. Authority comes only from role_bindings;
+ * PAT scopes are intersected with the owner's binding permissions in the token tenant.
  */
 import type { NextRequest } from 'next/server';
 
 import { ApiError } from '@/lib/api/errors';
+import { userCanAccessTeachingArea } from '@/lib/authz/gates';
+import { effectiveScopesForUser } from '@/lib/authz/tokenScopes';
 import { getOrCreateUser, type UserData } from '@/lib/getOrCreateUser';
 import {
   looksLikeApiToken,
@@ -50,11 +52,17 @@ export async function authenticateProfessorRequest(
   if (bearer && looksLikeApiToken(bearer)) {
     const verified = await verifyProfessorApiToken(bearer);
     if (!verified) return null;
+    // Token scopes ∩ owner's role-binding permissions in the token's tenant.
+    const scopes = await effectiveScopesForUser(
+      verified.user.id,
+      verified.scopes,
+      verified.tenantId,
+    );
     return {
       user: verified.user,
       viaToken: true,
       tokenId: verified.tokenId,
-      scopes: verified.scopes,
+      scopes,
     };
   }
 
@@ -77,10 +85,6 @@ export function hasScope(
   return auth.scopes.includes(scope);
 }
 
-export function isProfessorOrAdmin(user: Pick<UserData, 'role'>): boolean {
-  return user.role === 'PROFESSOR' || user.role === 'ADMIN';
-}
-
 /**
  * One-line guard for professor API routes. Throws `ApiError` (which
  * `apiErrorResponse` maps to 401/403) when the caller is unauthenticated,
@@ -97,10 +101,14 @@ export async function requireProfessorApi(
   const auth = await authenticateProfessorRequest(req);
   if (!auth) throw ApiError.unauthorized();
 
-  const roleOk = opts.professorOnly
-    ? auth.user.role === 'PROFESSOR'
-    : isProfessorOrAdmin(auth.user);
-  if (!roleOk) throw ApiError.forbidden();
+  const teaching = await userCanAccessTeachingArea(auth.user.id);
+  const isStaff = Boolean(auth.user.platformStaff);
+
+  if (opts.professorOnly) {
+    if (!teaching) throw ApiError.forbidden();
+  } else if (!teaching && !isStaff) {
+    throw ApiError.forbidden();
+  }
 
   if (opts.scope && !hasScope(auth, opts.scope)) {
     throw ApiError.forbidden(

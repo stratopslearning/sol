@@ -38,7 +38,7 @@ function notifyMilestone(seconds: number) {
  * Why wall-clock and not a setInterval decrement?
  *   Browsers throttle setInterval to ~1Hz/minute in background tabs (Chrome
  *   especially). A decrementing counter therefore drifts arbitrarily far
- *   behind real time when the tab is hidden — a 2-minute quiz can show 90
+ *   behind real time when the tab is hidden: a 2-minute quiz can show 90
  *   seconds remaining 6 wall-clock minutes after start. The server sees
  *   the true elapsed time and rejects the submit.
  *
@@ -91,7 +91,7 @@ export function QuizTimer({
 
   // Cosmetic 1Hz tick to keep the displayed value moving while the tab is
   // visible. setInterval may be throttled in the background, but that's
-  // fine — the wall-clock setTimeout + visibility listeners catch up.
+  // fine: the wall-clock setTimeout + visibility listeners catch up.
   useEffect(() => {
     if (paused) return;
     const interval = setInterval(() => {
@@ -146,7 +146,7 @@ export function QuizTimer({
     };
   }, [deadlineMs, paused]);
 
-  // Milestone toasts — fire each one exactly once per deadline reset.
+  // Milestone toasts: fire each one exactly once per deadline reset.
   useEffect(() => {
     if (paused) return;
     for (const threshold of applicableMilestones) {

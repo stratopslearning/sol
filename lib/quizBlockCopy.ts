@@ -70,13 +70,13 @@ export function getQuizBlockCopy(
       return {
         title,
         description:
-          'It is not assigned to any of your active sections. Check My quizzes for what you can take.',
+          'It is not assigned to any of your active sections. Check Assignments for what you can take.',
       };
     case 'quiz_unavailable':
       return {
         title,
         description:
-          'It may have been archived or removed. Check My quizzes for what is assigned to you.',
+          'It may have been archived or removed. Check Assignments for what is assigned to you.',
       };
   }
 }

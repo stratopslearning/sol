@@ -35,7 +35,7 @@ export async function PATCH(
   try {
     const user = await getOrCreateUser();
     if (!user) throw ApiError.unauthorized();
-    if (user.role === 'STUDENT' && !isStudentEntitled(user)) {
+    if (!isStudentEntitled(user)) {
       throw ApiError.paymentRequired();
     }
 
