@@ -65,6 +65,23 @@ const nextConfig: NextConfig = {
       'https://clerk-telemetry.com',
     ];
 
+    // Browser → S3 presigned PUTs (book uploads). CSP host wildcards only cover
+    // one DNS label, so include virtual-hosted + path-style for the deploy region.
+    const awsRegion = process.env.AWS_REGION || 'us-west-1';
+    const awsBucket = process.env.AWS_S3_BUCKET?.trim();
+    const s3ConnectHosts = [
+      `https://*.s3.${awsRegion}.amazonaws.com`,
+      `https://s3.${awsRegion}.amazonaws.com`,
+      'https://*.s3.amazonaws.com',
+      'https://s3.amazonaws.com',
+      ...(awsBucket
+        ? [
+            `https://${awsBucket}.s3.${awsRegion}.amazonaws.com`,
+            `https://${awsBucket}.s3.amazonaws.com`,
+          ]
+        : []),
+    ];
+
     const csp = [
       "default-src 'self'",
       "base-uri 'self'",
@@ -88,6 +105,7 @@ const nextConfig: NextConfig = {
       [
         "connect-src 'self'",
         ...clerkConnectHosts,
+        ...s3ConnectHosts,
         'https://challenges.cloudflare.com',
         'https://api.stripe.com',
         'https://*.sentry.io',
