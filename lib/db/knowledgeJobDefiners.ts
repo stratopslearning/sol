@@ -466,3 +466,283 @@ export async function fetchBookChaptersForRagDefiner(
     position: Number(ch.position ?? 0),
   }));
 }
+
+function asDateMaybe(v: unknown): Date | null {
+  if (v == null) return null;
+  return v instanceof Date ? v : new Date(String(v));
+}
+
+function mapConnectorRow(raw: Record<string, unknown>) {
+  return {
+    id: String(raw.id),
+    workspaceId: String(raw.workspace_id ?? raw.workspaceId),
+    tenantId: raw.tenant_id
+      ? String(raw.tenant_id)
+      : raw.tenantId
+        ? String(raw.tenantId)
+        : null,
+    provider: String(raw.provider),
+    displayName:
+      raw.display_name != null
+        ? String(raw.display_name)
+        : raw.displayName != null
+          ? String(raw.displayName)
+          : null,
+    status: String(raw.status ?? 'draft'),
+    lastSyncAt: asDateMaybe(raw.last_sync_at ?? raw.lastSyncAt),
+    errorMessage:
+      raw.error_message != null
+        ? String(raw.error_message)
+        : raw.errorMessage != null
+          ? String(raw.errorMessage)
+          : null,
+    config: (raw.config ?? {}) as Record<string, unknown>,
+    encryptedTokens:
+      raw.encrypted_tokens != null
+        ? String(raw.encrypted_tokens)
+        : raw.encryptedTokens != null
+          ? String(raw.encryptedTokens)
+          : null,
+    scopes:
+      raw.scopes != null
+        ? String(raw.scopes)
+        : null,
+    createdByUserId:
+      raw.created_by_user_id != null
+        ? String(raw.created_by_user_id)
+        : raw.createdByUserId != null
+          ? String(raw.createdByUserId)
+          : null,
+    deletedAt: asDateMaybe(raw.deleted_at ?? raw.deletedAt),
+    createdAt: asDateMaybe(raw.created_at ?? raw.createdAt) ?? new Date(),
+    updatedAt: asDateMaybe(raw.updated_at ?? raw.updatedAt) ?? new Date(),
+  };
+}
+
+export type KnowledgeConnectorRow = ReturnType<typeof mapConnectorRow>;
+
+export async function fetchKnowledgeConnectorByIdDefiner(
+  connectorId: string,
+): Promise<KnowledgeConnectorRow | null> {
+  const result = await db.execute(sql`
+    SELECT sol_knowledge_connector_by_id(${connectorId}::uuid) AS row
+  `);
+  const raw = parseJsonb<Record<string, unknown>>(
+    rowsFromExecute<{ row: unknown }>(result)[0]?.row,
+  );
+  if (!raw?.id) return null;
+  return mapConnectorRow(raw);
+}
+
+export async function listKnowledgeConnectorsDefiner(
+  workspaceId: string,
+): Promise<KnowledgeConnectorRow[]> {
+  const result = await db.execute(sql`
+    SELECT sol_list_knowledge_connectors(${workspaceId}::uuid) AS rows
+  `);
+  const raw = parseJsonb<Array<Record<string, unknown>>>(
+    rowsFromExecute<{ rows: unknown }>(result)[0]?.rows,
+  );
+  if (!Array.isArray(raw)) return [];
+  return raw.map(mapConnectorRow);
+}
+
+export type KnowledgeSyncRunRow = {
+  id: string;
+  connectorId: string;
+  workspaceId: string;
+  status: string;
+  startedAt: Date;
+  finishedAt: Date | null;
+  createdCount: number | null;
+  updatedCount: number | null;
+  skippedCount: number | null;
+  errorCount: number | null;
+  errorMessage: string | null;
+};
+
+export async function listKnowledgeSyncRunsDefiner(
+  connectorId: string,
+  limit = 10,
+): Promise<KnowledgeSyncRunRow[]> {
+  const result = await db.execute(sql`
+    SELECT sol_list_knowledge_sync_runs(
+      ${connectorId}::uuid,
+      ${limit}::integer
+    ) AS rows
+  `);
+  const raw = parseJsonb<Array<Record<string, unknown>>>(
+    rowsFromExecute<{ rows: unknown }>(result)[0]?.rows,
+  );
+  if (!Array.isArray(raw)) return [];
+  return raw.map((r) => ({
+    id: String(r.id),
+    connectorId: String(r.connector_id ?? r.connectorId),
+    workspaceId: String(r.workspace_id ?? r.workspaceId),
+    status: String(r.status),
+    startedAt: asDateMaybe(r.started_at ?? r.startedAt) ?? new Date(),
+    finishedAt: asDateMaybe(r.finished_at ?? r.finishedAt),
+    createdCount:
+      r.created_count != null
+        ? Number(r.created_count)
+        : r.createdCount != null
+          ? Number(r.createdCount)
+          : null,
+    updatedCount:
+      r.updated_count != null
+        ? Number(r.updated_count)
+        : r.updatedCount != null
+          ? Number(r.updatedCount)
+          : null,
+    skippedCount:
+      r.skipped_count != null
+        ? Number(r.skipped_count)
+        : r.skippedCount != null
+          ? Number(r.skippedCount)
+          : null,
+    errorCount:
+      r.error_count != null
+        ? Number(r.error_count)
+        : r.errorCount != null
+          ? Number(r.errorCount)
+          : null,
+    errorMessage:
+      r.error_message != null
+        ? String(r.error_message)
+        : r.errorMessage != null
+          ? String(r.errorMessage)
+          : null,
+  }));
+}
+
+export async function fetchKnowledgeDocByConnectorExternalDefiner(
+  workspaceId: string,
+  connectorId: string,
+  externalId: string,
+): Promise<{
+  id: string;
+  workspaceId: string;
+  currentVersionId: string | null;
+  status: string;
+  title: string;
+} | null> {
+  const result = await db.execute(sql`
+    SELECT sol_knowledge_doc_by_connector_external(
+      ${workspaceId}::uuid,
+      ${connectorId}::uuid,
+      ${externalId}
+    ) AS row
+  `);
+  const raw = parseJsonb<Record<string, unknown>>(
+    rowsFromExecute<{ row: unknown }>(result)[0]?.row,
+  );
+  if (!raw?.id) return null;
+  return {
+    id: String(raw.id),
+    workspaceId: String(raw.workspace_id ?? raw.workspaceId),
+    currentVersionId: raw.current_version_id
+      ? String(raw.current_version_id)
+      : raw.currentVersionId
+        ? String(raw.currentVersionId)
+        : null,
+    status: String(raw.status ?? 'PENDING'),
+    title: String(raw.title ?? ''),
+  };
+}
+
+export async function createConnectorKnowledgeDocumentDefiner(payload: {
+  id?: string;
+  workspaceId: string;
+  title: string;
+  sourceKind?: string;
+  mimeType?: string | null;
+  byteSize?: number | null;
+  connectorId: string;
+  externalId: string;
+  externalPath?: string | null;
+  status?: string;
+  visibility?: string;
+  createdByUserId?: string | null;
+}): Promise<{ id: string }> {
+  const result = await db.execute(sql`
+    SELECT sol_create_connector_knowledge_document(
+      ${JSON.stringify(payload)}::jsonb
+    ) AS row
+  `);
+  const raw = parseJsonb<Record<string, unknown>>(
+    rowsFromExecute<{ row: unknown }>(result)[0]?.row,
+  );
+  if (!raw?.id) {
+    throw new Error('sol_create_connector_knowledge_document returned no row');
+  }
+  return { id: String(raw.id) };
+}
+
+export async function startKnowledgeSyncRunDefiner(payload: {
+  connectorId: string;
+}): Promise<{ id: string }> {
+  const result = await db.execute(sql`
+    SELECT sol_start_knowledge_sync_run(${JSON.stringify(payload)}::jsonb) AS row
+  `);
+  const raw = parseJsonb<Record<string, unknown>>(
+    rowsFromExecute<{ row: unknown }>(result)[0]?.row,
+  );
+  if (!raw?.id) throw new Error('sol_start_knowledge_sync_run returned no row');
+  return { id: String(raw.id) };
+}
+
+export async function finishKnowledgeSyncRunDefiner(payload: {
+  runId: string;
+  connectorId: string;
+  status: 'succeeded' | 'failed';
+  createdCount?: number;
+  updatedCount?: number;
+  skippedCount?: number;
+  errorCount?: number;
+  errorMessage?: string | null;
+  config?: Record<string, unknown>;
+}): Promise<void> {
+  await db.execute(sql`
+    SELECT sol_finish_knowledge_sync_run(${JSON.stringify(payload)}::jsonb)
+  `);
+}
+
+export async function fetchKnowledgeVersionByIdDefiner(versionId: string) {
+  const result = await db.execute(sql`
+    SELECT * FROM sol_knowledge_version_by_id(${versionId}::uuid)
+  `);
+  const r = rowsFromExecute<{
+    id: string;
+    document_id: string;
+    checksum: string | null;
+    version: number;
+  }>(result)[0];
+  if (!r) return null;
+  return {
+    id: r.id,
+    documentId: r.document_id,
+    checksum: r.checksum,
+    version: Number(r.version),
+  };
+}
+
+export async function adminPurgeCourseMaterialDefiner(materialId: string): Promise<{
+  s3Key: string | null;
+  courseId: string;
+  title: string;
+  tenantId: string | null;
+}> {
+  const result = await db.execute(sql`
+    SELECT sol_admin_purge_course_material(${materialId}::uuid) AS row
+  `);
+  const raw = parseJsonb<Record<string, unknown>>(
+    rowsFromExecute<{ row: unknown }>(result)[0]?.row,
+  );
+  if (!raw) throw new Error('Material not found');
+  return {
+    s3Key: raw.s3Key != null ? String(raw.s3Key) : null,
+    courseId: String(raw.courseId),
+    title: String(raw.title ?? ''),
+    tenantId: raw.tenantId != null ? String(raw.tenantId) : null,
+  };
+}

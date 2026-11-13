@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 
 import { db } from '@/app/db';
-import { flashcards, lessonSections, lessons } from '@/app/db/schema';
+import { lessons } from '@/app/db/schema';
 import { ApiError } from '@/lib/api/errors';
 import {
   setActivityActiveByEntity,
@@ -10,6 +10,10 @@ import {
 import { authorizeOnSection } from '@/lib/authz/courseAccess';
 import { userCanAccessTeachingArea } from '@/lib/authz/gates';
 import { listTeachableSectionIdsForCourse } from '@/lib/authoring/access';
+import {
+  fetchLessonByIdDefiner,
+  fetchLessonSectionIdsDefiner,
+} from '@/lib/db/studentReadDefiners';
 import type { UserData } from '@/lib/getOrCreateUser';
 
 type AuthUser = Pick<UserData, 'id' | 'clerkId'> & {
@@ -51,39 +55,21 @@ export async function createLessonFromAuthoring(
     );
   }
 
-  const created = await db.transaction(async (tx) => {
-    const [lesson] = await tx
-      .insert(lessons)
-      .values({
-        professorId: user.id,
-        courseId: input.courseId,
-        title: input.title.trim(),
-        markdown,
-        isActive: input.isActive ?? false,
-        sourceOutlineItemId: input.sourceOutlineItemId ?? null,
-      })
-      .returning();
-
-    const cards = (input.flashcards ?? []).filter(
-      (c) => c.front?.trim() && c.back?.trim(),
-    );
-    if (cards.length > 0) {
-      await tx.insert(flashcards).values(
-        cards.map((c, i) => ({
-          lessonId: lesson.id,
-          front: c.front.trim(),
-          back: c.back.trim(),
-          position: i,
-        })),
-      );
-    }
-
-    return lesson;
-  });
-
-  const { assignLessonSectionsDefiner } = await import(
+  const { createLessonDefiner, assignLessonSectionsDefiner } = await import(
     '@/lib/db/facultyWriteDefiners'
   );
+  const created = await createLessonDefiner({
+    courseId: input.courseId,
+    professorId: user.id,
+    title: input.title.trim(),
+    markdown,
+    isActive: input.isActive ?? false,
+    sourceOutlineItemId: input.sourceOutlineItemId ?? null,
+    flashcards: (input.flashcards ?? []).filter(
+      (c) => c.front?.trim() && c.back?.trim(),
+    ),
+  });
+
   await assignLessonSectionsDefiner({
     lessonId: created.id,
     assignedBy: user.id,
@@ -107,24 +93,19 @@ export async function setLessonVisibility(
   lessonId: string,
   isActive: boolean,
 ): Promise<{ id: string; isActive: boolean }> {
-  const existing = await db.query.lessons.findFirst({
-    where: eq(lessons.id, lessonId),
-  });
-  if (!existing || existing.deletedAt) {
+  const existing = await fetchLessonByIdDefiner(lessonId);
+  if (!existing) {
     throw ApiError.notFound('Lesson not found');
   }
 
-  const links = await db.query.lessonSections.findMany({
-    where: eq(lessonSections.lessonId, lessonId),
-    columns: { sectionId: true },
-  });
+  const linkSectionIds = await fetchLessonSectionIdsDefiner(lessonId);
   let canPublish = false;
-  for (const link of links) {
-    if (await authorizeOnSection(user, 'content.publish', link.sectionId)) {
+  for (const sectionId of linkSectionIds) {
+    if (await authorizeOnSection(user, 'content.publish', sectionId)) {
       canPublish = true;
       break;
     }
-    if (await authorizeOnSection(user, 'content.write', link.sectionId)) {
+    if (await authorizeOnSection(user, 'content.write', sectionId)) {
       canPublish = true;
       break;
     }

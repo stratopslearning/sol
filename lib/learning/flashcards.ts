@@ -1,7 +1,4 @@
-import { and, asc, eq, isNull } from 'drizzle-orm';
-
-import { db } from '@/app/db';
-import { flashcards } from '@/app/db/schema';
+import { fetchLessonFlashcardsDefiner } from '@/lib/db/studentReadDefiners';
 import { assertStudentCanAccessLesson } from '@/lib/learning/access';
 
 export async function listFlashcardsForStudent(
@@ -9,10 +6,7 @@ export async function listFlashcardsForStudent(
   lessonId: string,
 ) {
   await assertStudentCanAccessLesson(studentId, lessonId);
-  const rows = await db.query.flashcards.findMany({
-    where: and(eq(flashcards.lessonId, lessonId), isNull(flashcards.deletedAt)),
-    orderBy: [asc(flashcards.position)],
-  });
+  const rows = await fetchLessonFlashcardsDefiner(lessonId);
   return rows.map((r) => ({
     id: r.id,
     front: r.front,

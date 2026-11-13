@@ -1,14 +1,5 @@
 import { createHash } from 'node:crypto';
 
-import { and, eq, isNull } from 'drizzle-orm';
-
-import { db } from '@/app/db';
-import {
-  knowledgeConnectors,
-  knowledgeDocuments,
-  knowledgeDocumentVersions,
-  knowledgeSyncRuns,
-} from '@/app/db/schema';
 import { getConnectorAdapter } from '@/lib/knowledge/connectors/index';
 import type { KnowledgeProvider } from '@/lib/knowledge/connectors/types';
 import { scheduleKnowledgeDocumentProcess } from '@/lib/knowledge/scheduleDocumentProcess';
@@ -27,13 +18,20 @@ import {
  * Run a full/delta sync for one connector into the workspace knowledge library.
  */
 export async function syncConnector(connectorId: string): Promise<void> {
-  const connector = await db.query.knowledgeConnectors.findFirst({
-    where: and(
-      eq(knowledgeConnectors.id, connectorId),
-      isNull(knowledgeConnectors.deletedAt),
-    ),
-  });
-  if (!connector) throw new Error('Connector not found');
+  const {
+    fetchKnowledgeConnectorByIdDefiner,
+    updateKnowledgeConnectorDefiner,
+    startKnowledgeSyncRunDefiner,
+    finishKnowledgeSyncRunDefiner,
+    fetchKnowledgeDocByConnectorExternalDefiner,
+    createConnectorKnowledgeDocumentDefiner,
+    fetchKnowledgeVersionByIdDefiner,
+  } = await import('@/lib/db/knowledgeJobDefiners');
+  const { addKnowledgeDocumentVersionDefiner, setKnowledgeDocumentTitleDefiner } =
+    await import('@/lib/db/entityScopedReads');
+
+  const connector = await fetchKnowledgeConnectorByIdDefiner(connectorId);
+  if (!connector || connector.deletedAt) throw new Error('Connector not found');
   if (!connector.encryptedTokens) {
     throw new Error('Connector is not authenticated');
   }
@@ -49,29 +47,13 @@ export async function syncConnector(connectorId: string): Promise<void> {
     adapter.refreshTokens
   ) {
     tokens = await adapter.refreshTokens(tokens);
-    await db
-      .update(knowledgeConnectors)
-      .set({
-        encryptedTokens: encryptSecretJson(tokens),
-        updatedAt: new Date(),
-      })
-      .where(eq(knowledgeConnectors.id, connectorId));
+    await updateKnowledgeConnectorDefiner({
+      connectorId,
+      encryptedTokens: encryptSecretJson(tokens),
+    });
   }
 
-  const [run] = await db
-    .insert(knowledgeSyncRuns)
-    .values({
-      connectorId,
-      workspaceId: connector.workspaceId,
-      tenantId: connector.tenantId ?? connector.workspaceId,
-      status: 'running',
-    })
-    .returning();
-
-  await db
-    .update(knowledgeConnectors)
-    .set({ status: 'syncing', errorMessage: null, updatedAt: new Date() })
-    .where(eq(knowledgeConnectors.id, connectorId));
+  const run = await startKnowledgeSyncRunDefiner({ connectorId });
 
   let created = 0;
   let updated = 0;
@@ -87,26 +69,20 @@ export async function syncConnector(connectorId: string): Promise<void> {
       const delta = await adapter.listDelta({ tokens, config, cursor });
       for (const file of delta.files) {
         try {
-          const existing = await db.query.knowledgeDocuments.findFirst({
-            where: and(
-              eq(knowledgeDocuments.workspaceId, connector.workspaceId),
-              eq(knowledgeDocuments.connectorId, connectorId),
-              eq(knowledgeDocuments.externalId, file.externalId),
-              isNull(knowledgeDocuments.deletedAt),
-            ),
-          });
+          const existing = await fetchKnowledgeDocByConnectorExternalDefiner(
+            connector.workspaceId,
+            connectorId,
+            file.externalId,
+          );
 
           if (
             existing?.currentVersionId &&
             file.checksum &&
             existing.status === 'READY'
           ) {
-            const ver = await db.query.knowledgeDocumentVersions.findFirst({
-              where: eq(
-                knowledgeDocumentVersions.id,
-                existing.currentVersionId,
-              ),
-            });
+            const ver = await fetchKnowledgeVersionByIdDefiner(
+              existing.currentVersionId,
+            );
             if (ver?.checksum === file.checksum) {
               skipped += 1;
               continue;
@@ -121,11 +97,15 @@ export async function syncConnector(connectorId: string): Promise<void> {
 
           if (fetched.buffer && isS3Configured()) {
             const docId = existing?.id ?? crypto.randomUUID();
-            const versionNum = existing
-              ? (await db.query.knowledgeDocumentVersions.findMany({
-                  where: eq(knowledgeDocumentVersions.documentId, existing.id),
-                })).length + 1
-              : 1;
+            let versionNum = 1;
+            if (existing?.currentVersionId) {
+              const cur = await fetchKnowledgeVersionByIdDefiner(
+                existing.currentVersionId,
+              );
+              versionNum = (cur?.version ?? 0) + 1;
+            } else if (existing) {
+              versionNum = 2;
+            }
             s3Key = buildKnowledgeS3Key(
               connector.workspaceId,
               docId,
@@ -143,85 +123,49 @@ export async function syncConnector(connectorId: string): Promise<void> {
               createHash('sha256').update(fetched.buffer).digest('hex');
 
             if (!existing) {
-              const [doc] = await db
-                .insert(knowledgeDocuments)
-                .values({
-                  id: docId,
-                  workspaceId: connector.workspaceId,
-                  tenantId: connector.workspaceId,
-                  title: file.title.slice(0, 300),
-                  sourceKind: 'CONNECTOR',
-                  mimeType,
-                  byteSize,
-                  connectorId,
-                  externalId: file.externalId,
-                  externalPath: file.path ?? null,
-                  status: 'PENDING',
-                  visibility: 'workspace',
-                  createdByUserId: connector.createdByUserId,
-                })
-                .returning();
-              const [version] = await db
-                .insert(knowledgeDocumentVersions)
-                .values({
-                  tenantId: connector.tenantId ?? connector.workspaceId,
-                  documentId: doc!.id,
-                  version: 1,
-                  s3Key,
-                  checksum,
-                  byteSize,
-                  mimeType,
-                  createdByUserId: connector.createdByUserId,
-                })
-                .returning();
-              await db
-                .update(knowledgeDocuments)
-                .set({
-                  currentVersionId: version!.id,
-                  updatedAt: new Date(),
-                })
-                .where(eq(knowledgeDocuments.id, doc!.id));
-              scheduleKnowledgeDocumentProcess(doc!.id, connector.workspaceId);
+              await createConnectorKnowledgeDocumentDefiner({
+                id: docId,
+                workspaceId: connector.workspaceId,
+                title: file.title.slice(0, 300),
+                sourceKind: 'CONNECTOR',
+                mimeType,
+                byteSize,
+                connectorId,
+                externalId: file.externalId,
+                externalPath: file.path ?? null,
+                status: 'PENDING',
+                visibility: 'workspace',
+                createdByUserId: connector.createdByUserId,
+              });
+              await addKnowledgeDocumentVersionDefiner({
+                documentId: docId,
+                version: 1,
+                s3Key,
+                checksum,
+                byteSize,
+                mimeType,
+                createdByUserId: connector.createdByUserId ?? connector.id,
+              });
+              scheduleKnowledgeDocumentProcess(docId, connector.workspaceId);
               created += 1;
             } else {
-              const versionNum =
-                (
-                  await db.query.knowledgeDocumentVersions.findMany({
-                    where: eq(
-                      knowledgeDocumentVersions.documentId,
-                      existing.id,
-                    ),
-                  })
-                ).length + 1;
-              const [version] = await db
-                .insert(knowledgeDocumentVersions)
-                .values({
-                  tenantId: connector.tenantId ?? connector.workspaceId,
-                  documentId: existing.id,
-                  version: versionNum,
-                  s3Key,
-                  checksum,
-                  byteSize,
-                  mimeType,
-                  createdByUserId: connector.createdByUserId,
-                })
-                .returning();
-              await db
-                .update(knowledgeDocuments)
-                .set({
-                  title: file.title.slice(0, 300),
-                  currentVersionId: version!.id,
-                  mimeType,
-                  byteSize,
-                  status: 'PENDING',
-                  errorMessage: null,
-                  updatedAt: new Date(),
-                })
-                .where(eq(knowledgeDocuments.id, existing.id));
+              const versionId = await addKnowledgeDocumentVersionDefiner({
+                documentId: existing.id,
+                version: versionNum,
+                s3Key,
+                checksum,
+                byteSize,
+                mimeType,
+                createdByUserId: connector.createdByUserId ?? connector.id,
+              });
+              await setKnowledgeDocumentTitleDefiner(
+                existing.id,
+                file.title.slice(0, 300),
+              );
               const { notifyLinkedCoursesOfNewVersion } = await import(
                 '@/lib/knowledge/linkVersions'
               );
-              await notifyLinkedCoursesOfNewVersion(existing.id, version!.id);
+              await notifyLinkedCoursesOfNewVersion(existing.id, versionId);
               scheduleKnowledgeDocumentProcess(
                 existing.id,
                 connector.workspaceId,
@@ -237,28 +181,24 @@ export async function syncConnector(connectorId: string): Promise<void> {
             byteSize = textBuf.byteLength;
 
             if (!existing) {
-              const [doc] = await db
-                .insert(knowledgeDocuments)
-                .values({
-                  workspaceId: connector.workspaceId,
-                  tenantId: connector.workspaceId,
-                  title: file.title.slice(0, 300),
-                  sourceKind: 'CONNECTOR',
-                  mimeType,
-                  byteSize,
-                  connectorId,
-                  externalId: file.externalId,
-                  externalPath: file.path ?? null,
-                  status: 'PENDING',
-                  visibility: 'workspace',
-                  createdByUserId: connector.createdByUserId,
-                })
-                .returning();
+              const doc = await createConnectorKnowledgeDocumentDefiner({
+                workspaceId: connector.workspaceId,
+                title: file.title.slice(0, 300),
+                sourceKind: 'CONNECTOR',
+                mimeType,
+                byteSize,
+                connectorId,
+                externalId: file.externalId,
+                externalPath: file.path ?? null,
+                status: 'PENDING',
+                visibility: 'workspace',
+                createdByUserId: connector.createdByUserId,
+              });
               let key: string | null = null;
               if (isS3Configured()) {
                 key = buildKnowledgeS3Key(
                   connector.workspaceId,
-                  doc!.id,
+                  doc.id,
                   1,
                   `${file.title.slice(0, 80)}.md`,
                 );
@@ -268,30 +208,17 @@ export async function syncConnector(connectorId: string): Promise<void> {
                   contentType: 'text/markdown',
                 });
               }
-              const [version] = await db
-                .insert(knowledgeDocumentVersions)
-                .values({
-                  tenantId: connector.tenantId ?? connector.workspaceId,
-                  documentId: doc!.id,
-                  version: 1,
-                  s3Key: key,
-                  checksum,
-                  byteSize,
-                  mimeType,
-                  charCount: fetched.text.length,
-                  createdByUserId: connector.createdByUserId,
-                })
-                .returning();
-              await db
-                .update(knowledgeDocuments)
-                .set({
-                  currentVersionId: version!.id,
-                  updatedAt: new Date(),
-                })
-                .where(eq(knowledgeDocuments.id, doc!.id));
-              // If no S3, process inline from text by writing a temp data URL — skip: require S3
+              await addKnowledgeDocumentVersionDefiner({
+                documentId: doc.id,
+                version: 1,
+                s3Key: key,
+                checksum,
+                byteSize,
+                mimeType,
+                createdByUserId: connector.createdByUserId ?? connector.id,
+              });
               if (key) {
-                scheduleKnowledgeDocumentProcess(doc!.id, connector.workspaceId);
+                scheduleKnowledgeDocumentProcess(doc.id, connector.workspaceId);
               }
               created += 1;
             } else {
@@ -310,51 +237,29 @@ export async function syncConnector(connectorId: string): Promise<void> {
       if (!delta.cursor) break;
     }
 
-    await db
-      .update(knowledgeConnectors)
-      .set({
-        status: 'connected',
-        lastSyncAt: new Date(),
-        config: { ...config, syncCursor: cursor },
-        errorMessage: null,
-        updatedAt: new Date(),
-      })
-      .where(eq(knowledgeConnectors.id, connectorId));
-
-    await db
-      .update(knowledgeSyncRuns)
-      .set({
-        status: 'succeeded',
-        finishedAt: new Date(),
-        createdCount: created,
-        updatedCount: updated,
-        skippedCount: skipped,
-        errorCount: errors,
-      })
-      .where(eq(knowledgeSyncRuns.id, run!.id));
+    await finishKnowledgeSyncRunDefiner({
+      runId: run.id,
+      connectorId,
+      status: 'succeeded',
+      createdCount: created,
+      updatedCount: updated,
+      skippedCount: skipped,
+      errorCount: errors,
+      config: { ...config, syncCursor: cursor },
+    });
   } catch (err) {
     const message =
       err instanceof Error ? err.message.slice(0, 500) : 'Sync failed';
-    await db
-      .update(knowledgeConnectors)
-      .set({
-        status: 'error',
-        errorMessage: message,
-        updatedAt: new Date(),
-      })
-      .where(eq(knowledgeConnectors.id, connectorId));
-    await db
-      .update(knowledgeSyncRuns)
-      .set({
-        status: 'failed',
-        finishedAt: new Date(),
-        createdCount: created,
-        updatedCount: updated,
-        skippedCount: skipped,
-        errorCount: errors + 1,
-        errorMessage: message,
-      })
-      .where(eq(knowledgeSyncRuns.id, run!.id));
+    await finishKnowledgeSyncRunDefiner({
+      runId: run.id,
+      connectorId,
+      status: 'failed',
+      createdCount: created,
+      updatedCount: updated,
+      skippedCount: skipped,
+      errorCount: errors + 1,
+      errorMessage: message,
+    });
     throw err;
   }
 }

@@ -1,7 +1,3 @@
-import { eq } from 'drizzle-orm';
-
-import { db } from '@/app/db';
-import { courseMaterialChunks, courseMaterials } from '@/app/db/schema';
 import { deleteMaterialObject } from '@/lib/knowledge/storage';
 
 /**
@@ -13,31 +9,23 @@ export async function purgeMaterial(materialId: string): Promise<{
   courseId: string;
   title: string;
 }> {
-  const material = await db.query.courseMaterials.findFirst({
-    where: eq(courseMaterials.id, materialId),
-  });
-  if (!material) {
-    throw new Error('Material not found');
-  }
+  const { adminPurgeCourseMaterialDefiner } = await import(
+    '@/lib/db/knowledgeJobDefiners'
+  );
+  const purged = await adminPurgeCourseMaterialDefiner(materialId);
 
-  await db
-    .delete(courseMaterialChunks)
-    .where(eq(courseMaterialChunks.materialId, materialId));
-
-  if (material.s3Key) {
+  if (purged.s3Key) {
     try {
-      await deleteMaterialObject(material.s3Key);
+      await deleteMaterialObject(purged.s3Key);
     } catch (err) {
-      console.error('S3 delete during purge failed', material.s3Key, err);
-      // Continue. DB purge still required for FERPA
+      console.error('S3 delete during purge failed', purged.s3Key, err);
+      // Continue — DB purge already completed for FERPA
     }
   }
 
-  await db.delete(courseMaterials).where(eq(courseMaterials.id, materialId));
-
   return {
-    s3Key: material.s3Key,
-    courseId: material.courseId,
-    title: material.title,
+    s3Key: purged.s3Key,
+    courseId: purged.courseId,
+    title: purged.title,
   };
 }
