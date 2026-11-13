@@ -571,24 +571,6 @@ export default function AuthoringClient({
     /** Retry in place — keep the existing user turn, don't append another. */
     skipAppendUser?: boolean;
   }) {
-    if (!canGenerate) {
-      appendMessage({
-        role: "system",
-        content:
-          "Add at least one Ready material before proposing an outline. Use Materials (top of chat) to upload or attach Knowledge docs.",
-      });
-      toast.error("Add at least one Ready material first");
-      return;
-    }
-    if (opts?.confirmReplace && outline) {
-      if (
-        !confirm(
-          "Regenerate a new outline from materials? This archives the current draft. Refine chat edits the current draft instead.",
-        )
-      ) {
-        return;
-      }
-    }
     const nextBrief =
       opts?.briefOverride !== undefined
         ? opts.briefOverride.trim()
@@ -601,6 +583,25 @@ export default function AuthoringClient({
     ) {
       appendMessage({ role: "user", content: chatInput.trim() });
       setChatInput("");
+    }
+
+    if (!canGenerate) {
+      appendMessage({
+        role: "system",
+        content:
+          "Add at least one Ready material before proposing an outline. Use + to upload or attach Knowledge docs — empty focus is fine (all Ready materials are used).",
+      });
+      toast.error("Add at least one Ready material first");
+      return;
+    }
+    if (opts?.confirmReplace && outline) {
+      if (
+        !confirm(
+          "Regenerate a new outline from materials? This archives the current draft. Refine chat edits the current draft instead.",
+        )
+      ) {
+        return;
+      }
     }
 
     abortRef.current?.abort();

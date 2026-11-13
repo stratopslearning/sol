@@ -11,9 +11,9 @@ export async function GET(
   req: NextRequest,
   ctx: { params: Promise<{ id: string }> },
 ) {
+  const { id } = await ctx.params;
   try {
     const auth = await requireProfessorApi(req, { scope: 'read' });
-    const { id } = await ctx.params;
     const courseId = req.nextUrl.searchParams.get('courseId');
     const disposition =
       req.nextUrl.searchParams.get('disposition') === 'attachment'
@@ -34,6 +34,10 @@ export async function GET(
       },
     });
   } catch (error) {
+    console.error('[knowledge file preview]', {
+      id,
+      message: error instanceof Error ? error.message : String(error),
+    });
     return apiErrorResponse(error);
   }
 }

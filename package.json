@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "prebuild": "node scripts/write-vercel-json.mjs",
+    "prebuild": "node scripts/write-vercel-json.mjs && node scripts/copy-pdf-worker.mjs",
+    "postinstall": "node scripts/copy-pdf-worker.mjs",
     "dev": "next dev",
     "jobs:dev": "npx inngest-cli@latest dev -u http://localhost:3000/api/inngest",
     "build": "next build",

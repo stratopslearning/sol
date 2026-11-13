@@ -1,15 +1,7 @@
 import { createHash } from 'node:crypto';
 
-import { and, desc, eq, inArray, isNull, or } from 'drizzle-orm';
-
-import { db } from '@/app/db';
-import {
-  courseKnowledgeLinks,
-  knowledgeDocuments,
-  knowledgeDocumentVersions,
-} from '@/app/db/schema';
+import { knowledgeDocuments } from '@/app/db/schema';
 import { ApiError } from '@/lib/api/errors';
-import { withTenant } from '@/lib/db/tenantContext';
 import type { UserData } from '@/lib/getOrCreateUser';
 import { assertCanManageCourse } from '@/lib/knowledge/access';
 import {
@@ -95,6 +87,25 @@ function toSummary(
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
+}
+
+/**
+ * Resolve a knowledge document under FORCE RLS.
+ * Bare `db.query.knowledgeDocuments` returns 0 rows without app.tenant_id.
+ */
+async function requireKnowledgeDocument(
+  documentId: string,
+  opts?: { allowDeleted?: boolean },
+) {
+  const { fetchKnowledgeDocumentById } = await import(
+    '@/lib/db/entityScopedReads'
+  );
+  const doc = await fetchKnowledgeDocumentById(documentId);
+  if (!doc) throw ApiError.notFound('Document not found');
+  if (!opts?.allowDeleted && doc.deletedAt) {
+    throw ApiError.notFound('Document not found');
+  }
+  return doc;
 }
 
 export async function listWorkspaceDocuments(
@@ -457,13 +468,7 @@ export async function addDocumentVersionFromUpload(
   documentId: string,
   opts: { fileName: string; mimeType: string; buffer: Buffer },
 ): Promise<KnowledgeDocumentSummary> {
-  const doc = await db.query.knowledgeDocuments.findFirst({
-    where: and(
-      eq(knowledgeDocuments.id, documentId),
-      isNull(knowledgeDocuments.deletedAt),
-    ),
-  });
-  if (!doc) throw ApiError.notFound('Document not found');
+  const doc = await requireKnowledgeDocument(documentId);
   await assertWorkspaceFaculty(user, doc.workspaceId);
   if (!isS3Configured()) {
     throw ApiError.badRequest('File storage is not configured (S3)');
@@ -497,13 +502,24 @@ export async function addDocumentVersionFromUpload(
 
   await notifyLinkedCoursesOfNewVersion(documentId, versionId);
   scheduleKnowledgeDocumentProcess(documentId, doc.workspaceId);
-  return toSummary({
-    ...doc,
-    currentVersionId: versionId,
-    status: 'PENDING',
+  const now = new Date();
+  return {
+    id: doc.id,
+    workspaceId: doc.workspaceId,
+    title: doc.title,
+    sourceKind: 'UPLOAD',
     mimeType: opts.mimeType,
     byteSize: opts.buffer.byteLength,
-  });
+    status: 'PENDING',
+    errorMessage: null,
+    externalUrl: null,
+    connectorId: null,
+    currentVersionId: versionId,
+    visibility: doc.visibility,
+    createdByUserId: doc.createdByUserId,
+    createdAt: now,
+    updatedAt: now,
+  };
 }
 
 /** Move a personal document into the shared workspace library. */
@@ -511,13 +527,7 @@ export async function shareDocumentToLibrary(
   user: AuthUser,
   documentId: string,
 ): Promise<KnowledgeDocumentSummary> {
-  const doc = await db.query.knowledgeDocuments.findFirst({
-    where: and(
-      eq(knowledgeDocuments.id, documentId),
-      isNull(knowledgeDocuments.deletedAt),
-    ),
-  });
-  if (!doc) throw ApiError.notFound('Document not found');
+  const doc = await requireKnowledgeDocument(documentId);
   await assertWorkspaceFaculty(user, doc.workspaceId);
   const canShare =
     (await isWorkspaceKnowledgeCoordinator(user, doc.workspaceId)) ||
@@ -525,24 +535,40 @@ export async function shareDocumentToLibrary(
   if (!canShare) {
     throw ApiError.forbidden('You cannot share this document');
   }
+  const now = new Date();
+  const base: KnowledgeDocumentSummary = {
+    id: doc.id,
+    workspaceId: doc.workspaceId,
+    title: doc.title,
+    sourceKind: 'UPLOAD',
+    mimeType: null,
+    byteSize: null,
+    status: doc.status as KnowledgeDocumentSummary['status'],
+    errorMessage: null,
+    externalUrl: null,
+    connectorId: null,
+    currentVersionId: doc.currentVersionId,
+    visibility: doc.visibility,
+    createdByUserId: doc.createdByUserId,
+    createdAt: now,
+    updatedAt: now,
+  };
   if (doc.visibility === 'workspace') {
-    return toSummary(doc);
+    return base;
   }
   const { setKnowledgeDocumentVisibilityDefiner } = await import(
     '@/lib/db/entityScopedReads'
   );
   await setKnowledgeDocumentVisibilityDefiner(documentId, 'workspace');
-  return toSummary({ ...doc, visibility: 'workspace', updatedAt: new Date() });
+  return { ...base, visibility: 'workspace', updatedAt: new Date() };
 }
 
 export async function softDeleteKnowledgeDocument(
   user: AuthUser,
   documentId: string,
 ): Promise<void> {
-  const doc = await db.query.knowledgeDocuments.findFirst({
-    where: eq(knowledgeDocuments.id, documentId),
-  });
-  if (!doc || doc.deletedAt) throw ApiError.notFound('Document not found');
+  const doc = await requireKnowledgeDocument(documentId, { allowDeleted: true });
+  if (doc.deletedAt) throw ApiError.notFound('Document not found');
   if (doc.visibility === 'workspace') {
     await assertWorkspaceLibraryAdmin(user, doc.workspaceId);
   } else {
@@ -562,7 +588,11 @@ export async function softDeleteKnowledgeDocument(
 
 async function assertCanRenameKnowledgeDocument(
   user: AuthUser,
-  doc: typeof knowledgeDocuments.$inferSelect,
+  doc: {
+    workspaceId: string;
+    visibility: 'personal' | 'workspace';
+    createdByUserId: string | null;
+  },
 ): Promise<void> {
   await assertWorkspaceFaculty(user, doc.workspaceId);
   // Personal docs: owner or coordinator. Shared library: any faculty (display title only).
@@ -584,20 +614,31 @@ export async function renameKnowledgeDocument(
   const nextTitle = title.trim().slice(0, 300);
   if (!nextTitle) throw ApiError.badRequest('Title is required');
 
-  const doc = await db.query.knowledgeDocuments.findFirst({
-    where: and(
-      eq(knowledgeDocuments.id, documentId),
-      isNull(knowledgeDocuments.deletedAt),
-    ),
-  });
-  if (!doc) throw ApiError.notFound('Document not found');
+  const doc = await requireKnowledgeDocument(documentId);
   await assertCanRenameKnowledgeDocument(user, doc);
 
   const { setKnowledgeDocumentTitleDefiner } = await import(
     '@/lib/db/entityScopedReads'
   );
   await setKnowledgeDocumentTitleDefiner(documentId, nextTitle);
-  return toSummary({ ...doc, title: nextTitle, updatedAt: new Date() });
+  const now = new Date();
+  return {
+    id: doc.id,
+    workspaceId: doc.workspaceId,
+    title: nextTitle,
+    sourceKind: 'UPLOAD',
+    mimeType: null,
+    byteSize: null,
+    status: doc.status as KnowledgeDocumentSummary['status'],
+    errorMessage: null,
+    externalUrl: null,
+    connectorId: null,
+    currentVersionId: doc.currentVersionId,
+    visibility: doc.visibility,
+    createdByUserId: doc.createdByUserId,
+    createdAt: now,
+    updatedAt: now,
+  };
 }
 
 /**
@@ -646,15 +687,12 @@ export async function renameKnowledgeFolder(
   );
   let updated = 0;
   for (const doc of targets) {
-    const row = await db.query.knowledgeDocuments.findFirst({
-      where: and(
-        eq(knowledgeDocuments.id, doc.id),
-        isNull(knowledgeDocuments.deletedAt),
-      ),
-    });
-    if (!row) continue;
     try {
-      await assertCanRenameKnowledgeDocument(user, row);
+      await assertCanRenameKnowledgeDocument(user, {
+        workspaceId: doc.workspaceId,
+        visibility: doc.visibility,
+        createdByUserId: doc.createdByUserId,
+      });
     } catch {
       continue;
     }
@@ -671,13 +709,7 @@ export async function reprocessDocumentForUser(
   user: AuthUser,
   documentId: string,
 ): Promise<void> {
-  const doc = await db.query.knowledgeDocuments.findFirst({
-    where: and(
-      eq(knowledgeDocuments.id, documentId),
-      isNull(knowledgeDocuments.deletedAt),
-    ),
-  });
-  if (!doc) throw ApiError.notFound('Document not found');
+  const doc = await requireKnowledgeDocument(documentId);
   await assertWorkspaceFaculty(user, doc.workspaceId);
   await reprocessKnowledgeDocument(documentId);
 }
@@ -687,13 +719,7 @@ export async function restoreDocumentVersionForUser(
   documentId: string,
   versionId: string,
 ): Promise<void> {
-  const doc = await db.query.knowledgeDocuments.findFirst({
-    where: and(
-      eq(knowledgeDocuments.id, documentId),
-      isNull(knowledgeDocuments.deletedAt),
-    ),
-  });
-  if (!doc) throw ApiError.notFound('Document not found');
+  const doc = await requireKnowledgeDocument(documentId);
   await assertWorkspaceLibraryAdmin(user, doc.workspaceId);
   await restoreKnowledgeDocumentVersion(documentId, versionId);
   await notifyLinkedCoursesOfNewVersion(documentId, versionId);
@@ -719,12 +745,11 @@ export async function listVersionsForUser(
   user: AuthUser,
   documentId: string,
 ) {
-  // FORCE RLS: bare knowledge_documents / versions reads return 0 without tenant GUC.
-  const { fetchKnowledgeDocumentById, fetchKnowledgeDocumentVersions } =
-    await import('@/lib/db/entityScopedReads');
-  const doc = await fetchKnowledgeDocumentById(documentId);
-  if (!doc || doc.deletedAt) throw ApiError.notFound('Document not found');
+  const doc = await requireKnowledgeDocument(documentId);
   await assertWorkspaceFaculty(user, doc.workspaceId);
+  const { fetchKnowledgeDocumentVersions } = await import(
+    '@/lib/db/entityScopedReads'
+  );
   return fetchKnowledgeDocumentVersions(documentId);
 }
 

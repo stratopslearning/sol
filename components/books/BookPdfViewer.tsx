@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import type { PDFDocumentProxy } from 'pdfjs-dist';
+import type { PDFDocumentProxy, RenderTask } from 'pdfjs-dist';
 
 import { Button } from '@/components/ui/button';
 import { apiUrl } from '@/lib/basePath';
+import { loadPdfDocument } from '@/lib/pdf/loadPdfDocument';
 
 type Props = {
   bookId: string;
@@ -21,6 +22,7 @@ export function BookPdfViewer({ bookId, title }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const pdfRef = useRef<PDFDocumentProxy | null>(null);
+  const renderTaskRef = useRef<RenderTask | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -28,23 +30,18 @@ export function BookPdfViewer({ bookId, title }: Props) {
       setLoading(true);
       setError(null);
       try {
-        const pdfjs = await import('pdfjs-dist');
-        pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-          'pdfjs-dist/build/pdf.worker.min.mjs',
-          import.meta.url,
-        ).toString();
-
         const url = apiUrl(`/api/student/books/${bookId}/file`);
-        const doc = await pdfjs.getDocument({ url }).promise;
-        if (cancelled) return;
+        const doc = await loadPdfDocument(url);
+        if (cancelled) {
+          void doc.destroy();
+          return;
+        }
         pdfRef.current = doc;
         setPageCount(doc.numPages);
         setPage(1);
       } catch (err) {
         if (!cancelled) {
-          setError(
-            err instanceof Error ? err.message : 'Could not load PDF',
-          );
+          setError(err instanceof Error ? err.message : 'Could not load PDF');
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -53,7 +50,11 @@ export function BookPdfViewer({ bookId, title }: Props) {
     void load();
     return () => {
       cancelled = true;
+      renderTaskRef.current?.cancel();
+      renderTaskRef.current = null;
+      const doc = pdfRef.current;
       pdfRef.current = null;
+      if (doc) void doc.destroy();
     };
   }, [bookId]);
 
@@ -62,27 +63,31 @@ export function BookPdfViewer({ bookId, title }: Props) {
     async function renderPage() {
       const pdf = pdfRef.current;
       const canvas = canvasRef.current;
-      if (!pdf || !canvas || page < 1) return;
+      if (!pdf || !canvas || page < 1 || loading) return;
       try {
+        renderTaskRef.current?.cancel();
+        renderTaskRef.current = null;
+
         const pdfPage = await pdf.getPage(page);
         if (cancelled) return;
         const viewport = pdfPage.getViewport({ scale: 1.25 });
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
         canvas.width = viewport.width;
         canvas.height = viewport.height;
-        await pdfPage.render({
-          canvas,
-          canvasContext: ctx,
-          viewport,
-        }).promise;
-      } catch {
-        if (!cancelled) setError('Could not render page');
+        const task = pdfPage.render({ canvas, viewport });
+        renderTaskRef.current = task;
+        await task.promise;
+      } catch (err) {
+        if (cancelled) return;
+        const name = err instanceof Error ? err.name : '';
+        if (name === 'RenderingCancelledException') return;
+        setError('Could not render page');
       }
     }
     void renderPage();
     return () => {
       cancelled = true;
+      renderTaskRef.current?.cancel();
+      renderTaskRef.current = null;
     };
   }, [page, pageCount, loading]);
 

@@ -95,7 +95,8 @@ const nextConfig: NextConfig = {
         'https://*.neon.tech',
       ].join(' '),
       [
-        "frame-src 'self'",
+        // blob: for same-origin PDF preview iframes (MaterialPreviewDialog)
+        "frame-src 'self' blob:",
         'https://js.stripe.com',
         ...clerkScriptHosts,
         'https://challenges.cloudflare.com',
