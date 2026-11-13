@@ -31,6 +31,8 @@ export function StudentChapterReader({
   prev,
   next,
   section,
+  audience = 'student',
+  backHref = null,
 }: {
   user: NavUser;
   book: {
@@ -50,6 +52,8 @@ export function StudentChapterReader({
   prev: { id: string; title: string } | null;
   next: { id: string; title: string } | null;
   section: { id: string; name: string } | null;
+  audience?: 'student' | 'professor';
+  backHref?: string | null;
 }) {
   const isPdf = book.sourceKind === 'PDF';
 
@@ -71,10 +75,16 @@ export function StudentChapterReader({
       activeChapterId={chapter.id}
       prev={isPdf ? null : prev}
       next={isPdf ? null : next}
+      audience={audience}
+      backHref={backHref}
     >
       <div className="mx-auto w-full max-w-3xl px-5 py-8 sm:px-10 sm:py-10 md:px-12">
         {isPdf ? (
-          <BookPdfViewer bookId={book.id} title={book.title} />
+          <BookPdfViewer
+            bookId={book.id}
+            title={book.title}
+            audience={audience}
+          />
         ) : (
           <>
             <h1 className="font-display text-3xl tracking-tight text-ink sm:text-4xl">

@@ -5,6 +5,7 @@ export * from '@/lib/books/books';
 export * from '@/lib/books/bookKnowledge';
 export * from '@/lib/books/createOutlineFromBook';
 export * from '@/lib/books/student';
+export * from '@/lib/books/faculty';
 export {
   processBook,
   processBookFromBuffer,

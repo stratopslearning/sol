@@ -10,12 +10,17 @@ import { loadPdfDocument } from '@/lib/pdf/loadPdfDocument';
 type Props = {
   bookId: string;
   title: string;
+  audience?: 'student' | 'professor';
 };
 
 /**
- * Renders a hosted PDF book via pdf.js using a same-origin student file URL.
+ * Renders a hosted PDF book via pdf.js using a same-origin file URL.
  */
-export function BookPdfViewer({ bookId, title }: Props) {
+export function BookPdfViewer({
+  bookId,
+  title,
+  audience = 'student',
+}: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [page, setPage] = useState(1);
   const [pageCount, setPageCount] = useState(0);
@@ -30,7 +35,11 @@ export function BookPdfViewer({ bookId, title }: Props) {
       setLoading(true);
       setError(null);
       try {
-        const url = apiUrl(`/api/student/books/${bookId}/file`);
+        const path =
+          audience === 'professor'
+            ? `/api/professor/books/${bookId}/file`
+            : `/api/student/books/${bookId}/file`;
+        const url = apiUrl(path);
         const doc = await loadPdfDocument(url);
         if (cancelled) {
           void doc.destroy();
@@ -56,7 +65,7 @@ export function BookPdfViewer({ bookId, title }: Props) {
       pdfRef.current = null;
       if (doc) void doc.destroy();
     };
-  }, [bookId]);
+  }, [bookId, audience]);
 
   useEffect(() => {
     let cancelled = false;

@@ -25,12 +25,19 @@ export function groupChaptersForToc<
 
 export function bookHref(
   bookId: string,
-  opts?: { sectionId?: string | null; chapterId?: string },
+  opts?: {
+    sectionId?: string | null;
+    chapterId?: string;
+    /** Faculty preview uses professor routes (no enrollment required). */
+    audience?: 'student' | 'professor';
+  },
 ): string {
-  const base = opts?.chapterId
-    ? `/dashboard/student/books/${bookId}/chapters/${opts.chapterId}`
-    : `/dashboard/student/books/${bookId}`;
-  if (opts?.sectionId) {
+  const root =
+    opts?.audience === 'professor'
+      ? `/dashboard/professor/books/${bookId}`
+      : `/dashboard/student/books/${bookId}`;
+  const base = opts?.chapterId ? `${root}/chapters/${opts.chapterId}` : root;
+  if (opts?.sectionId && opts.audience !== 'professor') {
     return `${base}?section=${encodeURIComponent(opts.sectionId)}`;
   }
   return base;

@@ -659,6 +659,13 @@
       "when": 1786300000000,
       "tag": "0093_course_material_status_owner",
       "breakpoints": true
+    },
+    {
+      "idx": 94,
+      "version": "7",
+      "when": 1786400000000,
+      "tag": "0094_course_material_by_id_definer",
+      "breakpoints": true
     }
   ]
 }

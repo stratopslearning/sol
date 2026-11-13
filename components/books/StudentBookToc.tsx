@@ -49,21 +49,26 @@ export function StudentBookToc({
   chapters,
   section,
   chapterCount,
+  audience = 'student',
+  backHref = null,
 }: {
   user: NavUser;
   book: { id: string; title: string };
   chapters: BookContentsItem[];
   section: { id: string; name: string } | null;
   chapterCount: number;
+  audience?: 'student' | 'professor';
+  backHref?: string | null;
 }) {
   const next = useMemo(
     () => firstReadableChapter(chapters, book.title),
     [chapters, book.title],
   );
 
-  const sectionBooksHref = section
-    ? withBasePath(`/dashboard/student/sections/${section.id}/books`)
-    : null;
+  const sectionBooksHref =
+    audience === 'student' && section
+      ? withBasePath(`/dashboard/student/sections/${section.id}/books`)
+      : null;
 
   return (
     <StudentBookReaderShell
@@ -73,6 +78,8 @@ export function StudentBookToc({
       section={section}
       activeChapterId={null}
       next={next}
+      audience={audience}
+      backHref={backHref}
     >
       <div className="mx-auto w-full max-w-3xl px-5 py-8 sm:px-10 sm:py-10 md:px-12">
         <h1 className="font-display text-3xl tracking-tight text-ink sm:text-4xl">
@@ -81,13 +88,16 @@ export function StudentBookToc({
         <p className="mt-4 text-base leading-relaxed text-ink-muted">
           {chapterCount} chapter{chapterCount === 1 ? '' : 's'}
           {chapters.some((c) => c.parentId) ? ' with sub-chapters' : ''}.
-          Choose a section from Contents, or continue where you left off.
+          {audience === 'professor'
+            ? ' Preview how students will see this book.'
+            : ' Choose a section from Contents, or continue where you left off.'}
         </p>
         <div className="mt-8 flex flex-wrap items-center gap-3">
           <BookResumeButton
             bookId={book.id}
             sectionId={section?.id}
             chapters={chapters}
+            audience={audience}
           />
           {next ? (
             <Link
@@ -95,6 +105,7 @@ export function StudentBookToc({
                 bookHref(book.id, {
                   sectionId: section?.id,
                   chapterId: next.id,
+                  audience,
                 }),
               )}
               className="text-sm font-medium text-brand hover:underline"

@@ -1,9 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState, useTransition } from "react";
 import {
   BookOpen,
+  ExternalLink,
   FileText,
   Folder,
   Link2,
@@ -46,7 +48,7 @@ import {
   chapterDisplayIndexMap,
   countTopLevelChapters,
 } from "@/lib/books/hierarchy";
-import { groupChaptersForToc } from "@/lib/books/toc";
+import { bookHref, groupChaptersForToc } from "@/lib/books/toc";
 import type {
   KnowledgeDocumentSummary,
   MaterialSummary,
@@ -946,8 +948,8 @@ export default function MaterialsClient({
     bulkDeleting;
 
   const addSection = (
-      <section className="rounded-xl border border-border bg-card/40 p-4 sm:p-5">
-        <div className="mb-3 flex items-baseline justify-between gap-3">
+      <section className="rounded-xl border border-border bg-card/40 p-3 sm:p-4">
+        <div className="mb-2 flex items-baseline justify-between gap-3">
           <h2 className="text-sm font-medium text-foreground">Add</h2>
           <p className="text-xs text-muted-foreground">
             File · link · book · max 50 MB
@@ -957,22 +959,22 @@ export default function MaterialsClient({
         <Tabs
           value={addMode}
           onValueChange={(v) => setAddMode(v as "file" | "link" | "book")}
-          className="max-w-2xl"
+          className="max-w-xl"
         >
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="file" disabled={busy}>
+          <TabsList className="grid h-8 w-full grid-cols-3">
+            <TabsTrigger value="file" disabled={busy} className="text-xs">
               File
             </TabsTrigger>
-            <TabsTrigger value="link" disabled={busy}>
+            <TabsTrigger value="link" disabled={busy} className="text-xs">
               Link
             </TabsTrigger>
-            <TabsTrigger value="book" disabled={busy}>
+            <TabsTrigger value="book" disabled={busy} className="text-xs">
               Book
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="file" className="mt-3 outline-none">
-            <form onSubmit={onUpload} className="flex flex-col gap-3">
+          <TabsContent value="file" className="mt-2 outline-none">
+            <form onSubmit={onUpload} className="flex flex-col gap-2.5">
               <p className="text-xs text-muted-foreground">
                 PDF, DOCX, TXT, MD, or ZIP (folders → title prefixes).
               </p>
@@ -987,9 +989,9 @@ export default function MaterialsClient({
               />
 
               {file ? (
-                <div className="flex items-start gap-3 rounded-xl border border-border bg-background px-3 py-3">
-                  <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border text-muted-foreground">
-                    <FileText className="h-4 w-4" aria-hidden />
+                <div className="flex items-center gap-2.5 rounded-lg border border-border bg-background px-2.5 py-2">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border text-muted-foreground">
+                    <FileText className="h-3.5 w-3.5" aria-hidden />
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-foreground">
@@ -1002,10 +1004,10 @@ export default function MaterialsClient({
                   <button
                     type="button"
                     onClick={clearFile}
-                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     aria-label="Clear selected file"
                   >
-                    <X className="h-4 w-4" />
+                    <X className="h-3.5 w-3.5" />
                   </button>
                 </div>
               ) : (
@@ -1029,15 +1031,16 @@ export default function MaterialsClient({
                     acceptFile(e.dataTransfer.files?.[0]);
                   }}
                   className={cn(
-                    "flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed px-3 py-5 text-center transition-colors",
+                    "flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed px-3 py-2.5 text-center transition-colors",
                     dragging
                       ? "border-foreground/40 bg-muted/60"
                       : "border-border bg-background/50 hover:border-foreground/25 hover:bg-muted/40",
                   )}
                 >
-                  <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground">
-                    <Upload className="h-3.5 w-3.5" aria-hidden />
-                  </span>
+                  <Upload
+                    className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                    aria-hidden
+                  />
                   <span className="text-sm text-foreground">
                     Drop or{" "}
                     <span className="font-medium underline underline-offset-2">
@@ -1092,8 +1095,8 @@ export default function MaterialsClient({
             </form>
           </TabsContent>
 
-          <TabsContent value="link" className="mt-3 outline-none">
-            <form onSubmit={onAddUrl} className="flex flex-col gap-3">
+          <TabsContent value="link" className="mt-2 outline-none">
+            <form onSubmit={onAddUrl} className="flex flex-col gap-2.5">
               <p className="text-xs text-muted-foreground">
                 Public http(s) URL.
               </p>
@@ -1129,8 +1132,8 @@ export default function MaterialsClient({
             </form>
           </TabsContent>
 
-          <TabsContent value="book" className="mt-3 outline-none">
-            <p className="mb-3 text-xs text-muted-foreground">
+          <TabsContent value="book" className="mt-2 outline-none">
+            <p className="mb-2 text-xs text-muted-foreground">
               EPUB, Pressbooks XML/PDF, or a public Pressbooks URL.
             </p>
 
@@ -1234,19 +1237,19 @@ export default function MaterialsClient({
                     <label
                       htmlFor={bookFileInputId}
                       className={cn(
-                        "flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-border bg-background/50 px-3 py-5 text-center transition-colors hover:border-rule-strong hover:bg-muted/30",
+                        "flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-background/50 px-3 py-2.5 text-center transition-colors hover:border-rule-strong hover:bg-muted/30",
                         busy && "pointer-events-none opacity-60",
                       )}
                     >
                       <Upload
-                        className="h-5 w-5 text-muted-foreground"
+                        className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
                         aria-hidden
                       />
                       <span className="text-sm text-foreground">
                         Drop or choose EPUB / XML / PDF
                       </span>
                       <span className="text-xs text-muted-foreground">
-                        Max 50 MB
+                        · 50 MB
                       </span>
                     </label>
                   )}
@@ -1276,22 +1279,24 @@ export default function MaterialsClient({
   );
 
   return (
-    <div className="mt-4 flex flex-col gap-5">
+    <div className="mt-4 flex flex-col gap-4">
       <MaterialPreviewDialog
         target={previewTarget}
         open={previewOpen}
         onOpenChange={setPreviewOpen}
       />
 
+      {addSection}
+
       {books.length > 0 ? (
-        <section className="rounded-xl border border-border bg-card/40 p-4 sm:p-5">
+        <section className="rounded-xl border border-border bg-card/40 p-3 sm:p-4">
           <div className="mb-3 flex items-baseline justify-between gap-3">
             <div className="flex items-center gap-2">
               <BookOpen className="h-4 w-4 text-muted-foreground" aria-hidden />
               <h2 className="text-sm font-medium text-foreground">Books</h2>
             </div>
             <p className="text-xs text-muted-foreground">
-              Student reader · outline design
+              Reader preview · outline design
             </p>
           </div>
           <div className="flex flex-col gap-2">
@@ -1406,6 +1411,18 @@ export default function MaterialsClient({
                         </div>
                       </div>
                       <div className="flex shrink-0 flex-wrap items-center gap-2">
+                        {b.status === "READY" ? (
+                          <Button asChild size="sm" variant="outline">
+                            <Link
+                              href={withBasePath(
+                                bookHref(b.id, { audience: "professor" }),
+                              )}
+                            >
+                              <ExternalLink className="h-3.5 w-3.5" />
+                              Open reader
+                            </Link>
+                          </Button>
+                        ) : null}
                         {b.status === "READY" && !b.isReleased ? (
                           <Button
                             type="button"
@@ -1625,7 +1642,7 @@ export default function MaterialsClient({
       ) : null}
 
 
-      <section className="rounded-xl border border-border bg-card/40 p-4 sm:p-5">
+      <section className="rounded-xl border border-border bg-card/40 p-3 sm:p-4">
         {(() => {
           type MaterialRow =
             | { kind: "linked"; id: string; doc: KnowledgeDocumentSummary }
@@ -1831,7 +1848,7 @@ export default function MaterialsClient({
 
               {rows.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-border px-4 py-5 text-center text-xs text-muted-foreground">
-                  No uploads yet — use Add below, or attach from Knowledge.
+                  No uploads yet — use Add above, or attach from Knowledge.
                 </div>
               ) : filtered.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-border px-4 py-4 text-center text-xs text-muted-foreground">
@@ -2067,29 +2084,32 @@ export default function MaterialsClient({
                         <li
                           key={`upload-${m.id}`}
                           className={cn(
-                            "flex items-center gap-3 px-3 py-2.5",
+                            "grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 px-3 py-2.5",
                             checked && "bg-brand/5",
                           )}
                         >
-                          <Checkbox
-                            checked={checked}
-                            disabled={busy}
-                            onCheckedChange={(v) =>
-                              setSelectedMaterialIds((prev) =>
-                                toggleId(prev, m.id, v === true),
-                              )
-                            }
-                            aria-label={`Select ${m.title}`}
-                          />
-                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border text-muted-foreground">
-                            {m.sourceType === "URL" ? (
-                              <Link2 className="h-3.5 w-3.5" aria-hidden />
-                            ) : (
-                              <FileText className="h-3.5 w-3.5" aria-hidden />
-                            )}
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                          <div className="flex shrink-0 items-center gap-2.5">
+                            <Checkbox
+                              className="relative z-10"
+                              checked={checked}
+                              disabled={busy}
+                              onCheckedChange={(v) =>
+                                setSelectedMaterialIds((prev) =>
+                                  toggleId(prev, m.id, v === true),
+                                )
+                              }
+                              aria-label={`Select ${m.title}`}
+                            />
+                            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border text-muted-foreground">
+                              {m.sourceType === "URL" ? (
+                                <Link2 className="h-3.5 w-3.5" aria-hidden />
+                              ) : (
+                                <FileText className="h-3.5 w-3.5" aria-hidden />
+                              )}
+                            </span>
+                          </div>
+                          <div className="min-w-0 overflow-hidden">
+                            <div className="flex min-w-0 items-center gap-x-2">
                               <span className="truncate text-sm font-medium text-foreground">
                                 {splitMaterialTitle(m.title).name}
                               </span>
@@ -2128,7 +2148,7 @@ export default function MaterialsClient({
                                 type="button"
                                 variant="ghost"
                                 size="sm"
-                                className="h-8 w-8 px-0"
+                                className="h-8 w-8 shrink-0 px-0"
                                 disabled={busy}
                                 aria-label={`Actions for ${m.title}`}
                               >
@@ -2217,8 +2237,6 @@ export default function MaterialsClient({
           );
         })()}
       </section>
-
-      {addSection}
     </div>
   );
 }
