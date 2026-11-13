@@ -46,7 +46,10 @@ export default async function ProfessorMaterialsPage({
       listCourseBooks(user, courseId),
       listCourseLinkedDocuments(user, courseId),
       workspaceId
-        ? listWorkspaceDocuments(user, workspaceId)
+        ? listWorkspaceDocuments(user, workspaceId).catch((err) => {
+            console.warn('[materials] workspace library list failed', err);
+            return [];
+          })
         : Promise.resolve([]),
       listTeachableCourses(user),
     ]);

@@ -93,8 +93,14 @@ export default async function WorkspaceKnowledgePage({
     ) : null;
 
   const [documents, connectors, entitlement] = await Promise.all([
-    listWorkspaceDocuments(user, workspaceId),
-    listWorkspaceConnectors(user, workspaceId),
+    listWorkspaceDocuments(user, workspaceId).catch((err) => {
+      console.warn('[knowledge] workspace documents list failed', err);
+      return [];
+    }),
+    listWorkspaceConnectors(user, workspaceId).catch((err) => {
+      console.warn('[knowledge] workspace connectors list failed', err);
+      return [];
+    }),
     assertWorkspaceAllowsTeaching(workspaceId),
   ]);
   const teachingBlocked =

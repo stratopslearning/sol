@@ -56,7 +56,10 @@ export default async function ProfessorAuthoringPage({
     listCourseMaterials(user, courseId),
     listCourseLinkedDocuments(user, courseId),
     workspaceId
-      ? listWorkspaceDocuments(user, workspaceId)
+      ? listWorkspaceDocuments(user, workspaceId).catch((err) => {
+          console.warn('[authoring] workspace library list failed', err);
+          return [];
+        })
       : Promise.resolve([]),
     listTeachableCourses(user),
     listTeachableSectionIdsForCourse(user, courseId),
