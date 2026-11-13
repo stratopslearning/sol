@@ -55,7 +55,7 @@ export default async function CourseInsightsPage({
         }),
       );
 
-      let rollup = offering
+      const rollup = offering
         ? await withTenant(tenantId, user.id, async (tx) =>
             tx.query.analyticsRollups.findFirst({
               where: and(

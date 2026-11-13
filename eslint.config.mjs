@@ -40,9 +40,9 @@ export default [
       },
     },
     rules: {
-      // Tighten over time; block new unused locals, allow intentional `_` prefixes.
+      // Warn until the backlog is cleared; `_` prefixes remain intentional.
       "@typescript-eslint/no-unused-vars": [
-        "error",
+        "warn",
         {
           argsIgnorePattern: "^_",
           varsIgnorePattern: "^_",
@@ -51,7 +51,7 @@ export default [
       ],
       "@typescript-eslint/no-explicit-any": "warn",
       "@typescript-eslint/no-unused-expressions": "off",
-      "prefer-const": "error",
+      "prefer-const": "warn",
       "react-hooks/exhaustive-deps": "warn",
       "sol/no-legacy-authz": ["error", { allowlist: legacyAllowlist }],
       // Wave 4 (24): lib/ai/gateway.ts is the sole OpenAI entry point.

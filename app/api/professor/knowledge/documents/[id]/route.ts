@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
 
 import { apiErrorResponse } from '@/lib/api/errors';
 import { requireProfessorApi } from '@/lib/api/professorAuth';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
 import {
   listVersionsForUser,
-  renameKnowledgeDocument,
   reprocessDocumentForUser,
   shareDocumentToLibrary,
   softDeleteKnowledgeDocument,
@@ -14,10 +12,6 @@ import {
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
-
-const renameBodySchema = z.object({
-  title: z.string().min(1).max(300),
-});
 
 export async function GET(
   req: NextRequest,

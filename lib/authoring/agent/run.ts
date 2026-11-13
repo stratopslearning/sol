@@ -112,8 +112,8 @@ export async function runAuthoringAgent(
     throw ApiError.badRequest('Outline is missing tenant_id');
   }
 
-  let detail = await getOutlineDetail(user, opts.outlineId);
-  let inventory = buildOutlineInventory(detail, opts.focusItemId);
+  const detail = await getOutlineDetail(user, opts.outlineId);
+  const inventory = buildOutlineInventory(detail, opts.focusItemId);
 
   const {
     fetchAuthoringMessagesForOutline,
