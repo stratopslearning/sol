@@ -10,6 +10,7 @@ import {
   useTransition,
 } from "react";
 import {
+  BookOpen,
   ChevronRight,
   FileText,
   Folder,
@@ -41,8 +42,10 @@ import type {
 import { cn } from "@/lib/utils";
 
 const ACCEPTED = ".pdf,.docx,.txt,.md,.zip";
+const BOOK_ACCEPTED = ".epub,.xml,.pdf";
 const MAX_BYTES = 50 * 1024 * 1024;
 const MAX_ZIP_BYTES = 50 * 1024 * 1024;
+const MAX_BOOK_BYTES = 50 * 1024 * 1024;
 const UNFILED = "Unfiled";
 
 /** Zip imports encode folders as `Week 1 / syllabus` in the title. */
@@ -155,6 +158,8 @@ function statusClass(status: string) {
 
 export default function KnowledgeClient({
   workspaceId,
+  activeCourseId = null,
+  activeCourseTitle = null,
   initialDocuments,
   initialConnectors,
   initialProviders,
@@ -162,6 +167,9 @@ export default function KnowledgeClient({
   teachingBlocked = false,
 }: {
   workspaceId: string;
+  /** Active course for hosted book imports (EPUB / XML / PDF / Pressbooks URL). */
+  activeCourseId?: string | null;
+  activeCourseTitle?: string | null;
   initialDocuments: KnowledgeDocumentSummary[];
   initialConnectors: ConnectorSummary[];
   initialProviders: ConnectorProviderStatus[];
@@ -171,7 +179,9 @@ export default function KnowledgeClient({
 }) {
   const router = useRouter();
   const fileInputId = useId();
+  const bookFileInputId = useId();
   const fileRef = useRef<HTMLInputElement>(null);
+  const bookFileRef = useRef<HTMLInputElement>(null);
   const [pending, startTransition] = useTransition();
   const [documents, setDocuments] = useState(initialDocuments);
   const [connectors, setConnectors] = useState(initialConnectors);
@@ -182,11 +192,16 @@ export default function KnowledgeClient({
   const [previewOpen, setPreviewOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [addingLink, setAddingLink] = useState(false);
+  const [importingBook, setImportingBook] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [fileTitle, setFileTitle] = useState("");
   const [dragging, setDragging] = useState(false);
   const [url, setUrl] = useState("");
   const [linkTitle, setLinkTitle] = useState("");
+  const [bookUrl, setBookUrl] = useState("");
+  const [bookTitle, setBookTitle] = useState("");
+  const [bookFile, setBookFile] = useState<File | null>(null);
+  const [bookImportMode, setBookImportMode] = useState<"url" | "file">("file");
   const [versionsDocId, setVersionsDocId] = useState<string | null>(null);
   const [versions, setVersions] = useState<
     Array<{
@@ -202,7 +217,7 @@ export default function KnowledgeClient({
     "all" | "shared" | "personal"
   >("all");
   const [noStudentRecords, setNoStudentRecords] = useState(false);
-  const [addMode, setAddMode] = useState<"file" | "link">("file");
+  const [addMode, setAddMode] = useState<"file" | "link" | "book">("file");
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(
     () => new Set(),
@@ -234,6 +249,11 @@ export default function KnowledgeClient({
     if (fileRef.current) fileRef.current.value = "";
   }
 
+  function clearBookFile() {
+    setBookFile(null);
+    if (bookFileRef.current) bookFileRef.current.value = "";
+  }
+
   function acceptFile(next: File | null | undefined) {
     if (!next) return;
     const zip = isZipFile(next);
@@ -248,6 +268,27 @@ export default function KnowledgeClient({
     setFile(next);
     if (!fileTitle.trim()) {
       setFileTitle(next.name.replace(/\.[^.]+$/, ""));
+    }
+  }
+
+  function acceptBookFile(next: File | null | undefined) {
+    if (!next) return;
+    if (next.size > MAX_BOOK_BYTES) {
+      toast.error("Book file must be 50 MB or smaller");
+      return;
+    }
+    const lower = next.name.toLowerCase();
+    if (
+      !lower.endsWith(".epub") &&
+      !lower.endsWith(".xml") &&
+      !lower.endsWith(".pdf")
+    ) {
+      toast.error("Upload an EPUB, Pressbooks XML, or PDF");
+      return;
+    }
+    setBookFile(next);
+    if (!bookTitle.trim()) {
+      setBookTitle(next.name.replace(/\.[^.]+$/, ""));
     }
   }
 
@@ -361,6 +402,104 @@ export default function KnowledgeClient({
       toast.error("Could not add link");
     } finally {
       setAddingLink(false);
+    }
+  }
+
+  async function onImportBookUrl(e: React.FormEvent) {
+    e.preventDefault();
+    if (!activeCourseId) {
+      toast.error("Select a course first (top bar) to import a book");
+      return;
+    }
+    if (!bookUrl.trim()) {
+      toast.error("Enter a Pressbooks URL");
+      return;
+    }
+    setImportingBook(true);
+    try {
+      const res = await fetch(apiUrl("/api/professor/books"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          courseId: activeCourseId,
+          url: bookUrl.trim(),
+          title: bookTitle.trim() || undefined,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error || "Could not import book");
+        return;
+      }
+      toast.success(
+        activeCourseTitle
+          ? `Book imported for ${activeCourseTitle}`
+          : "Book imported",
+      );
+      setBookUrl("");
+      setBookTitle("");
+      refresh();
+    } catch {
+      toast.error("Could not import book");
+    } finally {
+      setImportingBook(false);
+    }
+  }
+
+  async function onImportBookFile(e: React.FormEvent) {
+    e.preventDefault();
+    if (!activeCourseId) {
+      toast.error("Select a course first (top bar) to import a book");
+      return;
+    }
+    if (!bookFile) {
+      toast.error("Choose a book file first");
+      return;
+    }
+    const fd = new FormData();
+    fd.set("courseId", activeCourseId);
+    fd.set("file", bookFile);
+    if (bookTitle.trim()) fd.set("title", bookTitle.trim());
+    setImportingBook(true);
+    try {
+      const res = await fetch(apiUrl("/api/professor/books"), {
+        method: "POST",
+        body: fd,
+        credentials: "same-origin",
+        redirect: "manual",
+      });
+      if (
+        res.type === "opaqueredirect" ||
+        (res.status >= 300 && res.status < 400)
+      ) {
+        toast.error("Session expired — refresh and sign in again");
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(
+          res.status === 413
+            ? "Book file is too large (max 50 MB)"
+            : data.error || "Could not upload book",
+        );
+        return;
+      }
+      if (data.book?.status === "FAILED") {
+        toast.error(data.book?.errorMessage || "Book import failed");
+        return;
+      }
+      toast.success(
+        activeCourseTitle
+          ? `Book uploaded for ${activeCourseTitle}`
+          : "Book uploaded",
+      );
+      clearBookFile();
+      setBookTitle("");
+      refresh();
+    } catch {
+      toast.error("Could not upload book");
+    } finally {
+      setImportingBook(false);
     }
   }
 
@@ -655,7 +794,7 @@ export default function KnowledgeClient({
     }
   }
 
-  const busy = uploading || addingLink || pending;
+  const busy = uploading || addingLink || importingBook || pending;
 
   const visibleDocuments = useMemo(() => {
     return documents.filter((d) => {
@@ -872,11 +1011,28 @@ export default function KnowledgeClient({
                   <Link2 className="h-3.5 w-3.5" />
                   URL
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setAddMode("book")}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                    addMode === "book"
+                      ? "bg-muted text-foreground"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  <BookOpen className="h-3.5 w-3.5" />
+                  Book
+                </button>
               </div>
               <p className="text-[11px] text-muted-foreground">
                 {addMode === "file"
                   ? "PDF · DOCX · TXT · MD · ZIP · private until shared"
-                  : "Public http(s) pages only"}
+                  : addMode === "link"
+                    ? "Public http(s) pages only"
+                    : activeCourseId
+                      ? `EPUB · XML · PDF · Pressbooks · ${activeCourseTitle ?? "active course"}`
+                      : "Select a course in the top bar to import a book"}
               </p>
             </div>
 
@@ -1003,7 +1159,7 @@ export default function KnowledgeClient({
                   )}
                 </Button>
               </form>
-            ) : (
+            ) : addMode === "link" ? (
               <form
                 onSubmit={onAddUrl}
                 className="flex flex-col gap-2 p-3 sm:flex-row sm:items-end"
@@ -1057,6 +1213,170 @@ export default function KnowledgeClient({
                   )}
                 </Button>
               </form>
+            ) : (
+              <div className="flex flex-col gap-3 p-3">
+                {!activeCourseId ? (
+                  <p className="rounded-lg border border-dashed border-border bg-background/50 px-3 py-2.5 text-sm text-muted-foreground">
+                    Pick a course in the top bar, then import an EPUB, Pressbooks
+                    XML/PDF, or public Pressbooks URL. Books attach to that
+                    course&apos;s reader.
+                  </p>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-1 rounded-lg border border-border bg-background p-0.5 self-start">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBookImportMode("file");
+                          setBookUrl("");
+                        }}
+                        className={cn(
+                          "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                          bookImportMode === "file"
+                            ? "bg-muted text-foreground"
+                            : "text-muted-foreground hover:text-foreground",
+                        )}
+                      >
+                        Upload file
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBookImportMode("url");
+                          clearBookFile();
+                        }}
+                        className={cn(
+                          "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                          bookImportMode === "url"
+                            ? "bg-muted text-foreground"
+                            : "text-muted-foreground hover:text-foreground",
+                        )}
+                      >
+                        From URL
+                      </button>
+                    </div>
+
+                    <Input
+                      value={bookTitle}
+                      onChange={(e) => setBookTitle(e.target.value)}
+                      placeholder="Optional title"
+                      disabled={busy}
+                      className="h-8 text-sm sm:max-w-xs"
+                    />
+
+                    {bookImportMode === "file" ? (
+                      <form
+                        onSubmit={onImportBookFile}
+                        className="flex flex-col gap-3 sm:flex-row sm:items-end"
+                      >
+                        <input
+                          ref={bookFileRef}
+                          id={bookFileInputId}
+                          type="file"
+                          accept={BOOK_ACCEPTED}
+                          disabled={busy}
+                          className="sr-only"
+                          onChange={(e) =>
+                            acceptBookFile(e.target.files?.[0])
+                          }
+                        />
+                        <div className="min-w-0 flex-1">
+                          {bookFile ? (
+                            <div className="flex items-center gap-2 rounded-lg border border-border bg-background px-2.5 py-2">
+                              <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm text-foreground">
+                                  {bookFile.name}
+                                </p>
+                                <p className="text-[11px] text-muted-foreground">
+                                  {formatBytes(bookFile.size)}
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={clearBookFile}
+                                disabled={busy}
+                                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                                aria-label="Clear selected book file"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <label
+                              htmlFor={bookFileInputId}
+                              className={cn(
+                                "flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed px-3 py-2.5 text-sm transition-colors border-border bg-background/50 hover:border-foreground/25 hover:bg-muted/40",
+                                busy && "pointer-events-none opacity-60",
+                              )}
+                            >
+                              <BookOpen className="h-3.5 w-3.5 text-muted-foreground" />
+                              <span className="text-muted-foreground">
+                                Drop or{" "}
+                                <span className="font-medium text-foreground underline underline-offset-2">
+                                  browse
+                                </span>{" "}
+                                EPUB / XML / PDF
+                              </span>
+                            </label>
+                          )}
+                        </div>
+                        <Button
+                          type="submit"
+                          size="sm"
+                          disabled={busy || !bookFile}
+                          className="shrink-0"
+                        >
+                          {importingBook ? (
+                            <>
+                              <Loader2 className="animate-spin" />
+                              Uploading…
+                            </>
+                          ) : (
+                            <>
+                              <Upload />
+                              Upload book
+                            </>
+                          )}
+                        </Button>
+                      </form>
+                    ) : (
+                      <form
+                        onSubmit={onImportBookUrl}
+                        className="flex flex-col gap-2 sm:flex-row sm:items-end"
+                      >
+                        <Input
+                          type="url"
+                          value={bookUrl}
+                          onChange={(e) => setBookUrl(e.target.value)}
+                          placeholder="https://pressbooks.pub/your-book/"
+                          disabled={busy}
+                          required
+                          className="h-8 text-sm min-w-0 flex-1"
+                        />
+                        <Button
+                          type="submit"
+                          size="sm"
+                          disabled={busy || !bookUrl.trim()}
+                          className="shrink-0"
+                        >
+                          {importingBook ? (
+                            <>
+                              <Loader2 className="animate-spin" />
+                              Importing…
+                            </>
+                          ) : (
+                            <>
+                              <BookOpen />
+                              Import book
+                            </>
+                          )}
+                        </Button>
+                      </form>
+                    )}
+                  </>
+                )}
+              </div>
             )}
           </section>
           )}
@@ -1101,8 +1421,8 @@ export default function KnowledgeClient({
 
             {visibleDocuments.length === 0 ? (
               <div className="rounded-xl border border-dashed border-border px-5 py-10 text-center text-sm text-muted-foreground">
-                No materials yet. Upload a file, add a URL, or sync a
-                connection.
+                No materials yet. Upload a file, add a URL, import a book, or
+                sync a connection.
               </div>
             ) : (
               <>
