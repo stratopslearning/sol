@@ -631,6 +631,13 @@
       "when": 1785900000000,
       "tag": "0089_knowledge_version_definer_owner",
       "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "7",
+      "when": 1786000000000,
+      "tag": "0090_professor_enroll_cross_tenant",
+      "breakpoints": true
     }
   ]
 }
