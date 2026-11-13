@@ -128,6 +128,22 @@ const PROMPTS: Array<{
     requireTools: ['refine_items'],
   },
   {
+    // Quiz-only outline fixture → outline improve upgrades to Shah lessons.
+    message: 'make the outline better',
+    expectKind: 'act',
+    requireTools: ['ensure_interactive_lessons'],
+  },
+  {
+    message: 'add interactive lessons to each module',
+    expectKind: 'act',
+    requireTools: ['ensure_interactive_lessons'],
+  },
+  {
+    message: 'improve all quizzes',
+    expectKind: 'act',
+    requireTools: ['refine_items'],
+  },
+  {
     message: 'publish the first two quizzes then release them',
     expectKind: 'act',
   },
