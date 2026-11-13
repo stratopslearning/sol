@@ -872,6 +872,17 @@ ${opts.materialsContext}`;
 
   const OUTLINE_GEN_USER_ERROR = 'Outline didn’t come together';
 
+  function sanitizeOutlineFailureReason(raw: string): string {
+    const cleaned = raw
+      .replace(/^Invalid generated outline:\s*/i, '')
+      .replace(/^ApiError:\s*/i, '')
+      .trim();
+    if (!cleaned || /schema error|validation failed|empty response/i.test(cleaned)) {
+      return '';
+    }
+    return cleaned.length > 140 ? `${cleaned.slice(0, 137)}…` : cleaned;
+  }
+
   let raw: unknown;
   try {
     raw = await call([
@@ -918,7 +929,12 @@ ${previousJson}`,
       return parseGeneratedOutline(raw);
     } catch (err) {
       console.error('generateOutlineFromContext retry failed', err);
-      throw ApiError.badRequest(OUTLINE_GEN_USER_ERROR);
+      const detail = sanitizeOutlineFailureReason(
+        err instanceof Error ? err.message : reason,
+      );
+      throw ApiError.badRequest(
+        detail ? `${OUTLINE_GEN_USER_ERROR}: ${detail}` : OUTLINE_GEN_USER_ERROR,
+      );
     }
   }
 }

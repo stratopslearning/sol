@@ -606,17 +606,23 @@ export default function MaterialsClient({
       if (!res.ok) {
         const raw =
           typeof data.error === "string" ? data.error.trim() : "";
+        const cameTogether = /didn't come together|didn’t come together/i.test(
+          raw,
+        );
         const technical =
-          /invalid generated outline|didn't come together|failed to generate|schema error|validation/i.test(
+          /invalid generated outline|failed to generate|schema error|validation/i.test(
             raw,
           );
+        const detail = cameTogether
+          ? raw.replace(/^Outline didn’t come together:?\s*/i, "").trim()
+          : "";
         toast.error(
-          technical || !raw
+          cameTogether || technical || !raw
             ? "Outline didn’t come together"
             : raw,
           {
             id: toastId,
-            description: "Try Design course outline again.",
+            description: detail || "Try Outline again.",
           },
         );
         return;

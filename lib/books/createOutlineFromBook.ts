@@ -1,7 +1,3 @@
-import { and, eq, isNull } from 'drizzle-orm';
-
-import { db } from '@/app/db';
-import { courses } from '@/app/db/schema';
 import { ApiError } from '@/lib/api/errors';
 import { logAudit } from '@/lib/audit';
 import { AUTHORING_CONTEXT_CHAR_BUDGET } from '@/lib/authoring/constants';
@@ -18,6 +14,7 @@ import {
   isBookTitleChapter,
   isFrontMatterChapterTitle,
 } from '@/lib/books/frontMatter';
+import { fetchCourseById } from '@/lib/db/entityScopedReads';
 import type { UserData } from '@/lib/getOrCreateUser';
 
 export {
@@ -74,10 +71,7 @@ export async function createOutlineFromBook(
     );
   }
 
-  const course = await db.query.courses.findFirst({
-    where: and(eq(courses.id, book.courseId), isNull(courses.deletedAt)),
-    columns: { id: true, title: true },
-  });
+  const course = await fetchCourseById(book.courseId);
   if (!course) throw ApiError.notFound('Course not found');
 
   const { fetchBookChaptersForRagDefiner } = await import(
@@ -85,7 +79,9 @@ export async function createOutlineFromBook(
   );
   const chapters = await fetchBookChaptersForRagDefiner(bookId);
   if (chapters.length === 0) {
-    throw ApiError.badRequest('Book has no chapters');
+    throw ApiError.badRequest(
+      'Book is Ready but has no chapters to outline from. Reprocess the book, then try again.',
+    );
   }
 
   const teachable = chapters.filter(
@@ -94,8 +90,13 @@ export async function createOutlineFromBook(
       !isBookTitleChapter(c.title, book.title),
   );
   if (teachable.length === 0) {
+    const sample = chapters
+      .slice(0, 3)
+      .map((c) => c.title)
+      .filter(Boolean)
+      .join(', ');
     throw ApiError.badRequest(
-      'No concept chapters found after filtering front matter. Check chapter titles.',
+      `No concept chapters found after filtering front matter (${chapters.length} chapter${chapters.length === 1 ? '' : 's'} total${sample ? `: ${sample}` : ''}). Check chapter titles.`,
     );
   }
 
@@ -116,6 +117,7 @@ export async function createOutlineFromBook(
     brief,
     materialsContext,
     titleHint: `${book.title} (from book)`,
+    workspaceId: course.workspaceId,
   });
 
   const outline = await persistGeneratedOutline({

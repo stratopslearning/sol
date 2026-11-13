@@ -33,8 +33,14 @@ export type CourseCorpusItem = {
   id: string;
   title: string;
   status: "PENDING" | "PROCESSING" | "READY" | "FAILED";
-  kind: "upload" | "library";
+  kind: "upload" | "library" | "book";
 };
+
+function corpusKindLabel(kind: CourseCorpusItem["kind"]): string {
+  if (kind === "library") return "Library";
+  if (kind === "book") return "Book";
+  return "Upload";
+}
 
 export function AuthoringMaterialsPanel({
   courseId,
@@ -111,9 +117,14 @@ export function AuthoringMaterialsPanel({
           skipped > 0
             ? `Imported ${imported} · ${skipped} skipped`
             : `Imported ${imported} from zip`,
+          {
+            description: "Select materials above before proposing.",
+          },
         );
       } else {
-        toast.success("Upload queued for indexing");
+        toast.success("Upload queued for indexing", {
+          description: "Select materials above before proposing.",
+        });
       }
       onUploaded();
     } catch {
@@ -286,7 +297,7 @@ export function AuthoringMaterialsPanel({
                     {item.title}
                   </span>
                   <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
-                    {item.kind === "library" ? "Library" : "Upload"} ·{" "}
+                    {corpusKindLabel(item.kind)} ·{" "}
                     {item.status === "READY" ? "Ready" : item.status.toLowerCase()}
                   </span>
                 </li>
