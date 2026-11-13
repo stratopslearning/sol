@@ -6,7 +6,7 @@ import { eq } from 'drizzle-orm';
 import { auth } from '@clerk/nextjs/server';
 
 import { db } from '@/app/db';
-import { courseMaterials, courses, users } from '@/app/db/schema';
+import { users } from '@/app/db/schema';
 import { apiErrorResponse } from '@/lib/api/errors';
 import { extractRequestMeta, logAudit } from '@/lib/audit';
 import { requireSupportGrant } from '@/lib/authz/requireSupportGrant';
@@ -35,21 +35,14 @@ export async function DELETE(
       );
     }
 
-    const material = await db.query.courseMaterials.findFirst({
-      where: eq(courseMaterials.id, id),
-      columns: { tenantId: true, courseId: true },
-    });
+    const { fetchCourseMaterialByIdDefiner } = await import(
+      '@/lib/db/knowledgeJobDefiners'
+    );
+    const material = await fetchCourseMaterialByIdDefiner(id);
     if (!material) {
       return NextResponse.json({ error: 'Material not found' }, { status: 404 });
     }
-    let tenantId = material.tenantId;
-    if (!tenantId) {
-      const course = await db.query.courses.findFirst({
-        where: eq(courses.id, material.courseId),
-        columns: { tenantId: true, workspaceId: true },
-      });
-      tenantId = course?.tenantId ?? course?.workspaceId ?? null;
-    }
+    const tenantId = material.tenantId;
     if (!tenantId) {
       return NextResponse.json({ error: 'Material missing tenant' }, { status: 400 });
     }

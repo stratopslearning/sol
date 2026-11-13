@@ -893,116 +893,40 @@ export async function sectionCopyQuiz(
   user: ProfessorUser,
   quizId: string,
 ): Promise<{ id: string; title: string; sectionIds: string[] }> {
-  const original = await db.query.quizzes.findFirst({
-    where: and(eq(quizzes.id, quizId), activeOnly(quizzes.deletedAt)),
-    with: { questions: true, sectionAssignments: true },
-  });
+  const { fetchQuizById, fetchQuizSectionIds } = await import(
+    '@/lib/db/entityScopedReads'
+  );
+  const original = await fetchQuizById(quizId);
   if (!original) throw ApiError.notFound('Quiz not found');
   const quizAuthorId = original.professorId;
   if (quizAuthorId && quizAuthorId === user.id) {
     throw ApiError.conflict('Quiz is already editable');
   }
 
+  const assignedSectionIds = await fetchQuizSectionIds(quizId);
   const adminSupport = await adminSupportForTenant(user, original.tenantId);
-  let sectionsToMove = original.sectionAssignments;
+  let sectionIdsToMove = assignedSectionIds;
   if (!adminSupport) {
-    const writable: typeof original.sectionAssignments = [];
-    for (const sa of original.sectionAssignments) {
-      if (await authorizeOnSection(user, 'content.write', sa.sectionId)) {
-        writable.push(sa);
+    const writable: string[] = [];
+    for (const sectionId of assignedSectionIds) {
+      if (await authorizeOnSection(user, 'content.write', sectionId)) {
+        writable.push(sectionId);
       }
     }
-    sectionsToMove = writable;
+    sectionIdsToMove = writable;
   }
-  if (sectionsToMove.length === 0) {
+  if (sectionIdsToMove.length === 0) {
     throw ApiError.forbidden(
       'No editable section assignments found for this quiz',
     );
   }
-  const sectionIdsToMove = sectionsToMove.map((sa) => sa.sectionId);
 
-  const copied = await db.transaction(async (tx) => {
-    const [created] = await tx
-      .insert(quizzes)
-      .values({
-        title: original.title,
-        description: original.description,
-        professorId: user.id,
-        maxAttempts: original.maxAttempts,
-        timeLimit: original.timeLimit,
-        passingScore: original.passingScore,
-        startDate: original.startDate,
-        endDate: original.endDate,
-        isActive: original.isActive,
-      })
-      .returning();
-
-    if (original.questions.length > 0) {
-      await tx.insert(questions).values(
-        original.questions.map((q) => ({
-          quizId: created.id,
-          type: q.type,
-          question: q.question,
-          options: q.options,
-          correctAnswer: q.correctAnswer,
-          points: q.points,
-          order: q.order,
-        })),
-      );
-    }
-
-    await tx.insert(quizSections).values(
-      sectionsToMove.map((sa) => ({
-        quizId: created.id,
-        sectionId: sa.sectionId,
-        assignedBy: user.id,
-      })),
-    );
-
-    await tx
-      .update(attempts)
-      .set({ quizId: created.id })
-      .where(
-        and(
-          eq(attempts.quizId, original.id),
-          inArray(attempts.sectionId, sectionIdsToMove),
-        ),
-      );
-
-    const enrolledStudents = await tx.query.studentSections.findMany({
-      where: and(
-        inArray(studentSections.sectionId, sectionIdsToMove),
-        eq(studentSections.status, 'ACTIVE'),
-      ),
-      columns: { studentId: true },
-    });
-    const enrolledStudentIds = [
-      ...new Set(enrolledStudents.map((e) => e.studentId)),
-    ];
-
-    if (enrolledStudentIds.length > 0) {
-      await tx
-        .update(assignments)
-        .set({ quizId: created.id })
-        .where(
-          and(
-            eq(assignments.quizId, original.id),
-            inArray(assignments.studentId, enrolledStudentIds),
-          ),
-        );
-    }
-
-    await tx
-      .delete(quizSections)
-      .where(
-        and(
-          eq(quizSections.quizId, original.id),
-          inArray(quizSections.sectionId, sectionIdsToMove),
-        ),
-      );
-
-    return created;
+  const { sectionCopyQuizDefiner } = await import(
+    '@/lib/db/facultyWriteDefiners'
+  );
+  return sectionCopyQuizDefiner({
+    sourceQuizId: quizId,
+    professorId: user.id,
+    sectionIds: sectionIdsToMove,
   });
-
-  return { id: copied.id, title: copied.title, sectionIds: sectionIdsToMove };
 }

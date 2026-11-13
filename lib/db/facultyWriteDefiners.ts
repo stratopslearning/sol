@@ -421,6 +421,144 @@ export async function duplicateChatbotDefiner(payload: {
   return parsed;
 }
 
+export async function sectionCopyQuizDefiner(payload: {
+  sourceQuizId: string;
+  professorId: string;
+  sectionIds: string[];
+}): Promise<{ id: string; title: string; sectionIds: string[] }> {
+  const result = await db.execute(sql`
+    SELECT sol_section_copy_quiz(${JSON.stringify(payload)}::jsonb) AS row
+  `);
+  const parsed = parseJsonb<{
+    id: string;
+    title: string;
+    sectionIds?: string[];
+  }>(rowsFromExecute<{ row: unknown }>(result)[0]?.row);
+  if (!parsed?.id) throw new Error('sol_section_copy_quiz returned no row');
+  return {
+    id: parsed.id,
+    title: parsed.title,
+    sectionIds: Array.isArray(parsed.sectionIds)
+      ? parsed.sectionIds.map(String)
+      : payload.sectionIds,
+  };
+}
+
+export async function createLessonDefiner(payload: {
+  courseId: string;
+  professorId: string;
+  title: string;
+  markdown: string;
+  isActive?: boolean;
+  sourceOutlineItemId?: string | null;
+  flashcards?: Array<{ front: string; back: string }>;
+}): Promise<{
+  id: string;
+  title: string;
+  courseId: string;
+  professorId: string;
+  isActive: boolean;
+  sourceOutlineItemId: string | null;
+}> {
+  const result = await db.execute(sql`
+    SELECT sol_create_lesson(${JSON.stringify(payload)}::jsonb) AS row
+  `);
+  const parsed = parseJsonb<{
+    id: string;
+    title: string;
+    courseId: string;
+    professorId: string;
+    isActive: boolean;
+    sourceOutlineItemId?: string | null;
+  }>(rowsFromExecute<{ row: unknown }>(result)[0]?.row);
+  if (!parsed?.id) throw new Error('sol_create_lesson returned no row');
+  return {
+    id: parsed.id,
+    title: parsed.title,
+    courseId: parsed.courseId,
+    professorId: parsed.professorId,
+    isActive: Boolean(parsed.isActive),
+    sourceOutlineItemId: parsed.sourceOutlineItemId ?? null,
+  };
+}
+
+export async function createInteractiveDefiner(payload: {
+  courseId: string;
+  professorId: string;
+  title: string;
+  description?: string | null;
+  kind: string;
+  body?: Record<string, unknown>;
+  isActive?: boolean;
+  sourceOutlineItemId?: string | null;
+}): Promise<{
+  id: string;
+  courseId: string;
+  professorId: string | null;
+  title: string;
+  description: string | null;
+  kind: import('@/app/db/schema').InteractiveKind;
+  body: import('@/app/db/schema').InteractiveBody;
+  packageStorageKey: string | null;
+  isActive: boolean;
+  sourceOutlineItemId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  deletedAt: Date | null;
+  tenantId: string | null;
+  offeringId: string | null;
+}> {
+  const result = await db.execute(sql`
+    SELECT sol_create_interactive(${JSON.stringify(payload)}::jsonb) AS row
+  `);
+  const raw = parseJsonb<Record<string, unknown>>(
+    rowsFromExecute<{ row: unknown }>(result)[0]?.row,
+  );
+  if (!raw?.id) throw new Error('sol_create_interactive returned no row');
+  const asDateLocal = (v: unknown) =>
+    v == null ? null : v instanceof Date ? v : new Date(String(v));
+  return {
+    id: String(raw.id),
+    courseId: String(raw.course_id ?? raw.courseId ?? payload.courseId),
+    professorId: raw.professor_id
+      ? String(raw.professor_id)
+      : raw.professorId
+        ? String(raw.professorId)
+        : payload.professorId,
+    title: String(raw.title ?? payload.title),
+    description:
+      raw.description != null
+        ? String(raw.description)
+        : payload.description ?? null,
+    kind: String(raw.kind ?? payload.kind) as import('@/app/db/schema').InteractiveKind,
+    body: (raw.body ?? payload.body ?? {}) as import('@/app/db/schema').InteractiveBody,
+    packageStorageKey: raw.package_storage_key
+      ? String(raw.package_storage_key)
+      : raw.packageStorageKey
+        ? String(raw.packageStorageKey)
+        : null,
+    isActive: Boolean(raw.is_active ?? raw.isActive ?? payload.isActive ?? false),
+    sourceOutlineItemId: raw.source_outline_item_id
+      ? String(raw.source_outline_item_id)
+      : raw.sourceOutlineItemId
+        ? String(raw.sourceOutlineItemId)
+        : payload.sourceOutlineItemId ?? null,
+    createdAt: asDateLocal(raw.created_at ?? raw.createdAt) ?? new Date(),
+    updatedAt: asDateLocal(raw.updated_at ?? raw.updatedAt) ?? new Date(),
+    deletedAt: asDateLocal(raw.deleted_at ?? raw.deletedAt),
+    tenantId: raw.tenant_id
+      ? String(raw.tenant_id)
+      : raw.tenantId
+        ? String(raw.tenantId)
+        : null,
+    offeringId: raw.offering_id
+      ? String(raw.offering_id)
+      : raw.offeringId
+        ? String(raw.offeringId)
+        : null,
+  };
+}
+
 /** Seat-only membership upsert under FORCE RLS (0083). */
 export async function ensureWorkspaceMembershipDefiner(payload: {
   workspaceId: string;

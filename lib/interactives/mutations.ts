@@ -52,26 +52,20 @@ export async function createInteractive(
     }
   }
 
-  const [row] = await db
-    .insert(interactives)
-    .values({
-      professorId: user.id,
-      courseId: input.courseId,
-      title: input.title.trim(),
-      description: input.description ?? null,
-      kind: input.kind,
-      body: input.body ?? {},
-      // Storage keys are set only by trusted upload routes (never client body).
-      packageStorageKey: null,
-      isActive: input.isActive ?? false,
-      sourceOutlineItemId: input.sourceOutlineItemId ?? null,
-    })
-    .returning();
+  const { createInteractiveDefiner, setInteractiveSectionsDefiner } =
+    await import('@/lib/db/facultyWriteDefiners');
+  const row = await createInteractiveDefiner({
+    courseId: input.courseId,
+    professorId: user.id,
+    title: input.title.trim(),
+    description: input.description ?? null,
+    kind: input.kind,
+    body: (input.body ?? {}) as Record<string, unknown>,
+    isActive: input.isActive ?? false,
+    sourceOutlineItemId: input.sourceOutlineItemId ?? null,
+  });
 
   if (sectionIds.length > 0) {
-    const { setInteractiveSectionsDefiner } = await import(
-      '@/lib/db/facultyWriteDefiners'
-    );
     await setInteractiveSectionsDefiner({
       interactiveId: row.id,
       assignedBy: user.id,

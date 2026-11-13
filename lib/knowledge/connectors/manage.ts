@@ -1,10 +1,3 @@
-import { and, desc, eq, isNull } from 'drizzle-orm';
-
-import { db } from '@/app/db';
-import {
-  knowledgeConnectors,
-  knowledgeSyncRuns,
-} from '@/app/db/schema';
 import { ApiError } from '@/lib/api/errors';
 import type { UserData } from '@/lib/getOrCreateUser';
 import { getConnectorAdapter } from '@/lib/knowledge/connectors/index';
@@ -35,22 +28,29 @@ export type ConnectorSummary = {
   updatedAt: Date;
 };
 
-function toSummary(
-  row: typeof knowledgeConnectors.$inferSelect,
-): ConnectorSummary {
-  const { encryptedTokens: _t, ...rest } = row;
-  void _t;
+function toSummary(row: {
+  id: string;
+  workspaceId: string;
+  provider: string;
+  displayName: string | null;
+  status: string;
+  lastSyncAt: Date | null;
+  errorMessage: string | null;
+  config: Record<string, unknown>;
+  createdAt: Date;
+  updatedAt: Date;
+}): ConnectorSummary {
   return {
-    id: rest.id,
-    workspaceId: rest.workspaceId,
-    provider: rest.provider as KnowledgeProvider,
-    displayName: rest.displayName,
-    status: rest.status,
-    lastSyncAt: rest.lastSyncAt,
-    errorMessage: rest.errorMessage,
-    config: (rest.config ?? {}) as Record<string, unknown>,
-    createdAt: rest.createdAt,
-    updatedAt: rest.updatedAt,
+    id: row.id,
+    workspaceId: row.workspaceId,
+    provider: row.provider as KnowledgeProvider,
+    displayName: row.displayName,
+    status: row.status,
+    lastSyncAt: row.lastSyncAt,
+    errorMessage: row.errorMessage,
+    config: row.config ?? {},
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
   };
 }
 
@@ -60,13 +60,10 @@ export async function listWorkspaceConnectors(
 ): Promise<ConnectorSummary[]> {
   // Reads stay available pre-pilot; mutations still require teaching entitlement.
   await assertWorkspaceFacultyRead(user, workspaceId);
-  const rows = await db.query.knowledgeConnectors.findMany({
-    where: and(
-      eq(knowledgeConnectors.workspaceId, workspaceId),
-      isNull(knowledgeConnectors.deletedAt),
-    ),
-    orderBy: [desc(knowledgeConnectors.updatedAt)],
-  });
+  const { listKnowledgeConnectorsDefiner } = await import(
+    '@/lib/db/knowledgeJobDefiners'
+  );
+  const rows = await listKnowledgeConnectorsDefiner(workspaceId);
   return rows.map(toSummary);
 }
 
@@ -174,17 +171,11 @@ export async function updateConnectorConfig(
   connectorId: string,
   config: Record<string, unknown>,
 ): Promise<ConnectorSummary> {
-  const row = await db.query.knowledgeConnectors.findFirst({
-    where: and(
-      eq(knowledgeConnectors.id, connectorId),
-      isNull(knowledgeConnectors.deletedAt),
-    ),
-  });
-  if (!row) throw ApiError.notFound('Connector not found');
+  const { fetchKnowledgeConnectorByIdDefiner, updateKnowledgeConnectorDefiner } =
+    await import('@/lib/db/knowledgeJobDefiners');
+  const row = await fetchKnowledgeConnectorByIdDefiner(connectorId);
+  if (!row || row.deletedAt) throw ApiError.notFound('Connector not found');
   await assertWorkspaceLibraryAdmin(user, row.workspaceId);
-  const { updateKnowledgeConnectorDefiner } = await import(
-    '@/lib/db/knowledgeJobDefiners'
-  );
   const updated = await updateKnowledgeConnectorDefiner({
     connectorId,
     config: { ...(row.config ?? {}), ...config },
@@ -209,13 +200,11 @@ export async function scheduleConnectorSync(
   user: AuthUser,
   connectorId: string,
 ): Promise<void> {
-  const row = await db.query.knowledgeConnectors.findFirst({
-    where: and(
-      eq(knowledgeConnectors.id, connectorId),
-      isNull(knowledgeConnectors.deletedAt),
-    ),
-  });
-  if (!row) throw ApiError.notFound('Connector not found');
+  const { fetchKnowledgeConnectorByIdDefiner } = await import(
+    '@/lib/db/knowledgeJobDefiners'
+  );
+  const row = await fetchKnowledgeConnectorByIdDefiner(connectorId);
+  if (!row || row.deletedAt) throw ApiError.notFound('Connector not found');
   await assertWorkspaceLibraryAdmin(user, row.workspaceId);
   if (!row.encryptedTokens) {
     throw ApiError.badRequest('Connect the account before syncing');
@@ -227,14 +216,11 @@ export async function disconnectConnector(
   user: AuthUser,
   connectorId: string,
 ): Promise<void> {
-  const row = await db.query.knowledgeConnectors.findFirst({
-    where: eq(knowledgeConnectors.id, connectorId),
-  });
+  const { fetchKnowledgeConnectorByIdDefiner, updateKnowledgeConnectorDefiner } =
+    await import('@/lib/db/knowledgeJobDefiners');
+  const row = await fetchKnowledgeConnectorByIdDefiner(connectorId);
   if (!row || row.deletedAt) throw ApiError.notFound('Connector not found');
   await assertWorkspaceLibraryAdmin(user, row.workspaceId);
-  const { updateKnowledgeConnectorDefiner } = await import(
-    '@/lib/db/knowledgeJobDefiners'
-  );
   await updateKnowledgeConnectorDefiner({
     connectorId,
     encryptedTokens: null,
@@ -248,14 +234,12 @@ export async function listRecentSyncRuns(
   connectorId: string,
   limit = 10,
 ) {
-  const row = await db.query.knowledgeConnectors.findFirst({
-    where: eq(knowledgeConnectors.id, connectorId),
-  });
+  const {
+    fetchKnowledgeConnectorByIdDefiner,
+    listKnowledgeSyncRunsDefiner,
+  } = await import('@/lib/db/knowledgeJobDefiners');
+  const row = await fetchKnowledgeConnectorByIdDefiner(connectorId);
   if (!row) throw ApiError.notFound('Connector not found');
   await assertWorkspaceFaculty(user, row.workspaceId);
-  return db.query.knowledgeSyncRuns.findMany({
-    where: eq(knowledgeSyncRuns.connectorId, connectorId),
-    orderBy: [desc(knowledgeSyncRuns.startedAt)],
-    limit,
-  });
+  return listKnowledgeSyncRunsDefiner(connectorId, limit);
 }

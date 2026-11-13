@@ -1,38 +1,30 @@
-import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 
 import { db } from '@/app/db';
-import {
-  chatbotSections,
-  chatbots,
-  questions,
-  quizSections,
-  quizzes,
-  studentSections,
-} from '@/app/db/schema';
+import { questions, quizzes } from '@/app/db/schema';
 import { authorize, userHasAnyBinding } from '@/lib/authz/authorize';
 import { authorizeOnSection } from '@/lib/authz/courseAccess';
 import { TEACHING_ROLES } from '@/lib/authz/permissions';
+import { fetchActiveSectionIdsForStudentDefiner } from '@/lib/db/bookWriteDefiners';
+import { fetchSectionsByIds } from '@/lib/db/entityScopedReads';
+import {
+  fetchChatbotByIdDefiner,
+  fetchChatbotSectionIdsDefiner,
+} from '@/lib/db/studentReadDefiners';
 import type { UserData } from '@/lib/getOrCreateUser';
 import { professorCanAccessQuiz } from '@/lib/quizAccess';
 import type { SafeQuizInput } from '@/lib/chatbot/safeQuizContext';
 import { isSectionConcluded } from '@/lib/sectionAvailability';
 
 export async function getActiveChatbot(chatbotId: string) {
-  return db.query.chatbots.findFirst({
-    where: and(
-      eq(chatbots.id, chatbotId),
-      eq(chatbots.isActive, true),
-      isNull(chatbots.deletedAt),
-    ),
-  });
+  const bot = await fetchChatbotByIdDefiner(chatbotId);
+  if (!bot || !bot.isActive) return null;
+  return bot;
 }
 
 /** Sections where this chatbot is assigned. */
 export async function getChatbotAssignedSectionIds(chatbotId: string) {
-  const rows = await db.query.chatbotSections.findMany({
-    where: eq(chatbotSections.chatbotId, chatbotId),
-  });
-  return rows.map((r) => r.sectionId);
+  return fetchChatbotSectionIdsDefiner(chatbotId);
 }
 
 /** Student's enrolled section IDs that also have this chatbot assigned. */
@@ -40,17 +32,13 @@ export async function getStudentAccessSectionIds(
   studentId: string,
   chatbotId: string,
 ): Promise<string[]> {
-  const enrollments = await db.query.studentSections.findMany({
-    where: and(
-      eq(studentSections.studentId, studentId),
-      eq(studentSections.status, 'ACTIVE'),
-    ),
-    with: { section: true },
-  });
+  const enrolledIds = await fetchActiveSectionIdsForStudentDefiner(studentId);
+  if (enrolledIds.length === 0) return [];
+  const sections = await fetchSectionsByIds(enrolledIds);
   const enrolled = new Set(
-    enrollments
-      .filter((e) => e.section && !isSectionConcluded(e.section))
-      .map((e) => e.sectionId),
+    sections
+      .filter((s) => !isSectionConcluded(s))
+      .map((s) => s.id),
   );
   const assigned = await getChatbotAssignedSectionIds(chatbotId);
   return assigned.filter((id) => enrolled.has(id));
@@ -76,7 +64,7 @@ export async function professorOwnsOrTeachesChatbot(
 
 type ChatbotActor = Pick<UserData, 'id'> & {
   platformStaff?: boolean | null;
-}
+};
 
 /**
  * Binding-based (Wave 2 item 11b): the actor must hold content.write on every

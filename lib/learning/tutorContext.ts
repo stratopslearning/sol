@@ -1,11 +1,8 @@
-import { and, eq, inArray, isNull } from 'drizzle-orm';
-
-import { db } from '@/app/db';
-import { lessonSections, lessons } from '@/app/db/schema';
 import {
   LESSON_EXCERPT_CHARS,
   SAFE_LESSONS_CONTEXT_CHAR_BUDGET,
 } from '@/lib/learning/constants';
+import { fetchLessonsForSectionContextDefiner } from '@/lib/db/studentReadDefiners';
 
 /**
  * Budgeted excerpts from active (released) lessons assigned to the student's
@@ -32,30 +29,7 @@ export async function buildSafeLessonsContext(
     .filter((t) => t.length >= 3)
     .slice(0, 6);
 
-  const assigned = await db.query.lessonSections.findMany({
-    where: eq(lessonSections.sectionId, sectionId),
-    columns: { lessonId: true },
-  });
-  const assignedIds = [...new Set(assigned.map((a) => a.lessonId))];
-  if (assignedIds.length === 0) return '';
-
-  const rows = await db.query.lessons.findMany({
-    where: and(
-      eq(lessons.courseId, courseId),
-      eq(lessons.isActive, true),
-      isNull(lessons.deletedAt),
-      inArray(lessons.id, assignedIds),
-    ),
-    columns: {
-      id: true,
-      title: true,
-      markdown: true,
-      updatedAt: true,
-    },
-    orderBy: (t, { desc }) => [desc(t.updatedAt)],
-    limit: 20,
-  });
-
+  const rows = await fetchLessonsForSectionContextDefiner(courseId, sectionId);
   if (rows.length === 0) return '';
 
   const scored = rows.map((r) => {

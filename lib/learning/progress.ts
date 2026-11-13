@@ -1,8 +1,8 @@
-import { and, eq } from 'drizzle-orm';
-
-import { db } from '@/app/db';
-import { lessonProgress } from '@/app/db/schema';
 import { ApiError } from '@/lib/api/errors';
+import {
+  fetchLessonSectionIdsDefiner,
+  upsertLessonProgressDefiner,
+} from '@/lib/db/studentReadDefiners';
 import { assertStudentCanAccessLesson } from '@/lib/learning/access';
 
 export async function upsertLessonProgress(
@@ -12,46 +12,20 @@ export async function upsertLessonProgress(
 ) {
   await assertStudentCanAccessLesson(studentId, lessonId);
 
-  const existing = await db.query.lessonProgress.findFirst({
-    where: and(
-      eq(lessonProgress.lessonId, lessonId),
-      eq(lessonProgress.studentId, studentId),
-    ),
-  });
-
-  const now = new Date();
-  if (!existing) {
-    const [row] = await db
-      .insert(lessonProgress)
-      .values({
-        lessonId,
-        studentId,
-        status,
-        completedAt: status === 'COMPLETED' ? now : null,
-      })
-      .returning();
-    if (status === 'COMPLETED') {
-      void enqueueLessonCompletionPassback(studentId, lessonId);
-    }
-    return {
-      status: row.status as 'STARTED' | 'COMPLETED',
-      completedAt: row.completedAt,
-    };
-  }
-
-  if (existing.status === 'COMPLETED' && status === 'STARTED') {
-    throw ApiError.badRequest('Lesson is already completed');
-  }
-
-  const [row] = await db
-    .update(lessonProgress)
-    .set({
+  let row: { status: string; completedAt: Date | null };
+  try {
+    row = await upsertLessonProgressDefiner({
+      lessonId,
+      studentId,
       status,
-      completedAt: status === 'COMPLETED' ? now : existing.completedAt,
-      updatedAt: now,
-    })
-    .where(eq(lessonProgress.id, existing.id))
-    .returning();
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : '';
+    if (message.includes('already completed')) {
+      throw ApiError.badRequest('Lesson is already completed');
+    }
+    throw err;
+  }
 
   if (status === 'COMPLETED') {
     void enqueueLessonCompletionPassback(studentId, lessonId);
@@ -69,17 +43,12 @@ async function enqueueLessonCompletionPassback(
 ) {
   try {
     const { enqueueCompletionPassback } = await import('@/lib/lti/passback');
-    const { lessonSections } = await import('@/app/db/schema');
-    const { db } = await import('@/app/db');
-    const { eq } = await import('drizzle-orm');
-    const links = await db.query.lessonSections.findMany({
-      where: eq(lessonSections.lessonId, lessonId),
-    });
-    for (const link of links) {
+    const links = await fetchLessonSectionIdsDefiner(lessonId);
+    for (const sectionId of links) {
       void enqueueCompletionPassback({
         ref: { lessonId },
         studentId,
-        sectionId: link.sectionId,
+        sectionId,
         completed: true,
       });
     }

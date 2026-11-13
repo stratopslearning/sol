@@ -1,10 +1,12 @@
-import { and, eq, inArray } from 'drizzle-orm';
-
-import { db } from '@/app/db';
-import { assignments, quizSections, studentSections } from '@/app/db/schema';
 import { withBasePath } from '@/lib/basePath';
+import { fetchActiveSectionIdsForStudentDefiner } from '@/lib/db/bookWriteDefiners';
+import { fetchSectionsByIds } from '@/lib/db/entityScopedReads';
+import {
+  fetchStudentAssignmentDuesDefiner,
+  fetchStudentQuizDueForSectionsDefiner,
+} from '@/lib/db/studentReadDefiners';
 import { isQuizListedForStudents } from '@/lib/quizAvailability';
-import { partitionEnrollmentsByConclusion } from '@/lib/sectionAvailability';
+import { isSectionConcluded } from '@/lib/sectionAvailability';
 import { normalizeDatabaseDate } from '@/lib/utils';
 
 export type StudentCalendarEvent = {
@@ -26,48 +28,38 @@ export type StudentCalendarEvent = {
 export async function listStudentQuizDueEvents(
   studentId: string,
 ): Promise<StudentCalendarEvent[]> {
-  const enrollments = await db.query.studentSections.findMany({
-    where: and(
-      eq(studentSections.studentId, studentId),
-      eq(studentSections.status, 'ACTIVE'),
-    ),
-    with: { section: { with: { course: true } } },
-  });
-  const { active } = partitionEnrollmentsByConclusion(enrollments);
-  const sectionIds = active.map((e) => e.sectionId);
+  const enrolledIds = await fetchActiveSectionIdsForStudentDefiner(studentId);
+  if (enrolledIds.length === 0) return [];
+
+  const sections = await fetchSectionsByIds(enrolledIds);
+  const active = sections.filter((s) => !isSectionConcluded(s));
+  const sectionIds = active.map((s) => s.id);
   if (sectionIds.length === 0) return [];
 
   const sectionMeta = new Map(
-    active.map((e) => [
-      e.sectionId,
+    active.map((s) => [
+      s.id,
       {
-        name: e.section.name,
-        courseTitle: e.section.course?.title ?? 'Course',
+        name: s.name,
+        courseTitle: s.course?.title ?? 'Course',
       },
     ]),
   );
 
-  const links = await db.query.quizSections.findMany({
-    where: inArray(quizSections.sectionId, sectionIds),
-    with: { quiz: true, section: { with: { course: true } } },
-  });
-
-  const quizIds = [
-    ...new Set(
-      links
-        .filter((l) => l.quiz && isQuizListedForStudents(l.quiz))
-        .map((l) => l.quizId),
-    ),
-  ];
+  const links = await fetchStudentQuizDueForSectionsDefiner(sectionIds);
+  const listed = links.filter((l) =>
+    isQuizListedForStudents({
+      isActive: l.isActive,
+      startDate: l.startDate,
+    }),
+  );
+  const quizIds = [...new Set(listed.map((l) => l.quizId))];
   if (quizIds.length === 0) return [];
 
-  const studentAssignments = await db.query.assignments.findMany({
-    where: and(
-      eq(assignments.studentId, studentId),
-      inArray(assignments.quizId, quizIds),
-    ),
-    columns: { quizId: true, dueDate: true },
-  });
+  const studentAssignments = await fetchStudentAssignmentDuesDefiner(
+    studentId,
+    quizIds,
+  );
   const dueByQuiz = new Map(
     studentAssignments.map((a) => [a.quizId, a.dueDate]),
   );
@@ -75,33 +67,30 @@ export async function listStudentQuizDueEvents(
   const events: StudentCalendarEvent[] = [];
   const seen = new Set<string>();
 
-  for (const link of links) {
-    const quiz = link.quiz;
-    if (!quiz || !isQuizListedForStudents(quiz)) continue;
-
-    const endDate = normalizeDatabaseDate(quiz.endDate);
-    const assignDue = normalizeDatabaseDate(dueByQuiz.get(quiz.id) ?? null);
+  for (const link of listed) {
+    const endDate = normalizeDatabaseDate(link.endDate);
+    const assignDue = normalizeDatabaseDate(dueByQuiz.get(link.quizId) ?? null);
     const due = endDate ?? assignDue;
     if (!due) continue;
 
-    const key = `${quiz.id}:${link.sectionId}`;
+    const key = `${link.quizId}:${link.sectionId}`;
     if (seen.has(key)) continue;
     seen.add(key);
 
     const meta = sectionMeta.get(link.sectionId) ?? {
-      name: link.section?.name ?? 'Section',
-      courseTitle: link.section?.course?.title ?? 'Course',
+      name: link.sectionName || 'Section',
+      courseTitle: link.courseTitle || 'Course',
     };
 
     events.push({
       id: key,
-      quizId: quiz.id,
-      title: quiz.title,
+      quizId: link.quizId,
+      title: link.title,
       sectionId: link.sectionId,
       sectionName: meta.name,
       courseTitle: meta.courseTitle,
       dueAt: due.toISOString(),
-      href: withBasePath(`/quiz/${quiz.id}`),
+      href: withBasePath(`/quiz/${link.quizId}`),
     });
   }
 

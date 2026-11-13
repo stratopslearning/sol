@@ -1,16 +1,11 @@
-import { and, eq, inArray, isNull } from 'drizzle-orm';
-
-import { db } from '@/app/db';
-import {
-  interactiveSections,
-  interactives,
-  studentSections,
-} from '@/app/db/schema';
 import { ApiError } from '@/lib/api/errors';
 import { authorize, userHasAnyBinding } from '@/lib/authz/authorize';
 import { authorizeOnSection } from '@/lib/authz/courseAccess';
 import { TEACHING_ROLES } from '@/lib/authz/permissions';
 import { listTeachableSectionIdsForCourse } from '@/lib/authoring/access';
+import { fetchActiveSectionIdsForStudentDefiner } from '@/lib/db/bookWriteDefiners';
+import { fetchInteractiveSectionIdsDefiner } from '@/lib/db/facultyWriteDefiners';
+import { fetchInteractiveByIdDefiner } from '@/lib/db/studentReadDefiners';
 import type { UserData } from '@/lib/getOrCreateUser';
 
 type AuthUser = Pick<UserData, 'id'> & { platformStaff?: boolean | null };
@@ -36,12 +31,9 @@ async function userCanWriteInteractive(
     }
   }
 
-  const links = await db.query.interactiveSections.findMany({
-    where: eq(interactiveSections.interactiveId, interactive.id),
-    columns: { sectionId: true },
-  });
-  for (const link of links) {
-    if (await authorizeOnSection(user, 'content.write', link.sectionId)) {
+  const links = await fetchInteractiveSectionIdsDefiner(interactive.id);
+  for (const sectionId of links) {
+    if (await authorizeOnSection(user, 'content.write', sectionId)) {
       return true;
     }
   }
@@ -63,12 +55,7 @@ export async function assertCanManageInteractive(
   user: AuthUser,
   interactiveId: string,
 ) {
-  const interactive = await db.query.interactives.findFirst({
-    where: and(
-      eq(interactives.id, interactiveId),
-      isNull(interactives.deletedAt),
-    ),
-  });
+  const interactive = await fetchInteractiveByIdDefiner(interactiveId);
   if (!interactive) {
     throw ApiError.notFound('Interactive not found');
   }
@@ -82,34 +69,19 @@ export async function assertStudentCanAccessInteractive(
   user: AuthUser,
   interactiveId: string,
 ) {
-  const interactive = await db.query.interactives.findFirst({
-    where: and(
-      eq(interactives.id, interactiveId),
-      isNull(interactives.deletedAt),
-    ),
-  });
+  const interactive = await fetchInteractiveByIdDefiner(interactiveId);
   if (!interactive || !interactive.isActive) {
     throw ApiError.notFound('Interactive not found');
   }
 
-  const enrollments = await db.query.studentSections.findMany({
-    where: and(
-      eq(studentSections.studentId, user.id),
-      eq(studentSections.status, 'ACTIVE'),
-    ),
-    columns: { sectionId: true },
-  });
-  const sectionIds = enrollments.map((e) => e.sectionId);
+  const sectionIds = await fetchActiveSectionIdsForStudentDefiner(user.id);
   if (sectionIds.length === 0) {
     throw ApiError.forbidden('Not enrolled');
   }
-  const link = await db.query.interactiveSections.findFirst({
-    where: and(
-      eq(interactiveSections.interactiveId, interactiveId),
-      inArray(interactiveSections.sectionId, sectionIds),
-    ),
-  });
-  if (!link) throw ApiError.forbidden('Not assigned to your sections');
+  const assigned = await fetchInteractiveSectionIdsDefiner(interactiveId);
+  const enrolled = new Set(sectionIds);
+  const ok = assigned.some((id) => enrolled.has(id));
+  if (!ok) throw ApiError.forbidden('Not assigned to your sections');
   return interactive;
 }
 

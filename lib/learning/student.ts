@@ -1,16 +1,12 @@
-import { and, eq, inArray, isNull } from 'drizzle-orm';
-
-import { db } from '@/app/db';
+import { fetchActiveSectionIdsForStudentDefiner } from '@/lib/db/bookWriteDefiners';
+import { fetchSectionsByIds } from '@/lib/db/entityScopedReads';
 import {
-  flashcards,
-  lessonProgress,
-  lessonSections,
-  lessons,
-  studentSections,
-} from '@/app/db/schema';
-import { ApiError } from '@/lib/api/errors';
+  fetchLessonFlashcardsDefiner,
+  fetchLessonProgressForStudentDefiner,
+  fetchStudentLessonsForSectionsDefiner,
+} from '@/lib/db/studentReadDefiners';
 import { assertStudentCanAccessLesson } from '@/lib/learning/access';
-import { partitionEnrollmentsByConclusion } from '@/lib/sectionAvailability';
+import { isSectionConcluded } from '@/lib/sectionAvailability';
 
 export type StudentLessonListItem = {
   id: string;
@@ -24,61 +20,43 @@ export type StudentLessonListItem = {
 export async function listStudentLessons(
   studentId: string,
 ): Promise<StudentLessonListItem[]> {
-  const enrollments = await db.query.studentSections.findMany({
-    where: and(
-      eq(studentSections.studentId, studentId),
-      eq(studentSections.status, 'ACTIVE'),
-    ),
-    with: { section: { with: { course: true } } },
-  });
-  const { active: activeEnrollments } =
-    partitionEnrollmentsByConclusion(enrollments);
-  const sectionIds = activeEnrollments.map((e) => e.sectionId);
+  const enrolledIds = await fetchActiveSectionIdsForStudentDefiner(studentId);
+  if (enrolledIds.length === 0) return [];
+
+  const sections = await fetchSectionsByIds(enrolledIds);
+  const sectionIds = sections
+    .filter((s) => !isSectionConcluded(s))
+    .map((s) => s.id);
   if (sectionIds.length === 0) return [];
 
-  const assignments = await db.query.lessonSections.findMany({
-    where: inArray(lessonSections.sectionId, sectionIds),
-    with: {
-      lesson: {
-        with: {
-          course: true,
-          sectionAssignments: { with: { section: true } },
-          flashcards: {
-            where: isNull(flashcards.deletedAt),
-          },
-        },
-      },
-      section: true,
-    },
-  });
-
-  const progressRows = await db.query.lessonProgress.findMany({
-    where: eq(lessonProgress.studentId, studentId),
-  });
-  const progressByLesson = new Map(
-    progressRows.map((p) => [p.lessonId, p.status]),
-  );
-
+  const assignments = await fetchStudentLessonsForSectionsDefiner(sectionIds);
   const activeSectionIdSet = new Set(sectionIds);
   const seen = new Set<string>();
   const rows: StudentLessonListItem[] = [];
 
   for (const a of assignments) {
-    const lesson = a.lesson;
-    if (!lesson || lesson.deletedAt || !lesson.isActive) continue;
-    if (seen.has(lesson.id)) continue;
-    seen.add(lesson.id);
+    if (seen.has(a.id)) continue;
+    seen.add(a.id);
 
-    const status = progressByLesson.get(lesson.id);
+    const forLesson = assignments.filter(
+      (x) => x.id === a.id && activeSectionIdSet.has(x.sectionId),
+    );
+    const progress = await fetchLessonProgressForStudentDefiner(
+      a.id,
+      studentId,
+    );
+    const status = progress?.status;
+
     rows.push({
-      id: lesson.id,
-      title: lesson.title,
-      courseTitle: lesson.course?.title ?? '',
-      sectionNames: (lesson.sectionAssignments ?? [])
-        .filter((sa) => activeSectionIdSet.has(sa.sectionId))
-        .map((sa) => sa.section?.name)
-        .filter((n): n is string => Boolean(n)),
-      flashcardCount: (lesson.flashcards ?? []).length,
+      id: a.id,
+      title: a.title,
+      courseTitle: a.courseTitle,
+      sectionNames: [
+        ...new Set(
+          forLesson.map((x) => x.sectionName).filter((n): n is string => Boolean(n)),
+        ),
+      ],
+      flashcardCount: a.flashcardCount,
       progressStatus: status
         ? (status as 'STARTED' | 'COMPLETED')
         : 'open',
@@ -94,30 +72,21 @@ export async function getStudentLessonDetail(
 ) {
   const lesson = await assertStudentCanAccessLesson(studentId, lessonId);
 
-  const cards = await db.query.flashcards.findMany({
-    where: and(eq(flashcards.lessonId, lessonId), isNull(flashcards.deletedAt)),
-  });
-  cards.sort((a, b) => a.position - b.position);
+  const cards = await fetchLessonFlashcardsDefiner(lessonId);
+  const progress = await fetchLessonProgressForStudentDefiner(
+    lessonId,
+    studentId,
+  );
 
-  const progress = await db.query.lessonProgress.findFirst({
-    where: and(
-      eq(lessonProgress.lessonId, lessonId),
-      eq(lessonProgress.studentId, studentId),
-    ),
-  });
-
-  const course = await db.query.lessons.findFirst({
-    where: eq(lessons.id, lessonId),
-    with: { course: true },
-  });
-
-  if (!course) throw ApiError.notFound('Lesson not found');
+  const enrolledIds = await fetchActiveSectionIdsForStudentDefiner(studentId);
+  const assignments = await fetchStudentLessonsForSectionsDefiner(enrolledIds);
+  const match = assignments.find((a) => a.id === lessonId);
 
   return {
     id: lesson.id,
     title: lesson.title,
     markdown: lesson.markdown,
-    courseTitle: course.course?.title ?? '',
+    courseTitle: match?.courseTitle ?? '',
     flashcards: cards.map((c) => ({
       id: c.id,
       front: c.front,
