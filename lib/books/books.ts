@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 
 import { db } from '@/app/db';
 import {
@@ -28,6 +28,13 @@ import type {
   BookSummary,
   BookWithChapters,
 } from '@/lib/books/types';
+import {
+  createHostedBookDefiner,
+  fetchBookChaptersTocForCourseDefiner,
+  fetchHostedBookByIdDefiner,
+  fetchHostedBooksForCourseDefiner,
+  updateHostedBookDefiner,
+} from '@/lib/db/bookWriteDefiners';
 import type { UserData } from '@/lib/getOrCreateUser';
 import { assertCanManageCourse } from '@/lib/knowledge/access';
 import {
@@ -66,36 +73,14 @@ export async function listCourseBooks(
   courseId: string,
 ): Promise<BookWithChapters[]> {
   await assertCanManageCourse(user, courseId);
-  const rows = await db.query.hostedBooks.findMany({
-    where: and(
-      eq(hostedBooks.courseId, courseId),
-      isNull(hostedBooks.deletedAt),
-    ),
-    orderBy: [desc(hostedBooks.createdAt)],
-  });
-  const bookIds = rows.map((r) => r.id);
+  const rows = await fetchHostedBooksForCourseDefiner(courseId);
+  const bookIds = new Set(rows.map((r) => r.id));
 
   const tocByBook = new Map<string, BookChapterTocItem[]>();
-  if (bookIds.length > 0) {
-    const chapterRows = await db
-      .select({
-        id: bookChapters.id,
-        bookId: bookChapters.bookId,
-        position: bookChapters.position,
-        title: bookChapters.title,
-        partTitle: bookChapters.partTitle,
-        parentId: bookChapters.parentId,
-        level: bookChapters.level,
-      })
-      .from(bookChapters)
-      .where(
-        and(
-          inArray(bookChapters.bookId, bookIds),
-          isNull(bookChapters.deletedAt),
-        ),
-      )
-      .orderBy(asc(bookChapters.position));
+  if (bookIds.size > 0) {
+    const chapterRows = await fetchBookChaptersTocForCourseDefiner(courseId);
     for (const ch of chapterRows) {
+      if (!bookIds.has(ch.bookId)) continue;
       const list = tocByBook.get(ch.bookId) ?? [];
       list.push({
         id: ch.id,
@@ -168,17 +153,13 @@ export async function importBookFromUrl(
     parsed.pathname.split('/').filter(Boolean)[0] ||
     'Imported webbook';
 
-  const [row] = await db
-    .insert(hostedBooks)
-    .values({
-      courseId: opts.courseId,
-      createdByUserId: user.id,
-      title,
-      sourceKind: 'WEBBOOK_URL',
-      sourceUrl: parsed.toString(),
-      status: 'PENDING',
-    })
-    .returning();
+  const row = await createHostedBookDefiner({
+    courseId: opts.courseId,
+    createdByUserId: user.id,
+    title,
+    sourceKind: 'WEBBOOK_URL',
+    sourceUrl: parsed.toString(),
+  });
 
   await logAudit({
     actorUserId: user.id,
@@ -240,16 +221,12 @@ export async function importBookFromUpload(
     );
   }
 
-  const [row] = await db
-    .insert(hostedBooks)
-    .values({
-      courseId: opts.courseId,
-      createdByUserId: user.id,
-      title,
-      sourceKind,
-      status: 'PENDING',
-    })
-    .returning();
+  let row = await createHostedBookDefiner({
+    courseId: opts.courseId,
+    createdByUserId: user.id,
+    title,
+    sourceKind,
+  });
 
   // Best-effort S3 archive for EPUB/XML. PDF requires a successful store.
   if (isS3Configured()) {
@@ -269,24 +246,22 @@ export async function importBookFromUpload(
             ? 'application/pdf'
             : 'application/xml',
       });
-      await db
-        .update(hostedBooks)
-        .set({ s3Key: key, updatedAt: new Date() })
-        .where(eq(hostedBooks.id, row.id));
+      const updated = await updateHostedBookDefiner({
+        bookId: row.id,
+        s3Key: key,
+      });
+      if (updated) row = updated;
     } catch (err) {
       console.warn('[importBookFromUpload] S3 store failed; processing buffer', {
         bookId: row.id,
         err: err instanceof Error ? err.message : err,
       });
       if (isPdf) {
-        await db
-          .update(hostedBooks)
-          .set({
-            status: 'FAILED',
-            errorMessage: 'Could not store PDF for reading',
-            updatedAt: new Date(),
-          })
-          .where(eq(hostedBooks.id, row.id));
+        await updateHostedBookDefiner({
+          bookId: row.id,
+          status: 'FAILED',
+          errorMessage: 'Could not store PDF for reading',
+        });
         throw ApiError.badRequest(
           'Could not store PDF. Try again or contact support.',
         );
@@ -313,16 +288,10 @@ export async function importBookFromUpload(
     userAgent: audit?.userAgent ?? null,
   });
 
-  const refreshed = await db.query.hostedBooks.findFirst({
-    where: eq(hostedBooks.id, row.id),
-  });
-  const chapters = await db.query.bookChapters.findMany({
-    where: and(
-      eq(bookChapters.bookId, row.id),
-      isNull(bookChapters.deletedAt),
-    ),
-    columns: { id: true, title: true, parentId: true, level: true },
-  });
+  const refreshed = await fetchHostedBookByIdDefiner(row.id);
+  const toc = (await fetchBookChaptersTocForCourseDefiner(opts.courseId)).filter(
+    (ch) => ch.bookId === row.id,
+  );
 
   if (refreshed?.status === 'FAILED') {
     throw ApiError.badRequest(
@@ -333,7 +302,7 @@ export async function importBookFromUpload(
   const resolvedTitle = refreshed?.title ?? row.title;
   return toSummary(
     refreshed ?? row,
-    countTopLevelChapters(chapters, resolvedTitle),
+    countTopLevelChapters(toc, resolvedTitle),
   );
 }
 
@@ -402,16 +371,12 @@ export async function beginBookDirectUpload(
     opts.fileName.replace(/\.[^.]+$/, '') ||
     'Imported book';
 
-  const [row] = await db
-    .insert(hostedBooks)
-    .values({
-      courseId: opts.courseId,
-      createdByUserId: user.id,
-      title,
-      sourceKind,
-      status: 'PENDING',
-    })
-    .returning();
+  const row = await createHostedBookDefiner({
+    courseId: opts.courseId,
+    createdByUserId: user.id,
+    title,
+    sourceKind,
+  });
 
   const s3Key = buildMaterialS3Key(
     opts.courseId,
@@ -424,10 +389,7 @@ export async function beginBookDirectUpload(
           : 'book.xml'),
   );
 
-  await db
-    .update(hostedBooks)
-    .set({ s3Key, updatedAt: new Date() })
-    .where(eq(hostedBooks.id, row.id));
+  await updateHostedBookDefiner({ bookId: row.id, s3Key });
 
   const uploadUrl = await getMaterialObjectPresignedPutUrl({
     key: s3Key,
@@ -464,41 +426,32 @@ export async function completeBookDirectUpload(
 
   const head = await headMaterialObject(book.s3Key);
   if (!head || head.contentLength <= 0) {
-    await db
-      .update(hostedBooks)
-      .set({
-        status: 'FAILED',
-        errorMessage: 'Upload did not reach storage',
-        updatedAt: new Date(),
-      })
-      .where(eq(hostedBooks.id, book.id));
+    await updateHostedBookDefiner({
+      bookId: book.id,
+      status: 'FAILED',
+      errorMessage: 'Upload did not reach storage',
+    });
     throw ApiError.badRequest(
       'Upload did not reach storage. Check that the file finished uploading, then try again.',
     );
   }
   if (head.contentLength > MAX_BOOK_UPLOAD_BYTES) {
-    await db
-      .update(hostedBooks)
-      .set({
-        status: 'FAILED',
-        errorMessage: 'Book file exceeds 50 MB limit',
-        updatedAt: new Date(),
-      })
-      .where(eq(hostedBooks.id, book.id));
+    await updateHostedBookDefiner({
+      bookId: book.id,
+      status: 'FAILED',
+      errorMessage: 'Book file exceeds 50 MB limit',
+    });
     throw ApiError.badRequest('Book file exceeds 50 MB limit');
   }
   if (
     opts.expectedByteSize != null &&
     Math.abs(head.contentLength - opts.expectedByteSize) > 64
   ) {
-    await db
-      .update(hostedBooks)
-      .set({
-        status: 'FAILED',
-        errorMessage: 'Uploaded size mismatch',
-        updatedAt: new Date(),
-      })
-      .where(eq(hostedBooks.id, book.id));
+    await updateHostedBookDefiner({
+      bookId: book.id,
+      status: 'FAILED',
+      errorMessage: 'Uploaded size mismatch',
+    });
     throw ApiError.badRequest('Uploaded file size does not match — try again');
   }
 
@@ -520,16 +473,10 @@ export async function completeBookDirectUpload(
     userAgent: audit?.userAgent ?? null,
   });
 
-  const refreshed = await db.query.hostedBooks.findFirst({
-    where: eq(hostedBooks.id, book.id),
-  });
-  const chapters = await db.query.bookChapters.findMany({
-    where: and(
-      eq(bookChapters.bookId, book.id),
-      isNull(bookChapters.deletedAt),
-    ),
-    columns: { id: true, title: true, parentId: true, level: true },
-  });
+  const refreshed = await fetchHostedBookByIdDefiner(book.id);
+  const toc = (await fetchBookChaptersTocForCourseDefiner(book.courseId)).filter(
+    (ch) => ch.bookId === book.id,
+  );
 
   if (refreshed?.status === 'FAILED') {
     throw ApiError.badRequest(
@@ -540,7 +487,7 @@ export async function completeBookDirectUpload(
   const resolvedTitle = refreshed?.title ?? book.title;
   return toSummary(
     refreshed ?? book,
-    countTopLevelChapters(chapters, resolvedTitle),
+    countTopLevelChapters(toc, resolvedTitle),
   );
 }
 
@@ -564,15 +511,12 @@ export async function reprocessBook(
     );
   }
 
-  const [updated] = await db
-    .update(hostedBooks)
-    .set({
-      status: 'PENDING',
-      errorMessage: null,
-      updatedAt: new Date(),
-    })
-    .where(eq(hostedBooks.id, bookId))
-    .returning();
+  const updated = await updateHostedBookDefiner({
+    bookId,
+    status: 'PENDING',
+    errorMessage: null,
+  });
+  if (!updated) throw ApiError.notFound('Book not found');
 
   await logAudit({
     actorUserId: user.id,
@@ -622,11 +566,11 @@ export async function releaseBook(
     })),
   );
 
-  const [updated] = await db
-    .update(hostedBooks)
-    .set({ isReleased: true, updatedAt: new Date() })
-    .where(eq(hostedBooks.id, bookId))
-    .returning();
+  const updated = await updateHostedBookDefiner({
+    bookId,
+    isReleased: true,
+  });
+  if (!updated) throw ApiError.notFound('Book not found');
 
   await logAudit({
     actorUserId: user.id,
@@ -639,17 +583,10 @@ export async function releaseBook(
     userAgent: audit?.userAgent ?? null,
   });
 
-  const chapters = await db.query.bookChapters.findMany({
-    where: and(
-      eq(bookChapters.bookId, bookId),
-      isNull(bookChapters.deletedAt),
-    ),
-    columns: { title: true, parentId: true, level: true },
-  });
-  return toSummary(
-    updated,
-    countTopLevelChapters(chapters, updated.title),
+  const toc = (await fetchBookChaptersTocForCourseDefiner(book.courseId)).filter(
+    (ch) => ch.bookId === bookId,
   );
+  return toSummary(updated, countTopLevelChapters(toc, updated.title));
 }
 
 export async function softDeleteBook(
@@ -692,14 +629,18 @@ export async function softDeleteBooks(
     );
 
   const now = new Date();
-  await db
-    .update(hostedBooks)
-    .set({ deletedAt: now, updatedAt: now })
-    .where(inArray(hostedBooks.id, uniqueIds));
-  await db
-    .update(bookChapters)
-    .set({ deletedAt: now, updatedAt: now })
-    .where(inArray(bookChapters.bookId, uniqueIds));
+  for (const id of uniqueIds) {
+    await updateHostedBookDefiner({
+      bookId: id,
+      deletedAt: now.toISOString(),
+    });
+  }
+  const { softDeleteBookChaptersDefiner } = await import(
+    '@/lib/db/bookWriteDefiners'
+  );
+  for (const id of uniqueIds) {
+    await softDeleteBookChaptersDefiner(id);
+  }
   await softDeleteLinkedMaterials(
     chapters
       .map((c) => c.materialId)
