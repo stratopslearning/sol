@@ -211,9 +211,14 @@ export function AuthoringPlusMenu({
           skipped > 0
             ? `Imported ${imported} · ${skipped} skipped`
             : `Imported ${imported} from zip`,
+          {
+            description: 'Select materials above before proposing.',
+          },
         );
       } else {
-        toast.success('Upload queued for indexing');
+        toast.success('Upload queued for indexing', {
+          description: 'Select materials above before proposing.',
+        });
       }
       onUploaded();
       setView('menu');
@@ -537,7 +542,15 @@ export function AuthoringPlusMenu({
                                         <span className="mt-0.5 block text-[10px] text-ink-faint">
                                           Library
                                         </span>
-                                      ) : null}
+                                      ) : item.kind === 'book' ? (
+                                        <span className="mt-0.5 block text-[10px] text-ink-faint">
+                                          Book
+                                        </span>
+                                      ) : (
+                                        <span className="mt-0.5 block text-[10px] text-ink-faint">
+                                          Upload
+                                        </span>
+                                      )}
                                     </button>
                                   </li>
                                 );

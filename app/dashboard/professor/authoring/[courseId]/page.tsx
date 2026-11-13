@@ -10,6 +10,10 @@ import {
 } from '@/lib/authoring';
 import { appPath } from '@/lib/basePath';
 import { requireTeachingAccess } from '@/lib/authz/gates';
+import {
+  ensureBookKnowledgeIndexed,
+  listCourseBooks,
+} from '@/lib/books';
 import { fetchSectionsByIds } from '@/lib/db/entityScopedReads';
 import {
   assertCanManageCourse,
@@ -50,6 +54,7 @@ export default async function ProfessorAuthoringPage({
     libraryDocuments,
     teachable,
     teachableSectionIds,
+    books,
   ] = await Promise.all([
     getCurrentOutlineForCourse(user, courseId),
     listOutlinesForCourse(user, courseId, { includeArchived: true }),
@@ -63,6 +68,10 @@ export default async function ProfessorAuthoringPage({
       : Promise.resolve([]),
     listTeachableCourses(user),
     listTeachableSectionIdsForCourse(user, courseId),
+    listCourseBooks(user, courseId).catch((err) => {
+      console.warn('[authoring] course books list failed', err);
+      return [];
+    }),
   ]);
   const sectionRows = teachableSectionIds.length
     ? await fetchSectionsByIds(teachableSectionIds)
@@ -80,7 +89,47 @@ export default async function ProfessorAuthoringPage({
   const linkedTitles = new Set(linkedDocuments.map((d) => d.title));
   const unmirroredUploads = materials.filter((m) => !linkedTitles.has(m.title));
 
+  const { fetchCourseMaterialByIdDefiner } = await import(
+    '@/lib/db/knowledgeJobDefiners'
+  );
+  const bookCorpusItems: Array<{
+    id: string;
+    title: string;
+    status: 'PENDING' | 'PROCESSING' | 'READY' | 'FAILED';
+    kind: 'book';
+  }> = [];
+  const seenMaterialIds = new Set<string>();
+  for (const book of books) {
+    if (book.status !== 'READY') continue;
+    let materialId: string | null = null;
+    try {
+      const ensured = await ensureBookKnowledgeIndexed(book.id);
+      materialId = ensured.materialId;
+    } catch (err) {
+      console.warn('[authoring] ensureBookKnowledgeIndexed failed', book.id, err);
+    }
+    if (!materialId) continue;
+    if (seenMaterialIds.has(materialId)) continue;
+    let status: 'PENDING' | 'PROCESSING' | 'READY' | 'FAILED' = 'READY';
+    try {
+      const material = await fetchCourseMaterialByIdDefiner(materialId);
+      if (!material || material.deletedAt) continue;
+      status = material.status as typeof status;
+    } catch (err) {
+      console.warn('[authoring] book material status failed', materialId, err);
+      continue;
+    }
+    seenMaterialIds.add(materialId);
+    bookCorpusItems.push({
+      id: materialId,
+      title: book.title,
+      status,
+      kind: 'book',
+    });
+  }
+
   const corpusItems = [
+    ...bookCorpusItems,
     ...linkedDocuments.map((d) => ({
       id: d.id,
       title: d.title,

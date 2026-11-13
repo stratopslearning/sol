@@ -146,7 +146,15 @@ export async function ensureBookKnowledgeIndexed(
     .filter((id): id is string => id != null);
   const distinct = [...new Set(linked)];
   if (!opts?.force && distinct.length === 1) {
-    return { materialId: distinct[0]!, indexed: false };
+    const candidateId = distinct[0]!;
+    const { fetchCourseMaterialByIdDefiner } = await import(
+      '@/lib/db/knowledgeJobDefiners'
+    );
+    const material = await fetchCourseMaterialByIdDefiner(candidateId);
+    if (material && !material.deletedAt && material.status === 'READY') {
+      return { materialId: candidateId, indexed: false };
+    }
+    // Linked row missing / not READY — fall through and re-index.
   }
 
   const materialId = await indexBookChaptersAsSingleMaterial({
