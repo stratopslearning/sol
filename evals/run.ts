@@ -8,7 +8,6 @@ import { config as loadEnv } from 'dotenv';
 
 loadEnv({ path: '.env', quiet: true });
 loadEnv({ path: '.env.local', override: true, quiet: true });
-loadEnv({ path: '.env.braintrust', override: true, quiet: true });
 
 const PROJECT = process.env.BRAINTRUST_PROJECT?.trim() || 'teachwithsol';
 const GRADING_BAND_FLOOR = Number(process.env.EVAL_GRADING_BAND_FLOOR ?? '0.8');

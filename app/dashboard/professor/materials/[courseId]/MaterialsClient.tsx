@@ -422,7 +422,11 @@ export default function MaterialsClient({
       return;
     }
     const lower = next.name.toLowerCase();
-    if (!lower.endsWith(".epub") && !lower.endsWith(".xml")) {
+    if (
+      !lower.endsWith(".epub") &&
+      !lower.endsWith(".xml") &&
+      !lower.endsWith(".pdf")
+    ) {
       toast.error("Upload an EPUB, Pressbooks XML, or PDF");
       return;
     }

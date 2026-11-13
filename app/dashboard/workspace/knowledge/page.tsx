@@ -173,6 +173,8 @@ export default async function WorkspaceKnowledgePage({
       ) : null}
       <KnowledgeClient
         workspaceId={workspaceId}
+        activeCourseId={activeCourseId}
+        activeCourseTitle={activeCourse?.title ?? null}
         initialDocuments={documents}
         initialConnectors={connectors}
         initialProviders={providers}
