@@ -5,7 +5,7 @@ import { normalizeQuizScheduleToFuture } from '@/lib/authoring/schedule';
 
 export type FaithfulExpectedItem = {
   itemId: string;
-  type: 'QUIZ' | 'DISCUSSION' | 'INTERACTIVE';
+  type: 'LESSON' | 'QUIZ' | 'DISCUSSION' | 'INTERACTIVE';
   title: string;
   interactiveKind?: OutlineItemBody['interactiveKind'];
 };
@@ -54,6 +54,7 @@ function toBody(
     markdown: item.markdown,
     description: item.description,
     flashcards: item.flashcards,
+    chapter: item.chapter as OutlineItemBody['chapter'],
     questions: item.questions,
     sourceCitations: item.sourceCitations,
     unsupportedFacts: item.unsupportedFacts,

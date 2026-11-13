@@ -128,6 +128,60 @@ export function OutlineItemBodyView({
   onQuestionPointsChange?: (index: number, points: number) => void;
 }) {
   if (type === "LESSON") {
+    const chapter = body.chapter;
+    if (chapter?.kind === "interactive_chapter") {
+      return (
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">Interactive chapter</Badge>
+            <span className="text-xs text-muted-foreground">
+              {chapter.sections.length} sections · practice checks
+            </span>
+          </div>
+          {chapter.subtitle ? (
+            <p className="text-sm text-muted-foreground">{chapter.subtitle}</p>
+          ) : null}
+          {chapter.learningObjectives?.length ? (
+            <div>
+              <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Learning objectives
+              </p>
+              <ul className="list-disc space-y-0.5 pl-5 text-sm">
+                {chapter.learningObjectives.map((o) => (
+                  <li key={o}>{o}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          <ol className="flex flex-col gap-3">
+            {chapter.sections.map((section, i) => (
+              <li
+                key={section.id || i}
+                className="rounded-xl border border-border bg-background/50 p-3"
+              >
+                <p className="text-sm font-medium text-foreground">
+                  {i + 1}. {section.title}
+                </p>
+                {section.markdown?.trim() ? (
+                  <div className="mt-2 max-h-40 overflow-y-auto">
+                    <MarkdownBlock markdown={section.markdown} />
+                  </div>
+                ) : (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Reading not built yet.
+                  </p>
+                )}
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  Check bank · {section.checkBank?.length ?? 0} questions
+                  (practice)
+                </p>
+              </li>
+            ))}
+          </ol>
+        </div>
+      );
+    }
+
     const flashcards = body.flashcards ?? [];
     return (
       <div className="flex flex-col gap-4">

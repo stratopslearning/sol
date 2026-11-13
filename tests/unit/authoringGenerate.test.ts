@@ -75,8 +75,34 @@ function discussionItem() {
   };
 }
 
+function sixChecks() {
+  return Array.from({ length: 6 }, (_, i) => ({
+    question: `Practice question ${i + 1}?`,
+    options: ['A', 'B', 'C', 'D'],
+    correctAnswer: 'A',
+  }));
+}
+
+function chapterLesson() {
+  return {
+    type: 'LESSON' as const,
+    title: 'Interactive chapter',
+    chapter: {
+      kind: 'interactive_chapter' as const,
+      learningObjectives: ['Explain core idea', 'Apply the model'],
+      sections: [1, 2, 3, 4].map((n) => ({
+        id: `s${n}`,
+        title: `Section ${n}`,
+        markdown: `Reading for section ${n}.`,
+        checkBank: sixChecks(),
+      })),
+    },
+  };
+}
+
 function validModuleItems() {
   return [
+    chapterLesson(),
     {
       type: 'QUIZ' as const,
       title: 'Check-in',
@@ -88,7 +114,7 @@ function validModuleItems() {
 }
 
 describe('parseGeneratedOutline', () => {
-  it('accepts quiz discussion and fill-blanks without lessons', () => {
+  it('accepts lesson chapter then quiz discussion and fill-blanks', () => {
     const data = parseGeneratedOutline({
       title: 'Week 1–2',
       modules: [
@@ -100,16 +126,20 @@ describe('parseGeneratedOutline', () => {
       ],
     });
     expect(data.title).toBe('Week 1–2');
-    expect(data.modules[0]?.items).toHaveLength(3);
+    expect(data.modules[0]?.items).toHaveLength(4);
     expect(data.modules[0]?.items.map((i) => i.type)).toEqual([
+      'LESSON',
       'QUIZ',
       'DISCUSSION',
       'INTERACTIVE',
     ]);
-    expect(data.modules[0]?.items[0]?.questions).toHaveLength(5);
+    expect(data.modules[0]?.items[1]?.questions).toHaveLength(5);
+    expect(data.modules[0]?.items[0]?.chapter?.kind).toBe(
+      'interactive_chapter',
+    );
   });
 
-  it('rejects LESSON items in generated outlines', () => {
+  it('rejects modules that do not start with a LESSON chapter', () => {
     expect(() =>
       parseGeneratedOutline({
         title: 'Bad',
@@ -117,16 +147,6 @@ describe('parseGeneratedOutline', () => {
           {
             title: 'M',
             items: [
-              {
-                type: 'LESSON',
-                title: 'L',
-                markdown: 'Body',
-                flashcards: [
-                  { front: 'a', back: 'b' },
-                  { front: 'c', back: 'd' },
-                  { front: 'e', back: 'f' },
-                ],
-              },
               {
                 type: 'QUIZ',
                 title: 'Q',
@@ -148,7 +168,7 @@ describe('parseGeneratedOutline', () => {
         modules: [
           {
             title: 'M',
-            items: [discussionItem(), fillBlanksInteractive()],
+            items: [chapterLesson(), discussionItem(), fillBlanksInteractive()],
           },
         ],
       }),
@@ -163,6 +183,7 @@ describe('parseGeneratedOutline', () => {
           {
             title: 'M',
             items: [
+              chapterLesson(),
               {
                 type: 'QUIZ',
                 title: 'Q',
@@ -192,6 +213,7 @@ describe('parseGeneratedOutline', () => {
           {
             title: 'M',
             items: [
+              chapterLesson(),
               {
                 type: 'QUIZ',
                 title: 'Q',
@@ -214,6 +236,7 @@ describe('parseGeneratedOutline', () => {
           {
             title: 'M',
             items: [
+              chapterLesson(),
               {
                 type: 'QUIZ',
                 title: 'Q',
@@ -239,6 +262,7 @@ describe('parseGeneratedOutline', () => {
           {
             title: 'M',
             items: [
+              chapterLesson(),
               { type: 'QUIZ', title: 'Q', questions },
               discussionItem(),
               fillBlanksInteractive(),
@@ -257,6 +281,7 @@ describe('parseGeneratedOutline', () => {
           {
             title: 'M',
             items: [
+              chapterLesson(),
               {
                 type: 'QUIZ',
                 title: 'Q',
@@ -287,6 +312,7 @@ describe('parseGeneratedOutline', () => {
           {
             title: 'M',
             items: [
+              chapterLesson(),
               {
                 type: 'QUIZ',
                 title: 'Q',
@@ -322,6 +348,7 @@ describe('parseGeneratedOutline', () => {
         {
           name: 'Foundations',
           activities: [
+            chapterLesson(),
             {
               type: 'quiz',
               title: 'Check-in',
@@ -348,8 +375,9 @@ describe('parseGeneratedOutline', () => {
     });
     expect(data.title).toBe('From aliases');
     expect(data.modules[0]?.title).toBe('Foundations');
-    expect(data.modules[0]?.items[0]?.type).toBe('QUIZ');
-    expect(data.modules[0]?.items[2]?.interactiveKind).toBe('FILL_BLANKS');
+    expect(data.modules[0]?.items[0]?.type).toBe('LESSON');
+    expect(data.modules[0]?.items[1]?.type).toBe('QUIZ');
+    expect(data.modules[0]?.items[3]?.interactiveKind).toBe('FILL_BLANKS');
   });
 
   it('normalizeGeneratedOutlineRaw fills missing titles', () => {
@@ -381,6 +409,7 @@ describe('parseGeneratedOutline', () => {
           {
             title: 'Foundations',
             items: [
+              chapterLesson(),
               {
                 type: 'QUIZ',
                 title: 'Check-in',
@@ -410,6 +439,7 @@ describe('parseGeneratedOutline', () => {
         {
           title: 'Foundations',
           items: [
+            chapterLesson(),
             {
               type: 'QUIZ',
               title: 'Check-in',
@@ -432,7 +462,7 @@ describe('parseGeneratedOutline', () => {
         },
       ],
     });
-    expect(data.modules[0]?.items[2]?.interactiveBody).toMatchObject({
+    expect(data.modules[0]?.items[3]?.interactiveBody).toMatchObject({
       text: '{{mitochondria}} make {{ATP}}.',
     });
   });

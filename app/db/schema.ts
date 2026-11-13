@@ -318,6 +318,15 @@ export const courses = pgTable(
     aiPolicy: jsonb('ai_policy').$type<{
       mode: 'hints' | 'guided' | 'full_after_submit';
     }>(),
+    /**
+     * Canvas-like course tool order/visibility:
+     * `{ tools: [{ id, hidden? }] }`.
+     */
+    lmsNavigation: jsonb('lms_navigation').$type<{
+      tools: Array<{ id: string; hidden?: boolean }>;
+    }>(),
+    /** Rich syllabus body (markdown/HTML). */
+    syllabusMarkdown: text('syllabus_markdown'),
     status: text('status', { enum: ['ACTIVE', 'INACTIVE'] })
       .default('ACTIVE')
       .notNull(),
@@ -1775,6 +1784,8 @@ export const lessons = pgTable(
     }),
     title: text('title').notNull(),
     markdown: text('markdown').notNull(),
+    /** Shah-style interactive chapter payload (null = classic markdown lesson). */
+    chapter: jsonb('chapter').$type<InteractiveChapterBody | null>(),
     isActive: boolean('is_active').default(false).notNull(),
     sourceOutlineItemId: uuid('source_outline_item_id'),
     deletedAt: ts('deleted_at'),
@@ -1784,6 +1795,41 @@ export const lessons = pgTable(
   (table) => ({
     courseIdx: index('lessons_course_idx').on(table.courseId),
     professorIdx: index('lessons_professor_idx').on(table.professorId),
+  }),
+);
+
+/** Practice section-check progress for interactive chapters (not gradebook). */
+export const interactiveChapterProgress = pgTable(
+  'interactive_chapter_progress',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    lessonId: uuid('lesson_id')
+      .references(() => lessons.id, { onDelete: 'cascade' })
+      .notNull(),
+    studentId: uuid('student_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    tenantId: uuid('tenant_id').references(() => workspaces.id, {
+      onDelete: 'restrict',
+    }),
+    /** Section id inside InteractiveChapterBody.sections[].id */
+    sectionId: text('section_id').notNull(),
+    attempts: integer('attempts').notNull().default(0),
+    passed: boolean('passed').notNull().default(false),
+    lastSubmittedAt: ts('last_submitted_at'),
+    createdAt: ts('created_at').defaultNow().notNull(),
+    updatedAt: ts('updated_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    lessonStudentSectionUnique: uniqueIndex(
+      'interactive_chapter_progress_unique',
+    ).on(table.lessonId, table.studentId, table.sectionId),
+    studentIdx: index('interactive_chapter_progress_student_idx').on(
+      table.studentId,
+    ),
+    lessonIdx: index('interactive_chapter_progress_lesson_idx').on(
+      table.lessonId,
+    ),
   }),
 );
 
@@ -2131,10 +2177,38 @@ export type OutlineSourceCitation = {
   quote?: string;
 };
 
+/** Shah-style interactive chapter (LESSON body / lessons.chapter). */
+export type InteractiveChapterCheckQuestion = {
+  question: string;
+  options: string[];
+  correctAnswer: string;
+  explanation?: string;
+};
+
+export type InteractiveChapterSection = {
+  id: string;
+  title: string;
+  markdown: string;
+  subsections?: Array<{ id: string; title: string }>;
+  checkBank: InteractiveChapterCheckQuestion[];
+};
+
+export type InteractiveChapterBody = {
+  kind: 'interactive_chapter';
+  subtitle?: string;
+  learningObjectives: string[];
+  sections: InteractiveChapterSection[];
+  wrapUpMarkdown?: string;
+  /** Ungraded synthesis prompt shown in the chapter player. */
+  capstoneMarkdown?: string;
+};
+
 export type OutlineItemBody = {
   markdown?: string;
   description?: string;
   flashcards?: Array<{ front: string; back: string }>;
+  /** Shah-style interactive chapter for LESSON items. */
+  chapter?: InteractiveChapterBody;
   questions?: Array<{
     type: 'MULTIPLE_CHOICE' | 'TRUE_FALSE' | 'SHORT_ANSWER';
     question: string;
@@ -3180,3 +3254,413 @@ export const courseActivitiesRelations = relations(
     }),
   }),
 );
+
+// ---------------------------------------------------------------------------
+// Canvas-like LMS: modules, pages, announcements, peer discussions,
+// assignment groups, outcomes, course rubrics
+// ---------------------------------------------------------------------------
+
+export type ModuleCompletionRequirement = {
+  type: 'view' | 'submit' | 'score_at_least';
+  /** Required when type is score_at_least (0–100). */
+  minPercent?: number;
+};
+
+export const courseModules = pgTable(
+  'course_modules',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    courseId: uuid('course_id')
+      .references(() => courses.id, { onDelete: 'cascade' })
+      .notNull(),
+    tenantId: uuid('tenant_id')
+      .references(() => workspaces.id, { onDelete: 'restrict' })
+      .notNull(),
+    title: text('title').notNull(),
+    position: integer('position').notNull().default(0),
+    published: boolean('published').notNull().default(false),
+    unlockAt: ts('unlock_at'),
+    /** UUID[] of prerequisite course_modules.id */
+    prerequisiteModuleIds: jsonb('prerequisite_module_ids')
+      .$type<string[]>()
+      .notNull()
+      .default([]),
+    deletedAt: ts('deleted_at'),
+    createdAt: ts('created_at').defaultNow().notNull(),
+    updatedAt: ts('updated_at').defaultNow().notNull(),
+  },
+  (t) => ({
+    courseIdx: index('course_modules_course_idx').on(t.courseId),
+    tenantIdx: index('course_modules_tenant_idx').on(t.tenantId),
+  }),
+);
+
+export const moduleItems = pgTable(
+  'module_items',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    moduleId: uuid('module_id')
+      .references(() => courseModules.id, { onDelete: 'cascade' })
+      .notNull(),
+    tenantId: uuid('tenant_id')
+      .references(() => workspaces.id, { onDelete: 'restrict' })
+      .notNull(),
+    position: integer('position').notNull().default(0),
+    title: text('title').notNull(),
+    /** Text header row (no content link). */
+    isHeader: boolean('is_header').notNull().default(false),
+    type: text('type', {
+      enum: [
+        'HEADER',
+        'LESSON',
+        'QUIZ',
+        'DISCUSSION',
+        'TUTOR',
+        'INTERACTIVE',
+        'PAGE',
+        'FILE',
+        'EXTERNAL_URL',
+        'ANNOUNCEMENT',
+      ],
+    }).notNull(),
+    lessonId: uuid('lesson_id').references(() => lessons.id, {
+      onDelete: 'set null',
+    }),
+    quizId: uuid('quiz_id').references(() => quizzes.id, {
+      onDelete: 'set null',
+    }),
+    chatbotId: uuid('chatbot_id').references(() => chatbots.id, {
+      onDelete: 'set null',
+    }),
+    interactiveId: uuid('interactive_id').references(() => interactives.id, {
+      onDelete: 'set null',
+    }),
+    pageId: uuid('page_id'),
+    peerDiscussionId: uuid('peer_discussion_id'),
+    materialId: uuid('material_id'),
+    externalUrl: text('external_url'),
+    completionRequirement: jsonb(
+      'completion_requirement',
+    ).$type<ModuleCompletionRequirement | null>(),
+    published: boolean('published').notNull().default(true),
+    deletedAt: ts('deleted_at'),
+    createdAt: ts('created_at').defaultNow().notNull(),
+    updatedAt: ts('updated_at').defaultNow().notNull(),
+  },
+  (t) => ({
+    moduleIdx: index('module_items_module_idx').on(t.moduleId),
+    tenantIdx: index('module_items_tenant_idx').on(t.tenantId),
+  }),
+);
+
+export const moduleSections = pgTable(
+  'module_sections',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    moduleId: uuid('module_id')
+      .references(() => courseModules.id, { onDelete: 'cascade' })
+      .notNull(),
+    sectionId: uuid('section_id')
+      .references(() => sections.id, { onDelete: 'cascade' })
+      .notNull(),
+    tenantId: uuid('tenant_id')
+      .references(() => workspaces.id, { onDelete: 'restrict' })
+      .notNull(),
+    assignedAt: ts('assigned_at').defaultNow().notNull(),
+  },
+  (t) => ({
+    moduleSectionUnique: uniqueIndex('module_sections_unique').on(
+      t.moduleId,
+      t.sectionId,
+    ),
+    sectionIdx: index('module_sections_section_idx').on(t.sectionId),
+  }),
+);
+
+export const moduleItemProgress = pgTable(
+  'module_item_progress',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    moduleItemId: uuid('module_item_id')
+      .references(() => moduleItems.id, { onDelete: 'cascade' })
+      .notNull(),
+    studentId: uuid('student_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    tenantId: uuid('tenant_id')
+      .references(() => workspaces.id, { onDelete: 'restrict' })
+      .notNull(),
+    status: text('status', {
+      enum: ['STARTED', 'COMPLETED'],
+    })
+      .notNull()
+      .default('STARTED'),
+    completedAt: ts('completed_at'),
+    updatedAt: ts('updated_at').defaultNow().notNull(),
+    createdAt: ts('created_at').defaultNow().notNull(),
+  },
+  (t) => ({
+    itemStudentUnique: uniqueIndex('module_item_progress_unique').on(
+      t.moduleItemId,
+      t.studentId,
+    ),
+    studentIdx: index('module_item_progress_student_idx').on(t.studentId),
+  }),
+);
+
+export const coursePages = pgTable(
+  'course_pages',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    courseId: uuid('course_id')
+      .references(() => courses.id, { onDelete: 'cascade' })
+      .notNull(),
+    tenantId: uuid('tenant_id')
+      .references(() => workspaces.id, { onDelete: 'restrict' })
+      .notNull(),
+    title: text('title').notNull(),
+    slug: text('slug').notNull(),
+    markdown: text('markdown').notNull().default(''),
+    published: boolean('published').notNull().default(false),
+    position: integer('position').notNull().default(0),
+    deletedAt: ts('deleted_at'),
+    createdAt: ts('created_at').defaultNow().notNull(),
+    updatedAt: ts('updated_at').defaultNow().notNull(),
+  },
+  (t) => ({
+    courseSlugUnique: uniqueIndex('course_pages_course_slug_uidx').on(
+      t.courseId,
+      t.slug,
+    ),
+    courseIdx: index('course_pages_course_idx').on(t.courseId),
+  }),
+);
+
+export const courseAnnouncements = pgTable(
+  'course_announcements',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    courseId: uuid('course_id')
+      .references(() => courses.id, { onDelete: 'cascade' })
+      .notNull(),
+    tenantId: uuid('tenant_id')
+      .references(() => workspaces.id, { onDelete: 'restrict' })
+      .notNull(),
+    authorUserId: uuid('author_user_id')
+      .references(() => users.id, { onDelete: 'restrict' })
+      .notNull(),
+    title: text('title').notNull(),
+    bodyMarkdown: text('body_markdown').notNull().default(''),
+    publishedAt: ts('published_at'),
+    deletedAt: ts('deleted_at'),
+    createdAt: ts('created_at').defaultNow().notNull(),
+    updatedAt: ts('updated_at').defaultNow().notNull(),
+  },
+  (t) => ({
+    courseIdx: index('course_announcements_course_idx').on(t.courseId),
+  }),
+);
+
+/** Peer discussion boards (distinct from AI tutor chatbots). */
+export const peerDiscussions = pgTable(
+  'peer_discussions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    courseId: uuid('course_id')
+      .references(() => courses.id, { onDelete: 'cascade' })
+      .notNull(),
+    tenantId: uuid('tenant_id')
+      .references(() => workspaces.id, { onDelete: 'restrict' })
+      .notNull(),
+    createdByUserId: uuid('created_by_user_id')
+      .references(() => users.id, { onDelete: 'restrict' })
+      .notNull(),
+    title: text('title').notNull(),
+    promptMarkdown: text('prompt_markdown').notNull().default(''),
+    published: boolean('published').notNull().default(false),
+    assignmentGroupId: uuid('assignment_group_id'),
+    deletedAt: ts('deleted_at'),
+    createdAt: ts('created_at').defaultNow().notNull(),
+    updatedAt: ts('updated_at').defaultNow().notNull(),
+  },
+  (t) => ({
+    courseIdx: index('peer_discussions_course_idx').on(t.courseId),
+  }),
+);
+
+export const peerDiscussionPosts = pgTable(
+  'peer_discussion_posts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    discussionId: uuid('discussion_id')
+      .references(() => peerDiscussions.id, { onDelete: 'cascade' })
+      .notNull(),
+    tenantId: uuid('tenant_id')
+      .references(() => workspaces.id, { onDelete: 'restrict' })
+      .notNull(),
+    authorUserId: uuid('author_user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    parentPostId: uuid('parent_post_id'),
+    bodyMarkdown: text('body_markdown').notNull(),
+    deletedAt: ts('deleted_at'),
+    createdAt: ts('created_at').defaultNow().notNull(),
+    updatedAt: ts('updated_at').defaultNow().notNull(),
+  },
+  (t) => ({
+    discussionIdx: index('peer_discussion_posts_discussion_idx').on(
+      t.discussionId,
+    ),
+  }),
+);
+
+export const assignmentGroups = pgTable(
+  'assignment_groups',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    courseId: uuid('course_id')
+      .references(() => courses.id, { onDelete: 'cascade' })
+      .notNull(),
+    tenantId: uuid('tenant_id')
+      .references(() => workspaces.id, { onDelete: 'restrict' })
+      .notNull(),
+    name: text('name').notNull(),
+    /** Weight toward final grade (0–100). Weights should sum to 100. */
+    weight: integer('weight').notNull().default(0),
+    dropLowest: integer('drop_lowest').notNull().default(0),
+    position: integer('position').notNull().default(0),
+    deletedAt: ts('deleted_at'),
+    createdAt: ts('created_at').defaultNow().notNull(),
+    updatedAt: ts('updated_at').defaultNow().notNull(),
+  },
+  (t) => ({
+    courseIdx: index('assignment_groups_course_idx').on(t.courseId),
+  }),
+);
+
+/** Links a graded quiz (or later other activities) to an assignment group. */
+export const assignmentGroupMembers = pgTable(
+  'assignment_group_members',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    groupId: uuid('group_id')
+      .references(() => assignmentGroups.id, { onDelete: 'cascade' })
+      .notNull(),
+    tenantId: uuid('tenant_id')
+      .references(() => workspaces.id, { onDelete: 'restrict' })
+      .notNull(),
+    quizId: uuid('quiz_id').references(() => quizzes.id, {
+      onDelete: 'cascade',
+    }),
+    peerDiscussionId: uuid('peer_discussion_id').references(
+      () => peerDiscussions.id,
+      { onDelete: 'cascade' },
+    ),
+    createdAt: ts('created_at').defaultNow().notNull(),
+  },
+  (t) => ({
+    groupIdx: index('assignment_group_members_group_idx').on(t.groupId),
+    quizUnique: uniqueIndex('assignment_group_members_quiz_uidx').on(t.quizId),
+  }),
+);
+
+export const learningOutcomes = pgTable(
+  'learning_outcomes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    courseId: uuid('course_id')
+      .references(() => courses.id, { onDelete: 'cascade' })
+      .notNull(),
+    tenantId: uuid('tenant_id')
+      .references(() => workspaces.id, { onDelete: 'restrict' })
+      .notNull(),
+    title: text('title').notNull(),
+    description: text('description'),
+    /** Mastery threshold 0–100. */
+    masteryPercent: integer('mastery_percent').notNull().default(70),
+    position: integer('position').notNull().default(0),
+    deletedAt: ts('deleted_at'),
+    createdAt: ts('created_at').defaultNow().notNull(),
+    updatedAt: ts('updated_at').defaultNow().notNull(),
+  },
+  (t) => ({
+    courseIdx: index('learning_outcomes_course_idx').on(t.courseId),
+  }),
+);
+
+export const outcomeLinks = pgTable(
+  'outcome_links',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    outcomeId: uuid('outcome_id')
+      .references(() => learningOutcomes.id, { onDelete: 'cascade' })
+      .notNull(),
+    tenantId: uuid('tenant_id')
+      .references(() => workspaces.id, { onDelete: 'restrict' })
+      .notNull(),
+    questionId: uuid('question_id').references(() => questions.id, {
+      onDelete: 'cascade',
+    }),
+    quizId: uuid('quiz_id').references(() => quizzes.id, {
+      onDelete: 'cascade',
+    }),
+    conceptTag: text('concept_tag'),
+    rubricCriterionId: text('rubric_criterion_id'),
+    createdAt: ts('created_at').defaultNow().notNull(),
+  },
+  (t) => ({
+    outcomeIdx: index('outcome_links_outcome_idx').on(t.outcomeId),
+  }),
+);
+
+/** Reusable course-level rubrics (beyond per-question SA JSON). */
+export const courseRubrics = pgTable(
+  'course_rubrics',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    courseId: uuid('course_id')
+      .references(() => courses.id, { onDelete: 'cascade' })
+      .notNull(),
+    tenantId: uuid('tenant_id')
+      .references(() => workspaces.id, { onDelete: 'restrict' })
+      .notNull(),
+    title: text('title').notNull(),
+    criteria: jsonb('criteria')
+      .$type<Array<{ id: string; description: string; weight: number; points?: number }>>()
+      .notNull()
+      .default([]),
+    deletedAt: ts('deleted_at'),
+    createdAt: ts('created_at').defaultNow().notNull(),
+    updatedAt: ts('updated_at').defaultNow().notNull(),
+  },
+  (t) => ({
+    courseIdx: index('course_rubrics_course_idx').on(t.courseId),
+  }),
+);
+
+export const courseModulesRelations = relations(courseModules, ({ one, many }) => ({
+  course: one(courses, {
+    fields: [courseModules.courseId],
+    references: [courses.id],
+  }),
+  items: many(moduleItems),
+  sections: many(moduleSections),
+}));
+
+export const moduleItemsRelations = relations(moduleItems, ({ one }) => ({
+  module: one(courseModules, {
+    fields: [moduleItems.moduleId],
+    references: [courseModules.id],
+  }),
+}));
+
+export const moduleSectionsRelations = relations(moduleSections, ({ one }) => ({
+  module: one(courseModules, {
+    fields: [moduleSections.moduleId],
+    references: [courseModules.id],
+  }),
+  section: one(sections, {
+    fields: [moduleSections.sectionId],
+    references: [sections.id],
+  }),
+}));

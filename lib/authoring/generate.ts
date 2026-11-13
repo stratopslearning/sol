@@ -165,6 +165,37 @@ const interactiveBodySchema = z.preprocess((val) => {
   };
 }, interactiveBodyObjectSchema);
 
+const chapterCheckSchema = z.object({
+  question: z.string().min(1),
+  options: z.array(z.string().min(1)).min(2),
+  correctAnswer: z.string().min(1),
+  explanation: z.string().optional(),
+});
+
+const chapterSectionSchema = z.object({
+  id: z.string().min(1).max(64),
+  title: z.string().min(1).max(200),
+  markdown: z.string().min(1),
+  subsections: z
+    .array(
+      z.object({
+        id: z.string().min(1).max(64),
+        title: z.string().min(1).max(200),
+      }),
+    )
+    .optional(),
+  checkBank: z.array(chapterCheckSchema).min(4),
+});
+
+const interactiveChapterSchema = z.object({
+  kind: z.literal('interactive_chapter'),
+  subtitle: z.string().optional(),
+  learningObjectives: z.array(z.string().min(1)).min(1),
+  sections: z.array(chapterSectionSchema).min(1),
+  wrapUpMarkdown: z.string().optional(),
+  capstoneMarkdown: z.string().optional(),
+});
+
 const generatedItemSchema = z
   .object({
     type: z.enum(['LESSON', 'QUIZ', 'DISCUSSION', 'INTERACTIVE']),
@@ -172,6 +203,7 @@ const generatedItemSchema = z
     markdown: z.string().optional(),
     description: z.string().optional(),
     flashcards: z.array(flashcardSchema).optional(),
+    chapter: interactiveChapterSchema.optional(),
     questions: z.array(questionSchema).optional(),
     sourceMaterialIds: z.array(z.string()).optional(),
     sourceCitations: z.array(sourceCitationSchema).optional(),
@@ -561,15 +593,16 @@ function assertActivityMix(data: GeneratedOutlinePayload): void {
   let hasFillBlanks = false;
 
   for (const mod of data.modules) {
-    const types = new Set(mod.items.map((i) => i.type));
-    if (types.has('LESSON')) {
+    const first = mod.items[0];
+    if (!first || first.type !== 'LESSON') {
       throw ApiError.badRequest(
-        'Do not include LESSON items — use QUIZ, DISCUSSION, and INTERACTIVE only',
+        `Module “${mod.title}” must start with an interactive LESSON chapter`,
       );
     }
+    const types = new Set(mod.items.map((i) => i.type));
     if (!types.has('QUIZ')) {
       throw ApiError.badRequest(
-        `Module “${mod.title}” must include at least one QUIZ`,
+        `Module “${mod.title}” must include at least one QUIZ after the lesson`,
       );
     }
     if (types.has('DISCUSSION')) hasDiscussion = true;
@@ -675,9 +708,40 @@ type GeneratedItem = GeneratedOutlinePayload['modules'][number]['items'][number]
 /** Per-item body rules shared by full outline generation and faithful build. */
 export function assertGeneratedItemContent(item: GeneratedItem): void {
   if (item.type === 'LESSON') {
-    throw ApiError.badRequest(
-      'Do not include LESSON items — use QUIZ, DISCUSSION, and INTERACTIVE only',
-    );
+    if (!item.chapter || item.chapter.kind !== 'interactive_chapter') {
+      throw ApiError.badRequest(
+        'LESSON items require an interactive_chapter body',
+      );
+    }
+    if (item.chapter.sections.length < 4) {
+      throw ApiError.badRequest(
+        'Interactive chapters need at least 4 sections',
+      );
+    }
+    if (item.chapter.learningObjectives.length < 2) {
+      throw ApiError.badRequest(
+        'Interactive chapters need at least 2 learning objectives',
+      );
+    }
+    for (const section of item.chapter.sections) {
+      if (!section.markdown?.trim()) {
+        throw ApiError.badRequest(
+          `Chapter section “${section.title}” needs reading content`,
+        );
+      }
+      if (section.checkBank.length < 6) {
+        throw ApiError.badRequest(
+          `Chapter section “${section.title}” needs at least 6 check questions`,
+        );
+      }
+      for (const q of section.checkBank) {
+        if (!q.options.includes(q.correctAnswer)) {
+          throw ApiError.badRequest(
+            `Chapter section “${section.title}”: correctAnswer must match an option`,
+          );
+        }
+      }
+    }
   }
   if (item.type === 'QUIZ') {
     if (!item.questions || item.questions.length < 5) {
@@ -801,6 +865,7 @@ export function toPersistModules(data: GeneratedOutlinePayload) {
         markdown: item.markdown,
         description: item.description,
         flashcards: item.flashcards,
+        chapter: item.chapter,
         questions: item.questions,
         sourceCitations: item.sourceCitations,
         unsupportedFacts: item.unsupportedFacts,

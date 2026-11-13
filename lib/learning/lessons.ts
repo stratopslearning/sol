@@ -24,6 +24,7 @@ export type CreateLessonInput = {
   courseId: string;
   title: string;
   markdown: string;
+  chapter?: import('@/app/db/schema').InteractiveChapterBody | null;
   sectionIds: string[];
   flashcards?: Array<{ front: string; back: string }>;
   sourceOutlineItemId?: string | null;
@@ -38,7 +39,14 @@ export async function createLessonFromAuthoring(
     throw ApiError.forbidden('Teaching access required');
   }
   const markdown = input.markdown.trim();
-  if (!markdown) throw ApiError.badRequest('Lesson markdown is required');
+  const hasChapter =
+    input.chapter &&
+    input.chapter.kind === 'interactive_chapter' &&
+    Array.isArray(input.chapter.sections) &&
+    input.chapter.sections.length > 0;
+  if (!markdown && !hasChapter) {
+    throw ApiError.badRequest('Lesson markdown or chapter content is required');
+  }
   if (input.sectionIds.length === 0) {
     throw ApiError.badRequest('Select at least one section');
   }
@@ -62,7 +70,8 @@ export async function createLessonFromAuthoring(
     courseId: input.courseId,
     professorId: user.id,
     title: input.title.trim(),
-    markdown,
+    markdown: markdown || input.title.trim(),
+    chapter: hasChapter ? input.chapter : null,
     isActive: input.isActive ?? false,
     sourceOutlineItemId: input.sourceOutlineItemId ?? null,
     flashcards: (input.flashcards ?? []).filter(

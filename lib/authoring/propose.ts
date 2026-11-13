@@ -47,11 +47,13 @@ import type { UserData } from '@/lib/getOrCreateUser';
 type AuthUser = Pick<UserData, 'id' | 'clerkId'> & { platformStaff?: boolean | null };
 
 const skeletonItemSchema = z.object({
-  type: z.enum(['QUIZ', 'DISCUSSION', 'INTERACTIVE']),
+  type: z.enum(['LESSON', 'QUIZ', 'DISCUSSION', 'INTERACTIVE']),
   title: z.string().min(1).max(200),
   interactiveKind: z
     .enum(['FILL_BLANKS', 'DRAG_WORDS', 'IMAGE_HOTSPOTS', 'ACCORDION'])
     .optional(),
+  /** Optional section titles for LESSON interactive chapters. */
+  sectionTitles: z.array(z.string().min(1).max(200)).max(12).optional(),
 });
 
 const skeletonSchema = z.object({
@@ -74,10 +76,16 @@ function assertSkeletonMix(
   let hasDiscussion = false;
   let hasFill = false;
   for (const mod of data.modules) {
+    const first = mod.items[0];
+    if (!first || first.type !== 'LESSON') {
+      throw ApiError.badRequest(
+        `Module “${mod.title}” must start with an interactive LESSON chapter`,
+      );
+    }
     const types = new Set(mod.items.map((i) => i.type));
     if (!types.has('QUIZ')) {
       throw ApiError.badRequest(
-        `Module “${mod.title}” must include at least one QUIZ`,
+        `Module “${mod.title}” must include at least one QUIZ after the lesson`,
       );
     }
     if (types.has('DISCUSSION')) hasDiscussion = true;
@@ -214,11 +222,25 @@ Return a corrected FULL skeleton JSON. Every module needs >=1 QUIZ; the outline 
     title: mod.title,
     summary: mod.summary ?? null,
     items: mod.items.map((item) => ({
-      type: item.type as 'QUIZ' | 'DISCUSSION' | 'INTERACTIVE',
+      type: item.type as 'LESSON' | 'QUIZ' | 'DISCUSSION' | 'INTERACTIVE',
       title: item.title,
       body: {
         ...(item.type === 'INTERACTIVE' && item.interactiveKind
           ? { interactiveKind: item.interactiveKind }
+          : {}),
+        ...(item.type === 'LESSON' && item.sectionTitles?.length
+          ? {
+              chapter: {
+                kind: 'interactive_chapter' as const,
+                learningObjectives: [],
+                sections: item.sectionTitles.map((title, i) => ({
+                  id: `s${i + 1}`,
+                  title,
+                  markdown: '',
+                  checkBank: [],
+                })),
+              },
+            }
           : {}),
         description: 'Awaiting approval — bodies not built yet.',
       } satisfies OutlineItemBody,
@@ -334,8 +356,9 @@ export async function approveAndBuildOutline(
       items: mod.items
         .filter(
           (item): item is typeof item & {
-            type: 'QUIZ' | 'DISCUSSION' | 'INTERACTIVE';
+            type: 'LESSON' | 'QUIZ' | 'DISCUSSION' | 'INTERACTIVE';
           } =>
+            item.type === 'LESSON' ||
             item.type === 'QUIZ' ||
             item.type === 'DISCUSSION' ||
             item.type === 'INTERACTIVE',
@@ -350,7 +373,7 @@ export async function approveAndBuildOutline(
     .filter((mod) => mod.items.length > 0);
 
   if (moduleBatches.length === 0) {
-    throw ApiError.badRequest('This outline has no assignments to build');
+    throw ApiError.badRequest('This outline has no items to build');
   }
 
   async function buildModule(
@@ -554,6 +577,29 @@ Return a corrected JSON object for these same itemIds. Every quiz needs 5–8 qu
   }
 
   const built = await getOutlineDetail(user, outlineId);
+
+  // Materialize Canvas-like Modules as soon as bodies exist (draft placeholders
+  // + sequential prereqs + weekly unlocks from quiz windows).
+  try {
+    const { rebuildSmartModulesFromOutline } = await import(
+      '@/lib/lms/smartModulesFromOutline'
+    );
+    const { listTeachableSectionIdsForCourse } = await import(
+      '@/lib/authoring/access'
+    );
+    const sectionIds = await listTeachableSectionIdsForCourse(
+      user,
+      outlineRow.courseId,
+    );
+    await rebuildSmartModulesFromOutline({
+      outlineId,
+      sectionIds,
+      autoPublishModulesWithContent: false,
+    });
+  } catch (err) {
+    console.warn('[approveAndBuildOutline] smart modules skipped', err);
+  }
+
   void logAiSpan('authoring.build', 'authoring', {
     outlineId: hashId(outlineId),
     patchCount: scheduledPatches.length,

@@ -12,8 +12,9 @@ Authoring policy for this course:
 {{authoring_policy}}
 
 Hard product rules:
-- Allowed item types only: QUIZ, DISCUSSION, INTERACTIVE. Never create LESSON items or flashcards.
-- Every module must include at least one QUIZ.
+- Allowed item types: LESSON (interactive chapter), QUIZ, DISCUSSION, INTERACTIVE. Never create flashcards.
+- Every module starts with exactly one LESSON (Shah-style interactive chapter), then graded work.
+- Every module must include at least one QUIZ after the lesson.
 - The whole outline must include at least one DISCUSSION and at least one FILL_BLANKS interactive.
 - Stay clear, warm, and academically appropriate.
 
@@ -41,15 +42,17 @@ Return JSON:
     {
       "title": "string",
       "summary": "optional string",
-      "items": [{ "type": "QUIZ|DISCUSSION|INTERACTIVE", "title": "string", "interactiveKind": "FILL_BLANKS|DRAG_WORDS|ACCORDION optional for INTERACTIVE" }]
+      "items": [{ "type": "LESSON|QUIZ|DISCUSSION|INTERACTIVE", "title": "string", "interactiveKind": "FILL_BLANKS|DRAG_WORDS|ACCORDION optional for INTERACTIVE", "sectionTitles": ["optional section titles for LESSON only"] }]
     }
   ]
 }
 
 Hard rules:
-1. 2–5 modules. No LESSON items.
-2. Every module has >=1 QUIZ. Outline has >=1 DISCUSSION and >=1 FILL_BLANKS interactive (set interactiveKind FILL_BLANKS on that item).
-3. Items are titles/types only — omit questions, systemPrompt, instructions, interactiveBody.`;
+1. 2–5 modules in teaching order (week/topic sequence).
+2. Each module's FIRST item is a LESSON (interactive chapter). Then >=1 QUIZ, plus optional DISCUSSION/INTERACTIVE.
+3. Outline has >=1 DISCUSSION and >=1 FILL_BLANKS interactive (set interactiveKind FILL_BLANKS on that item).
+4. Items are titles/types only — omit full questions, systemPrompt, instructions, interactiveBody, and chapter bodies. For LESSON you may list sectionTitles (4–10 short titles).
+5. Module titles should read as sequential units (e.g. "Week 1 · …"). Summaries should state the learning goal for that unit — SOL turns modules into a locked sequence (finish prior module first) with weekly unlock pacing.`;
 
 export function buildSkeletonSystemPrompt(ctx: CoursePromptContext): string {
   return `${buildAuthoringSharedSystem(ctx)}\n\n${SKELETON_BODY}`;
@@ -63,10 +66,10 @@ export function buildOutlineSystemPrompt(ctx: CoursePromptContext): string {
 export const AUTHORING_OUTLINE_FIXUP_PROMPT = `Your previous JSON failed validation. Fix it and return a corrected FULL skeleton JSON (not a patch).
 
 Requirements that must all hold:
-- Do NOT include LESSON items or flashcards
-- Every module has >=1 QUIZ
+- Do NOT include flashcards
+- Every module starts with a LESSON, then >=1 QUIZ
 - Outline has >=1 DISCUSSION and >=1 FILL_BLANKS interactive
-- Every item has type + title only (no full questions/bodies)
+- Every item has type + title only (no full questions/bodies); LESSON may include sectionTitles
 - INTERACTIVE may set interactiveKind FILL_BLANKS|DRAG_WORDS|ACCORDION
 Keep concept-first content grounded in the same materials.`;
 
@@ -78,6 +81,7 @@ Return JSON:
     {
       "itemId": "exact uuid from the request",
       "title": "optional retitle",
+      "chapter": { /* LESSON interactive chapter — see rules */ },
       "questions": [/* QUIZ only */],
       "sourceMaterialIds": ["uuid from materials context when cited"],
       "sourceCitations": [{ "materialId": "uuid", "chunkId": "optional", "quote": "short excerpt" }],
@@ -91,14 +95,30 @@ Return JSON:
       "passingScore": 70,
       "timeLimit": 30,
       "startDate": "ISO-8601 datetime from schedule context",
-      "endDate": "ISO-8601 datetime from schedule context",
-      "questions": [{ "points": 1, "...": "..." }]
+      "endDate": "ISO-8601 datetime from schedule context"
     }
   ]
 }
 
 Hard rules:
 - Return one object per requested itemId. Copy each itemId exactly.
+- LESSON: provide chapter as an OBJECT with kind "interactive_chapter":
+  {
+    "kind": "interactive_chapter",
+    "subtitle": "optional",
+    "learningObjectives": ["…"],
+    "sections": [{
+      "id": "s1",
+      "title": "…",
+      "markdown": "teaching prose with optional tables / worked examples",
+      "subsections": [{ "id": "s1a", "title": "…" }],
+      "checkBank": [{ "question": "…", "options": ["A","B","C","D"], "correctAnswer": "exact option text", "explanation": "optional" }]
+    }],
+    "wrapUpMarkdown": "optional",
+    "capstoneMarkdown": "optional ungraded synthesis prompt"
+  }
+  Each LESSON needs 4–10 sections, >=4 learningObjectives, and >=6 checkBank MC questions per section (practice only — not graded).
+  Ground reading and checks in materials. No flashcards.
 - QUIZ: 5–8 questions. Include MULTIPLE_CHOICE and TRUE_FALSE plus at least one SHORT_ANSWER.
   MULTIPLE_CHOICE needs options (array of strings) and correctAnswer equal to one option.
   TRUE_FALSE correctAnswer is "true" or "false".
@@ -115,7 +135,7 @@ Hard rules:
   - FILL_BLANKS: { "text": "…{{marker}}…", "blanks": [{ "id": "b1", "answers": ["…"] }] }
   - DRAG_WORDS: { "sentence": "…{{word}}…", "words": ["word"] }
   - ACCORDION: { "panels": [{ "id": "p1", "title": "…", "body": "…" }] }
-- No LESSON items.`;
+- Do not invent flashcards.`;
 
 export function buildFaithfulBuildSystemPrompt(ctx: CoursePromptContext): string {
   return `${buildAuthoringSharedSystem(ctx)}\n\n${BUILDER_BODY}`;
@@ -129,7 +149,8 @@ Do NOT claim publish, release, or schedule side effects — another agent tool o
 
 Design rules when editing:
 - Stay concept-first: improve assessment and practice of ideas from materials — not book meta.
-- Prefer QUIZ, DISCUSSION, and INTERACTIVE. Do not add new LESSON items or flashcards unless the user explicitly asks.
+- Prefer refining existing LESSON chapters, QUIZ, DISCUSSION, and INTERACTIVE. Do not add flashcards unless the user explicitly asks.
+- When editing a LESSON chapter, keep kind "interactive_chapter", preserve section ids when possible, and keep >=6 checkBank questions per section.
 - Quizzes should stay substantial (aim for >=5 questions with at least one SHORT_ANSWER when editing a quiz).
 - Quiz schedule & scoring are first-class body fields — when the user asks to change dates, time limit, attempts, passing score, or points, patch ONLY those fields and NOTHING else:
   { "maxAttempts": int, "timeLimit": minutes|null, "passingScore": 0–100,

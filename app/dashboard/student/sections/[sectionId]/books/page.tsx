@@ -6,6 +6,7 @@ import { SectionHubShell } from '@/components/student/SectionHubShell';
 import { requireStudent } from '@/lib/auth';
 import { listStudentBooks } from '@/lib/books';
 import { requireStudentSectionAccess } from '@/lib/student/sectionAccess';
+import { loadCourseNav } from '@/lib/lms/loadCourseNav';
 
 export default async function StudentSectionBooksPage({
   params,
@@ -15,7 +16,10 @@ export default async function StudentSectionBooksPage({
   const user = await requireStudent();
   const { sectionId } = await params;
   const ctx = await requireStudentSectionAccess(user.id, sectionId);
-  const books = await listStudentBooks(user.id, { sectionId });
+  const [books, lms] = await Promise.all([
+    listStudentBooks(user.id, { sectionId }),
+    loadCourseNav(ctx.courseId),
+  ]);
 
   return (
     <SectionHubShell
@@ -23,7 +27,8 @@ export default async function StudentSectionBooksPage({
       sectionName={ctx.sectionName}
       courseTitle={ctx.courseTitle}
       description="Released books for this section. Open a book to read chapters and sub-chapters."
-      activeTab="books"
+      activeTab={lms.enabled ? "files" : "books"}
+      tools={lms.enabled ? lms.studentTools : undefined}
       user={user}
     >
       {books.length === 0 ? (

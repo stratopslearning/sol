@@ -68,7 +68,14 @@ export async function previewOutlineItem(
   const { item } = await assertCanManageItem(user, itemId);
   const body = (item.body ?? {}) as OutlineItemSummary['body'];
 
-  if (item.type === 'LESSON' && !body.markdown?.trim()) {
+  if (
+    item.type === 'LESSON' &&
+    !body.markdown?.trim() &&
+    !(
+      body.chapter?.kind === 'interactive_chapter' &&
+      (body.chapter.sections?.length ?? 0) > 0
+    )
+  ) {
     throw ApiError.badRequest('Lesson has no content to preview');
   }
   if (item.type === 'QUIZ' && (!body.questions || body.questions.length === 0)) {

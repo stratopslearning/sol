@@ -5,6 +5,9 @@ import { attempts } from '@/app/db/schema';
 import { SectionHubShell } from '@/components/student/SectionHubShell';
 import { listStudentActivities } from '@/lib/assignments';
 import { requireStudent } from '@/lib/auth';
+import { listAssignmentGroupsDefiner } from '@/lib/db/lmsDefiners';
+import { loadCourseNav } from '@/lib/lms/loadCourseNav';
+import { computeWeightedGrade } from '@/lib/lms/weightedGrades';
 import { isSectionConcluded } from '@/lib/sectionAvailability';
 import { requireStudentSectionAccess } from '@/lib/student/sectionAccess';
 
@@ -19,6 +22,7 @@ export default async function StudentSectionGradesPage({
   const user = await requireStudent();
   const { sectionId } = await params;
   const ctx = await requireStudentSectionAccess(user.id, sectionId);
+  const lms = await loadCourseNav(ctx.courseId);
 
   const allAttempts = await db.query.attempts.findMany({
     where: eq(attempts.studentId, user.id),
@@ -63,6 +67,28 @@ export default async function StudentSectionGradesPage({
       href: a.href,
     }));
 
+  const groups = await listAssignmentGroupsDefiner(ctx.courseId);
+  const bestByQuiz = new Map<string, number>();
+  for (const row of attemptRows) {
+    if (row.percentage == null || !row.quizId) continue;
+    const prev = bestByQuiz.get(row.quizId);
+    if (prev == null || row.percentage > prev) {
+      bestByQuiz.set(row.quizId, row.percentage);
+    }
+  }
+  // Until group membership links are filled, put all quiz scores in each group
+  // that has weight — prefer a single catch-all when only one group exists.
+  const allScores = [...bestByQuiz.values()];
+  const weighted = computeWeightedGrade(
+    groups.map((g) => ({
+      groupId: String(g.id),
+      name: String(g.name),
+      weight: Number(g.weight ?? 0),
+      dropLowest: Number(g.dropLowest ?? 0),
+      scores: allScores,
+    })),
+  );
+
   return (
     <SectionHubShell
       sectionId={ctx.sectionId}
@@ -70,9 +96,26 @@ export default async function StudentSectionGradesPage({
       courseTitle={ctx.courseTitle}
       description="Quiz scores and completion for work in this section."
       activeTab="grades"
+      tools={lms.enabled ? lms.studentTools : undefined}
       user={user}
     >
       <div className="space-y-12">
+        {groups.length > 0 && weighted.total != null ? (
+          <div className="rounded-lg border border-rule/70 bg-surface p-4">
+            <div className="text-sm text-ink-muted">Weighted total</div>
+            <div className="text-2xl font-medium text-ink">
+              {weighted.total.toFixed(1)}%
+            </div>
+            <ul className="mt-3 space-y-1 text-sm text-ink-muted">
+              {weighted.groups.map((g) => (
+                <li key={g.groupId}>
+                  {g.name} ({g.weight}%):{' '}
+                  {g.average != null ? `${g.average.toFixed(1)}%` : '—'}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
         <StudentGradesTableClient
           attempts={attemptRows}
           initialSectionId={sectionId}

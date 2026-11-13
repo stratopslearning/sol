@@ -1,12 +1,14 @@
 import { notFound } from 'next/navigation';
 
 import LessonReaderClient from './LessonReaderClient';
+import { InteractiveChapterPlayer } from '@/components/lms/InteractiveChapterPlayer';
 import { AppShell } from '@/components/layout/AppShell';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { withBasePath } from '@/lib/basePath';
 import { requireStudent } from '@/lib/auth';
 import { getStudentLessonDetail } from '@/lib/learning';
 import { ApiError } from '@/lib/api/errors';
+import { isInteractiveChapterBody } from '@/lib/lms/interactiveChapter';
 
 export default async function StudentLessonDetailPage({
   params,
@@ -26,26 +28,42 @@ export default async function StudentLessonDetailPage({
     throw err;
   }
 
+  const isChapter = isInteractiveChapterBody(lesson.chapter);
+
   return (
     <AppShell
       role="student"
       active="assignments"
       topbarTitle={lesson.title}
     >
-      <PageHeader
-        breadcrumbs={[
-          { label: 'Dashboard', href: withBasePath('/dashboard/student') },
-          {
-            label: 'Assignments',
-            href: withBasePath('/dashboard/student/assignments'),
-          },
-          { label: lesson.title },
-        ]}
-        eyebrow={lesson.courseTitle || 'Lesson'}
-        title={lesson.title}
-        description="Read the notes, study the cards, then mark the lesson complete."
-      />
-      <LessonReaderClient lesson={lesson} />
+      {isChapter ? (
+        <div className="mx-auto max-w-5xl">
+          <InteractiveChapterPlayer
+            lessonId={lesson.id}
+            title={lesson.title}
+            courseTitle={lesson.courseTitle}
+            chapter={lesson.chapter!}
+            initialProgress={lesson.chapterProgress ?? []}
+          />
+        </div>
+      ) : (
+        <>
+          <PageHeader
+            breadcrumbs={[
+              { label: 'Dashboard', href: withBasePath('/dashboard/student') },
+              {
+                label: 'Assignments',
+                href: withBasePath('/dashboard/student/assignments'),
+              },
+              { label: lesson.title },
+            ]}
+            eyebrow={lesson.courseTitle || 'Lesson'}
+            title={lesson.title}
+            description="Read the notes, study the cards, then mark the lesson complete."
+          />
+          <LessonReaderClient lesson={lesson} />
+        </>
+      )}
     </AppShell>
   );
 }

@@ -8,6 +8,7 @@ import { listStudentActivities } from '@/lib/assignments';
 import { requireStudent } from '@/lib/auth';
 import { withBasePath } from '@/lib/basePath';
 import { listStudentBooks } from '@/lib/books';
+import { loadCourseNav } from '@/lib/lms/loadCourseNav';
 import { requireStudentSectionAccess } from '@/lib/student/sectionAccess';
 import { isStudentSectionInUnverifiedCreatorWorkspace } from '@/lib/student/sectionWorkspace';
 
@@ -20,13 +21,14 @@ export default async function StudentSectionOverviewPage({
   const { sectionId } = await params;
   const ctx = await requireStudentSectionAccess(user.id, sectionId);
 
-  const [books, activities, instructorUnverified] = await Promise.all([
+  const [books, activities, instructorUnverified, lms] = await Promise.all([
     listStudentBooks(user.id, { sectionId }),
     listStudentActivities({
       studentId: user.id,
       sectionIds: [sectionId],
     }),
     isStudentSectionInUnverifiedCreatorWorkspace(sectionId),
+    loadCourseNav(ctx.courseId),
   ]);
 
   const openWork = activities.filter(
@@ -42,7 +44,8 @@ export default async function StudentSectionOverviewPage({
       sectionName={ctx.sectionName}
       courseTitle={ctx.courseTitle}
       description="Your home for this section — books, assigned work, and grades."
-      activeTab="overview"
+      activeTab={lms.enabled ? 'home' : 'overview'}
+      tools={lms.enabled ? lms.studentTools : undefined}
       user={user}
       instructorUnverified={instructorUnverified}
     >

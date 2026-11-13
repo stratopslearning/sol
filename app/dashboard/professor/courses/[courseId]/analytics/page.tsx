@@ -25,6 +25,7 @@ import { appPath } from '@/lib/basePath';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import { assertCanManageCourse } from '@/lib/knowledge/access';
 import { appRedirect } from '@/lib/serverRedirect';
+import { loadCourseNav } from '@/lib/lms/loadCourseNav';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,12 +34,15 @@ export default async function CourseHubAnalyticsPage({
   searchParams,
 }: {
   params: Promise<{ courseId: string }>;
-  searchParams: Promise<{ sectionId?: string }>;
+  searchParams: Promise<{ sectionId?: string; as?: string }>;
 }) {
   const user = await requireTeachingAccess();
 
   const { courseId } = await params;
-  const { sectionId } = await searchParams;
+  const lms = await loadCourseNav(courseId);
+  const sp = await searchParams;
+  const { sectionId } = sp;
+  const studentView = sp.as === 'student';
 
   let course: { id: string; title: string };
   try {
@@ -72,6 +76,9 @@ export default async function CourseHubAnalyticsPage({
       courseTitle={course.title}
       description="Concept success rates from tagged quiz questions, plus lesson completion against your roster."
       activeTab="analytics"
+      tools={lms.enabled ? lms.facultyTools : undefined}
+      nav={lms.nav}
+      studentView={studentView}
     >
       {sectionRows.length > 1 ? (
         <div className="mb-6 flex flex-wrap gap-2 text-sm">
