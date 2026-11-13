@@ -694,6 +694,13 @@
       "when": 1786800000000,
       "tag": "0098_authoring_chunks_include_books",
       "breakpoints": true
+    },
+    {
+      "idx": 99,
+      "version": "7",
+      "when": 1786900000000,
+      "tag": "0099_active_workspace_license_definer",
+      "breakpoints": true
     }
   ]
 }

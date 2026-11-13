@@ -75,13 +75,61 @@ export async function getWorkspace(workspaceId: string) {
 export async function getActiveLicense(
   workspaceId: string,
 ): Promise<WorkspaceLicenseRow | undefined> {
-  return db.query.workspaceLicenses.findFirst({
-    where: and(
-      eq(workspaceLicenses.workspaceId, workspaceId),
-      inArray(workspaceLicenses.status, ['active', 'trialing']),
-    ),
-    orderBy: (t, { desc }) => [desc(t.createdAt)],
-  });
+  // FORCE RLS: bare workspace_licenses reads return 0 without app.tenant_id
+  // and falsely block student join with "No active license".
+  const result = await db.execute(sql`
+    SELECT sol_active_workspace_license(${workspaceId}::uuid) AS row
+  `);
+  const rows =
+    (result as unknown as { rows?: Array<{ row: unknown }> }).rows ??
+    (Array.isArray(result) ? (result as Array<{ row: unknown }>) : []);
+  const raw = rows[0]?.row;
+  if (raw == null) return undefined;
+  const parsed =
+    typeof raw === 'string'
+      ? (JSON.parse(raw) as Record<string, unknown>)
+      : (raw as Record<string, unknown>);
+  if (!parsed?.id) return undefined;
+
+  const asDate = (v: unknown): Date | null => {
+    if (v == null) return null;
+    return v instanceof Date ? v : new Date(String(v));
+  };
+
+  return {
+    id: String(parsed.id),
+    workspaceId: String(parsed.workspace_id ?? parsed.workspaceId),
+    plan: String(parsed.plan ?? 'department') as WorkspaceLicenseRow['plan'],
+    seatCap: Number(parsed.seat_cap ?? parsed.seatCap ?? 500),
+    aiUnitCap:
+      parsed.ai_unit_cap != null
+        ? Number(parsed.ai_unit_cap)
+        : parsed.aiUnitCap != null
+          ? Number(parsed.aiUnitCap)
+          : null,
+    periodStart: asDate(parsed.period_start ?? parsed.periodStart),
+    periodEnd: asDate(parsed.period_end ?? parsed.periodEnd),
+    billingProvider: String(
+      parsed.billing_provider ?? parsed.billingProvider ?? 'manual',
+    ) as WorkspaceLicenseRow['billingProvider'],
+    stripeCustomerId:
+      parsed.stripe_customer_id != null
+        ? String(parsed.stripe_customer_id)
+        : parsed.stripeCustomerId != null
+          ? String(parsed.stripeCustomerId)
+          : null,
+    stripeSubscriptionId:
+      parsed.stripe_subscription_id != null
+        ? String(parsed.stripe_subscription_id)
+        : parsed.stripeSubscriptionId != null
+          ? String(parsed.stripeSubscriptionId)
+          : null,
+    status: String(
+      parsed.status ?? 'active',
+    ) as WorkspaceLicenseRow['status'],
+    createdAt: asDate(parsed.created_at ?? parsed.createdAt) ?? new Date(),
+    updatedAt: asDate(parsed.updated_at ?? parsed.updatedAt) ?? new Date(),
+  };
 }
 
 /** Active learner seats used in a workspace (distinct students in active enrollments). */
