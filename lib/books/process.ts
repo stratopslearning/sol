@@ -1,6 +1,3 @@
-import { and, eq, isNull, lt, or } from 'drizzle-orm';
-
-import { db } from '@/app/db';
 import { hostedBooks } from '@/app/db/schema';
 import { indexBookChaptersAsSingleMaterial } from '@/lib/books/bookKnowledge';
 import { crawlWebbook } from '@/lib/books/crawlWebbook';
@@ -155,20 +152,10 @@ export async function processBookFromBuffer(
  */
 export async function processPendingBooks(limit = 3): Promise<number> {
   const staleBefore = new Date(Date.now() - 15 * 60_000);
-  const pending = await db.query.hostedBooks.findMany({
-    where: and(
-      isNull(hostedBooks.deletedAt),
-      or(
-        eq(hostedBooks.status, 'PENDING'),
-        and(
-          eq(hostedBooks.status, 'PROCESSING'),
-          lt(hostedBooks.updatedAt, staleBefore),
-        ),
-      ),
-    ),
-    limit,
-    orderBy: (t, { asc }) => [asc(t.createdAt)],
-  });
+  const { listPendingHostedBooksDefiner } = await import(
+    '@/lib/db/bookWriteDefiners'
+  );
+  const pending = await listPendingHostedBooksDefiner(limit, staleBefore);
 
   for (const row of pending) {
     if (row.status === 'PROCESSING') {

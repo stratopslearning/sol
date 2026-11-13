@@ -64,14 +64,6 @@ export async function createLessonFromAuthoring(
       })
       .returning();
 
-    await tx.insert(lessonSections).values(
-      input.sectionIds.map((sectionId) => ({
-        lessonId: lesson.id,
-        sectionId,
-        assignedBy: user.id,
-      })),
-    );
-
     const cards = (input.flashcards ?? []).filter(
       (c) => c.front?.trim() && c.back?.trim(),
     );
@@ -87,6 +79,15 @@ export async function createLessonFromAuthoring(
     }
 
     return lesson;
+  });
+
+  const { assignLessonSectionsDefiner } = await import(
+    '@/lib/db/facultyWriteDefiners'
+  );
+  await assignLessonSectionsDefiner({
+    lessonId: created.id,
+    assignedBy: user.id,
+    sectionIds: input.sectionIds,
   });
 
   await upsertActivityForLesson(created.id, {

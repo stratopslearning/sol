@@ -1,14 +1,10 @@
-import { and, eq, isNull } from 'drizzle-orm';
-
-import { db } from '@/app/db';
-import {
-  bookChapters,
-  bookSections,
-  hostedBooks,
-  studentSections,
-} from '@/app/db/schema';
 import { ApiError } from '@/lib/api/errors';
-import { fetchHostedBookByIdDefiner } from '@/lib/db/bookWriteDefiners';
+import {
+  fetchBookChapterForReaderDefiner,
+  fetchBookSectionIdsDefiner,
+  fetchHostedBookByIdDefiner,
+  fetchActiveSectionIdsForStudentDefiner,
+} from '@/lib/db/bookWriteDefiners';
 import { assertCanManageCourse } from '@/lib/knowledge/access';
 import type { UserData } from '@/lib/getOrCreateUser';
 
@@ -26,29 +22,17 @@ export async function assertStudentCanAccessBook(
   studentId: string,
   bookId: string,
 ) {
-  const book = await db.query.hostedBooks.findFirst({
-    where: and(
-      eq(hostedBooks.id, bookId),
-      eq(hostedBooks.isReleased, true),
-      eq(hostedBooks.status, 'READY'),
-      isNull(hostedBooks.deletedAt),
-    ),
-  });
-  if (!book) throw ApiError.notFound('Book not found');
+  const book = await fetchHostedBookByIdDefiner(bookId);
+  if (!book || book.deletedAt || !book.isReleased || book.status !== 'READY') {
+    throw ApiError.notFound('Book not found');
+  }
 
-  const assignments = await db.query.bookSections.findMany({
-    where: eq(bookSections.bookId, bookId),
-  });
-  if (assignments.length === 0) throw ApiError.forbidden('Book not assigned');
+  const sectionIds = await fetchBookSectionIdsDefiner(bookId);
+  if (sectionIds.length === 0) throw ApiError.forbidden('Book not assigned');
 
-  const sectionIds = assignments.map((a) => a.sectionId);
-  const enrollments = await db.query.studentSections.findMany({
-    where: and(
-      eq(studentSections.studentId, studentId),
-      eq(studentSections.status, 'ACTIVE'),
-    ),
-  });
-  const enrolled = new Set(enrollments.map((e) => e.sectionId));
+  const enrolled = new Set(
+    await fetchActiveSectionIdsForStudentDefiner(studentId),
+  );
   const ok = sectionIds.some((id) => enrolled.has(id));
   if (!ok) throw ApiError.forbidden('You are not enrolled in this book');
 
@@ -59,9 +43,7 @@ export async function assertStudentCanAccessChapter(
   studentId: string,
   chapterId: string,
 ) {
-  const chapter = await db.query.bookChapters.findFirst({
-    where: and(eq(bookChapters.id, chapterId), isNull(bookChapters.deletedAt)),
-  });
+  const chapter = await fetchBookChapterForReaderDefiner(chapterId);
   if (!chapter) throw ApiError.notFound('Chapter not found');
   const book = await assertStudentCanAccessBook(studentId, chapter.bookId);
   return { book, chapter };

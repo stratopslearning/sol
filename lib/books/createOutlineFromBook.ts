@@ -1,7 +1,7 @@
-import { and, asc, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 
 import { db } from '@/app/db';
-import { bookChapters, courses, hostedBooks } from '@/app/db/schema';
+import { courses } from '@/app/db/schema';
 import { ApiError } from '@/lib/api/errors';
 import { logAudit } from '@/lib/audit';
 import { AUTHORING_CONTEXT_CHAR_BUDGET } from '@/lib/authoring/constants';
@@ -80,13 +80,10 @@ export async function createOutlineFromBook(
   });
   if (!course) throw ApiError.notFound('Course not found');
 
-  const chapters = await db.query.bookChapters.findMany({
-    where: and(
-      eq(bookChapters.bookId, bookId),
-      isNull(bookChapters.deletedAt),
-    ),
-    orderBy: [asc(bookChapters.position)],
-  });
+  const { fetchBookChaptersForRagDefiner } = await import(
+    '@/lib/db/knowledgeJobDefiners'
+  );
+  const chapters = await fetchBookChaptersForRagDefiner(bookId);
   if (chapters.length === 0) {
     throw ApiError.badRequest('Book has no chapters');
   }
@@ -131,10 +128,10 @@ export async function createOutlineFromBook(
     modules: toPersistModules(data),
   });
 
-  await db
-    .update(hostedBooks)
-    .set({ updatedAt: new Date() })
-    .where(eq(hostedBooks.id, bookId));
+  const { updateHostedBookDefiner } = await import(
+    '@/lib/db/bookWriteDefiners'
+  );
+  await updateHostedBookDefiner({ bookId });
 
   await logAudit({
     actorUserId: user.id,

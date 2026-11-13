@@ -109,13 +109,10 @@ export async function getBookDetail(
   bookId: string,
 ): Promise<{ book: BookSummary; chapters: BookChapterSummary[] }> {
   const book = await assertCanManageBook(user, bookId);
-  const chapters = await db.query.bookChapters.findMany({
-    where: and(
-      eq(bookChapters.bookId, bookId),
-      isNull(bookChapters.deletedAt),
-    ),
-    orderBy: [asc(bookChapters.position)],
-  });
+  const { fetchBookChaptersDetailForBookDefiner } = await import(
+    '@/lib/db/bookWriteDefiners'
+  );
+  const chapters = await fetchBookChaptersDetailForBookDefiner(bookId);
   return {
     book: toSummary(book, countTopLevelChapters(chapters, book.title)),
     chapters: chapters.map((c) => ({
@@ -126,10 +123,10 @@ export async function getBookDetail(
       slug: c.slug,
       partTitle: c.partTitle,
       parentId: c.parentId,
-      level: c.level ?? 0,
+      level: c.level,
       sourceUrl: c.sourceUrl,
       materialId: c.materialId,
-      markdownLength: c.markdown.length,
+      markdownLength: c.markdownLength,
     })),
   };
 }
@@ -597,18 +594,11 @@ export async function softDeleteBooks(
     books.push(await assertCanManageBook(user, id));
   }
 
-  const chapters = await db
-    .select({
-      bookId: bookChapters.bookId,
-      materialId: bookChapters.materialId,
-    })
-    .from(bookChapters)
-    .where(
-      and(
-        inArray(bookChapters.bookId, uniqueIds),
-        isNull(bookChapters.deletedAt),
-      ),
-    );
+  const {
+    fetchBookMaterialIdsForBooksDefiner,
+    softDeleteBookChaptersDefiner,
+  } = await import('@/lib/db/bookWriteDefiners');
+  const materialIds = await fetchBookMaterialIdsForBooksDefiner(uniqueIds);
 
   const now = new Date();
   for (const id of uniqueIds) {
@@ -617,17 +607,10 @@ export async function softDeleteBooks(
       deletedAt: now.toISOString(),
     });
   }
-  const { softDeleteBookChaptersDefiner } = await import(
-    '@/lib/db/bookWriteDefiners'
-  );
   for (const id of uniqueIds) {
     await softDeleteBookChaptersDefiner(id);
   }
-  await softDeleteLinkedMaterials(
-    chapters
-      .map((c) => c.materialId)
-      .filter((id): id is string => id != null),
-  );
+  await softDeleteLinkedMaterials(materialIds);
 
   await logAudit({
     actorUserId: user.id,
@@ -668,16 +651,14 @@ export async function softDeleteChapters(
     throw ApiError.badRequest('No chapters selected');
   }
 
-  const chapters = await db.query.bookChapters.findMany({
-    where: and(
-      eq(bookChapters.bookId, bookId),
-      inArray(bookChapters.id, uniqueIds),
-      isNull(bookChapters.deletedAt),
-    ),
-  });
+  const {
+    fetchBookChaptersDetailForBookDefiner,
+    softDeleteBookChaptersByIdsDefiner,
+  } = await import('@/lib/db/bookWriteDefiners');
+  const allChapters = await fetchBookChaptersDetailForBookDefiner(bookId);
+  const chapters = allChapters.filter((c) => uniqueIds.includes(c.id));
   if (chapters.length === 0) throw ApiError.notFound('Chapter not found');
 
-  const now = new Date();
   const ids = chapters.map((c) => c.id);
   const candidateMaterialIds = [
     ...new Set(
@@ -687,24 +668,18 @@ export async function softDeleteChapters(
     ),
   ];
 
-  await db
-    .update(bookChapters)
-    .set({ deletedAt: now, updatedAt: now })
-    .where(inArray(bookChapters.id, ids));
+  await softDeleteBookChaptersByIdsDefiner(bookId, ids);
 
   // Shared book material must stay while other chapters still reference it.
-  const orphanMaterialIds: string[] = [];
-  for (const materialId of candidateMaterialIds) {
-    const stillLinked = await db.query.bookChapters.findFirst({
-      where: and(
-        eq(bookChapters.bookId, bookId),
-        eq(bookChapters.materialId, materialId),
-        isNull(bookChapters.deletedAt),
-      ),
-      columns: { id: true },
-    });
-    if (!stillLinked) orphanMaterialIds.push(materialId);
-  }
+  const remaining = await fetchBookChaptersDetailForBookDefiner(bookId);
+  const stillLinked = new Set(
+    remaining
+      .map((c) => c.materialId)
+      .filter((id): id is string => id != null),
+  );
+  const orphanMaterialIds = candidateMaterialIds.filter(
+    (id) => !stillLinked.has(id),
+  );
   await softDeleteLinkedMaterials(orphanMaterialIds);
 
   await logAudit({

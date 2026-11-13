@@ -381,11 +381,14 @@ export async function setMaterialAuthoringCorpus(
   corpus: 'prior_course' | 'this_term',
 ): Promise<MaterialSummary> {
   await assertCanManageMaterial(user, materialId);
-  const [row] = await db
-    .update(courseMaterials)
-    .set({ authoringCorpus: corpus, updatedAt: new Date() })
-    .where(eq(courseMaterials.id, materialId))
-    .returning();
+  const { setCourseMaterialAuthoringCorpusDefiner, fetchCourseMaterialByIdDefiner } =
+    await import('@/lib/db/knowledgeJobDefiners');
+  const updated = await setCourseMaterialAuthoringCorpusDefiner(
+    materialId,
+    corpus,
+  );
+  if (!updated) throw ApiError.notFound('Material not found');
+  const row = await fetchCourseMaterialByIdDefiner(materialId);
   if (!row) throw ApiError.notFound('Material not found');
-  return toSummary(row);
+  return toSummary(row as unknown as typeof courseMaterials.$inferSelect);
 }

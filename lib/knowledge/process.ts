@@ -1,7 +1,3 @@
-import { and, eq, isNull, lt, or } from 'drizzle-orm';
-
-import { db } from '@/app/db';
-import { courseMaterialChunks, courseMaterials } from '@/app/db/schema';
 import { chunkText } from '@/lib/knowledge/chunk';
 import { embedTexts } from '@/lib/knowledge/embed';
 import {
@@ -9,30 +5,21 @@ import {
   extractTextFromUrl,
 } from '@/lib/knowledge/extract';
 import { getMaterialObjectBytes } from '@/lib/knowledge/storage';
+import {
+  claimCourseMaterialDefiner,
+  deleteCourseMaterialChunksDefiner,
+  insertCourseMaterialChunksDefiner,
+  listPendingCourseMaterialsDefiner,
+  setCourseMaterialStatusDefiner,
+} from '@/lib/db/knowledgeJobDefiners';
 
 /**
  * Extract → chunk → embed → READY/FAILED for one material.
- * Claims with conditional UPDATE so concurrent callers don't double-process.
+ * Claims with DEFINER conditional UPDATE so concurrent callers don't double-process.
  */
 export async function processMaterial(materialId: string): Promise<void> {
-  const claimed = await db
-    .update(courseMaterials)
-    .set({
-      status: 'PROCESSING',
-      errorMessage: null,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(courseMaterials.id, materialId),
-        isNull(courseMaterials.deletedAt),
-        eq(courseMaterials.status, 'PENDING'),
-      ),
-    )
-    .returning();
-
-  if (claimed.length === 0) return;
-  const material = claimed[0]!;
+  const material = await claimCourseMaterialDefiner(materialId);
+  if (!material) return;
 
   try {
     let text = '';
@@ -64,38 +51,30 @@ export async function processMaterial(materialId: string): Promise<void> {
     const workspaceId = await getCourseWorkspaceId(material.courseId);
     const aiCap = await checkAiBandAvailable(workspaceId);
     if (!aiCap.ok) {
-      await db
-        .update(courseMaterials)
-        .set({
-          status: 'FAILED',
-          errorMessage: aiCap.reason.slice(0, 500),
-          updatedAt: new Date(),
-        })
-        .where(eq(courseMaterials.id, materialId));
+      await setCourseMaterialStatusDefiner(
+        materialId,
+        'FAILED',
+        aiCap.reason.slice(0, 500),
+      );
       return;
     }
 
-    await db
-      .delete(courseMaterialChunks)
-      .where(eq(courseMaterialChunks.materialId, materialId));
+    await deleteCourseMaterialChunksDefiner(materialId);
 
     const embeddings = await embedTexts(chunks.map((c) => c.content));
 
-    await db.insert(courseMaterialChunks).values(
-      chunks.map((chunk, i) => ({
-        materialId,
-        courseId: material.courseId,
+    await insertCourseMaterialChunksDefiner({
+      materialId,
+      courseId: material.courseId,
+      chunks: chunks.map((chunk, i) => ({
         chunkIndex: chunk.index,
         content: chunk.content,
         tokenCount: chunk.tokenCount,
         embedding: embeddings[i]!,
       })),
-    );
+    });
 
-    await db
-      .update(courseMaterials)
-      .set({ status: 'READY', errorMessage: null, updatedAt: new Date() })
-      .where(eq(courseMaterials.id, materialId));
+    await setCourseMaterialStatusDefiner(materialId, 'READY', null);
 
     void (async () => {
       try {
@@ -113,41 +92,18 @@ export async function processMaterial(materialId: string): Promise<void> {
   } catch (err) {
     const message =
       err instanceof Error ? err.message.slice(0, 500) : 'Processing failed';
-    await db
-      .update(courseMaterials)
-      .set({
-        status: 'FAILED',
-        errorMessage: message,
-        updatedAt: new Date(),
-      })
-      .where(eq(courseMaterials.id, materialId));
+    await setCourseMaterialStatusDefiner(materialId, 'FAILED', message);
   }
 }
 
 /** Cron helper: pick stuck PENDING / old PROCESSING rows. */
 export async function processPendingMaterials(limit = 10): Promise<number> {
   const staleBefore = new Date(Date.now() - 15 * 60_000);
-  const pending = await db.query.courseMaterials.findMany({
-    where: and(
-      isNull(courseMaterials.deletedAt),
-      or(
-        eq(courseMaterials.status, 'PENDING'),
-        and(
-          eq(courseMaterials.status, 'PROCESSING'),
-          lt(courseMaterials.updatedAt, staleBefore),
-        ),
-      ),
-    ),
-    limit,
-    orderBy: (t, { asc }) => [asc(t.createdAt)],
-  });
+  const pending = await listPendingCourseMaterialsDefiner(limit, staleBefore);
 
   for (const row of pending) {
     if (row.status === 'PROCESSING') {
-      await db
-        .update(courseMaterials)
-        .set({ status: 'PENDING', updatedAt: new Date() })
-        .where(eq(courseMaterials.id, row.id));
+      await setCourseMaterialStatusDefiner(row.id, 'PENDING', null);
     }
     await processMaterial(row.id);
   }

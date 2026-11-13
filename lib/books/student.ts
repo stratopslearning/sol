@@ -1,12 +1,3 @@
-import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
-
-import { db } from '@/app/db';
-import {
-  bookChapters,
-  bookSections,
-  hostedBooks,
-  studentSections,
-} from '@/app/db/schema';
 import {
   assertStudentCanAccessBook,
   assertStudentCanAccessChapter,
@@ -16,7 +7,11 @@ import {
   countTopLevelChapters,
   isMetaTocChapter,
 } from '@/lib/books/hierarchy';
-import { partitionEnrollmentsByConclusion } from '@/lib/sectionAvailability';
+import {
+  fetchActiveSectionIdsForStudentDefiner,
+  fetchBookChaptersTocForBookDefiner,
+  fetchStudentBookAssignmentsDefiner,
+} from '@/lib/db/bookWriteDefiners';
 
 export type StudentBookListItem = {
   id: string;
@@ -34,66 +29,35 @@ export async function listStudentBooks(
   studentId: string,
   opts?: { sectionId?: string },
 ): Promise<StudentBookListItem[]> {
-  const enrollments = await db.query.studentSections.findMany({
-    where: and(
-      eq(studentSections.studentId, studentId),
-      eq(studentSections.status, 'ACTIVE'),
-    ),
-    with: { section: { with: { course: true } } },
-  });
-  const { active: activeEnrollments } =
-    partitionEnrollmentsByConclusion(enrollments);
-  let sectionIds = activeEnrollments.map((e) => e.sectionId);
+  let sectionIds = await fetchActiveSectionIdsForStudentDefiner(studentId);
   if (opts?.sectionId) {
     if (!sectionIds.includes(opts.sectionId)) return [];
     sectionIds = [opts.sectionId];
   }
   if (sectionIds.length === 0) return [];
 
-  const assignments = await db.query.bookSections.findMany({
-    where: inArray(bookSections.sectionId, sectionIds),
-    with: {
-      book: true,
-      section: { with: { course: true } },
-    },
-  });
+  const assignments = await fetchStudentBookAssignmentsDefiner(sectionIds);
 
   const seen = new Set<string>();
   const items: StudentBookListItem[] = [];
 
   for (const a of assignments) {
-    const book = a.book;
-    if (
-      !book ||
-      book.deletedAt ||
-      !book.isReleased ||
-      book.status !== 'READY'
-    ) {
-      continue;
-    }
-    if (seen.has(book.id)) continue;
-    seen.add(book.id);
+    if (seen.has(a.bookId)) continue;
+    seen.add(a.bookId);
 
-    const chapters = await db.query.bookChapters.findMany({
-      where: and(
-        eq(bookChapters.bookId, book.id),
-        isNull(bookChapters.deletedAt),
-      ),
-      columns: { id: true, title: true, parentId: true, level: true },
-    });
-
+    const chapters = await fetchBookChaptersTocForBookDefiner(a.bookId);
     const forBook = assignments.filter(
-      (x) => x.bookId === book.id && sectionIds.includes(x.sectionId),
+      (x) => x.bookId === a.bookId && sectionIds.includes(x.sectionId),
     );
     const bookSectionIds = [
       ...new Set(forBook.map((x) => x.sectionId).filter(Boolean)),
     ];
     const sectionNames = forBook
-      .map((x) => x.section?.name)
+      .map((x) => x.sectionName)
       .filter((n): n is string => Boolean(n));
 
     const primarySectionId = opts?.sectionId ?? bookSectionIds[0];
-    const bookPath = `/dashboard/student/books/${book.id}`;
+    const bookPath = `/dashboard/student/books/${a.bookId}`;
     const href = withBasePath(
       primarySectionId
         ? `${bookPath}?section=${encodeURIComponent(primarySectionId)}`
@@ -101,11 +65,11 @@ export async function listStudentBooks(
     );
 
     items.push({
-      id: book.id,
-      title: book.title,
-      courseId: book.courseId,
-      courseTitle: a.section?.course?.title ?? '',
-      chapterCount: countTopLevelChapters(chapters, book.title),
+      id: a.bookId,
+      title: a.title,
+      courseId: a.courseId,
+      courseTitle: a.courseTitle,
+      chapterCount: countTopLevelChapters(chapters, a.title),
       href,
       sectionNames: [...new Set(sectionNames)],
       sectionIds: bookSectionIds,
@@ -117,22 +81,7 @@ export async function listStudentBooks(
 
 export async function getStudentBookToc(studentId: string, bookId: string) {
   const book = await assertStudentCanAccessBook(studentId, bookId);
-  const chapters = await db.query.bookChapters.findMany({
-    where: and(
-      eq(bookChapters.bookId, bookId),
-      isNull(bookChapters.deletedAt),
-    ),
-    orderBy: [asc(bookChapters.position)],
-    columns: {
-      id: true,
-      title: true,
-      slug: true,
-      partTitle: true,
-      position: true,
-      parentId: true,
-      level: true,
-    },
-  });
+  const chapters = await fetchBookChaptersTocForBookDefiner(bookId);
   return {
     id: book.id,
     title: book.title,
@@ -149,24 +98,9 @@ export async function getStudentChapter(
     studentId,
     chapterId,
   );
-  const siblings = await db.query.bookChapters.findMany({
-    where: and(
-      eq(bookChapters.bookId, book.id),
-      isNull(bookChapters.deletedAt),
-    ),
-    orderBy: [asc(bookChapters.position)],
-    columns: {
-      id: true,
-      title: true,
-      position: true,
-      parentId: true,
-      level: true,
-      partTitle: true,
-    },
-  });
+  const siblings = await fetchBookChaptersTocForBookDefiner(book.id);
   const idx = siblings.findIndex((s) => s.id === chapter.id);
-  const isMeta = (s: { title: string }) =>
-    isMetaTocChapter(s, book.title);
+  const isMeta = (s: { title: string }) => isMetaTocChapter(s, book.title);
   let prev: (typeof siblings)[number] | null = null;
   for (let i = idx - 1; i >= 0; i -= 1) {
     const cand = siblings[i]!;
@@ -201,9 +135,9 @@ export async function getStudentChapter(
       partTitle: chapter.partTitle,
       position: chapter.position,
       parentId: chapter.parentId,
-      level: chapter.level ?? 0,
+      level: chapter.level,
       markdown: chapter.markdown,
-      html: chapter.html ?? null,
+      html: chapter.html,
     },
     toc: siblings,
     prev,

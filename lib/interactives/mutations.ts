@@ -69,13 +69,14 @@ export async function createInteractive(
     .returning();
 
   if (sectionIds.length > 0) {
-    await db.insert(interactiveSections).values(
-      sectionIds.map((sectionId) => ({
-        interactiveId: row.id,
-        sectionId,
-        assignedBy: user.id,
-      })),
+    const { setInteractiveSectionsDefiner } = await import(
+      '@/lib/db/facultyWriteDefiners'
     );
+    await setInteractiveSectionsDefiner({
+      interactiveId: row.id,
+      assignedBy: user.id,
+      sectionIds,
+    });
   }
 
   await upsertActivityForInteractive(row.id, {
@@ -202,19 +203,14 @@ export async function assignInteractiveSections(
   const allowed = new Set(teachable);
   const next = sectionIds.filter((id) => allowed.has(id));
 
-  await db
-    .delete(interactiveSections)
-    .where(eq(interactiveSections.interactiveId, interactiveId));
-
-  if (next.length > 0) {
-    await db.insert(interactiveSections).values(
-      next.map((sectionId) => ({
-        interactiveId,
-        sectionId,
-        assignedBy: user.id,
-      })),
-    );
-  }
+  const { setInteractiveSectionsDefiner } = await import(
+    '@/lib/db/facultyWriteDefiners'
+  );
+  await setInteractiveSectionsDefiner({
+    interactiveId,
+    assignedBy: user.id,
+    sectionIds: next,
+  });
 }
 
 export async function upsertInteractiveProgress(opts: {
