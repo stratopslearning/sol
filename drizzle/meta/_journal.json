@@ -666,6 +666,13 @@
       "when": 1786400000000,
       "tag": "0094_course_material_by_id_definer",
       "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "7",
+      "when": 1786500000000,
+      "tag": "0095_faculty_book_reader_release",
+      "breakpoints": true
     }
   ]
 }

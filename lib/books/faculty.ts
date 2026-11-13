@@ -1,10 +1,10 @@
-import { and, asc, eq, isNull } from 'drizzle-orm';
-
-import { db } from '@/app/db';
-import { bookChapters } from '@/app/db/schema';
 import { ApiError } from '@/lib/api/errors';
 import { assertCanManageBook } from '@/lib/books/access';
 import { isMetaTocChapter } from '@/lib/books/hierarchy';
+import {
+  fetchBookChapterForReaderDefiner,
+  fetchBookChaptersTocForBookDefiner,
+} from '@/lib/db/bookWriteDefiners';
 import type { UserData } from '@/lib/getOrCreateUser';
 
 type AuthUser = Pick<UserData, 'id'> & { platformStaff?: boolean | null };
@@ -12,22 +12,7 @@ type AuthUser = Pick<UserData, 'id'> & { platformStaff?: boolean | null };
 /** Faculty preview: same TOC shape as student, gated by course manage access. */
 export async function getFacultyBookToc(user: AuthUser, bookId: string) {
   const book = await assertCanManageBook(user, bookId);
-  const chapters = await db.query.bookChapters.findMany({
-    where: and(
-      eq(bookChapters.bookId, bookId),
-      isNull(bookChapters.deletedAt),
-    ),
-    orderBy: [asc(bookChapters.position)],
-    columns: {
-      id: true,
-      title: true,
-      slug: true,
-      partTitle: true,
-      position: true,
-      parentId: true,
-      level: true,
-    },
-  });
+  const chapters = await fetchBookChaptersTocForBookDefiner(bookId);
   return {
     id: book.id,
     title: book.title,
@@ -40,27 +25,11 @@ export async function getFacultyChapter(
   user: AuthUser,
   chapterId: string,
 ) {
-  const chapter = await db.query.bookChapters.findFirst({
-    where: and(eq(bookChapters.id, chapterId), isNull(bookChapters.deletedAt)),
-  });
+  const chapter = await fetchBookChapterForReaderDefiner(chapterId);
   if (!chapter) throw ApiError.notFound('Chapter not found');
   const book = await assertCanManageBook(user, chapter.bookId);
 
-  const siblings = await db.query.bookChapters.findMany({
-    where: and(
-      eq(bookChapters.bookId, book.id),
-      isNull(bookChapters.deletedAt),
-    ),
-    orderBy: [asc(bookChapters.position)],
-    columns: {
-      id: true,
-      title: true,
-      position: true,
-      parentId: true,
-      level: true,
-      partTitle: true,
-    },
-  });
+  const siblings = await fetchBookChaptersTocForBookDefiner(book.id);
   const idx = siblings.findIndex((s) => s.id === chapter.id);
   const isMeta = (s: { title: string }) => isMetaTocChapter(s, book.title);
   let prev: (typeof siblings)[number] | null = null;
@@ -98,9 +67,9 @@ export async function getFacultyChapter(
       partTitle: chapter.partTitle,
       position: chapter.position,
       parentId: chapter.parentId,
-      level: chapter.level ?? 0,
+      level: chapter.level,
       markdown: chapter.markdown,
-      html: chapter.html ?? null,
+      html: chapter.html,
     },
     toc: siblings,
     prev,

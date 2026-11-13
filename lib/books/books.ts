@@ -3,7 +3,6 @@ import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 import { db } from '@/app/db';
 import {
   bookChapters,
-  bookSections,
   hostedBooks,
 } from '@/app/db/schema';
 import { softDeleteLinkedMaterials } from '@/lib/books/bookKnowledge';
@@ -29,7 +28,9 @@ import type {
   BookWithChapters,
 } from '@/lib/books/types';
 import {
+  assignBookSectionsDefiner,
   createHostedBookDefiner,
+  fetchBookChaptersTocForBookDefiner,
   fetchBookChaptersTocForCourseDefiner,
   fetchHostedBookByIdDefiner,
   fetchHostedBooksForCourseDefiner,
@@ -544,14 +545,11 @@ export async function releaseBook(
     throw ApiError.badRequest('No teachable sections to assign');
   }
 
-  await db.delete(bookSections).where(eq(bookSections.bookId, bookId));
-  await db.insert(bookSections).values(
-    sectionIds.map((sectionId) => ({
-      bookId,
-      sectionId,
-      assignedBy: user.id,
-    })),
-  );
+  await assignBookSectionsDefiner({
+    bookId,
+    assignedBy: user.id,
+    sectionIds,
+  });
 
   const updated = await updateHostedBookDefiner({
     bookId,
@@ -570,12 +568,9 @@ export async function releaseBook(
     userAgent: audit?.userAgent ?? null,
   });
 
-  const toc = (await fetchBookChaptersTocForCourseDefiner(book.courseId)).filter(
-    (ch) => ch.bookId === bookId,
-  );
+  const toc = await fetchBookChaptersTocForBookDefiner(bookId);
   return toSummary(updated, countTopLevelChapters(toc, updated.title));
 }
-
 export async function softDeleteBook(
   user: AuthUser,
   bookId: string,
