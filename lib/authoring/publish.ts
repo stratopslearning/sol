@@ -122,7 +122,8 @@ export async function publishOutlineItem(
   opts?: { sectionIds?: string[] },
   audit?: { ip?: string | null; userAgent?: string | null },
 ): Promise<OutlineItemSummary> {
-  const { item, outline } = await assertCanManageItem(user, itemId);
+  const { item, outline, module: outlineModule } =
+    await assertCanManageItem(user, itemId);
   {
     const { requireCourseTeaching } = await import(
       '@/lib/workspace/entitlement'
@@ -159,13 +160,30 @@ export async function publishOutlineItem(
   let publishedInteractiveId: string | null = null;
 
   if (item.type === 'LESSON') {
-    if (!body.markdown?.trim()) {
-      throw ApiError.badRequest('Lesson has no markdown content');
+    const chapter =
+      body.chapter?.kind === 'interactive_chapter' ? body.chapter : null;
+    let markdown = body.markdown?.trim() ?? '';
+    if (chapter) {
+      const { chapterToMarkdown, assertValidChapter } = await import(
+        '@/lib/lms/interactiveChapter'
+      );
+      try {
+        assertValidChapter(chapter);
+      } catch (err) {
+        throw ApiError.badRequest(
+          err instanceof Error ? err.message : 'Invalid interactive chapter',
+        );
+      }
+      if (!markdown) markdown = chapterToMarkdown(chapter);
+    }
+    if (!markdown && !chapter) {
+      throw ApiError.badRequest('Lesson has no markdown or chapter content');
     }
     const created = await createLessonFromAuthoring(user, {
       courseId: outline.courseId,
       title: item.title,
-      markdown: body.markdown,
+      markdown: markdown || item.title,
+      chapter,
       sectionIds,
       flashcards: body.flashcards,
       sourceOutlineItemId: item.id,
@@ -257,6 +275,28 @@ export async function publishOutlineItem(
     });
   } catch (err) {
     console.warn('[publishOutlineItem] DEFINER mark published failed', err);
+  }
+
+  // Bridge into runtime Canvas-like Modules (delivery surface).
+  try {
+    const { syncPublishedOutlineItemToModule } = await import(
+      '@/lib/lms/modules'
+    );
+    await syncPublishedOutlineItemToModule({
+      courseId: outline.courseId,
+      outlineModuleId: outlineModule.id,
+      outlineModuleTitle: outlineModule.title,
+      outlineModulePosition: outlineModule.position,
+      itemTitle: item.title,
+      itemType: item.type as 'LESSON' | 'QUIZ' | 'DISCUSSION' | 'INTERACTIVE',
+      publishedLessonId,
+      publishedQuizId,
+      publishedChatbotId,
+      publishedInteractiveId,
+      sectionIds,
+    });
+  } catch (err) {
+    console.warn('[publishOutlineItem] module sync skipped', err);
   }
 
   void logAudit({
@@ -383,6 +423,22 @@ export async function publishOutlineItems(
               ? err.message
               : 'Publish failed',
       });
+    }
+  }
+
+  // Rebuild smart runtime Modules (prereqs, unlocks, completion rules).
+  if (published.length > 0) {
+    try {
+      const { rebuildSmartModulesFromOutline } = await import(
+        '@/lib/lms/smartModulesFromOutline'
+      );
+      await rebuildSmartModulesFromOutline({
+        outlineId,
+        sectionIds,
+        autoPublishModulesWithContent: true,
+      });
+    } catch (err) {
+      console.warn('[publishOutlineItems] smart modules rebuild skipped', err);
     }
   }
 

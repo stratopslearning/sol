@@ -449,6 +449,7 @@ export async function createLessonDefiner(payload: {
   professorId: string;
   title: string;
   markdown: string;
+  chapter?: import('@/app/db/schema').InteractiveChapterBody | null;
   isActive?: boolean;
   sourceOutlineItemId?: string | null;
   flashcards?: Array<{ front: string; back: string }>;

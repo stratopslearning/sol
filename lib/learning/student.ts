@@ -4,6 +4,7 @@ import {
   fetchLessonFlashcardsDefiner,
   fetchLessonProgressForStudentDefiner,
   fetchStudentLessonsForSectionsDefiner,
+  listChapterSectionProgressDefiner,
 } from '@/lib/db/studentReadDefiners';
 import { assertStudentCanAccessLesson } from '@/lib/learning/access';
 import { isSectionConcluded } from '@/lib/sectionAvailability';
@@ -77,6 +78,9 @@ export async function getStudentLessonDetail(
     lessonId,
     studentId,
   );
+  const chapterProgress = lesson.chapter
+    ? await listChapterSectionProgressDefiner(lessonId, studentId)
+    : [];
 
   const enrolledIds = await fetchActiveSectionIdsForStudentDefiner(studentId);
   const assignments = await fetchStudentLessonsForSectionsDefiner(enrolledIds);
@@ -86,6 +90,7 @@ export async function getStudentLessonDetail(
     id: lesson.id,
     title: lesson.title,
     markdown: lesson.markdown,
+    chapter: lesson.chapter ?? null,
     courseTitle: match?.courseTitle ?? '',
     flashcards: cards.map((c) => ({
       id: c.id,
@@ -93,6 +98,7 @@ export async function getStudentLessonDetail(
       back: c.back,
       position: c.position,
     })),
+    chapterProgress,
     progress: progress
       ? {
           status: progress.status as 'STARTED' | 'COMPLETED',

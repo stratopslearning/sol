@@ -29,6 +29,7 @@ function asDate(value: Date | string | null | undefined): Date | null {
 }
 
 function mapLesson(raw: Record<string, unknown>) {
+  const chapterRaw = raw.chapter;
   return {
     id: String(raw.id),
     professorId: raw.professor_id
@@ -44,6 +45,10 @@ function mapLesson(raw: Record<string, unknown>) {
         : null,
     title: String(raw.title ?? ''),
     markdown: String(raw.markdown ?? ''),
+    chapter:
+      chapterRaw && typeof chapterRaw === 'object' && !Array.isArray(chapterRaw)
+        ? (chapterRaw as import('@/app/db/schema').InteractiveChapterBody)
+        : null,
     isActive: Boolean(raw.is_active ?? raw.isActive),
     sourceOutlineItemId: raw.source_outline_item_id
       ? String(raw.source_outline_item_id)
@@ -184,6 +189,71 @@ export async function upsertLessonProgressDefiner(payload: {
     status: String(raw.status),
     completedAt: asDate(
       (raw.completed_at ?? raw.completedAt) as Date | string | null | undefined,
+    ),
+  };
+}
+
+export type ChapterSectionProgressRow = {
+  sectionId: string;
+  attempts: number;
+  passed: boolean;
+  lastSubmittedAt: Date | null;
+};
+
+export async function listChapterSectionProgressDefiner(
+  lessonId: string,
+  studentId: string,
+): Promise<ChapterSectionProgressRow[]> {
+  const result = await db.execute(sql`
+    SELECT sol_list_chapter_section_progress(
+      ${lessonId}::uuid,
+      ${studentId}::uuid
+    ) AS rows
+  `);
+  const raw = parseJsonb<Record<string, unknown>[]>(
+    rowsFromExecute<{ rows: unknown }>(result)[0]?.rows,
+  );
+  return (raw ?? []).map((row) => ({
+    sectionId: String(row.section_id ?? row.sectionId ?? ''),
+    attempts: Number(row.attempts ?? 0),
+    passed: Boolean(row.passed),
+    lastSubmittedAt: asDate(
+      (row.last_submitted_at ?? row.lastSubmittedAt) as
+        | Date
+        | string
+        | null
+        | undefined,
+    ),
+  }));
+}
+
+export async function upsertChapterSectionProgressDefiner(payload: {
+  lessonId: string;
+  studentId: string;
+  sectionId: string;
+  passed: boolean;
+}): Promise<ChapterSectionProgressRow> {
+  const result = await db.execute(sql`
+    SELECT sol_upsert_chapter_section_progress(
+      ${JSON.stringify(payload)}::jsonb
+    ) AS row
+  `);
+  const raw = parseJsonb<Record<string, unknown>>(
+    rowsFromExecute<{ row: unknown }>(result)[0]?.row,
+  );
+  if (!raw) {
+    throw new Error('sol_upsert_chapter_section_progress returned no row');
+  }
+  return {
+    sectionId: String(raw.section_id ?? raw.sectionId ?? payload.sectionId),
+    attempts: Number(raw.attempts ?? 0),
+    passed: Boolean(raw.passed),
+    lastSubmittedAt: asDate(
+      (raw.last_submitted_at ?? raw.lastSubmittedAt) as
+        | Date
+        | string
+        | null
+        | undefined,
     ),
   };
 }

@@ -2,6 +2,7 @@ import { AssignmentsTableClient } from '@/components/assignments/AssignmentsTabl
 import { SectionHubShell } from '@/components/student/SectionHubShell';
 import { listStudentActivities } from '@/lib/assignments';
 import { requireStudent } from '@/lib/auth';
+import { loadCourseNav } from '@/lib/lms/loadCourseNav';
 import { requireStudentSectionAccess } from '@/lib/student/sectionAccess';
 
 export default async function StudentSectionAssignmentsPage({
@@ -12,10 +13,13 @@ export default async function StudentSectionAssignmentsPage({
   const user = await requireStudent();
   const { sectionId } = await params;
   const ctx = await requireStudentSectionAccess(user.id, sectionId);
-  const items = await listStudentActivities({
-    studentId: user.id,
-    sectionIds: [sectionId],
-  });
+  const [items, lms] = await Promise.all([
+    listStudentActivities({
+      studentId: user.id,
+      sectionIds: [sectionId],
+    }),
+    loadCourseNav(ctx.courseId),
+  ]);
 
   return (
     <SectionHubShell
@@ -24,6 +28,7 @@ export default async function StudentSectionAssignmentsPage({
       courseTitle={ctx.courseTitle}
       description="Quizzes, lessons, discussions, and interactives assigned to this section."
       activeTab="assignments"
+      tools={lms.enabled ? lms.studentTools : undefined}
       user={user}
     >
       <AssignmentsTableClient items={items} role="student" />

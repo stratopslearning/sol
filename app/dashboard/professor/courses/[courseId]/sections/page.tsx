@@ -16,17 +16,22 @@ import {
 } from '@/lib/db/entityScopedReads';
 import { assertCanManageCourse } from '@/lib/knowledge';
 import { isSectionConcluded } from '@/lib/sectionAvailability';
+import { loadCourseNav } from '@/lib/lms/loadCourseNav';
 
 export const dynamic = 'force-dynamic';
 
 export default async function CourseHubSectionsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ courseId: string }>;
+  searchParams: Promise<{ as?: string }>;
 }) {
   const user = await requireTeachingAccess();
 
   const { courseId } = await params;
+  const studentView = (await searchParams).as === 'student';
+  const lms = await loadCourseNav(courseId);
   let course: { id: string; title: string };
   try {
     course = await assertCanManageCourse(user, courseId);
@@ -48,6 +53,9 @@ export default async function CourseHubSectionsPage({
       courseTitle={course.title}
       description="Invite faculty with each section’s faculty code — they only see courses they teach. Open a section for roster, releases, and gradebook."
       activeTab="sections"
+      tools={lms.enabled ? lms.facultyTools : undefined}
+      nav={lms.nav}
+      studentView={studentView}
     >
       <div className="mb-4 max-w-2xl rounded-2xl border border-rule/70 bg-surface-sunken/40 px-4 py-3 text-sm text-ink-muted">
         <p className="font-medium text-ink">Invite to teach</p>

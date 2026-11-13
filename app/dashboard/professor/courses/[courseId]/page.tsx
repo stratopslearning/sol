@@ -32,6 +32,7 @@ import {
 } from '@/lib/db/facultyStudentReads';
 import { TeachingPaywallBanner } from '@/components/workspace/TeachingPaywallBanner';
 import { assertCanManageCourse, listCourseMaterials } from '@/lib/knowledge';
+import { loadCourseNav } from '@/lib/lms/loadCourseNav';
 import { getAttentionItemsForProfessor } from '@/lib/professorAttention';
 import { assertWorkspaceAllowsTeaching } from '@/lib/workspace';
 
@@ -51,12 +52,15 @@ function formatWhen(d: Date | string | null | undefined) {
 
 export default async function ProfessorCourseHubPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ courseId: string }>;
+  searchParams: Promise<{ as?: string }>;
 }) {
   const user = await requireTeachingAccess();
 
   const { courseId } = await params;
+  const studentView = (await searchParams).as === 'student';
   let course: { id: string; title: string; workspaceId: string | null };
   try {
     course = await assertCanManageCourse(user, courseId);
@@ -81,6 +85,7 @@ export default async function ProfessorCourseHubPage({
     outlines,
     materials,
     analytics,
+    lms,
   ] = await Promise.all([
     fetchCourseHubMeta(courseId),
     listCopySourceOfferings(user, courseId),
@@ -94,6 +99,7 @@ export default async function ProfessorCourseHubPage({
     listOutlinesForCourse(user, courseId),
     listCourseMaterials(user, courseId),
     getCourseAnalytics(user, courseId, { audit: false }),
+    loadCourseNav(courseId),
   ]);
 
   const sectionCount = hub?.sectionCount ?? sectionIds.length;
@@ -135,7 +141,10 @@ export default async function ProfessorCourseHubPage({
       courseId={courseId}
       courseTitle={course.title}
       description="Enrollment, materials, live work, and what needs your attention."
-      activeTab="overview"
+      activeTab={lms.enabled ? 'home' : 'overview'}
+      tools={lms.enabled ? lms.facultyTools : undefined}
+      nav={lms.nav}
+      studentView={studentView}
       actions={
         <div className="flex flex-wrap items-center gap-2">
           <CopyFromOfferingDialog

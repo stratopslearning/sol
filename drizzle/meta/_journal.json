@@ -701,6 +701,20 @@
       "when": 1786900000000,
       "tag": "0099_active_workspace_license_definer",
       "breakpoints": true
+    },
+    {
+      "idx": 100,
+      "version": "7",
+      "when": 1787000000000,
+      "tag": "0100_canvas_lms_course_ia",
+      "breakpoints": true
+    },
+    {
+      "idx": 101,
+      "version": "7",
+      "when": 1787100000000,
+      "tag": "0101_interactive_chapters",
+      "breakpoints": true
     }
   ]
 }

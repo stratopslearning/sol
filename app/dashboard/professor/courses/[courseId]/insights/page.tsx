@@ -16,6 +16,7 @@ import { withBasePath } from '@/lib/basePath';
 import { withTenant } from '@/lib/db/tenantContext';
 import { assertCanManageCourse } from '@/lib/knowledge/access';
 import { getCourseWorkspaceId } from '@/lib/workspace';
+import { loadCourseNav } from '@/lib/lms/loadCourseNav';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,12 +28,16 @@ function suggestionsFromPayload(payload: unknown): WhatToChangeSuggestion[] {
 
 export default async function CourseInsightsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ courseId: string }>;
+  searchParams: Promise<{ as?: string }>;
 }) {
   const user = await requireTeachingAccess();
 
   const { courseId } = await params;
+  const studentView = (await searchParams).as === 'student';
+  const lms = await loadCourseNav(courseId);
   let course: { id: string; title: string };
   try {
     course = await assertCanManageCourse(user, courseId);
@@ -89,6 +94,9 @@ export default async function CourseInsightsPage({
       courseId={courseId}
       courseTitle={course.title}
       activeTab="insights"
+      tools={lms.enabled ? lms.facultyTools : undefined}
+      nav={lms.nav}
+      studentView={studentView}
     >
       <SectionHeading
         title="What to change"
