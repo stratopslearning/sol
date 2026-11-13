@@ -35,7 +35,14 @@ function getClient(): S3Client {
   if (cachedClient) return cachedClient;
   const { region } = requireBucket();
   // Default credential chain: env keys, shared credentials / AWS_PROFILE, etc.
-  cachedClient = new S3Client({ region });
+  // WHEN_REQUIRED: AWS SDK v3 otherwise signs x-amz-checksum-* into presigned
+  // PUT URLs; browsers never send those headers, S3 returns 403 without CORS
+  // headers, and fetch() surfaces it as a network/CORS failure.
+  cachedClient = new S3Client({
+    region,
+    requestChecksumCalculation: 'WHEN_REQUIRED',
+    responseChecksumValidation: 'WHEN_REQUIRED',
+  });
   return cachedClient;
 }
 
@@ -142,6 +149,9 @@ export async function getMaterialObjectPresignedPutUrl(opts: {
       60,
       Math.min(opts.expiresInSeconds ?? 900, 86_400),
     ),
+    // Sign Content-Type so the browser header must match; do not let SDK
+    // checksum middleware add x-amz-checksum-* (breaks browser PUT / CORS).
+    signableHeaders: new Set(['content-type']),
   });
 }
 

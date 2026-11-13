@@ -32,7 +32,7 @@ async function putFileToPresignedUrl(
     if (!res.ok) {
       return {
         ok: false,
-        error: `Storage upload failed (${res.status}). If this persists, ask an admin to allow browser PUT CORS on the file bucket.`,
+        error: `Storage upload failed (${res.status}). Try again; if it keeps failing, storage signing/CORS may be misconfigured.`,
       };
     }
     return { ok: true };
@@ -40,7 +40,7 @@ async function putFileToPresignedUrl(
     return {
       ok: false,
       error:
-        'Could not reach file storage (network or CORS). Ask an admin to allow PUT from this app origin on the S3 bucket.',
+        'Could not reach file storage (blocked browser upload). Refresh and try again after the latest deploy.',
     };
   }
 }
