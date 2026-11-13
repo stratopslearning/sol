@@ -41,6 +41,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { apiUrl, withBasePath } from "@/lib/basePath";
 import type { BookChapterTocItem, BookWithChapters } from "@/lib/books";
+import { uploadCourseBookFile } from "@/lib/books/clientUpload";
 import {
   chapterDisplayIndexMap,
   countTopLevelChapters,
@@ -560,40 +561,24 @@ export default function MaterialsClient({
       toast.error("Choose an EPUB, XML, or PDF file");
       return;
     }
-    const fd = new FormData();
-    fd.set("courseId", courseId);
-    fd.set("file", bookFile);
-    if (bookTitle.trim()) fd.set("title", bookTitle.trim());
     setImportingBook(true);
     try {
-      const res = await fetch(apiUrl("/api/professor/books"), {
-        method: "POST",
-        body: fd,
-        credentials: "same-origin",
-        redirect: "manual",
+      const result = await uploadCourseBookFile({
+        courseId,
+        file: bookFile,
+        title: bookTitle.trim() || undefined,
       });
-      if (res.type === "opaqueredirect" || (res.status >= 300 && res.status < 400)) {
-        toast.error("Session expired — refresh and sign in again");
+      if (!result.ok) {
+        toast.error(result.error);
         return;
       }
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        toast.error(
-          res.status === 401
-            ? "Session expired — refresh and sign in again"
-            : res.status === 413
-              ? "Book file is too large (max 50 MB)"
-              : data.error || "Book upload failed",
-        );
-        return;
-      }
-      const chapterCount = Number(data.book?.chapterCount ?? 0);
-      if (data.book?.status === "FAILED") {
-        toast.error(data.book?.errorMessage || "Book import failed");
+      const chapterCount = Number(result.book?.chapterCount ?? 0);
+      if (result.book?.status === "FAILED") {
+        toast.error(result.book?.errorMessage || "Book import failed");
         return;
       }
       toast.success(
-        data.book?.status === "READY"
+        result.book?.status === "READY"
           ? `Imported ${chapterCount} chapter${chapterCount === 1 ? "" : "s"}`
           : "Book upload queued",
       );

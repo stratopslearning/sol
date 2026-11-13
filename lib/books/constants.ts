@@ -1,6 +1,12 @@
 /** Max book upload size (50 MB) — larger than Knowledge materials. */
 export const MAX_BOOK_UPLOAD_BYTES = 50 * 1024 * 1024;
 
+/**
+ * Vercel serverless request bodies max out around 4.5 MB. Files at or above
+ * this threshold must use S3 presigned PUT (see beginBookDirectUpload).
+ */
+export const BOOK_DIRECT_UPLOAD_THRESHOLD_BYTES = 3 * 1024 * 1024;
+
 /** Cap chapters per import (Pressbooks crawl or EPUB spine). */
 export const MAX_BOOK_CHAPTERS = 200;
 
