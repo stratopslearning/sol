@@ -332,15 +332,17 @@ export async function softDeleteMaterials(
     await assertCanManageCourse(user, opts.courseId);
   }
 
-  const rows = await db.query.courseMaterials.findMany({
-    where: and(
-      inArray(courseMaterials.id, uniqueIds),
-      isNull(courseMaterials.deletedAt),
-      opts.courseId
-        ? eq(courseMaterials.courseId, opts.courseId)
-        : undefined,
-    ),
-  });
+  const { fetchCourseMaterialByIdDefiner, softDeleteCourseMaterialsDefiner } =
+    await import('@/lib/db/knowledgeJobDefiners');
+
+  const rows = (
+    await Promise.all(uniqueIds.map((id) => fetchCourseMaterialByIdDefiner(id)))
+  ).filter(
+    (row): row is NonNullable<typeof row> =>
+      row != null &&
+      row.deletedAt == null &&
+      (!opts.courseId || row.courseId === opts.courseId),
+  );
   if (rows.length === 0) throw ApiError.notFound('Material not found');
 
   // When courseId is omitted (single-id path), authorize each course once.
@@ -352,15 +354,7 @@ export async function softDeleteMaterials(
   }
 
   const ids = rows.map((r) => r.id);
-  const now = new Date();
-  await db
-    .update(courseMaterials)
-    .set({ deletedAt: now, updatedAt: now })
-    .where(inArray(courseMaterials.id, ids));
-  await db
-    .update(courseMaterialChunks)
-    .set({ deletedAt: now })
-    .where(inArray(courseMaterialChunks.materialId, ids));
+  await softDeleteCourseMaterialsDefiner(ids);
   await softDeleteMirroredKnowledgeDocs(ids);
 
   await logAudit({

@@ -182,6 +182,88 @@ export type CreatedCourseMaterial = {
   status: string;
 };
 
+export async function fetchCourseMaterialByIdDefiner(
+  materialId: string,
+): Promise<{
+  id: string;
+  courseId: string;
+  tenantId: string | null;
+  title: string;
+  sourceType: string;
+  mimeType: string | null;
+  byteSize: number | null;
+  s3Key: string | null;
+  externalUrl: string | null;
+  status: string;
+  errorMessage: string | null;
+  authoringCorpus: string | null;
+  deletedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+} | null> {
+  const result = await db.execute(sql`
+    SELECT sol_course_material_by_id(${materialId}::uuid) AS row
+  `);
+  const raw = parseJsonb<Record<string, unknown>>(
+    rowsFromExecute<{ row: unknown }>(result)[0]?.row,
+  );
+  if (!raw?.id) return null;
+  const asDate = (v: unknown) =>
+    v == null ? null : v instanceof Date ? v : new Date(String(v));
+  return {
+    id: String(raw.id),
+    courseId: String(raw.course_id ?? raw.courseId),
+    tenantId: raw.tenant_id
+      ? String(raw.tenant_id)
+      : raw.tenantId
+        ? String(raw.tenantId)
+        : null,
+    title: String(raw.title ?? ''),
+    sourceType: String(raw.source_type ?? raw.sourceType ?? 'UPLOAD'),
+    mimeType: raw.mime_type != null ? String(raw.mime_type) : raw.mimeType != null ? String(raw.mimeType) : null,
+    byteSize:
+      raw.byte_size != null
+        ? Number(raw.byte_size)
+        : raw.byteSize != null
+          ? Number(raw.byteSize)
+          : null,
+    s3Key: raw.s3_key != null ? String(raw.s3_key) : raw.s3Key != null ? String(raw.s3Key) : null,
+    externalUrl:
+      raw.external_url != null
+        ? String(raw.external_url)
+        : raw.externalUrl != null
+          ? String(raw.externalUrl)
+          : null,
+    status: String(raw.status ?? 'PENDING'),
+    errorMessage:
+      raw.error_message != null
+        ? String(raw.error_message)
+        : raw.errorMessage != null
+          ? String(raw.errorMessage)
+          : null,
+    authoringCorpus:
+      raw.authoring_corpus != null
+        ? String(raw.authoring_corpus)
+        : raw.authoringCorpus != null
+          ? String(raw.authoringCorpus)
+          : null,
+    deletedAt: asDate(raw.deleted_at ?? raw.deletedAt),
+    createdAt: asDate(raw.created_at ?? raw.createdAt) ?? new Date(),
+    updatedAt: asDate(raw.updated_at ?? raw.updatedAt) ?? new Date(),
+  };
+}
+
+export async function fetchBookLinkedMaterialIdsDefiner(
+  courseId: string,
+): Promise<string[]> {
+  const result = await db.execute(sql`
+    SELECT sol_book_linked_material_ids(${courseId}::uuid) AS ids
+  `);
+  const ids = rowsFromExecute<{ ids: unknown }>(result)[0]?.ids;
+  if (!Array.isArray(ids)) return [];
+  return ids.map((id) => String(id));
+}
+
 export async function createCourseMaterialDefiner(payload: {
   courseId: string;
   uploadedByUserId: string;

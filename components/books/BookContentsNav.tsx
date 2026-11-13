@@ -68,6 +68,7 @@ export function BookContentsNav({
   className,
   onNavigate,
   variant = 'reader',
+  audience = 'student',
 }: {
   bookId: string;
   bookTitle: string;
@@ -78,6 +79,7 @@ export function BookContentsNav({
   onNavigate?: () => void;
   /** `reader` = Pressbooks-style blocks; `plain` = compact list */
   variant?: 'reader' | 'plain';
+  audience?: 'student' | 'professor';
 }) {
   const displayIndex = useMemo(
     () => chapterDisplayIndexMap(chapters, bookTitle),
@@ -132,7 +134,11 @@ export function BookContentsNav({
               <li key={ch.id}>
                 <Link
                   href={withBasePath(
-                    bookHref(bookId, { sectionId, chapterId: ch.id }),
+                    bookHref(bookId, {
+                      sectionId,
+                      chapterId: ch.id,
+                      audience,
+                    }),
                   )}
                   onClick={onNavigate}
                   className={cn(
@@ -159,7 +165,7 @@ export function BookContentsNav({
   return (
     <nav className={cn('min-h-0', className)} aria-label="Book contents">
       <Link
-        href={withBasePath(bookHref(bookId, { sectionId }))}
+        href={withBasePath(bookHref(bookId, { sectionId, audience }))}
         onClick={onNavigate}
         className="mb-3 block px-1 text-sm font-medium text-ink underline-offset-2 hover:underline"
       >
@@ -182,7 +188,11 @@ export function BookContentsNav({
               <div className="flex items-stretch gap-1">
                 <Link
                   href={withBasePath(
-                    bookHref(bookId, { sectionId, chapterId: node.id }),
+                    bookHref(bookId, {
+                      sectionId,
+                      chapterId: node.id,
+                      audience,
+                    }),
                   )}
                   onClick={onNavigate}
                   className={cn(
@@ -227,6 +237,7 @@ export function BookContentsNav({
                             bookHref(bookId, {
                               sectionId,
                               chapterId: child.id,
+                              audience,
                             }),
                           )}
                           onClick={onNavigate}

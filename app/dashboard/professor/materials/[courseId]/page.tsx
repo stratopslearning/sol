@@ -40,19 +40,35 @@ export default async function ProfessorMaterialsPage({
   }
 
   const workspaceId = await getCourseWorkspaceId(courseId);
-  const [materials, books, linkedDocuments, libraryDocuments, teachable] =
-    await Promise.all([
-      listCourseMaterials(user, courseId),
-      listCourseBooks(user, courseId),
-      listCourseLinkedDocuments(user, courseId),
-      workspaceId
-        ? listWorkspaceDocuments(user, workspaceId).catch((err) => {
-            console.warn('[materials] workspace library list failed', err);
-            return [];
-          })
-        : Promise.resolve([]),
-      listTeachableCourses(user),
-    ]);
+  const [
+    materialsRaw,
+    books,
+    linkedDocuments,
+    libraryDocuments,
+    teachable,
+    bookLinkedMaterialIds,
+  ] = await Promise.all([
+    listCourseMaterials(user, courseId),
+    listCourseBooks(user, courseId),
+    listCourseLinkedDocuments(user, courseId),
+    workspaceId
+      ? listWorkspaceDocuments(user, workspaceId).catch((err) => {
+          console.warn('[materials] workspace library list failed', err);
+          return [];
+        })
+      : Promise.resolve([]),
+    listTeachableCourses(user),
+    import('@/lib/db/knowledgeJobDefiners').then((m) =>
+      m.fetchBookLinkedMaterialIdsDefiner(courseId).catch((err) => {
+        console.warn('[materials] book-linked material ids failed', err);
+        return [] as string[];
+      }),
+    ),
+  ]);
+
+  // Book RAG rows live under Books — hide them from Uploads & library.
+  const bookLinked = new Set(bookLinkedMaterialIds);
+  const materials = materialsRaw.filter((m) => !bookLinked.has(m.id));
 
   const linkedIds = new Set(linkedDocuments.map((d) => d.id));
   const attachableDocuments = libraryDocuments.filter(

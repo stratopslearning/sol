@@ -17,11 +17,13 @@ export function BookResumeButton({
   bookId,
   sectionId,
   chapters,
+  audience = 'student',
 }: {
   bookId: string;
   sectionId?: string | null;
   /** Current TOC — used to remap stale chapter ids after reprocess. */
   chapters: Array<{ id: string; title: string }>;
+  audience?: 'student' | 'professor';
 }) {
   const [href, setHref] = useState<string | null>(null);
   const [label, setLabel] = useState<string | null>(null);
@@ -54,11 +56,15 @@ export function BookResumeButton({
 
     setHref(
       withBasePath(
-        bookHref(bookId, { sectionId, chapterId: resolved.id }),
+        bookHref(bookId, {
+          sectionId,
+          chapterId: resolved.id,
+          audience,
+        }),
       ),
     );
     setLabel(resolved.title);
-  }, [bookId, sectionId, chapters]);
+  }, [bookId, sectionId, chapters, audience]);
 
   if (!href || !label) return null;
 

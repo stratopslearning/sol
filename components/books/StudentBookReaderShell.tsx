@@ -36,6 +36,8 @@ export function StudentBookReaderShell({
   children,
   prev = null,
   next = null,
+  audience = 'student',
+  backHref: backHrefOverride = null,
 }: {
   user: NavUser;
   book: { id: string; title: string };
@@ -45,6 +47,8 @@ export function StudentBookReaderShell({
   children: ReactNode;
   prev?: { id: string; title: string } | null;
   next?: { id: string; title: string } | null;
+  audience?: 'student' | 'professor';
+  backHref?: string | null;
 }) {
   const [tocOpen, setTocOpen] = useState(true);
 
@@ -57,16 +61,18 @@ export function StudentBookReaderShell({
   }, []);
 
   const bookTocHref = withBasePath(
-    bookHref(book.id, { sectionId: section?.id }),
+    bookHref(book.id, { sectionId: section?.id, audience }),
   );
-  const backHref = section
-    ? withBasePath(`/dashboard/student/sections/${section.id}/books`)
-    : bookTocHref;
+  const backHref =
+    backHrefOverride ??
+    (section
+      ? withBasePath(`/dashboard/student/sections/${section.id}/books`)
+      : bookTocHref);
 
   return (
     <AppShell
-      role="student"
-      active="sections"
+      role={audience === 'professor' ? 'professor' : 'student'}
+      active={audience === 'professor' ? 'knowledge' : 'sections'}
       user={user}
       topbarTitle={book.title}
       maxWidth="full"
@@ -108,6 +114,7 @@ export function StudentBookReaderShell({
                 chapters={chapters}
                 activeChapterId={activeChapterId}
                 sectionId={section?.id}
+                audience={audience}
                 onNavigate={() => {
                   if (window.matchMedia('(max-width: 1023px)').matches) {
                     setTocOpen(false);
@@ -118,7 +125,11 @@ export function StudentBookReaderShell({
                 href={backHref}
                 className="mt-4 block px-1 text-xs text-ink-faint hover:text-ink"
               >
-                ← Back to books
+                {audience === 'professor'
+                  ? backHrefOverride
+                    ? '← Back to materials'
+                    : '← Back to book'
+                  : '← Back to books'}
               </Link>
             </div>
           </aside>
@@ -169,6 +180,7 @@ export function StudentBookReaderShell({
                     bookHref(book.id, {
                       sectionId: section?.id,
                       chapterId: prev.id,
+                      audience,
                     }),
                   )}
                   className="inline-flex min-w-0 max-w-[46%] items-center gap-1.5 text-sm text-paper/90 transition-colors hover:text-paper"
@@ -189,6 +201,7 @@ export function StudentBookReaderShell({
                     bookHref(book.id, {
                       sectionId: section?.id,
                       chapterId: next.id,
+                      audience,
                     }),
                   )}
                   className="inline-flex min-w-0 max-w-[46%] items-center justify-end gap-1.5 text-sm text-paper/90 transition-colors hover:text-paper"
