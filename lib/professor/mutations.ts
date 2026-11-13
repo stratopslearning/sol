@@ -144,25 +144,30 @@ export async function enrollInSection(
   );
   if (existing) throw ApiError.badRequest('Already enrolled in this section');
 
+  // Seat first so destination-tenant writes see an allowed member where needed.
+  const { upsertRoleBinding } = await import('@/lib/authz/bindings');
+  await ensureWorkspaceMembership({
+    workspaceId: destinationWorkspaceId,
+    userId: user.id,
+  });
+
   try {
     await professorSectionEnrollDefiner({
       professorId: user.id,
       sectionId: section.id,
+      tenantId: destinationWorkspaceId,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     if (message.includes('Already enrolled')) {
       throw ApiError.badRequest('Already enrolled in this section');
     }
+    if (message.includes('Section not found')) {
+      throw ApiError.notFound('Invalid enrollment code');
+    }
     throw err;
   }
 
-  // Seat + co_instructor binding on the destination workspace.
-  const { upsertRoleBinding } = await import('@/lib/authz/bindings');
-  await ensureWorkspaceMembership({
-    workspaceId: destinationWorkspaceId,
-    userId: user.id,
-  });
   await upsertRoleBinding({
     tenantId: destinationWorkspaceId,
     userId: user.id,

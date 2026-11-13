@@ -250,6 +250,8 @@ export async function setSectionEndsAtDefiner(
 export async function professorSectionEnrollDefiner(payload: {
   professorId: string;
   sectionId: string;
+  /** Destination workspace/tenant — required for cross-workspace joins under FORCE RLS. */
+  tenantId?: string;
 }): Promise<void> {
   await db.execute(sql`
     SELECT sol_professor_section_enroll(${JSON.stringify(payload)}::jsonb)
