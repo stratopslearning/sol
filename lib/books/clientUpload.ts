@@ -40,7 +40,7 @@ async function putFileToPresignedUrl(
     return {
       ok: false,
       error:
-        'Could not reach file storage (blocked browser upload). Refresh and try again after the latest deploy.',
+        'Browser blocked the storage upload (CSP/network). Hard-refresh after deploy and try again.',
     };
   }
 }
