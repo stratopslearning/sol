@@ -3,11 +3,22 @@
  *
  * Run locally:  BRAINTRUST_WRAP=1 npm run eval
  * Requires:      OPENAI_API_KEY; BRAINTRUST_API_KEY optional (noSendLogs when absent)
+ *
+ * Env: Vercel/CI already inject process.env — do not load `.env.local` there
+ * (and never override host env). Locally, `.env` then `.env.local` fill gaps.
  */
 import { config as loadEnv } from 'dotenv';
 
+const hosted =
+  Boolean(process.env.VERCEL) ||
+  Boolean(process.env.CI) ||
+  process.env.NODE_ENV === 'production';
+
+// Never override vars the host already set (Vercel / CI / shell).
 loadEnv({ path: '.env', quiet: true });
-loadEnv({ path: '.env.local', override: true, quiet: true });
+if (!hosted) {
+  loadEnv({ path: '.env.local', quiet: true });
+}
 
 const PROJECT = process.env.BRAINTRUST_PROJECT?.trim() || 'teachwithsol';
 const GRADING_BAND_FLOOR = Number(process.env.EVAL_GRADING_BAND_FLOOR ?? '0.8');
