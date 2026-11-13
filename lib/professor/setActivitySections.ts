@@ -168,13 +168,11 @@ export async function addActivityToSection(
     return;
   }
   if (opts.type === 'INTERACTIVE') {
-    const existing = await db.query.interactiveSections.findMany({
-      where: eq(interactiveSections.interactiveId, opts.entityId),
-      columns: { sectionId: true },
-    });
-    const next = [
-      ...new Set([...existing.map((e) => e.sectionId), opts.sectionId]),
-    ];
+    const { fetchInteractiveSectionIdsDefiner } = await import(
+      '@/lib/db/facultyWriteDefiners'
+    );
+    const existing = await fetchInteractiveSectionIdsDefiner(opts.entityId);
+    const next = [...new Set([...existing, opts.sectionId])];
     await assignInteractiveSections(user, opts.entityId, next);
     return;
   }

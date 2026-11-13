@@ -301,6 +301,41 @@ export async function assignQuizSectionsDefiner(payload: {
   return ids ?? [];
 }
 
+export async function setInteractiveSectionsDefiner(payload: {
+  interactiveId: string;
+  assignedBy: string;
+  sectionIds: string[];
+}): Promise<string[]> {
+  const result = await db.execute(sql`
+    SELECT sol_set_interactive_sections(${JSON.stringify(payload)}::jsonb) AS ids
+  `);
+  const ids = rowsFromExecute<{ ids: string[] | null }>(result)[0]?.ids;
+  return ids ?? [];
+}
+
+export async function fetchInteractiveSectionIdsDefiner(
+  interactiveId: string,
+): Promise<string[]> {
+  const result = await db.execute(sql`
+    SELECT sol_interactive_section_ids(${interactiveId}::uuid) AS ids
+  `);
+  const ids = rowsFromExecute<{ ids: unknown }>(result)[0]?.ids;
+  if (!Array.isArray(ids)) return [];
+  return ids.map((id) => String(id));
+}
+
+export async function assignLessonSectionsDefiner(payload: {
+  lessonId: string;
+  assignedBy: string;
+  sectionIds: string[];
+}): Promise<string[]> {
+  const result = await db.execute(sql`
+    SELECT sol_assign_lesson_sections(${JSON.stringify(payload)}::jsonb) AS ids
+  `);
+  const ids = rowsFromExecute<{ ids: string[] | null }>(result)[0]?.ids;
+  return ids ?? [];
+}
+
 export async function unassignQuizSectionDefiner(
   sectionId: string,
   quizId: string,

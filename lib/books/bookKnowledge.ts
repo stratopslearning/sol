@@ -1,11 +1,6 @@
-import { and, eq, isNotNull, isNull } from 'drizzle-orm';
-
-import { db } from '@/app/db';
-import { bookChapters, hostedBooks } from '@/app/db/schema';
 import { indexBookAsMaterial } from '@/lib/books/indexChapterMaterial';
 import type { ParsedChapter } from '@/lib/books/types';
-import { fetchHostedBookByIdDefiner } from '@/lib/db/bookWriteDefiners';
-import {
+import { fetchHostedBookByIdDefiner } from '@/lib/db/bookWriteDefiners';import {
   fetchBookChaptersForRagDefiner,
   setBookChaptersMaterialDefiner,
   softDeleteCourseMaterialsDefiner,
@@ -60,15 +55,7 @@ export async function indexBookChaptersAsSingleMaterial(opts: {
   const prior =
     opts.priorMaterialIds ??
     (
-      await db
-        .select({ materialId: bookChapters.materialId })
-        .from(bookChapters)
-        .where(
-          and(
-            eq(bookChapters.bookId, opts.bookId),
-            isNotNull(bookChapters.materialId),
-          ),
-        )
+      await fetchBookChaptersForRagDefiner(opts.bookId)
     )
       .map((r) => r.materialId)
       .filter((id): id is string => id != null);
@@ -179,18 +166,11 @@ export async function ensureBookKnowledgeIndexed(
  * chapters (no active chapter still points at them).
  */
 async function cleanupOrphanBookMaterials(courseId: string): Promise<number> {
-  const allLinked = await db
-    .select({
-      materialId: bookChapters.materialId,
-      deletedAt: bookChapters.deletedAt,
-    })
-    .from(bookChapters)
-    .where(
-      and(
-        eq(bookChapters.courseId, courseId),
-        isNotNull(bookChapters.materialId),
-      ),
-    );
+  const { fetchBookChapterMaterialLinksForCourseDefiner } = await import(
+    '@/lib/db/bookWriteDefiners'
+  );
+  const allLinked =
+    await fetchBookChapterMaterialLinksForCourseDefiner(courseId);
 
   const active = new Set<string>();
   const seen = new Set<string>();
@@ -208,14 +188,12 @@ async function cleanupOrphanBookMaterials(courseId: string): Promise<number> {
 export async function consolidateCourseBookKnowledge(
   courseId: string,
 ): Promise<{ consolidated: number; orphansRemoved: number }> {
-  const books = await db.query.hostedBooks.findMany({
-    where: and(
-      eq(hostedBooks.courseId, courseId),
-      eq(hostedBooks.status, 'READY'),
-      isNull(hostedBooks.deletedAt),
-    ),
-    columns: { id: true },
-  });
+  const { fetchHostedBooksForCourseDefiner } = await import(
+    '@/lib/db/bookWriteDefiners'
+  );
+  const books = (await fetchHostedBooksForCourseDefiner(courseId)).filter(
+    (b) => b.status === 'READY' && !b.deletedAt,
+  );
 
   let consolidated = 0;
   for (const b of books) {

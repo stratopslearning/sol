@@ -673,6 +673,13 @@
       "when": 1786500000000,
       "tag": "0095_faculty_book_reader_release",
       "breakpoints": true
+    },
+    {
+      "idx": 96,
+      "version": "7",
+      "when": 1786600000000,
+      "tag": "0096_force_rls_audit_pack",
+      "breakpoints": true
     }
   ]
 }

@@ -274,6 +274,188 @@ export async function softDeleteBookChaptersDefiner(
   `);
 }
 
+export async function softDeleteBookChaptersByIdsDefiner(
+  bookId: string,
+  chapterIds: string[],
+): Promise<number> {
+  if (chapterIds.length === 0) return 0;
+  const { asUuidArray } = await import('@/lib/db/sqlArrays');
+  const result = await db.execute(sql`
+    SELECT sol_soft_delete_book_chapters_by_ids(
+      ${bookId}::uuid,
+      ${asUuidArray(chapterIds)}
+    ) AS count
+  `);
+  return Number(rowsFromExecute<{ count: number }>(result)[0]?.count ?? 0);
+}
+
+export async function fetchBookMaterialIdsForBooksDefiner(
+  bookIds: string[],
+): Promise<string[]> {
+  if (bookIds.length === 0) return [];
+  const { asUuidArray } = await import('@/lib/db/sqlArrays');
+  const result = await db.execute(sql`
+    SELECT sol_book_material_ids_for_books(${asUuidArray(bookIds)}) AS ids
+  `);
+  const ids = rowsFromExecute<{ ids: unknown }>(result)[0]?.ids;
+  if (!Array.isArray(ids)) return [];
+  return ids.map((id) => String(id));
+}
+
+export async function fetchBookChaptersDetailForBookDefiner(
+  bookId: string,
+): Promise<
+  Array<{
+    id: string;
+    bookId: string;
+    position: number;
+    title: string;
+    slug: string;
+    partTitle: string | null;
+    parentId: string | null;
+    level: number;
+    sourceUrl: string | null;
+    materialId: string | null;
+    markdownLength: number;
+  }>
+> {
+  const result = await db.execute(sql`
+    SELECT sol_book_chapters_detail_for_book(${bookId}::uuid) AS rows
+  `);
+  const raw = parseJsonb<
+    Array<{
+      id: string;
+      bookId: string;
+      position: number;
+      title: string;
+      slug?: string | null;
+      partTitle?: string | null;
+      parentId?: string | null;
+      level?: number | null;
+      sourceUrl?: string | null;
+      materialId?: string | null;
+      markdownLength?: number | null;
+    }>
+  >(rowsFromExecute<{ rows: unknown }>(result)[0]?.rows);
+  if (!Array.isArray(raw)) return [];
+  return raw.map((ch) => ({
+    id: ch.id,
+    bookId: ch.bookId,
+    position: Number(ch.position ?? 0),
+    title: ch.title,
+    slug: String(ch.slug ?? ''),
+    partTitle: ch.partTitle ?? null,
+    parentId: ch.parentId ?? null,
+    level: Number(ch.level ?? 0),
+    sourceUrl: ch.sourceUrl ?? null,
+    materialId: ch.materialId ?? null,
+    markdownLength: Number(ch.markdownLength ?? 0),
+  }));
+}
+
+export async function fetchBookSectionIdsDefiner(
+  bookId: string,
+): Promise<string[]> {
+  const result = await db.execute(sql`
+    SELECT sol_book_section_ids_for_book(${bookId}::uuid) AS ids
+  `);
+  const ids = rowsFromExecute<{ ids: unknown }>(result)[0]?.ids;
+  if (!Array.isArray(ids)) return [];
+  return ids.map((id) => String(id));
+}
+
+export async function fetchActiveSectionIdsForStudentDefiner(
+  studentId: string,
+): Promise<string[]> {
+  const result = await db.execute(sql`
+    SELECT sol_active_section_ids_for_student(${studentId}::uuid) AS ids
+  `);
+  const ids = rowsFromExecute<{ ids: unknown }>(result)[0]?.ids;
+  if (!Array.isArray(ids)) return [];
+  return ids.map((id) => String(id));
+}
+
+export async function fetchStudentBookAssignmentsDefiner(
+  sectionIds: string[],
+): Promise<
+  Array<{
+    bookId: string;
+    title: string;
+    courseId: string;
+    courseTitle: string;
+    sectionId: string;
+    sectionName: string;
+    status: string;
+    isReleased: boolean;
+  }>
+> {
+  if (sectionIds.length === 0) return [];
+  const { asUuidArray } = await import('@/lib/db/sqlArrays');
+  const result = await db.execute(sql`
+    SELECT sol_student_book_assignments(${asUuidArray(sectionIds)}) AS rows
+  `);
+  const raw = parseJsonb<
+    Array<{
+      bookId: string;
+      title: string;
+      courseId: string;
+      courseTitle?: string | null;
+      sectionId: string;
+      sectionName?: string | null;
+      status: string;
+      isReleased: boolean;
+    }>
+  >(rowsFromExecute<{ rows: unknown }>(result)[0]?.rows);
+  if (!Array.isArray(raw)) return [];
+  return raw.map((r) => ({
+    bookId: r.bookId,
+    title: r.title,
+    courseId: r.courseId,
+    courseTitle: r.courseTitle ?? '',
+    sectionId: r.sectionId,
+    sectionName: r.sectionName ?? '',
+    status: r.status,
+    isReleased: Boolean(r.isReleased),
+  }));
+}
+
+export async function listPendingHostedBooksDefiner(
+  limit: number,
+  staleBefore: Date,
+): Promise<Array<{ id: string; status: string; courseId: string }>> {
+  const result = await db.execute(sql`
+    SELECT sol_list_pending_hosted_books(
+      ${limit}::integer,
+      ${staleBefore.toISOString()}::timestamptz
+    ) AS rows
+  `);
+  const raw = parseJsonb<
+    Array<{ id: string; status: string; courseId: string }>
+  >(rowsFromExecute<{ rows: unknown }>(result)[0]?.rows);
+  if (!Array.isArray(raw)) return [];
+  return raw.map((r) => ({
+    id: String(r.id),
+    status: String(r.status),
+    courseId: String(r.courseId),
+  }));
+}
+
+export async function fetchBookChapterMaterialLinksForCourseDefiner(
+  courseId: string,
+): Promise<Array<{ materialId: string; deletedAt: string | null }>> {
+  const result = await db.execute(sql`
+    SELECT sol_book_chapter_material_links_for_course(${courseId}::uuid) AS rows
+  `);
+  const raw = parseJsonb<
+    Array<{ materialId: string; deletedAt?: string | null }>
+  >(rowsFromExecute<{ rows: unknown }>(result)[0]?.rows);
+  if (!Array.isArray(raw)) return [];
+  return raw.map((r) => ({
+    materialId: String(r.materialId),
+    deletedAt: r.deletedAt ?? null,
+  }));
+}
+
 export async function insertBookChapterDefiner(payload: {
   bookId: string;
   courseId: string;

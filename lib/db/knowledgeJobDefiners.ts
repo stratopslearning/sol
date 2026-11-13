@@ -327,6 +327,97 @@ export async function softDeleteCourseMaterialsDefiner(
   return Number(rowsFromExecute<{ count: number }>(result)[0]?.count ?? 0);
 }
 
+export async function setCourseMaterialAuthoringCorpusDefiner(
+  materialId: string,
+  corpus: 'prior_course' | 'this_term',
+): Promise<Record<string, unknown> | null> {
+  const result = await db.execute(sql`
+    SELECT sol_set_course_material_authoring_corpus(
+      ${materialId}::uuid,
+      ${corpus}
+    ) AS row
+  `);
+  return parseJsonb<Record<string, unknown>>(
+    rowsFromExecute<{ row: unknown }>(result)[0]?.row,
+  );
+}
+
+export async function claimCourseMaterialDefiner(
+  materialId: string,
+): Promise<{
+  id: string;
+  courseId: string;
+  sourceType: string;
+  mimeType: string | null;
+  s3Key: string | null;
+  externalUrl: string | null;
+  title: string;
+  status: string;
+} | null> {
+  const result = await db.execute(sql`
+    SELECT sol_claim_course_material(${materialId}::uuid) AS row
+  `);
+  const raw = parseJsonb<Record<string, unknown>>(
+    rowsFromExecute<{ row: unknown }>(result)[0]?.row,
+  );
+  if (!raw?.id) return null;
+  return {
+    id: String(raw.id),
+    courseId: String(raw.course_id ?? raw.courseId),
+    sourceType: String(raw.source_type ?? raw.sourceType ?? 'UPLOAD'),
+    mimeType:
+      raw.mime_type != null
+        ? String(raw.mime_type)
+        : raw.mimeType != null
+          ? String(raw.mimeType)
+          : null,
+    s3Key:
+      raw.s3_key != null
+        ? String(raw.s3_key)
+        : raw.s3Key != null
+          ? String(raw.s3Key)
+          : null,
+    externalUrl:
+      raw.external_url != null
+        ? String(raw.external_url)
+        : raw.externalUrl != null
+          ? String(raw.externalUrl)
+          : null,
+    title: String(raw.title ?? ''),
+    status: String(raw.status ?? 'PROCESSING'),
+  };
+}
+
+export async function deleteCourseMaterialChunksDefiner(
+  materialId: string,
+): Promise<number> {
+  const result = await db.execute(sql`
+    SELECT sol_delete_course_material_chunks(${materialId}::uuid) AS count
+  `);
+  return Number(rowsFromExecute<{ count: number }>(result)[0]?.count ?? 0);
+}
+
+export async function listPendingCourseMaterialsDefiner(
+  limit: number,
+  staleBefore: Date,
+): Promise<Array<{ id: string; status: string; courseId: string }>> {
+  const result = await db.execute(sql`
+    SELECT sol_list_pending_course_materials(
+      ${limit}::integer,
+      ${staleBefore.toISOString()}::timestamptz
+    ) AS rows
+  `);
+  const raw = parseJsonb<
+    Array<{ id: string; status: string; courseId: string }>
+  >(rowsFromExecute<{ rows: unknown }>(result)[0]?.rows);
+  if (!Array.isArray(raw)) return [];
+  return raw.map((r) => ({
+    id: String(r.id),
+    status: String(r.status),
+    courseId: String(r.courseId),
+  }));
+}
+
 export async function setBookChaptersMaterialDefiner(
   bookId: string,
   materialId: string | null,

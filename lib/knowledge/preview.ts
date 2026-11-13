@@ -251,13 +251,13 @@ export async function getLegacyMaterialPreviewBytes(
   title: string;
   externalUrl: string | null;
 }> {
-  const material = await db.query.courseMaterials.findFirst({
-    where: and(
-      eq(courseMaterials.id, materialId),
-      isNull(courseMaterials.deletedAt),
-    ),
-  });
-  if (!material) throw ApiError.notFound('Material not found');
+  const { fetchCourseMaterialByIdDefiner } = await import(
+    '@/lib/db/knowledgeJobDefiners'
+  );
+  const material = await fetchCourseMaterialByIdDefiner(materialId);
+  if (!material || material.deletedAt) {
+    throw ApiError.notFound('Material not found');
+  }
   await assertCanManageCourse(user, material.courseId);
   if (material.externalUrl && !material.s3Key) {
     return {
