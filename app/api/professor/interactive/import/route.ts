@@ -51,12 +51,12 @@ export async function POST(req: Request) {
       throw ApiError.badRequest('Upload a .h5p package');
     }
     if (file.size > MAX_UPLOAD_BYTES) {
-      throw ApiError.badRequest('File exceeds 10 MB limit');
+      throw ApiError.badRequest('File exceeds 50 MB limit');
     }
 
     const buf = Buffer.from(await file.arrayBuffer());
     if (buf.byteLength > MAX_UPLOAD_BYTES) {
-      throw ApiError.badRequest('File exceeds 10 MB limit');
+      throw ApiError.badRequest('File exceeds 50 MB limit');
     }
 
     // Create row first to get id for storage key

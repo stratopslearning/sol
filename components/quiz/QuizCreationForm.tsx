@@ -1,6 +1,10 @@
 "use client";
 
 import { apiUrl, withBasePath } from '@/lib/basePath';
+import {
+  downloadCsvTemplate,
+  QUIZ_QUESTIONS_CSV_TEMPLATE,
+} from '@/lib/csv/downloadTemplate';
 import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -796,6 +800,19 @@ export function QuizCreationForm({
                   <h2 className="font-display text-2xl text-ink mt-1">Questions</h2>
                 </div>
                 <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    onClick={() =>
+                      downloadCsvTemplate(
+                        'quiz_questions_template.csv',
+                        QUIZ_QUESTIONS_CSV_TEMPLATE,
+                      )
+                    }
+                    variant="ghost"
+                    size="sm"
+                  >
+                    Download template
+                  </Button>
                   <Button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}

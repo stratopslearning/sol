@@ -16,6 +16,7 @@ import {
 } from '@/lib/knowledge/tokens';
 import {
   assertWorkspaceFaculty,
+  assertWorkspaceFacultyRead,
   assertWorkspaceLibraryAdmin,
 } from '@/lib/knowledge/workspaceAccess';
 
@@ -57,7 +58,8 @@ export async function listWorkspaceConnectors(
   user: AuthUser,
   workspaceId: string,
 ): Promise<ConnectorSummary[]> {
-  await assertWorkspaceFaculty(user, workspaceId);
+  // Reads stay available pre-pilot; mutations still require teaching entitlement.
+  await assertWorkspaceFacultyRead(user, workspaceId);
   const rows = await db.query.knowledgeConnectors.findMany({
     where: and(
       eq(knowledgeConnectors.workspaceId, workspaceId),

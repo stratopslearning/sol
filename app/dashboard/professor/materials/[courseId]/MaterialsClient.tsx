@@ -16,6 +16,10 @@ import {
 } from "@/components/icons";
 import { toast } from "sonner";
 
+import {
+  MaterialPreviewDialog,
+  type MaterialPreviewTarget,
+} from "@/components/knowledge/MaterialPreviewDialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -53,8 +57,8 @@ import {
 import { cn } from "@/lib/utils";
 
 const ACCEPTED = ".pdf,.docx,.txt,.md,.zip";
-const BOOK_ACCEPTED = ".epub,.xml";
-const MAX_BYTES = 10 * 1024 * 1024;
+const BOOK_ACCEPTED = ".epub,.xml,.pdf";
+const MAX_BYTES = 50 * 1024 * 1024;
 const MAX_ZIP_BYTES = 50 * 1024 * 1024;
 
 function isZipFile(file: File) {
@@ -178,6 +182,9 @@ export default function MaterialsClient({
     "all" | "attention" | "ready"
   >("all");
   const [retryingId, setRetryingId] = useState<string | null>(null);
+  const [previewTarget, setPreviewTarget] =
+    useState<MaterialPreviewTarget | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   useEffect(() => {
     setBooks(initialBooks);
@@ -399,7 +406,7 @@ export default function MaterialsClient({
       return;
     }
     if (!zip && next.size > MAX_BYTES) {
-      toast.error("File must be 10 MB or smaller");
+      toast.error("File must be 50 MB or smaller");
       return;
     }
     setFile(next);
@@ -416,7 +423,7 @@ export default function MaterialsClient({
     }
     const lower = next.name.toLowerCase();
     if (!lower.endsWith(".epub") && !lower.endsWith(".xml")) {
-      toast.error("Upload an EPUB or Pressbooks XML export");
+      toast.error("Upload an EPUB, Pressbooks XML, or PDF");
       return;
     }
     setBookFile(next);
@@ -461,7 +468,7 @@ export default function MaterialsClient({
             : res.status === 413
               ? zip
                 ? "Zip is too large (max 50 MB)"
-                : "File is too large (max 10 MB)"
+                : "File is too large (max 50 MB)"
               : data.error || "Upload failed",
         );
         return;
@@ -546,7 +553,7 @@ export default function MaterialsClient({
   async function onImportBookFile(e: React.FormEvent) {
     e.preventDefault();
     if (!bookFile) {
-      toast.error("Choose an EPUB or XML file");
+      toast.error("Choose an EPUB, XML, or PDF file");
       return;
     }
     const fd = new FormData();
@@ -951,6 +958,11 @@ export default function MaterialsClient({
 
   return (
     <div className="mt-8 flex flex-col gap-8">
+      <MaterialPreviewDialog
+        target={previewTarget}
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+      />
       <section className="rounded-2xl border border-border bg-card/40 p-5 sm:p-6">
         <div className="mb-5 max-w-2xl">
           <h2 className="text-sm font-medium text-foreground">Add materials</h2>
@@ -980,7 +992,7 @@ export default function MaterialsClient({
           <TabsContent value="file" className="mt-5 outline-none">
             <form onSubmit={onUpload} className="flex flex-col gap-4">
               <p className="text-xs text-muted-foreground">
-                PDF, DOCX, TXT, or Markdown · max 10 MB. Or a zip pack (up to 50
+                PDF, DOCX, TXT, or Markdown · max 50 MB. Or a zip pack (up to 50
                 MB) — folders become title prefixes for authoring.
               </p>
 
@@ -1143,7 +1155,7 @@ export default function MaterialsClient({
             <p className="mb-4 text-xs leading-relaxed text-muted-foreground">
               Pull in chapters for the reader. Use a{" "}
               <span className="text-foreground/80">public</span> Pressbooks URL,
-              or upload an EPUB / Pressbooks XML export if the book is private.
+              or upload an EPUB, Pressbooks XML, or PDF if the book is private.
             </p>
 
             <Tabs
@@ -1255,7 +1267,7 @@ export default function MaterialsClient({
                         aria-hidden
                       />
                       <span className="text-sm text-foreground">
-                        Drop or choose EPUB / Pressbooks XML
+                        Drop or choose EPUB / XML / PDF
                       </span>
                       <span className="text-xs text-muted-foreground">
                         Max 50 MB
@@ -1991,6 +2003,23 @@ export default function MaterialsClient({
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
+                                  <DropdownMenuItem
+                                    onClick={() => {
+                                      setPreviewTarget({
+                                        kind: "knowledge",
+                                        id: d.id,
+                                        title: d.title,
+                                        mimeType: d.mimeType,
+                                        externalUrl: d.externalUrl,
+                                        sourceKind: d.sourceKind,
+                                        status: d.status,
+                                        courseId,
+                                      });
+                                      setPreviewOpen(true);
+                                    }}
+                                  >
+                                    Preview
+                                  </DropdownMenuItem>
                                   {d.updateAvailableVersionId ? (
                                     <DropdownMenuItem
                                       onClick={() =>
@@ -2118,6 +2147,21 @@ export default function MaterialsClient({
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setPreviewTarget({
+                                    kind: "legacy",
+                                    id: m.id,
+                                    title: m.title,
+                                    mimeType: m.mimeType,
+                                    externalUrl: m.externalUrl,
+                                    status: m.status,
+                                  });
+                                  setPreviewOpen(true);
+                                }}
+                              >
+                                Preview
+                              </DropdownMenuItem>
                               <DropdownMenuItem
                                 onClick={() =>
                                   void onSetMaterialCorpus(

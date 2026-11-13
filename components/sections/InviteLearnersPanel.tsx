@@ -6,6 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { apiUrl } from '@/lib/basePath';
+import {
+  downloadCsvTemplate,
+  EMAIL_LIST_CSV_TEMPLATE,
+} from '@/lib/csv/downloadTemplate';
 
 type InviteResultRow = {
   email?: string;
@@ -134,7 +138,22 @@ export function InviteLearnersPanel({ sectionId }: { sectionId: string }) {
       </form>
 
       <div className="grid gap-2 border-t border-rule pt-4">
-        <Label htmlFor={`learner-csv-${sectionId}`}>Or upload CSV</Label>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <Label htmlFor={`learner-csv-${sectionId}`}>Or upload CSV</Label>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() =>
+              downloadCsvTemplate(
+                'learner_import_template.csv',
+                EMAIL_LIST_CSV_TEMPLATE,
+              )
+            }
+          >
+            Download template
+          </Button>
+        </div>
         <input
           id={`learner-csv-${sectionId}`}
           type="file"

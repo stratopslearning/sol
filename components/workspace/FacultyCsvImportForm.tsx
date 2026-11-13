@@ -2,8 +2,13 @@
 
 import { useState } from 'react';
 
+import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { apiUrl } from '@/lib/basePath';
+import {
+  downloadCsvTemplate,
+  EMAIL_LIST_CSV_TEMPLATE,
+} from '@/lib/csv/downloadTemplate';
 
 export function FacultyCsvImportForm({ workspaceId }: { workspaceId: string }) {
   const [busy, setBusy] = useState(false);
@@ -41,9 +46,21 @@ export function FacultyCsvImportForm({ workspaceId }: { workspaceId: string }) {
 
   return (
     <div className="mt-4 grid gap-2 border-t border-rule/60 pt-4">
-      <Label htmlFor={`faculty-csv-${workspaceId}`}>
-        Faculty list CSV (emails)
-      </Label>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Label htmlFor={`faculty-csv-${workspaceId}`}>
+          Faculty list CSV (emails)
+        </Label>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() =>
+            downloadCsvTemplate('faculty_import_template.csv', EMAIL_LIST_CSV_TEMPLATE)
+          }
+        >
+          Download template
+        </Button>
+      </div>
       <p className="text-xs text-ink-faint">
         Each row should contain one email. Accounts must exist in SOL before
         invite.

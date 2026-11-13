@@ -36,6 +36,7 @@ import {
 } from '@/lib/knowledge/storage';
 import {
   assertWorkspaceFaculty,
+  assertWorkspaceFacultyRead,
   assertWorkspaceLibraryAdmin,
   isWorkspaceKnowledgeCoordinator,
 } from '@/lib/knowledge/workspaceAccess';
@@ -100,7 +101,8 @@ export async function listWorkspaceDocuments(
   user: AuthUser,
   workspaceId: string,
 ): Promise<KnowledgeDocumentSummary[]> {
-  await assertWorkspaceFaculty(user, workspaceId);
+  // Reads stay available pre-pilot; mutations still require teaching entitlement.
+  await assertWorkspaceFacultyRead(user, workspaceId);
   const coordinator = await isWorkspaceKnowledgeCoordinator(user, workspaceId);
 
   // FORCE RLS: bare knowledge_documents reads return 0 without tenant GUC.
@@ -297,7 +299,7 @@ export async function addWorkspaceDocumentFromUpload(
     throw ApiError.badRequest('File storage is not configured (S3)');
   }
   if (opts.buffer.byteLength > MAX_UPLOAD_BYTES) {
-    throw ApiError.badRequest('File exceeds 10 MB limit');
+    throw ApiError.badRequest('File exceeds 50 MB limit');
   }
   const mime = opts.mimeType || 'application/octet-stream';
   if (

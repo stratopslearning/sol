@@ -19,8 +19,13 @@ import {
   resolveProfessorCourseIdFromList,
 } from '@/lib/professor/activeCourse';
 import { appRedirect } from '@/lib/serverRedirect';
+import { TeachingPaywallBanner } from '@/components/workspace/TeachingPaywallBanner';
 import { WorkspaceSwitcher } from '@/components/workspace/WorkspaceSwitcher';
-import { getActiveWorkspaceId, listActiveMembershipsForUser } from '@/lib/workspace';
+import {
+  assertWorkspaceAllowsTeaching,
+  getActiveWorkspaceId,
+  listActiveMembershipsForUser,
+} from '@/lib/workspace';
 
 export const dynamic = 'force-dynamic';
 
@@ -87,10 +92,13 @@ export default async function WorkspaceKnowledgePage({
       />
     ) : null;
 
-  const [documents, connectors] = await Promise.all([
+  const [documents, connectors, entitlement] = await Promise.all([
     listWorkspaceDocuments(user, workspaceId),
     listWorkspaceConnectors(user, workspaceId),
+    assertWorkspaceAllowsTeaching(workspaceId),
   ]);
+  const teachingBlocked =
+    !entitlement.ok && entitlement.code === 'billing_required';
   const providers = listConnectorProviderStatus();
 
   const initialTab =
@@ -155,12 +163,21 @@ export default async function WorkspaceKnowledgePage({
           </Link>
         </p>
       ) : null}
+      {teachingBlocked && !entitlement.ok ? (
+        <div className="mt-4">
+          <TeachingPaywallBanner
+            workspaceId={workspaceId}
+            reason={entitlement.reason}
+          />
+        </div>
+      ) : null}
       <KnowledgeClient
         workspaceId={workspaceId}
         initialDocuments={documents}
         initialConnectors={connectors}
         initialProviders={providers}
         initialTab={initialTab}
+        teachingBlocked={teachingBlocked}
       />
     </AppShell>
   );

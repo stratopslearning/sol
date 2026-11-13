@@ -10,8 +10,8 @@ export const MATERIALS_RETRIEVE_TOP_K = 6;
 export const CHUNK_TARGET_CHARS = 2_000;
 export const CHUNK_OVERLAP_CHARS = 200;
 
-/** Max upload size (10 MB). */
-export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+/** Max upload size for a single file (50 MB; matches zip/book caps). */
+export const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
 /** Max size for a Knowledge zip pack (50 MB). */
 export const MAX_ZIP_UPLOAD_BYTES = 50 * 1024 * 1024;

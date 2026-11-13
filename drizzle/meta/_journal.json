@@ -617,6 +617,13 @@
       "when": 1785700000000,
       "tag": "0087_no_auto_indefinite_pilot",
       "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "7",
+      "when": 1785800000000,
+      "tag": "0088_hosted_books_pdf",
+      "breakpoints": true
     }
   ]
 }

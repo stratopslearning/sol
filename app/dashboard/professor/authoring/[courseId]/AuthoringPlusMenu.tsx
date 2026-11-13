@@ -27,7 +27,7 @@ import { cn } from '@/lib/utils';
 import type { AttachableDoc, CourseCorpusItem } from './AuthoringMaterialsPanel';
 
 const ACCEPTED = '.pdf,.docx,.txt,.md,.zip';
-const MAX_BYTES = 10 * 1024 * 1024;
+const MAX_BYTES = 50 * 1024 * 1024;
 const MAX_ZIP_BYTES = 50 * 1024 * 1024;
 
 function isZipFile(file: File) {
@@ -169,7 +169,7 @@ export function AuthoringPlusMenu({
       return;
     }
     if (!zip && file.size > MAX_BYTES) {
-      toast.error('File must be 10 MB or smaller');
+      toast.error('File must be 50 MB or smaller');
       return;
     }
     const fd = new FormData();
@@ -199,7 +199,7 @@ export function AuthoringPlusMenu({
             : res.status === 413
               ? zip
                 ? 'Zip is too large (max 50 MB)'
-                : 'File is too large (max 10 MB)'
+                : 'File is too large (max 50 MB)'
               : data.error || 'Upload failed',
         );
         return;
@@ -382,7 +382,7 @@ export function AuthoringPlusMenu({
                       Drag & drop a file or zip
                     </p>
                     <p className="mt-0.5 text-[11px] text-ink-faint">
-                      PDF, DOCX, TXT, MD · 10 MB · zip up to 50 MB
+                      PDF, DOCX, TXT, MD · up to 50 MB · zip up to 50 MB
                     </p>
                   </div>
                   <input

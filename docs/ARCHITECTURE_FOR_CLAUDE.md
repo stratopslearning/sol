@@ -291,7 +291,7 @@ Code is LTI 1.3 Advantage, Canvas-oriented. It is off unless `LTI_ENABLED=true` 
 | Legacy course materials | `course_materials.course_id` | Originals in S3 key `courses/{courseId}/...` (`lib/knowledge/storage.ts` `buildMaterialS3Key`). Text chunks and embeddings in `course_material_chunks`. | Included in `retrieveCourseChunks` |
 | Shared library | `knowledge_documents.workspace_id` | Versions in S3 (`buildKnowledgeS3Key`). Chunks in `knowledge_chunks`. A course sees a document only through `course_knowledge_links`, pinned to `pinned_version_id`. | Same function, `origin = shared` |
 
-Upload path: `lib/knowledge/materials.ts` `addMaterialFromUpload` and `lib/knowledge/documents.ts` `addWorkspaceDocumentFromUpload`. MIME allow-list and 10 MB cap in `lib/knowledge/constants.ts`. Zip import up to 50 MB / 40 files (`lib/knowledge/zipImport.ts`). URL import extracts text (`lib/knowledge/extract.ts`). OCR via Textract when extraction is thin (`lib/knowledge/ocr.ts`).
+Upload path: `lib/knowledge/materials.ts` `addMaterialFromUpload` and `lib/knowledge/documents.ts` `addWorkspaceDocumentFromUpload`. MIME allow-list and 50 MB cap in `lib/knowledge/constants.ts`. Zip import up to 50 MB / 40 files (`lib/knowledge/zipImport.ts`). URL import extracts text (`lib/knowledge/extract.ts`). OCR via Textract when extraction is thin (`lib/knowledge/ocr.ts`).
 
 Processing: `processMaterial` (`lib/knowledge/process.ts`) and `processKnowledgeDocument` (`lib/knowledge/processDocument.ts`): extract, `chunkText` (~2000 characters, 200 overlap, `lib/knowledge/chunk.ts`), embed with `text-embedding-3-small`, status READY or FAILED. Scheduled by `lib/jobs/enqueue.ts` and cron `app/api/cron/process-materials/route.ts`.
 

@@ -1638,7 +1638,7 @@ export const knowledgeSyncRuns = pgTable(
 );
 
 /**
- * Hosted course books (Pressbooks webbook crawl, EPUB, or Pressbooks XML).
+ * Hosted course books (Pressbooks webbook crawl, EPUB, Pressbooks XML, or PDF).
  * Chapters are student-readable; also indexed into course_materials for RAG.
  */
 export const hostedBooks = pgTable(
@@ -1656,7 +1656,7 @@ export const hostedBooks = pgTable(
       .notNull(),
     title: text('title').notNull(),
     sourceKind: text('source_kind', {
-      enum: ['WEBBOOK_URL', 'EPUB', 'PRESSBOOKS_XML'],
+      enum: ['WEBBOOK_URL', 'EPUB', 'PRESSBOOKS_XML', 'PDF'],
     }).notNull(),
     sourceUrl: text('source_url'),
     s3Key: text('s3_key'),
