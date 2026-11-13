@@ -6,6 +6,7 @@
 import {
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadObjectCommand,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
@@ -118,6 +119,49 @@ export async function getMaterialObjectPresignedUrl(
   return getSignedUrl(getClient(), command, {
     expiresIn: Math.max(60, Math.min(expiresInSeconds, 86_400)),
   });
+}
+
+/**
+ * Presigned PUT for browser → S3 uploads (bypasses Vercel ~4.5 MB body limit).
+ * Caller must send the same Content-Type header used when signing.
+ * Omits SSE headers so browsers only need Content-Type (bucket default encryption applies).
+ */
+export async function getMaterialObjectPresignedPutUrl(opts: {
+  key: string;
+  contentType: string;
+  expiresInSeconds?: number;
+}): Promise<string> {
+  const { bucket } = requireBucket();
+  const command = new PutObjectCommand({
+    Bucket: bucket,
+    Key: opts.key,
+    ContentType: opts.contentType,
+  });
+  return getSignedUrl(getClient(), command, {
+    expiresIn: Math.max(
+      60,
+      Math.min(opts.expiresInSeconds ?? 900, 86_400),
+    ),
+  });
+}
+
+/** Object metadata when present; null if missing. */
+export async function headMaterialObject(
+  key: string,
+): Promise<{ contentLength: number; contentType?: string } | null> {
+  if (!isS3Configured()) return null;
+  const { bucket } = requireBucket();
+  try {
+    const res = await getClient().send(
+      new HeadObjectCommand({ Bucket: bucket, Key: key }),
+    );
+    return {
+      contentLength: Number(res.ContentLength ?? 0),
+      contentType: res.ContentType,
+    };
+  } catch {
+    return null;
+  }
 }
 
 export async function deleteMaterialObject(key: string): Promise<void> {

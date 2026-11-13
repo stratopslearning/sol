@@ -20,7 +20,7 @@ import {
   MAX_BOOK_UPLOAD_BYTES,
 } from '@/lib/books/constants';
 import { countTopLevelChapters } from '@/lib/books/hierarchy';
-import { processBookFromBuffer } from '@/lib/books/process';
+import { processBook, processBookFromBuffer } from '@/lib/books/process';
 import { scheduleBookProcess } from '@/lib/books/scheduleProcess';
 import type {
   BookChapterSummary,
@@ -32,6 +32,8 @@ import type { UserData } from '@/lib/getOrCreateUser';
 import { assertCanManageCourse } from '@/lib/knowledge/access';
 import {
   buildMaterialS3Key,
+  getMaterialObjectPresignedPutUrl,
+  headMaterialObject,
   isS3Configured,
   putMaterialObject,
 } from '@/lib/knowledge/storage';
@@ -331,6 +333,213 @@ export async function importBookFromUpload(
   const resolvedTitle = refreshed?.title ?? row.title;
   return toSummary(
     refreshed ?? row,
+    countTopLevelChapters(chapters, resolvedTitle),
+  );
+}
+
+function resolveBookSourceKind(
+  fileName: string,
+  mimeType: string,
+): 'EPUB' | 'PRESSBOOKS_XML' | 'PDF' {
+  const lower = fileName.toLowerCase();
+  const mime = (mimeType || '').toLowerCase();
+  const isEpub = lower.endsWith('.epub') || BOOK_EPUB_MIME.has(mime);
+  const isXml = lower.endsWith('.xml') || BOOK_XML_MIME.has(mime);
+  const isPdf = lower.endsWith('.pdf') || BOOK_PDF_MIME.has(mime);
+  if (!isEpub && !isXml && !isPdf) {
+    throw ApiError.badRequest(
+      'Unsupported book file. Upload an EPUB, Pressbooks XML export, or PDF.',
+    );
+  }
+  return isEpub ? 'EPUB' : isPdf ? 'PDF' : 'PRESSBOOKS_XML';
+}
+
+function contentTypeForBookSource(
+  sourceKind: 'EPUB' | 'PRESSBOOKS_XML' | 'PDF',
+): string {
+  if (sourceKind === 'EPUB') return 'application/epub+zip';
+  if (sourceKind === 'PDF') return 'application/pdf';
+  return 'application/xml';
+}
+
+/**
+ * Start a browser → S3 book upload (for files above the Vercel body limit).
+ * Client PUTs bytes to `uploadUrl`, then calls completeBookDirectUpload.
+ */
+export async function beginBookDirectUpload(
+  user: AuthUser,
+  opts: {
+    courseId: string;
+    title?: string;
+    fileName: string;
+    mimeType: string;
+    byteSize: number;
+  },
+): Promise<{
+  bookId: string;
+  uploadUrl: string;
+  contentType: string;
+  s3Key: string;
+}> {
+  await assertCanManageCourse(user, opts.courseId);
+
+  if (!isS3Configured()) {
+    throw ApiError.badRequest(
+      'Large book uploads require file storage. Use a file under 3 MB, or import from URL.',
+    );
+  }
+  if (opts.byteSize <= 0) {
+    throw ApiError.badRequest('Book file is empty');
+  }
+  if (opts.byteSize > MAX_BOOK_UPLOAD_BYTES) {
+    throw ApiError.badRequest('Book file exceeds 50 MB limit');
+  }
+
+  const sourceKind = resolveBookSourceKind(opts.fileName, opts.mimeType);
+  const contentType = contentTypeForBookSource(sourceKind);
+  const title =
+    opts.title?.trim() ||
+    opts.fileName.replace(/\.[^.]+$/, '') ||
+    'Imported book';
+
+  const [row] = await db
+    .insert(hostedBooks)
+    .values({
+      courseId: opts.courseId,
+      createdByUserId: user.id,
+      title,
+      sourceKind,
+      status: 'PENDING',
+    })
+    .returning();
+
+  const s3Key = buildMaterialS3Key(
+    opts.courseId,
+    row.id,
+    opts.fileName ||
+      (sourceKind === 'EPUB'
+        ? 'book.epub'
+        : sourceKind === 'PDF'
+          ? 'book.pdf'
+          : 'book.xml'),
+  );
+
+  await db
+    .update(hostedBooks)
+    .set({ s3Key, updatedAt: new Date() })
+    .where(eq(hostedBooks.id, row.id));
+
+  const uploadUrl = await getMaterialObjectPresignedPutUrl({
+    key: s3Key,
+    contentType,
+    expiresInSeconds: 900,
+  });
+
+  return { bookId: row.id, uploadUrl, contentType, s3Key };
+}
+
+/**
+ * After the client finishes the S3 PUT, verify the object and parse the book.
+ */
+export async function completeBookDirectUpload(
+  user: AuthUser,
+  opts: { bookId: string; expectedByteSize?: number },
+  audit?: { ip?: string | null; userAgent?: string | null },
+): Promise<BookSummary> {
+  const book = await assertCanManageBook(user, opts.bookId);
+
+  if (book.status !== 'PENDING') {
+    throw ApiError.badRequest('Book upload is not awaiting processing');
+  }
+  if (!book.s3Key) {
+    throw ApiError.badRequest('Book has no storage key');
+  }
+  if (
+    book.sourceKind !== 'EPUB' &&
+    book.sourceKind !== 'PRESSBOOKS_XML' &&
+    book.sourceKind !== 'PDF'
+  ) {
+    throw ApiError.badRequest('Book is not a direct file upload');
+  }
+
+  const head = await headMaterialObject(book.s3Key);
+  if (!head || head.contentLength <= 0) {
+    await db
+      .update(hostedBooks)
+      .set({
+        status: 'FAILED',
+        errorMessage: 'Upload did not reach storage',
+        updatedAt: new Date(),
+      })
+      .where(eq(hostedBooks.id, book.id));
+    throw ApiError.badRequest(
+      'Upload did not reach storage. Check that the file finished uploading, then try again.',
+    );
+  }
+  if (head.contentLength > MAX_BOOK_UPLOAD_BYTES) {
+    await db
+      .update(hostedBooks)
+      .set({
+        status: 'FAILED',
+        errorMessage: 'Book file exceeds 50 MB limit',
+        updatedAt: new Date(),
+      })
+      .where(eq(hostedBooks.id, book.id));
+    throw ApiError.badRequest('Book file exceeds 50 MB limit');
+  }
+  if (
+    opts.expectedByteSize != null &&
+    Math.abs(head.contentLength - opts.expectedByteSize) > 64
+  ) {
+    await db
+      .update(hostedBooks)
+      .set({
+        status: 'FAILED',
+        errorMessage: 'Uploaded size mismatch',
+        updatedAt: new Date(),
+      })
+      .where(eq(hostedBooks.id, book.id));
+    throw ApiError.badRequest('Uploaded file size does not match — try again');
+  }
+
+  await processBook(book.id);
+
+  await logAudit({
+    actorUserId: user.id,
+    actorClerkId: user.clerkId,
+    action: 'professor.book.create',
+    targetType: 'hosted_book',
+    targetId: book.id,
+    metadata: {
+      courseId: book.courseId,
+      sourceKind: book.sourceKind,
+      byteSize: head.contentLength,
+      directUpload: true,
+    },
+    ip: audit?.ip ?? null,
+    userAgent: audit?.userAgent ?? null,
+  });
+
+  const refreshed = await db.query.hostedBooks.findFirst({
+    where: eq(hostedBooks.id, book.id),
+  });
+  const chapters = await db.query.bookChapters.findMany({
+    where: and(
+      eq(bookChapters.bookId, book.id),
+      isNull(bookChapters.deletedAt),
+    ),
+    columns: { id: true, title: true, parentId: true, level: true },
+  });
+
+  if (refreshed?.status === 'FAILED') {
+    throw ApiError.badRequest(
+      refreshed.errorMessage || 'Could not parse book file',
+    );
+  }
+
+  const resolvedTitle = refreshed?.title ?? book.title;
+  return toSummary(
+    refreshed ?? book,
     countTopLevelChapters(chapters, resolvedTitle),
   );
 }

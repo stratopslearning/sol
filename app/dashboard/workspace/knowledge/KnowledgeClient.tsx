@@ -34,6 +34,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { apiUrl } from "@/lib/basePath";
+import { uploadCourseBookFile } from "@/lib/books/clientUpload";
 import type {
   ConnectorSummary,
   KnowledgeDocumentSummary,
@@ -456,36 +457,19 @@ export default function KnowledgeClient({
       toast.error("Choose a book file first");
       return;
     }
-    const fd = new FormData();
-    fd.set("courseId", activeCourseId);
-    fd.set("file", bookFile);
-    if (bookTitle.trim()) fd.set("title", bookTitle.trim());
     setImportingBook(true);
     try {
-      const res = await fetch(apiUrl("/api/professor/books"), {
-        method: "POST",
-        body: fd,
-        credentials: "same-origin",
-        redirect: "manual",
+      const result = await uploadCourseBookFile({
+        courseId: activeCourseId,
+        file: bookFile,
+        title: bookTitle.trim() || undefined,
       });
-      if (
-        res.type === "opaqueredirect" ||
-        (res.status >= 300 && res.status < 400)
-      ) {
-        toast.error("Session expired — refresh and sign in again");
+      if (!result.ok) {
+        toast.error(result.error);
         return;
       }
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        toast.error(
-          res.status === 413
-            ? "Book file is too large (max 50 MB)"
-            : data.error || "Could not upload book",
-        );
-        return;
-      }
-      if (data.book?.status === "FAILED") {
-        toast.error(data.book?.errorMessage || "Book import failed");
+      if (result.book?.status === "FAILED") {
+        toast.error(result.book?.errorMessage || "Book import failed");
         return;
       }
       toast.success(
