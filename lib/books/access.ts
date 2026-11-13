@@ -8,16 +8,15 @@ import {
   studentSections,
 } from '@/app/db/schema';
 import { ApiError } from '@/lib/api/errors';
+import { fetchHostedBookByIdDefiner } from '@/lib/db/bookWriteDefiners';
 import { assertCanManageCourse } from '@/lib/knowledge/access';
 import type { UserData } from '@/lib/getOrCreateUser';
 
 type AuthUser = Pick<UserData, 'id'> & { platformStaff?: boolean | null };
 
 export async function assertCanManageBook(user: AuthUser, bookId: string) {
-  const book = await db.query.hostedBooks.findFirst({
-    where: and(eq(hostedBooks.id, bookId), isNull(hostedBooks.deletedAt)),
-  });
-  if (!book) throw ApiError.notFound('Book not found');
+  const book = await fetchHostedBookByIdDefiner(bookId);
+  if (!book || book.deletedAt) throw ApiError.notFound('Book not found');
   await assertCanManageCourse(user, book.courseId);
   return book;
 }
