@@ -4,8 +4,8 @@
  * Strategy notes:
  *   - Vercel's Hobby plan caps cron frequency at once per day, so the
  *     real-time recovery of pending grades doesn't depend on this cron.
- *     The submit handler and the student/professor view pages each fire a
- *     `after()` background retry through `lib/backgroundRetry.ts`, which
+ *     The submit handler and the student/professor view pages each enqueue
+ *     grading via `lib/backgroundRetry.ts` (Inngest or `after()`), which
  *     makes the system self-healing within seconds of any user activity.
  *   - This cron is a long-tail safety net: it sweeps up attempts that have
  *     been sitting for hours with no user activity (e.g. nightly when
@@ -19,6 +19,7 @@ import { inArray } from 'drizzle-orm';
 
 import { db } from '@/app/db';
 import { attempts } from '@/app/db/schema';
+import { isCronAuthorized } from '@/lib/api/cronAuth';
 import { sweepStaleInProgressAttempts } from '@/lib/autoSubmitInProgressAttempt';
 import {
   gradePendingForAttempt,
@@ -30,15 +31,8 @@ export const maxDuration = 300;
 
 const BATCH_LIMIT = 25;
 
-function authorized(req: NextRequest): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return false;
-  const header = req.headers.get('authorization') ?? '';
-  return header === `Bearer ${secret}`;
-}
-
 export async function GET(req: NextRequest) {
-  if (!authorized(req)) {
+  if (!isCronAuthorized(req)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

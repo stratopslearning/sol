@@ -46,7 +46,7 @@ export function getQuizAvailability(
  * quizzes). Taking is gated separately by `getQuizAvailability`.
  *
  * Hidden until `startDate` so a later chapter does not show up as "Not open
- * yet" — it simply is not offered yet.
+ * yet". it simply is not offered yet.
  */
 export function isQuizListedForStudents(
   quiz: {

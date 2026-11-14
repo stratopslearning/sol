@@ -9,7 +9,6 @@ import { parse as toCsv } from 'json2csv';
 import { db } from '@/app/db';
 import {
   attempts,
-  professorSections,
   quizSections,
   quizzes,
   sections,
@@ -17,15 +16,19 @@ import {
   users,
 } from '@/app/db/schema';
 import { ApiError } from '@/lib/api/errors';
+import { listTeachingSectionIds } from '@/lib/professor/graderSections';
 import { logAudit, logGradebookAccess } from '@/lib/audit';
 import { activeOnly } from '@/lib/db/filters';
 import type { UserData } from '@/lib/getOrCreateUser';
 import { comparePersonsByLastName } from '@/lib/personName';
 import { buildGradebookScoresForSection, fetchSubmittedAttemptsForProfessorSections } from '@/lib/professorVisibleAttempts';
-import { professorCanAccessQuiz } from '@/lib/quizAccess';
+import {
+  accessibleQuizSectionIds,
+  professorCanAccessQuiz,
+} from '@/lib/quizAccess';
 import { assertTeachesSection } from '@/lib/professor/sections';
 
-type ProfessorUser = Pick<UserData, 'id' | 'role' | 'clerkId'>;
+type ProfessorUser = Pick<UserData, 'id' | 'clerkId'> & { platformStaff?: boolean | null };
 
 function personName(p: {
   firstName: string | null;
@@ -66,7 +69,7 @@ export async function getSectionGradebook(
     actorUserId: user.id,
     actorClerkId: user.clerkId,
     sectionId,
-    role: user.role,
+    role: user.platformStaff ? 'ADMIN' : 'PROFESSOR',
   });
 
   const studentEnrollments = await db.query.studentSections.findMany({
@@ -150,18 +153,9 @@ export async function listQuizAttempts(
   const allowed = await professorCanAccessQuiz(user, quizId);
   if (!allowed) throw ApiError.forbidden('You do not have access to this quiz');
 
-  let sectionIds: string[];
-  if (user.role === 'ADMIN') {
-    const links = await db.query.quizSections.findMany({
-      where: eq(quizSections.quizId, quizId),
-    });
-    sectionIds = links.map((l) => l.sectionId);
-  } else {
-    const enrollments = await db.query.professorSections.findMany({
-      where: eq(professorSections.professorId, user.id),
-    });
-    sectionIds = enrollments.map((e) => e.sectionId);
-  }
+  // Binding-based section scope (platform staff only with a support grant,
+  // enforced inside authorize()). professor_sections is not consulted.
+  const sectionIds = await accessibleQuizSectionIds(user, quizId);
 
   const rows = await fetchSubmittedAttemptsForProfessorSections({
     quizId,
@@ -176,7 +170,7 @@ export async function listQuizAttempts(
     targetType: 'quiz',
     targetId: quizId,
     metadata: {
-      viewerRole: user.role,
+      viewerRole: user.platformStaff ? 'ADMIN' : 'PROFESSOR',
       sectionId: options.sectionId ?? null,
       rowCount: rows.length,
     },
@@ -228,7 +222,9 @@ export async function getAttemptDetail(
     action: 'education.attempt.view',
     targetType: 'attempt',
     targetId: attemptId,
-    metadata: { viewerRole: user.role },
+    metadata: {
+      viewerRole: user.platformStaff ? 'ADMIN' : 'PROFESSOR',
+    },
   });
 
   return {
@@ -260,14 +256,7 @@ export async function exportResultsCsv(
   user: ProfessorUser,
   options: { quizId?: string; dateFrom?: string; dateTo?: string } = {},
 ): Promise<{ csv: string; rowCount: number }> {
-  if (user.role !== 'PROFESSOR') {
-    throw ApiError.forbidden('Only professors can export results');
-  }
-
-  const enrollments = await db.query.professorSections.findMany({
-    where: eq(professorSections.professorId, user.id),
-  });
-  const sectionIds = enrollments.map((e) => e.sectionId);
+  const sectionIds = await listTeachingSectionIds(user);
   if (sectionIds.length === 0) throw ApiError.forbidden('No section access');
 
   const quizLinks = await db.query.quizSections.findMany({

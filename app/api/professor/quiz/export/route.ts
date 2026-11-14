@@ -17,11 +17,10 @@ export async function GET(req: NextRequest) {
       professorOnly: true,
     });
 
-    // Get all section IDs the professor is enrolled in
-    const professorSectionEnrollments = await db.query.professorSections.findMany({
-      where: eq(professorSections.professorId, professor.id),
-    });
-    const sectionIds = professorSectionEnrollments.map(e => e.sectionId);
+    const { listTeachingSectionIds } = await import(
+      '@/lib/professor/graderSections'
+    );
+    const sectionIds = await listTeachingSectionIds(professor);
     if (sectionIds.length === 0) {
       return NextResponse.json({ error: 'No section access' }, { status: 403 });
     }
@@ -42,7 +41,7 @@ export async function GET(req: NextRequest) {
     const dateTo = searchParams.get('dateTo');
 
     // Build where conditions: only submitted attempts (exclude in-progress)
-    let whereConditions = [
+    const whereConditions = [
       inArray(attempts.quizId, allowedQuizIds),
       isNotNull(attempts.submittedAt),
     ];

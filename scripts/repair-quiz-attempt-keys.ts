@@ -3,9 +3,10 @@
  * to the quiz's current question ids (after a delete-and-reinsert edit).
  *
  * Usage:
- *   npx tsx scripts/repair-quiz-attempt-keys.ts <quizId> [--dry-run]
+ *   npx tsx scripts/repair-quiz-attempt-keys.ts <quizId> [--dry-run] --confirm-dev-db
  */
-import 'dotenv/config';
+import './lib/bootstrapDevDb';
+
 import { eq } from 'drizzle-orm';
 
 import { db } from '@/app/db';

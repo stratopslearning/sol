@@ -1,9 +1,6 @@
 import Link from "next/link";
-import { eq } from "drizzle-orm";
-import { Archive } from "lucide-react";
+import { Archive } from "@/components/icons";
 
-import { db } from "@/app/db";
-import { studentSections } from "@/app/db/schema";
 import { AppShell } from "@/components/layout/AppShell";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { SectionHeading } from "@/components/layout/SectionHeading";
@@ -20,6 +17,7 @@ import {
 } from "@/components/ui/table";
 import { appPath, withBasePath } from "@/lib/basePath";
 import { requireStudent } from "@/lib/auth";
+import { fetchUserEnrollmentsDetail } from "@/lib/db/facultyStudentReads";
 import { partitionEnrollmentsByConclusion } from "@/lib/sectionAvailability";
 import {
   LocalDateTime,
@@ -29,16 +27,16 @@ import {
 export default async function StudentArchivedSectionsPage() {
   const user = await requireStudent();
 
-  const enrollments = await db.query.studentSections.findMany({
-    where: eq(studentSections.studentId, user.id),
-    with: {
-      section: { with: { course: true } },
-    },
-  });
+  const enrollments = await fetchUserEnrollmentsDetail(user.id);
 
   const { archived } = partitionEnrollmentsByConclusion(enrollments);
   const rows = archived
-    .map((e) => e.section)
+    .map((e) => ({
+      id: e.section.id,
+      name: e.section.name,
+      endsAt: e.section.endsAt,
+      course: e.section.course,
+    }))
     .sort((a, b) => {
       const aEnd = a.endsAt ? new Date(a.endsAt).getTime() : 0;
       const bEnd = b.endsAt ? new Date(b.endsAt).getTime() : 0;
@@ -49,7 +47,6 @@ export default async function StudentArchivedSectionsPage() {
     <AppShell
       role="student"
       user={user}
-      topbarEyebrow="Learner"
       topbarTitle="Past sections"
     >
       <PageHeader
@@ -63,7 +60,7 @@ export default async function StudentArchivedSectionsPage() {
         ]}
         eyebrow="Archive"
         title="Past sections."
-        description="Sections that have ended. You can still review grades and prior attempts — new quizzes and discussions are closed."
+        description="Sections that have ended. You can still review grades and prior attempts. New quizzes and discussions are closed."
         actions={
           <Button asChild variant="outline">
             <Link href={appPath("/dashboard/student/sections")}>
@@ -77,7 +74,7 @@ export default async function StudentArchivedSectionsPage() {
         <SectionHeading
           eyebrow="Concluded"
           title="Archived enrollments"
-          description="Canvas-style past course list — read-only for new work."
+          description="Canvas-style past course list. Read-only for new work."
         />
 
         <div className="mt-6">
@@ -107,12 +104,12 @@ export default async function StudentArchivedSectionsPage() {
                         {section.name}
                       </TableCell>
                       <TableCell className="text-ink-muted">
-                        {section.course?.title ?? "—"}
+                        {section.course?.title ?? "-"}
                       </TableCell>
                       <TableCell className={`text-ink-muted ${TIMESTAMP_CELL_CLASS}`}>
                         {section.endsAt
                           ? <LocalDateTime stacked value={section.endsAt} />
-                          : "—"}
+                          : "-"}
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline">Archived</Badge>

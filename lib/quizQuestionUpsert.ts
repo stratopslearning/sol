@@ -16,6 +16,7 @@ export type QuestionUpsertInput = {
   correctAnswer?: string | null;
   points: number;
   order?: number;
+  conceptTags?: string[] | null;
 };
 
 export async function upsertQuizQuestions(
@@ -44,6 +45,9 @@ export async function upsertQuizQuestions(
       correctAnswer: question.correctAnswer ?? null,
       points: question.points,
       order,
+      conceptTags: (question.conceptTags ?? [])
+        .map((t) => t.trim())
+        .filter(Boolean),
     };
 
     const hasPersistedId =

@@ -1,10 +1,11 @@
 import { eq } from "drizzle-orm";
 
 import { db } from "@/app/db";
-import { attempts } from "@/app/db/schema";
+import { attempts, questions } from "@/app/db/schema";
+import { LocalDateTime } from "@/components/timezone/LocalDateTime";
 import { AppShell } from "@/components/layout/AppShell";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { LocalDateTime } from "@/components/timezone/LocalDateTime";
+import { StudentRegradeRequestForm } from "@/components/quiz/StudentRegradeRequestForm";
 import { Button } from "@/components/ui/button";
 import { withBasePath } from "@/lib/basePath";
 import { appRedirect } from "@/lib/serverRedirect";
@@ -13,6 +14,9 @@ import {
   scheduleAttemptRetry,
 } from "@/lib/backgroundRetry";
 import { getOrCreateUser } from "@/lib/getOrCreateUser";
+import { listGradeOverrideHistoryForAttempt } from "@/lib/professor/overrides";
+import { quizGradesAreReleased } from "@/lib/professor/gradesReleased";
+import { getOpenRegradeRequestForAttempt } from "@/lib/regradeRequests";
 
 interface ResultsPageProps {
   params: Promise<{ quizId: string }>;
@@ -50,6 +54,28 @@ export default async function ResultsPage({
     scheduleAttemptRetry(attempt.id);
   }
 
+  const gradesReleased = quizGradesAreReleased(quiz);
+  const overrideHistory = gradesReleased
+    ? await listGradeOverrideHistoryForAttempt(attempt.id)
+    : [];
+  const openRegradeRequest = attempt.submittedAt
+    ? await getOpenRegradeRequestForAttempt({
+        attemptId: attempt.id,
+        studentId: user.id,
+      })
+    : null;
+
+  const quizQuestions =
+    overrideHistory.length > 0
+      ? await db.query.questions.findMany({
+          where: eq(questions.quizId, p.quizId),
+          columns: { id: true, order: true },
+        })
+      : [];
+  const questionOrder = new Map(
+    quizQuestions.map((q) => [q.id, q.order] as const),
+  );
+
   const percentage =
     attempt.percentage ??
     (attempt.maxScore
@@ -59,8 +85,7 @@ export default async function ResultsPage({
   return (
     <AppShell
       role="student"
-      active="quizzes"
-      topbarEyebrow="Submission"
+      active="assignments"
       topbarTitle={quiz.title}
       maxWidth="narrow"
       user={{
@@ -74,8 +99,8 @@ export default async function ResultsPage({
         breadcrumbs={[
           { label: "Dashboard", href: withBasePath("/dashboard/student") },
           {
-            label: "My quizzes",
-            href: withBasePath("/dashboard/student/quizzes"),
+            label: "Assignments",
+            href: withBasePath("/dashboard/student/assignments"),
           },
           { label: "Submitted" },
         ]}
@@ -105,7 +130,7 @@ export default async function ResultsPage({
                   {attempt.submittedAt ? (
                     <LocalDateTime stacked value={attempt.submittedAt} />
                   ) : (
-                    "—"
+                    "-"
                   )}
                 </dd>
               </div>
@@ -118,6 +143,69 @@ export default async function ResultsPage({
             </dl>
           </div>
         </div>
+
+        {overrideHistory.length > 0 ? (
+          <div className="mt-6 paper paper-shadow p-6 md:p-8">
+            <span className="eyebrow text-ink-faint">Grade adjustments</span>
+            <p className="text-sm text-ink-muted mt-2">
+              Your instructor updated how this attempt was scored. Notes below
+              are shown in the order they were recorded.
+            </p>
+            <ol className="mt-5 flex flex-col gap-4 list-none p-0 m-0">
+              {overrideHistory.map((entry) => {
+                const label =
+                  entry.questionId == null
+                    ? "Whole attempt"
+                    : questionOrder.has(entry.questionId)
+                      ? `Question ${questionOrder.get(entry.questionId)! + 1}`
+                      : "Question";
+                return (
+                  <li
+                    key={entry.id}
+                    className="border border-border rounded-lg p-4 bg-card/30"
+                  >
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <span className="text-sm font-medium text-ink">
+                        {label}
+                        {entry.numericScore != null ? (
+                          <span className="text-ink-muted font-normal">
+                            {" "}
+                            · score set to {entry.numericScore}
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="text-xs text-ink-faint tnum">
+                        <LocalDateTime stacked value={entry.createdAt} />
+                      </span>
+                    </div>
+                    <p className="text-sm text-ink mt-2">{entry.note}</p>
+                    {entry.criteriaOverrides &&
+                    Object.keys(entry.criteriaOverrides).length > 0 ? (
+                      <p className="text-xs text-ink-muted mt-2">
+                        Rubric criteria were adjusted for this question.
+                      </p>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
+        ) : null}
+
+        {attempt.submittedAt ? (
+          <StudentRegradeRequestForm
+            attemptId={attempt.id}
+            existingOpenRequest={
+              openRegradeRequest
+                ? {
+                    id: openRegradeRequest.id,
+                    note: openRegradeRequest.note,
+                    createdAt: openRegradeRequest.createdAt.toISOString(),
+                  }
+                : null
+            }
+          />
+        ) : null}
 
         <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
           <Button asChild>

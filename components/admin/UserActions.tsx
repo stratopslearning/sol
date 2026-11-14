@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown } from "@/components/icons";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -15,39 +15,43 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { apiUrl } from "@/lib/basePath";
 
-const ROLES = ["STUDENT", "PROFESSOR", "ADMIN"];
-
 export function UserActions({
   user,
+  canGrantPlatformStaff = false,
 }: {
   user: {
     id: string;
     email: string | null;
-    role: string;
+    platformStaff?: boolean | null;
     firstName?: string | null;
     lastName?: string | null;
   };
+  canGrantPlatformStaff?: boolean;
 }) {
   const [loading, setLoading] = useState(false);
+  const isStaff = Boolean(user.platformStaff);
 
-  const handleRoleSelect = async (role: string) => {
-    if (role === user.role) return;
-    if (!confirm(`Change role to ${role}?`)) return;
+  const handlePlatformStaffToggle = async () => {
+    const next = !isStaff;
+    const label = next ? "grant" : "revoke";
+    if (!confirm(`${label} platform staff for ${user.email ?? user.id}?`)) return;
     setLoading(true);
     try {
       const res = await fetch(apiUrl(`/api/admin/user/${user.id}`), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role }),
+        body: JSON.stringify({ platformStaff: next }),
       });
       if (res.ok) {
-        toast.success(`Role changed to ${role}`);
+        toast.success(
+          next ? "Platform staff granted" : "Platform staff revoked",
+        );
         setTimeout(() => window.location.reload(), 600);
       } else {
-        toast.error("Failed to change role");
+        toast.error("Failed to update platform staff");
       }
     } catch {
-      toast.error("Failed to change role");
+      toast.error("Failed to update platform staff");
     } finally {
       setLoading(false);
     }
@@ -122,22 +126,19 @@ export function UserActions({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuLabel>Set role</DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        {ROLES.map((role) => (
-          <DropdownMenuItem
-            key={role}
-            onSelect={() => handleRoleSelect(role)}
-            disabled={loading}
-            className={role === user.role ? "font-medium text-brand" : ""}
-          >
-            {role.toLowerCase()}
-            {role === user.role ? (
-              <span className="ml-auto text-xs text-ink-faint">current</span>
-            ) : null}
-          </DropdownMenuItem>
-        ))}
-        <DropdownMenuSeparator />
+        {canGrantPlatformStaff ? (
+          <>
+            <DropdownMenuLabel>Access</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onSelect={() => void handlePlatformStaffToggle()}
+              disabled={loading}
+            >
+              {isStaff ? "Revoke platform staff" : "Grant platform staff"}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        ) : null}
         <DropdownMenuItem
           onSelect={(e) => {
             e.preventDefault();

@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight } from "@/components/icons";
 
 import { withBasePath } from "@/lib/basePath";
 import { cn } from "@/lib/utils";

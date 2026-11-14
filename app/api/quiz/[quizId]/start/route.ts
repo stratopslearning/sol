@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { db } from '@/app/db';
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
   try {
     const user = await getOrCreateUser();
     if (!user) throw ApiError.unauthorized();
-    if (user.role === 'STUDENT' && !isStudentEntitled(user)) {
+    if (!isStudentEntitled(user)) {
       throw ApiError.paymentRequired();
     }
 
@@ -229,7 +229,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
         forceAutoSubmit,
         resumed: true,
         message: forceAutoSubmit
-          ? 'Time limit reached — submitting your saved answers now.'
+          ? 'Time limit reached: submitting your saved answers now.'
           : 'Resuming existing attempt',
       });
     }
@@ -242,22 +242,102 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
       });
     }
 
-    let attempt;
+    let attempt: {
+      id: string;
+      startedAt: Date | string;
+      answers: unknown;
+    };
     try {
-      [attempt] = await db
-        .insert(attempts)
-        .values({
+      const { authorize } = await import('@/lib/authz');
+      const { fetchSectionById } = await import('@/lib/db/entityScopedReads');
+      const sectionMeta = await fetchSectionById(sectionId);
+      const tenantId = sectionMeta?.tenantId ?? sectionMeta?.workspaceId;
+      if (!tenantId) throw ApiError.badRequest('Section is missing tenant');
+      const canSubmit = await authorize(user, 'student.submit', {
+        tenantId,
+        scopeType: 'section',
+        scopeId: sectionId,
+      });
+      if (!canSubmit) {
+        throw ApiError.forbidden('Not authorized to start this quiz');
+      }
+
+      const startResult = await db.execute(sql`
+        SELECT sol_start_quiz_attempt(${JSON.stringify({
           assignmentId,
           studentId: user.id,
           quizId,
           sectionId,
-          answers: {},
-          maxScore: 0,
-          startedAt: now,
-        })
-        .returning();
+        })}::jsonb) AS row
+      `);
+      const raw =
+        (startResult as unknown as { rows?: Array<{ row: unknown }> }).rows?.[0]
+          ?.row ??
+        (Array.isArray(startResult)
+          ? (startResult as Array<{ row: unknown }>)[0]?.row
+          : null);
+      const parsed =
+        typeof raw === 'string'
+          ? (JSON.parse(raw) as {
+              id: string;
+              startedAt: string;
+              answers: unknown;
+              resumed: boolean;
+            })
+          : (raw as {
+              id: string;
+              startedAt: string;
+              answers: unknown;
+              resumed: boolean;
+            } | null);
+      if (!parsed?.id) throw ApiError.internal('Failed to start quiz');
+      attempt = {
+        id: parsed.id,
+        startedAt: parsed.startedAt,
+        answers: parsed.answers,
+      };
+      if (parsed.resumed) {
+        const startedAtDate = new Date(parsed.startedAt);
+        const timeLimitMinutes = quiz.timeLimit ?? null;
+        const remainingSeconds = getRemainingSeconds(
+          timeLimitMinutes,
+          startedAtDate,
+          now,
+        );
+        const savedAnswers =
+          parsed.answers &&
+          typeof parsed.answers === 'object' &&
+          !Array.isArray(parsed.answers)
+            ? (parsed.answers as Record<string, string>)
+            : {};
+        logQuizAttemptAudit({
+          action: 'quiz.attempt.start',
+          actorUserId: user.id,
+          actorClerkId: user.clerkId,
+          attemptId: parsed.id,
+          quizId,
+          assignmentId,
+          metadata: { resumed: true, concurrentInsert: true },
+          req,
+        });
+        return NextResponse.json({
+          success: true,
+          attemptId: parsed.id,
+          startedAt: startedAtDate.toISOString(),
+          answers: savedAnswers,
+          timeLimitMinutes,
+          remainingSeconds: remainingSeconds ?? null,
+          timeLimitExceeded:
+            timeLimitMinutes != null &&
+            isTimeLimitExceeded(timeLimitMinutes, startedAtDate, now),
+          forceAutoSubmit: false,
+          resumed: true,
+          message: 'Resuming existing attempt',
+        });
+      }
     } catch (insertError) {
-      // Unique open-attempt index (0007): a concurrent start won — resume it.
+      if (insertError instanceof ApiError) throw insertError;
+      // Unique open-attempt index (0007): a concurrent start won: resume it.
       const open = await db.query.attempts.findFirst({
         where: and(
           eq(attempts.assignmentId, assignmentId),
@@ -316,10 +396,14 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
       });
     }
 
+    const startedAtDate =
+      attempt.startedAt instanceof Date
+        ? attempt.startedAt
+        : new Date(attempt.startedAt);
     const timeLimitMinutes = quiz.timeLimit ?? null;
     const remainingSeconds = getRemainingSeconds(
       timeLimitMinutes,
-      attempt.startedAt,
+      startedAtDate,
       now,
     );
 
@@ -336,7 +420,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ quizId
     return NextResponse.json({
       success: true,
       attemptId: attempt.id,
-      startedAt: attempt.startedAt.toISOString(),
+      startedAt: startedAtDate.toISOString(),
       answers: {},
       timeLimitMinutes,
       remainingSeconds,

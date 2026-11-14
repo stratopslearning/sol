@@ -3,9 +3,21 @@ import { withBasePath } from '@/lib/basePath';
 /**
  * Cross-host URLs for the Sol (teachwithsol.com) multi-subdomain deploy.
  * When hosts are unset (StratOps / local `/learning`), links stay same-origin.
+ *
+ * Local multi-host (no /etc/hosts needed on modern browsers):
+ *   NEXT_PUBLIC_SOL_MARKETING_HOST=www.localhost:3000
+ *   NEXT_PUBLIC_SOL_APP_HOST=app.localhost:3000
+ *   … (docs / trust). Protocol defaults to http for *.localhost.
  */
 
 export type SolHostRole = 'marketing' | 'app' | 'docs' | 'trust';
+
+type ParsedSolHost = {
+  /** Hostname only (no port). */
+  hostname: string;
+  port: string | null;
+  protocol: 'http' | 'https';
+};
 
 const HOST_ENV: Record<SolHostRole, string | undefined> = {
   marketing: process.env.NEXT_PUBLIC_SOL_MARKETING_HOST,
@@ -14,26 +26,121 @@ const HOST_ENV: Record<SolHostRole, string | undefined> = {
   trust: process.env.NEXT_PUBLIC_SOL_TRUST_HOST,
 };
 
-/** True when Sol host map env is configured (empty BASE_PATH deploy). */
-export function solHostsConfigured(): boolean {
-  return Boolean(
-    HOST_ENV.marketing && HOST_ENV.app && HOST_ENV.docs && HOST_ENV.trust,
+function isLocalHostname(hostname: string): boolean {
+  return (
+    hostname === 'localhost' ||
+    hostname.endsWith('.localhost') ||
+    hostname.endsWith('.local') ||
+    hostname === '127.0.0.1'
   );
 }
 
-function normalizeHost(host: string): string {
-  return host.replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase();
+function parseSolHostEnv(raw: string | undefined): ParsedSolHost | null {
+  if (!raw?.trim()) return null;
+  let value = raw.trim();
+  let protocol: 'http' | 'https' | null = null;
+  if (/^https:\/\//i.test(value)) {
+    protocol = 'https';
+    value = value.slice('https://'.length);
+  } else if (/^http:\/\//i.test(value)) {
+    protocol = 'http';
+    value = value.slice('http://'.length);
+  }
+  value = value.replace(/\/$/, '').toLowerCase();
+
+  let hostname = value;
+  let port: string | null = null;
+  const colon = value.lastIndexOf(':');
+  if (colon > 0) {
+    const maybePort = value.slice(colon + 1);
+    if (/^\d+$/.test(maybePort)) {
+      hostname = value.slice(0, colon);
+      port = maybePort;
+    }
+  }
+
+  return {
+    hostname,
+    port,
+    protocol: protocol ?? (isLocalHostname(hostname) ? 'http' : 'https'),
+  };
 }
 
+function parsedHost(role: SolHostRole): ParsedSolHost | null {
+  return parseSolHostEnv(HOST_ENV[role]);
+}
+
+/** True when Sol host map env is configured (empty BASE_PATH deploy). */
+export function solHostsConfigured(): boolean {
+  return Boolean(
+    parsedHost('marketing') &&
+      parsedHost('app') &&
+      parsedHost('docs') &&
+      parsedHost('trust'),
+  );
+}
+
+/**
+ * Soft-launch gate: when true, hide Sign in / Sign up and redirect those
+ * routes to Book a demo. Opt-in via NEXT_PUBLIC_SOL_DEMO_ONLY=true|1.
+ * Default is false so teachwithsol production exposes auth.
+ */
+export function solDemoOnly(): boolean {
+  const override = process.env.NEXT_PUBLIC_SOL_DEMO_ONLY?.trim().toLowerCase();
+  if (override === 'false' || override === '0') return false;
+  if (override === 'true' || override === '1') return true;
+  return false;
+}
+
+/** Hostname only (no port), for comparisons. */
 export function solHost(role: SolHostRole): string | null {
-  const raw = HOST_ENV[role];
-  return raw ? normalizeHost(raw) : null;
+  return parsedHost(role)?.hostname ?? null;
 }
 
-/** Absolute https origin for a Sol role, or null if not configured. */
+function isLocalMarketingHost(hostname: string | null): boolean {
+  return (
+    hostname === 'localhost' ||
+    Boolean(hostname?.endsWith('.localhost'))
+  );
+}
+
+function isTeachwithsolMarketingHost(hostname: string | null): boolean {
+  return hostname === 'www.teachwithsol.com' || hostname === 'teachwithsol.com';
+}
+
+/**
+ * Founders inbox on the local TeachWithSol host map and on production
+ * teachwithsol.com. Preview and StratOps stay without it.
+ * `NEXT_PUBLIC_VERCEL_ENV` is inlined from `VERCEL_ENV` in next.config.
+ */
+export function foundersContactEnabled(): boolean {
+  const marketing = solHost('marketing');
+  if (isLocalMarketingHost(marketing)) return true;
+  return (
+    process.env.NEXT_PUBLIC_VERCEL_ENV === 'production' &&
+    isTeachwithsolMarketingHost(marketing)
+  );
+}
+
+/**
+ * Privacy address stays on StratOps. TeachWithSol, local and Vercel, does not
+ * publish it.
+ */
+export function privacyEmailEnabled(): boolean {
+  const marketing = solHost('marketing');
+  if (isLocalMarketingHost(marketing)) return false;
+  if (isTeachwithsolMarketingHost(marketing)) return false;
+  return true;
+}
+
+/** Absolute origin for a Sol role, or null if not configured. */
 export function solOrigin(role: SolHostRole): string | null {
-  const host = solHost(role);
-  return host ? `https://${host}` : null;
+  const parsed = parsedHost(role);
+  if (!parsed) return null;
+  const hostWithPort = parsed.port
+    ? `${parsed.hostname}:${parsed.port}`
+    : parsed.hostname;
+  return `${parsed.protocol}://${hostWithPort}`;
 }
 
 /**
@@ -53,6 +160,12 @@ export function solHref(
 
 export function roleForPath(path: string): SolHostRole {
   const p = path.startsWith('/') ? path : `/${path}`;
+  // Crawl artifacts prefer the marketing Host (www), not the app host.
+  if (p === '/robots.txt' || p === '/sitemap.xml') return 'marketing';
+  // Blog lives on the marketing host (www), not docs.
+  if (p === '/blog' || p.startsWith('/blog/') || p === '/blog.md') {
+    return 'marketing';
+  }
   if (
     p === '/docs' ||
     p.startsWith('/docs/') ||
@@ -82,6 +195,7 @@ export function roleForPath(path: string): SolHostRole {
 export function isMarketingPath(path: string): boolean {
   const p = path.startsWith('/') ? path : `/${path}`;
   if (p === '/' || p.startsWith('/#')) return true;
+  if (p === '/blog' || p.startsWith('/blog/') || p === '/blog.md') return true;
   if (p === '/unsubscribe' || p.startsWith('/unsubscribe/')) return true;
   if (p === '/api/demo-request') return true;
   if (p === '/robots.txt' || p === '/sitemap.xml') return true;
@@ -111,7 +225,7 @@ export function isTrustPath(path: string): boolean {
 /** Classify request hostname against Sol env hosts (null = not a Sol mapped host). */
 export function classifySolHost(hostname: string): SolHostRole | null {
   if (!solHostsConfigured()) return null;
-  const h = normalizeHost(hostname.split(':')[0] ?? hostname);
+  const h = (hostname.split(':')[0] ?? hostname).toLowerCase();
   const marketing = solHost('marketing');
   const app = solHost('app');
   const docs = solHost('docs');

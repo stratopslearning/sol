@@ -1,3 +1,6 @@
+import { FOUNDERS_EMAIL } from "@/lib/legal";
+import { foundersContactEnabled } from "@/lib/solHosts";
+
 export const MARKETING_FAQS = [
   {
     q: "What is SOL?",
@@ -25,7 +28,9 @@ export const MARKETING_FAQS = [
   },
   {
     q: "How do we get started?",
-    a: "Book a demo, or sign up with a school email and ask your SOL admin for professor access. Join a section with a faculty code (or create one when your institution allows), upload materials, generate a draft, then release what you approve and share the learner code with students.",
+    a: foundersContactEnabled()
+      ? `Book a demo to get started, or email ${FOUNDERS_EMAIL}. After onboarding, your institution's SOL admin grants professor access. Join a section with a faculty code (or create one when your institution allows), upload materials, generate a draft, then release what you approve and share the learner code with students.`
+      : "Book a demo to get started. After onboarding, your institution's SOL admin grants professor access. Join a section with a faculty code (or create one when your institution allows), upload materials, generate a draft, then release what you approve and share the learner code with students.",
   },
   {
     q: "Is student work private?",

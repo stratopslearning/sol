@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
-import { db } from '@/app/db';
-import { professorSections, sections } from '@/app/db/schema';
 import { apiErrorResponse } from '@/lib/api/errors';
 import { requireProfessorApi } from '@/lib/api/professorAuth';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
-import { activeOnly } from '@/lib/db/filters';
 import { getProfessorSectionDetail } from '@/lib/professor/sections';
-import { parseOptionalEndsAt } from '@/lib/sectionAvailability';
+import { setSectionEndsAt } from '@/lib/professor/mutations';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,28 +49,6 @@ export async function PATCH(
     const auth = await requireProfessorApi(req, { scope: 'sections:write' });
     const user = auth.user;
 
-    if (user.role === 'PROFESSOR') {
-      const enrollment = await db.query.professorSections.findFirst({
-        where: and(
-          eq(professorSections.sectionId, sectionId),
-          eq(professorSections.professorId, user.id),
-        ),
-      });
-      if (!enrollment) {
-        return NextResponse.json(
-          { error: 'You can only update sections you teach' },
-          { status: 403 },
-        );
-      }
-    }
-
-    const section = await db.query.sections.findFirst({
-      where: and(eq(sections.id, sectionId), activeOnly(sections.deletedAt)),
-    });
-    if (!section) {
-      return NextResponse.json({ error: 'Section not found' }, { status: 404 });
-    }
-
     const body = await req.json().catch(() => null);
     const parsed = patchSchema.safeParse(body);
     if (!parsed.success) {
@@ -91,21 +65,19 @@ export async function PATCH(
       );
     }
 
-    const endsAtResult = parseOptionalEndsAt(parsed.data.endsAt ?? null);
-    if (!endsAtResult.ok) {
-      return NextResponse.json({ error: endsAtResult.error }, { status: 400 });
-    }
+    const updated = await setSectionEndsAt(
+      user,
+      sectionId,
+      parsed.data.endsAt ?? null,
+    );
 
-    const [updated] = await db
-      .update(sections)
-      .set({
-        endsAt: endsAtResult.endsAt,
-        updatedAt: new Date(),
-      })
-      .where(eq(sections.id, sectionId))
-      .returning();
-
-    return NextResponse.json({ success: true, section: updated });
+    return NextResponse.json({
+      success: true,
+      section: {
+        id: updated.id,
+        endsAt: updated.endsAt,
+      },
+    });
   } catch (error) {
     console.error('Professor section PATCH error:', error);
     return apiErrorResponse(error);

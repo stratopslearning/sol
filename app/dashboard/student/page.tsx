@@ -1,83 +1,69 @@
 import Link from 'next/link';
-import { and, eq, inArray } from 'drizzle-orm';
 import {
   ArrowRight,
+  CalendarDays,
   CheckCircle,
   FileText,
+  GraduationCap,
   Layers,
   TrendingUp,
-} from 'lucide-react';
+} from '@/components/icons';
 
-import { db } from '@/app/db';
-import { attempts, quizSections, quizzes, studentSections } from '@/app/db/schema';
 import { AttemptList } from '@/components/AttemptList';
 import { EnrollmentList } from '@/components/EnrollmentList';
 import StudentEnrollFormWrapper from '@/components/StudentEnrollFormWrapper';
+import { StudentDataExportButton } from '@/components/student/StudentDataExportButton';
 import { AppShell } from '@/components/layout/AppShell';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { SectionHeading } from '@/components/layout/SectionHeading';
 import { StatCard } from '@/components/patterns/StatCard';
-import { activeOnly } from '@/lib/db/filters';
 import { requireStudent } from '@/lib/auth';
 import { appPath } from '@/lib/basePath';
+import {
+  fetchQuizIdsForSections,
+  fetchQuizzesByIds,
+  fetchUserEnrollmentsDetail,
+  fetchUserSubmittedAttempts,
+} from '@/lib/db/facultyStudentReads';
 import { partitionEnrollmentsByConclusion } from '@/lib/sectionAvailability';
 import { isQuizListedForStudents } from '@/lib/quizAvailability';
 
 export default async function StudentDashboard() {
   const user = await requireStudent();
 
-  const enrollments = await db.query.studentSections.findMany({
-    where: eq(studentSections.studentId, user.id),
-    with: { section: { with: { course: true } } },
-  });
+  const enrollmentRows = await fetchUserEnrollmentsDetail(user.id);
+  const enrollments = enrollmentRows.map((e) => ({
+    id: e.id,
+    sectionId: e.sectionId,
+    status: e.status,
+    enrolledAt: e.enrolledAt,
+    section: {
+      id: e.section.id,
+      name: e.section.name,
+      endsAt: e.section.endsAt,
+      course: e.section.course,
+    },
+  }));
   const { active: activeEnrollments } =
     partitionEnrollmentsByConclusion(enrollments);
 
   const sectionIds = activeEnrollments.map((e) => e.sectionId);
 
-  const availableQuizzes =
-    sectionIds.length > 0
-      ? await db.query.quizzes.findMany({
-          where: and(
-            inArray(
-              quizzes.id,
-              db
-                .select({ quizId: quizSections.quizId })
-                .from(quizSections)
-                .where(inArray(quizSections.sectionId, sectionIds)),
-            ),
-            activeOnly(quizzes.deletedAt),
-          ),
-          with: {
-            sectionAssignments: {
-              with: { section: true },
-            },
-          },
-        })
-      : [];
+  const quizLinks = await fetchQuizIdsForSections(sectionIds);
+  const availableQuizzes = await fetchQuizzesByIds([
+    ...new Set(quizLinks.map((l) => l.quizId)),
+  ]);
 
   const activeQuizzes = availableQuizzes.filter((quiz) =>
-    isQuizListedForStudents(quiz),
+    isQuizListedForStudents({ isActive: quiz.isActive }),
   );
   const uniqueActiveQuizzes = activeQuizzes.filter(
     (quiz, index, self) =>
       index === self.findIndex((q) => q.id === quiz.id),
   );
 
-  const allSubmittedAttempts = await db.query.attempts.findMany({
-    where: eq(attempts.studentId, user.id),
-    with: { quiz: true, section: true },
-  });
-  const submittedOnly = allSubmittedAttempts.filter(
-    (a) => a.submittedAt != null,
-  );
-  const recentAttempts = [...submittedOnly]
-    .sort(
-      (a, b) =>
-        new Date(b.submittedAt!).getTime() -
-        new Date(a.submittedAt!).getTime(),
-    )
-    .slice(0, 5);
+  const submittedOnly = await fetchUserSubmittedAttempts(user.id, 50);
+  const recentAttempts = submittedOnly.slice(0, 5);
 
   const bestPerQuiz: Record<string, number> = {};
   submittedOnly.forEach((a) => {
@@ -134,27 +120,36 @@ export default async function StudentDashboard() {
           <ul className="mt-4 flex flex-col gap-1">
             {[
               {
-                href: appPath('/dashboard/student/quizzes'),
-                label: 'Quizzes',
-                hint: totalQuizzes === 1 ? '1 quiz open' : `${totalQuizzes} quizzes open`,
-                icon: FileText,
-              },
-              {
-                href: appPath('/dashboard/student/discussions'),
-                label: 'Discussions',
-                hint: 'Socratic practice',
+                href: appPath('/dashboard/student/sections'),
+                label: 'My sections',
+                hint:
+                  totalSections === 1
+                    ? '1 section'
+                    : `${totalSections} sections`,
                 icon: Layers,
               },
               {
-                href: appPath('/dashboard/student/grades'),
-                label: 'Grades',
-                hint: averageScore > 0 ? `${averageScore}% average` : 'View results',
-                icon: CheckCircle,
+                href: appPath('/dashboard/student/calendar'),
+                label: 'Calendar',
+                hint:
+                  totalQuizzes === 1
+                    ? '1 quiz due soon'
+                    : `${totalQuizzes} quizzes open`,
+                icon: CalendarDays,
+              },
+              {
+                href: appPath('/dashboard/student/sections'),
+                label: 'Continue in a section',
+                hint:
+                  averageScore > 0
+                    ? `${averageScore}% average · grades inside`
+                    : 'Assignments, books & grades',
+                icon: GraduationCap,
               },
             ].map((item) => {
               const Icon = item.icon;
               return (
-                <li key={item.href}>
+                <li key={item.label}>
                   <Link
                     href={item.href}
                     className="group flex items-center gap-3 rounded-md px-2 py-2.5 transition-colors hover:bg-surface"
@@ -197,15 +192,15 @@ export default async function StudentDashboard() {
             label="Open quizzes"
             value={totalQuizzes}
             icon={<FileText className="h-4 w-4" />}
-            hint="Ready to attempt"
-            href={appPath('/dashboard/student/quizzes')}
+            hint="See calendar"
+            href={appPath('/dashboard/student/calendar')}
           />
           <StatCard
             label="Attempts"
             value={totalAttempts}
             icon={<CheckCircle className="h-4 w-4" />}
-            hint="Submitted so far"
-            href={appPath('/dashboard/student/grades')}
+            hint="In your sections"
+            href={appPath('/dashboard/student/sections')}
           />
           <StatCard
             label="Average"
@@ -213,7 +208,7 @@ export default async function StudentDashboard() {
             icon={<TrendingUp className="h-4 w-4" />}
             hint="Best score per quiz"
             accent
-            href={appPath('/dashboard/student/grades')}
+            href={appPath('/dashboard/student/sections')}
           />
         </div>
       </section>

@@ -2,7 +2,7 @@
 
 import { useRef } from "react";
 import Image from "next/image";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight } from "@/components/icons";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
@@ -11,7 +11,13 @@ import { SolMark } from "@/components/brand/SolMark";
 import { Button } from "@/components/ui/button";
 import { withBasePath } from "@/lib/basePath";
 import { CAL_BOOKING_URL } from "@/lib/calBooking";
-import { solHref } from "@/lib/solHosts";
+import { FOUNDERS_EMAIL, LEGAL_PRIVACY_EMAIL } from "@/lib/legal";
+import {
+  foundersContactEnabled,
+  privacyEmailEnabled,
+  solDemoOnly,
+  solHref,
+} from "@/lib/solHosts";
 
 const PATH_LIGHT = withBasePath("/marketing/path-light.jpg");
 
@@ -21,15 +27,23 @@ const productLinks = [
   { title: "How it works", href: solHref("/#product") },
   { title: "FAQ", href: solHref("/#faq") },
   { title: "Trust", href: solHref("/#trust") },
+  { title: "Blogs", href: solHref("/blog") },
   { title: "Book a demo", href: CAL_BOOKING_URL, external: true },
 ] as const;
 
-const companyLinks = [
+const companyLinksBase = [
   { title: "Docs", href: solHref("/docs") },
   { title: "About SOL", href: solHref("/docs/about-sol") },
+  { title: "Blogs", href: solHref("/blog") },
   { title: "Security", href: solHref("/security") },
-  { title: "Sign in", href: solHref("/login") },
 ] as const;
+
+const companyLinks = solDemoOnly()
+  ? companyLinksBase
+  : ([
+      ...companyLinksBase,
+      { title: "Sign in", href: solHref("/login") },
+    ] as const);
 
 const legalLinks = [
   { title: "Terms", href: solHref("/terms") },
@@ -90,7 +104,7 @@ export function Footer() {
       <div className="absolute inset-0" aria-hidden data-footer-bg>
         <Image
           src={PATH_LIGHT}
-          alt=""
+          alt="Sunlit path through trees toward an open clearing, for a calm close to the page"
           fill
           className="object-cover object-[center_35%]"
           sizes="100vw"
@@ -181,6 +195,28 @@ export function Footer() {
                 The AI teaching layer for the LMS you already use. The operating
                 system for teaching.
               </p>
+              {foundersContactEnabled() ? (
+                <p className="text-sm leading-relaxed text-[#f4f1e8]/70">
+                  Founders:{" "}
+                  <a
+                    href={`mailto:${FOUNDERS_EMAIL}`}
+                    className="underline decoration-[#f4f1e8]/35 underline-offset-2 transition-colors hover:text-[#f4f1e8] hover:decoration-[#f4f1e8]/70"
+                  >
+                    {FOUNDERS_EMAIL}
+                  </a>
+                </p>
+              ) : null}
+              {privacyEmailEnabled() ? (
+                <p className="text-sm leading-relaxed text-[#f4f1e8]/70">
+                  Privacy and campus IT:{" "}
+                  <a
+                    href={`mailto:${LEGAL_PRIVACY_EMAIL}`}
+                    className="underline decoration-[#f4f1e8]/35 underline-offset-2 transition-colors hover:text-[#f4f1e8] hover:decoration-[#f4f1e8]/70"
+                  >
+                    {LEGAL_PRIVACY_EMAIL}
+                  </a>
+                </p>
+              ) : null}
             </div>
 
             <nav

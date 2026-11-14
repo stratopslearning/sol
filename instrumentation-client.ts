@@ -12,24 +12,25 @@ import {
 
 const isProd = process.env.NODE_ENV === 'production';
 
-Sentry.init({
-  dsn:
-    process.env.NEXT_PUBLIC_SENTRY_DSN ||
-    'https://6c7da7e597d25db5237c68870747ceb7@o4510841491816448.ingest.us.sentry.io/4510841493127168',
+const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
+if (!dsn) {
+  // No-op when unset (local / misconfigured). Never hardcode a project DSN.
+}
 
-  integrations: [Sentry.replayIntegration()],
+Sentry.init({
+  dsn: dsn || undefined,
+
+  // Session Replay intentionally off (privacy / lawsuit surface). Errors only.
+  integrations: [],
+  enabled: Boolean(dsn),
 
   tracesSampleRate: isProd ? 0.1 : 1,
   enableLogs: !isProd,
 
-  // Replay sampling: 10% of sessions in production, 100% on errors so we can
-  // reproduce real bug reports. Lower replaysSessionSampleRate further if the
-  // bill becomes a concern.
-  replaysSessionSampleRate: isProd ? 0.05 : 0.1,
-  replaysOnErrorSampleRate: 1.0,
+  replaysSessionSampleRate: 0,
+  replaysOnErrorSampleRate: 0,
 
-  // PII: stripped in production so cookies / headers / IPs do not flow into
-  // Sentry. Replay still captures the page DOM — see Sentry docs for masking.
+  // PII: stripped in production so cookies / headers / IPs do not flow into Sentry.
   sendDefaultPii: !isProd,
 
   ignoreErrors: SENTRY_IGNORE_ERRORS,

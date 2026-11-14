@@ -97,6 +97,45 @@ describe('computeCacheKey', () => {
     expect(a).not.toBe(b);
   });
 
+  it('invalidates when materialsContextHash changes', () => {
+    const a = computeCacheKey(base);
+    const b = computeCacheKey({
+      ...base,
+      materialsContextHash: 'abcdef0123456789',
+    });
+    expect(a).not.toBe(b);
+  });
+
+  it('invalidates when tenantId changes', () => {
+    const a = computeCacheKey(base);
+    const b = computeCacheKey({
+      ...base,
+      tenantId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+    });
+    expect(a).not.toBe(b);
+  });
+
+  it('changes key when tenant and materials hash both set', () => {
+    const tenant = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+    const a = computeCacheKey({
+      ...base,
+      tenantId: tenant,
+      materialsContextHash: '1111111111111111',
+    });
+    const b = computeCacheKey({
+      ...base,
+      tenantId: tenant,
+      materialsContextHash: '2222222222222222',
+    });
+    expect(a).not.toBe(b);
+  });
+
+  it('treats missing materialsContextHash as empty', () => {
+    const a = computeCacheKey(base);
+    const b = computeCacheKey({ ...base, materialsContextHash: '' });
+    expect(a).toBe(b);
+  });
+
   it('produces deterministic 64-char hex digests', () => {
     const key = computeCacheKey(base);
     expect(key).toMatch(/^[0-9a-f]{64}$/);

@@ -14,10 +14,11 @@
  * plus any attempts where `gradingStatus IS NULL` for the professor's
  * sections that contain the magic string.
  */
-import { and, eq, inArray, isNotNull, or, sql } from 'drizzle-orm';
+import { and, inArray, isNotNull, or, sql } from 'drizzle-orm';
 
 import { db } from '@/app/db';
-import { attempts, professorSections } from '@/app/db/schema';
+import { attempts } from '@/app/db/schema';
+import { listTeachingSectionIds } from '@/lib/professor/graderSections';
 import {
   isFallbackGradingFeedback,
   isPendingFeedback,
@@ -119,13 +120,13 @@ function summariseFeedback(gptFeedback: unknown): {
 
 export async function getAttentionItemsForProfessor(
   professorId: string,
-  options: { limit?: number } = {},
+  options: { limit?: number; sectionIds?: string[] } = {},
 ): Promise<AttentionItem[]> {
-  const enrollments = await db.query.professorSections.findMany({
-    where: eq(professorSections.professorId, professorId),
-    columns: { sectionId: true },
-  });
-  const sectionIds = enrollments.map((e) => e.sectionId);
+  // Binding-derived sections only (professor_sections is metadata).
+  const teaching = await listTeachingSectionIds({ id: professorId });
+  const sectionIds = options.sectionIds
+    ? options.sectionIds.filter((id) => teaching.includes(id))
+    : teaching;
   if (sectionIds.length === 0) return [];
 
   const limit = Math.max(1, Math.min(options.limit ?? 100, 500));

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight } from '@/components/icons';
 
 import { DocsNav } from '@/components/docs/DocsNav';
 import type { DocMeta } from '@/lib/docs';

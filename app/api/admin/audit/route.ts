@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
     const admin = await db.query.users.findFirst({
       where: eq(users.clerkId, adminClerkId),
     });
-    if (!admin || admin.role !== 'ADMIN') {
+    if (!admin || !admin.platformStaff) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

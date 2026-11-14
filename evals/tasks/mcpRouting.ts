@@ -1,9 +1,8 @@
 /**
  * Simulated professor-agent tool routing (no database).
- * Uses OpenAI function calling against the live MCP tool catalog.
+ * Uses OpenAI function calling against the live MCP tool catalog via the gateway.
  */
-import OpenAI from 'openai';
-
+import { getAiClient, resolveModel } from '@/lib/ai/gateway';
 import { zodToJsonSchema } from '@/lib/mcp/jsonSchema';
 import { MCP_TOOLS } from '@/lib/mcp/tools';
 
@@ -11,8 +10,6 @@ export type McpRoutingResult = {
   toolName: string;
   args: Record<string, unknown>;
 };
-
-const ROUTING_MODEL = 'gpt-4.1-mini';
 
 function mcpToolsForOpenAI() {
   return MCP_TOOLS.map((tool) => ({
@@ -30,9 +27,10 @@ export async function routeMcpIntent(intent: string): Promise<McpRoutingResult> 
     throw new Error('OPENAI_API_KEY is required for MCP routing evals');
   }
 
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const openai = getAiClient('authoring', { timeout: 60_000 });
+  const model = resolveModel('refine').model;
   const completion = await openai.chat.completions.create({
-    model: ROUTING_MODEL,
+    model,
     temperature: 0,
     messages: [
       {

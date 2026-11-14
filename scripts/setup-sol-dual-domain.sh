@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# Interactive ops helper for the Sol (teachwithsol.com) Vercel project.
+# Ops helper for the standalone teachwithsol.com Vercel project.
+# GitHub: stratopslearning/teachwithsol (leave stratopslearning/sol / StratOps alone).
+#
 # Requires: vercel CLI logged in (`npx vercel login`), Cloudflare DNS access,
-# and Clerk Production dashboard (or `clerk link` to the SOL production app).
+# and a NEW Clerk Production application (not StratOps satellite).
 #
 # Usage:
 #   chmod +x scripts/setup-sol-dual-domain.sh
@@ -27,20 +29,18 @@ fi
 $VERCEL whoami "${TEAM_FLAG[@]}"
 
 echo ""
-echo "==> Link / create project '$PROJECT_NAME' (same git repo as StratOps)"
-echo "    When prompted, create a NEW project — do not overwrite StratOps."
+echo "==> Link project '$PROJECT_NAME'"
+echo "    Git should be stratopslearning/teachwithsol — not stratopslearning/sol."
 $VERCEL link "${TEAM_FLAG[@]}" --yes --project "$PROJECT_NAME" || true
 
 echo ""
-echo "==> Set Sol-specific Production env (shared secrets: copy from StratOps UI)"
+echo "==> Set teachwithsol-specific Production public env"
 set_env() {
   local key="$1" val="$2"
-  # Remove existing then add (idempotent-ish)
   $VERCEL env rm "$key" production -y "${TEAM_FLAG[@]}" 2>/dev/null || true
   printf '%s' "$val" | $VERCEL env add "$key" production "${TEAM_FLAG[@]}"
 }
 
-# Empty BASE_PATH: vercel env add may not accept empty; set via dashboard if this fails.
 set_env NEXT_PUBLIC_BASE_URL "https://app.teachwithsol.com"
 set_env NEXT_PUBLIC_CLERK_SIGN_IN_URL "/login"
 set_env NEXT_PUBLIC_CLERK_SIGN_UP_URL "/signup"
@@ -49,39 +49,48 @@ set_env NEXT_PUBLIC_SOL_APP_HOST "app.teachwithsol.com"
 set_env NEXT_PUBLIC_SOL_DOCS_HOST "docs.teachwithsol.com"
 set_env NEXT_PUBLIC_SOL_TRUST_HOST "trust.teachwithsol.com"
 
-echo ""
-echo "IMPORTANT: In Vercel → $PROJECT_NAME → Settings → Environment Variables,"
-echo "  add NEXT_PUBLIC_BASE_PATH with an empty value for Production"
-echo "  (CLI often cannot set empty strings). Copy all other secrets from StratOps."
-echo "  See scripts/sol-dual-domain.env.example"
+# Ensure satellite mode is off if previously set
+$VERCEL env rm NEXT_PUBLIC_CLERK_IS_SATELLITE production -y "${TEAM_FLAG[@]}" 2>/dev/null || true
+$VERCEL env rm NEXT_PUBLIC_CLERK_DOMAIN production -y "${TEAM_FLAG[@]}" 2>/dev/null || true
 
 echo ""
-echo "==> Add domains (Vercel will print DNS targets)"
+echo "IMPORTANT: In Vercel → $PROJECT_NAME → Settings → Environment Variables:"
+echo "  1. NEXT_PUBLIC_BASE_PATH = empty string (CLI often cannot set empty)"
+echo "  2. Paste secrets from scripts/sol-dual-domain.env.example"
+echo "     - NEW Clerk keys + webhook secret"
+echo "     - NEW Upstash + CRON_SECRET + Braintrust"
+echo "     - REUSE Neon, OpenAI, Inngest"
+echo "     - EMAIL_ENABLED=true + EMAIL_FROM + AWS_REGION"
+echo "     - PLATFORM_STAFF_GRANTORS"
+echo "  3. Unset any leftover StratOps satellite / absolute sign-in URLs"
+echo "  4. Settings → Git: connect stratopslearning/teachwithsol"
+echo "  5. Enable Production Cron Jobs (this project owns crons on its Neon)"
+
+echo ""
+echo "==> Domains (skip if already attached)"
 for d in teachwithsol.com www.teachwithsol.com app.teachwithsol.com docs.teachwithsol.com trust.teachwithsol.com; do
   echo "--- $d"
   $VERCEL domains add "$d" "${TEAM_FLAG[@]}" || true
 done
 
 echo ""
-echo "==> Cloudflare DNS (zone teachwithsol.com)"
-echo "  For each hostname Vercel listed, create a CNAME (orange or grey cloud):"
-echo "    www / app / docs / trust  →  cname.vercel-dns.com"
-echo "    @ (apex)                  →  CNAME flattening to same target"
-echo "  Or use the exact A/CNAME values from: Vercel → Project → Domains"
-
-echo ""
-echo "==> Clerk Production allowlist (keep strat-ops URLs)"
-echo "  Add allowed redirect URLs:"
+echo "==> Clerk (NEW standalone Production app)"
+echo "  Domains: app.teachwithsol.com (and www if marketing signs in)"
+echo "  Allowed redirect URLs:"
 echo "    https://app.teachwithsol.com/login"
 echo "    https://app.teachwithsol.com/signup"
 echo "    https://app.teachwithsol.com/login/sso-callback"
 echo "    https://app.teachwithsol.com/signup/sso-callback"
-echo "    https://www.teachwithsol.com"
-echo "    https://teachwithsol.com"
-echo "  Do NOT remove https://www.strat-ops.net/learning/..."
+echo "  Webhook: https://app.teachwithsol.com/api/clerk/webhook"
+echo "  Do NOT configure StratOps satellite domains for this product."
+
+echo ""
+echo "==> Inngest"
+echo "  Reuse existing keys; set serve/sync URL to"
+echo "    https://app.teachwithsol.com/api/inngest"
 
 echo ""
 echo "==> Deploy"
 echo "  $VERCEL --prod ${TEAM_FLAG[*]}"
-echo "  Confirm StratOps project still has BASE_PATH unset or /learning and still runs crons."
+echo "  Leave StratOps Vercel on stratopslearning/sol untouched."
 echo "Done."

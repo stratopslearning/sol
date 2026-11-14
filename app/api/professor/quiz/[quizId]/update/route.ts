@@ -1,18 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
-import { db } from '@/app/db';
-import {
-  professorSections,
-  quizSections,
-  quizzes,
-} from '@/app/db/schema';
-import { ApiError, jsonError } from '@/lib/api/errors';
+import { ApiError, apiErrorResponse, jsonError } from '@/lib/api/errors';
 import { requireProfessorApi } from '@/lib/api/professorAuth';
-import { activeOnly } from '@/lib/db/filters';
-import { upsertQuizQuestions } from '@/lib/quizQuestionUpsert';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
+import { updateQuiz } from '@/lib/professor/mutations';
 import { readJsonBody } from '@/lib/api/readJsonBody';
 import {
   isoDateTimeRequired,
@@ -24,25 +16,25 @@ export const dynamic = 'force-dynamic';
 
 const updateQuizSchema = z
   .object({
-  title: z.string().min(1).max(200),
-  description: z.string().max(8_000).optional(),
-  sectionIds: z
-    .array(z.string().min(1))
-    .min(1, 'Select at least one section')
-    .max(50),
-  maxAttempts: z.number().min(1).max(10).default(1),
-  timeLimit: z.number().min(1).max(24 * 60).optional(),
-  startDate: isoDateTimeRequired,
-  endDate: isoDateTimeRequired,
-  isActive: z.boolean().default(true),
-  passingScore: z.number().int().min(0).max(100).default(60),
-  questions: z.array(quizQuestionInputSchema).max(200),
-})
+    title: z.string().min(1).max(200),
+    description: z.string().max(8_000).optional(),
+    sectionIds: z
+      .array(z.string().min(1))
+      .min(1, 'Select at least one section')
+      .max(50),
+    maxAttempts: z.number().min(1).max(10).default(1),
+    timeLimit: z.number().min(1).max(24 * 60).optional(),
+    startDate: isoDateTimeRequired,
+    endDate: isoDateTimeRequired,
+    isActive: z.boolean().default(true),
+    passingScore: z.number().int().min(0).max(100).default(60),
+    questions: z.array(quizQuestionInputSchema).max(200),
+  })
   .superRefine(quizWindowSuperRefine);
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: Promise<{ quizId: string }> }
+  { params }: { params: Promise<{ quizId: string }> },
 ) {
   try {
     const { quizId } = await params;
@@ -56,99 +48,45 @@ export async function PUT(
       message: 'Too many quiz update requests. Please wait a moment.',
     });
     if (limited) return limited;
+
     const body = await readJsonBody(req);
     const validatedData = updateQuizSchema.parse(body);
 
-    // Check if quiz exists and belongs to professor. Soft-deleted quizzes
-    // can't be edited.
-    const existingQuiz = await db.query.quizzes.findFirst({
-      where: and(eq(quizzes.id, quizId), activeOnly(quizzes.deletedAt)),
+    const quiz = await updateQuiz(user, quizId, {
+      title: validatedData.title,
+      description: validatedData.description,
+      sectionIds: validatedData.sectionIds,
+      maxAttempts: validatedData.maxAttempts,
+      timeLimit: validatedData.timeLimit,
+      passingScore: validatedData.passingScore,
+      startDate: validatedData.startDate,
+      endDate: validatedData.endDate,
+      isActive: validatedData.isActive,
+      questions: validatedData.questions.map((q) => ({
+        id: q.id,
+        type: q.type,
+        question: q.question,
+        options: q.options,
+        correctAnswer: q.correctAnswer,
+        points: q.points,
+        order: q.order,
+      })),
     });
 
-    if (!existingQuiz) {
-      return NextResponse.json({ error: 'Quiz not found' }, { status: 404 });
-    }
-
-    // Quiz mutations require *ownership*. The previous logic let any professor
-    // co-teaching one of the quiz's assigned sections mutate the quiz, which
-    // included rewriting questions, answers, and reassigning sections.
-    const isAdmin = user.role === 'ADMIN';
-    const isOwner = existingQuiz.professorId === user.id;
-    if (!isAdmin && !isOwner) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
-
-    // Verify professor is enrolled in all specified sections (so they can't
-    // assign their quiz to a section they don't teach). Admins are exempt.
-    const professorSectionEnrollments = await db.query.professorSections.findMany({
-      where: eq(professorSections.professorId, user.id),
-    });
-    const enrolledSectionIds = professorSectionEnrollments.map((e) => e.sectionId);
-    if (!isAdmin) {
-      const invalidSections = validatedData.sectionIds.filter(
-        (id) => !enrolledSectionIds.includes(id),
-      );
-      if (invalidSections.length > 0) {
-        return NextResponse.json(
-          { error: 'You can only assign quizzes to sections you are enrolled in' },
-          { status: 403 },
-        );
-      }
-    }
-
-    const startDate = new Date(validatedData.startDate);
-    const endDate = new Date(validatedData.endDate);
-    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
-      return NextResponse.json({ error: 'Invalid date format' }, { status: 400 });
-    }
-
-    // Atomic edit: quiz row + questions + section assignments all in one
-    // transaction so a partial failure cannot leave the quiz with mismatched
-    // questions or stale section assignments.
-    await db.transaction(async (tx) => {
-      await tx
-        .update(quizzes)
-        .set({
-          title: validatedData.title,
-          description: validatedData.description,
-          maxAttempts: validatedData.maxAttempts,
-          timeLimit: validatedData.timeLimit,
-          passingScore: validatedData.passingScore,
-          startDate: startDate,
-          endDate: endDate,
-          isActive: validatedData.isActive,
-          updatedAt: new Date(),
-        })
-        .where(eq(quizzes.id, quizId));
-
-      await upsertQuizQuestions(tx, quizId, validatedData.questions);
-
-      await tx.delete(quizSections).where(eq(quizSections.quizId, quizId));
-      await tx.insert(quizSections).values(
-        validatedData.sectionIds.map((sectionId: string) => ({
-          quizId,
-          sectionId,
-          assignedBy: user.id,
-        })),
-      );
-    });
-
-    return NextResponse.json({ 
-      success: true, 
+    return NextResponse.json({
+      success: true,
       message: 'Quiz updated successfully',
-      quiz: {
-        id: quizId,
-        title: validatedData.title,
-        sectionIds: validatedData.sectionIds,
-      }
+      quiz,
     });
-
   } catch (error) {
     console.error('Quiz update error:', error);
     if (error instanceof ApiError) return jsonError(error);
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: 'Invalid data', details: error.errors }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Invalid data', details: error.errors },
+        { status: 400 },
+      );
     }
-    return NextResponse.json({ error: 'Failed to update quiz' }, { status: 500 });
+    return apiErrorResponse(error);
   }
-} 
+}

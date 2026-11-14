@@ -3,7 +3,6 @@ import { notFound } from 'next/navigation';
 
 import { db } from '@/app/db';
 import {
-  professorSections,
   quizSections,
   sections,
   studentSections,
@@ -34,7 +33,7 @@ export default async function AdminSectionGradebookPage({
     actorUserId: admin.id,
     actorClerkId: admin.clerkId,
     sectionId,
-    role: admin.role,
+    role: 'ADMIN',
   });
 
   const section = await db.query.sections.findFirst({
@@ -104,8 +103,7 @@ export default async function AdminSectionGradebookPage({
   return (
     <AppShell
       role="admin"
-      active="sections"
-      topbarEyebrow="Administration"
+      active="workspaces"
       topbarTitle="Gradebook"
       maxWidth="wide"
     >

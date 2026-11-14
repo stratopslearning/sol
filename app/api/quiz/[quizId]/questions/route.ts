@@ -1,22 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { and, eq, inArray } from 'drizzle-orm';
 
-import { db } from '@/app/db';
-import {
-  questions,
-  quizSections,
-  quizzes,
-  studentSections,
-} from '@/app/db/schema';
-import { activeOnly } from '@/lib/db/filters';
 import { isStudentEntitled } from '@/lib/featureFlags';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
+import { professorCanAccessQuiz, userCanWriteQuiz } from '@/lib/quizAccess';
+import {
+  fetchQuizQuestionsSafeDefiner,
+  studentEnrolledInQuizDefiner,
+} from '@/lib/db/studentWriteDefiners';
+import { fetchQuizById } from '@/lib/db/entityScopedReads';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ quizId: string }> }
+  _request: NextRequest,
+  { params }: { params: Promise<{ quizId: string }> },
 ) {
   try {
     const { quizId } = await params;
@@ -25,86 +22,46 @@ export async function GET(
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    if (user.role === 'STUDENT' && !isStudentEntitled(user)) {
+    if (!isStudentEntitled(user)) {
       return NextResponse.json({ error: 'Payment required' }, { status: 402 });
     }
 
-    const isAdmin = user.role === 'ADMIN';
-
-    // Admins keep visibility into soft-deleted quizzes (for restore/audit).
-    // Everyone else sees them as 404.
-    const quiz = await db.query.quizzes.findFirst({
-      where: isAdmin
-        ? eq(quizzes.id, quizId)
-        : and(eq(quizzes.id, quizId), activeOnly(quizzes.deletedAt)),
-    });
+    const quiz = await fetchQuizById(quizId);
     if (!quiz) {
       return NextResponse.json({ error: 'Quiz not found' }, { status: 404 });
     }
 
-    const isOwnerProfessor =
-      user.role === 'PROFESSOR' && quiz.professorId === user.id;
+    const isStaff = await professorCanAccessQuiz(user, quizId);
 
-    // For students (and non-owner professors), enforce that the caller is
-    // currently enrolled in at least one section the quiz is assigned to.
-    if (!isAdmin && !isOwnerProfessor) {
-      const quizSectionLinks = await db.query.quizSections.findMany({
-        where: eq(quizSections.quizId, quizId),
-      });
-      const quizSectionIds = quizSectionLinks.map((qs) => qs.sectionId);
-      if (quizSectionIds.length === 0) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
-
-      if (user.role === 'STUDENT') {
-        const enrollment = await db.query.studentSections.findFirst({
-          where: and(
-            eq(studentSections.studentId, user.id),
-            eq(studentSections.status, 'ACTIVE'),
-            inArray(studentSections.sectionId, quizSectionIds),
-          ),
-        });
-        if (!enrollment) {
-          return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-        }
-      } else if (user.role === 'PROFESSOR') {
-        // Co-teaching professor: require professor enrollment in one of the
-        // sections the quiz is assigned to.
-        const { professorSections } = await import('@/app/db/schema');
-        const profEnrollment = await db.query.professorSections.findFirst({
-          where: and(
-            eq(professorSections.professorId, user.id),
-            inArray(professorSections.sectionId, quizSectionIds),
-          ),
-        });
-        if (!profEnrollment) {
-          return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-        }
-      } else {
+    if (!isStaff) {
+      const enrolled = await studentEnrolledInQuizDefiner(user.id, quizId);
+      if (!enrolled) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
     }
 
-    const quizQuestions = await db.query.questions.findMany({
-      where: eq(questions.quizId, quizId),
-      orderBy: (questions, { asc }) => [asc(questions.order)],
-    });
+    const quizQuestions = await fetchQuizQuestionsSafeDefiner(quizId);
 
-    // Strip answer key + rubric for callers who must not see them. Admins and
-    // the quiz's own author keep the full row (editor / reports).
-    const includeAnswerKey = isAdmin || isOwnerProfessor;
-    const responseQuestions = includeAnswerKey
-      ? quizQuestions
-      : quizQuestions.map((q) => ({
-          ...q,
-          correctAnswer: null,
-          rubric: null,
-          rubricVersion: null,
-        }));
+    const includeAnswerKey = isStaff && (await userCanWriteQuiz(user, quizId));
+    // Safe definer already strips keys; staff writers need full bank via separate path.
+    if (includeAnswerKey) {
+      const { db } = await import('@/app/db');
+      const { eq } = await import('drizzle-orm');
+      const { questions } = await import('@/app/db/schema');
+      // Staff write path: faculty/admin roles typically use BYPASS or tenant GUC.
+      const full = await db.query.questions.findMany({
+        where: eq(questions.quizId, quizId),
+        orderBy: (q, { asc }) => [asc(q.order)],
+      });
+      return NextResponse.json({ questions: full });
+    }
 
-    return NextResponse.json({ questions: responseQuestions });
+    return NextResponse.json({ questions: quizQuestions });
   } catch (error) {
-    console.error('Error fetching quiz questions:', error);
-    return NextResponse.json({ error: 'Failed to fetch questions' }, { status: 500 });
+    console.error('Quiz questions error:', error);
+    return NextResponse.json(
+      { error: 'Failed to load questions' },
+      { status: 500 },
+    );
   }
 }

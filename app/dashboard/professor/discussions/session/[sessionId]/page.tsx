@@ -1,12 +1,10 @@
-import { and, eq } from 'drizzle-orm';
+import { requireTeachingAccess } from '@/lib/authz/gates';
 
-import { db } from '@/app/db';
-import { chatbotSessions, professorSections } from '@/app/db/schema';
 import { AppShell } from '@/components/layout/AppShell';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { TranscriptDownloadButton } from '@/components/chatbot/TranscriptDownloadButton';
 import { withBasePath } from '@/lib/basePath';
-import { getOrCreateUser } from '@/lib/getOrCreateUser';
+import { getDiscussionSession } from '@/lib/professor/discussions';
 import { appRedirect } from '@/lib/serverRedirect';
 import { LocalDateTime } from '@/components/timezone/LocalDateTime';
 
@@ -14,44 +12,37 @@ interface PageProps {
   params: Promise<{ sessionId: string }>;
 }
 
+type TranscriptMessage = { role?: string; content?: string; at?: string };
+
 export default async function ProfessorSessionReviewPage(props: PageProps) {
-  const user = await getOrCreateUser();
-  if (!user || user.role !== 'PROFESSOR') return null;
+  const user = await requireTeachingAccess();
 
   const { sessionId } = await props.params;
-  const session = await db.query.chatbotSessions.findFirst({
-    where: eq(chatbotSessions.id, sessionId),
-    with: {
-      student: true,
-      section: true,
-      chatbot: true,
-    },
-  });
-  if (!session) appRedirect('/dashboard/professor/discussions');
-
-  const owns = session.chatbot.professorId === user.id;
-  const teaches = await db.query.professorSections.findFirst({
-    where: and(
-      eq(professorSections.professorId, user.id),
-      eq(professorSections.sectionId, session.sectionId),
-    ),
-  });
-  if (!owns && !teaches) {
+  let session;
+  try {
+    session = await getDiscussionSession(user, sessionId);
+  } catch {
     appRedirect('/dashboard/professor/discussions');
   }
 
-  const studentName =
-    [session.student.firstName, session.student.lastName]
-      .filter(Boolean)
-      .join(' ') || session.student.email;
-
-  const messages = Array.isArray(session.messages) ? session.messages : [];
+  const studentName = session.studentName;
+  const rawMessages = (
+    Array.isArray(session.messages) ? session.messages : []
+  ) as TranscriptMessage[];
+  const messages: Array<{
+    role: 'user' | 'assistant';
+    content: string;
+    at?: string;
+  }> = rawMessages.flatMap((m) => {
+    if (m.role !== 'user' && m.role !== 'assistant') return [];
+    const content = typeof m.content === 'string' ? m.content : '';
+    return [{ role: m.role, content, at: m.at }];
+  });
 
   return (
     <AppShell
       role="professor"
-      active="discussions"
-      topbarEyebrow="Faculty"
+      active="assignments"
       topbarTitle="Transcript"
       maxWidth="narrow"
     >
@@ -59,14 +50,12 @@ export default async function ProfessorSessionReviewPage(props: PageProps) {
         breadcrumbs={[
           { label: 'Dashboard', href: withBasePath('/dashboard/professor') },
           {
-            label: 'Discussions',
-            href: withBasePath('/dashboard/professor/discussions'),
+            label: 'Assignments',
+            href: withBasePath('/dashboard/professor/assignments'),
           },
           {
-            label: session.chatbot.title,
-            href: withBasePath(
-              `/dashboard/professor/discussions/${session.chatbotId}`,
-            ),
+            label: session.chatbotTitle,
+            href: withBasePath('/dashboard/professor/discussions'),
           },
           { label: 'Transcript' },
         ]}
@@ -74,7 +63,7 @@ export default async function ProfessorSessionReviewPage(props: PageProps) {
         title={studentName}
         description={
           <>
-            {session.chatbot.title} · {session.section.name}
+            {session.chatbotTitle} · {session.sectionName}
             {session.completedAt ? (
               <>
                 {' · '}
@@ -85,8 +74,8 @@ export default async function ProfessorSessionReviewPage(props: PageProps) {
         }
         actions={
           <TranscriptDownloadButton
-            title={session.chatbot.title}
-            personaName={session.chatbot.personaName}
+            title={session.chatbotTitle}
+            personaName={session.personaName}
             studentName={studentName}
             messages={messages}
           />
@@ -99,13 +88,13 @@ export default async function ProfessorSessionReviewPage(props: PageProps) {
         ) : (
           messages.map((m, i) => (
             <div
-              key={`${m.at}-${i}`}
+              key={`${m.at ?? i}-${i}`}
               className={
                 m.role === 'user' ? 'text-[#0b5394]' : 'text-[#38761d]'
               }
             >
               <strong>
-                {m.role === 'user' ? studentName : session.chatbot.personaName}:
+                {m.role === 'user' ? studentName : session.personaName}:
               </strong>{' '}
               <span className="whitespace-pre-wrap">{m.content}</span>
             </div>

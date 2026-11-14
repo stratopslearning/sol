@@ -1,9 +1,10 @@
 "use client";
 
-import { apiUrl } from '@/lib/basePath';
-import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { 
+import { useState } from "react";
+import { LogOut } from "@/components/icons";
+import { toast } from "sonner";
+
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -13,45 +14,57 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
-import { LogOut } from 'lucide-react';
-import { toast } from 'sonner';
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import { apiUrl } from "@/lib/basePath";
+import { cn } from "@/lib/utils";
 
 interface LeaveSectionButtonProps {
   sectionId: string;
   sectionName: string;
   onSuccess?: () => void;
+  /** Quieter secondary action by default (ghost). */
+  variant?: "ghost" | "outline" | "destructive";
+  className?: string;
 }
 
-export default function LeaveSectionButton({ sectionId, sectionName, onSuccess }: LeaveSectionButtonProps) {
+export default function LeaveSectionButton({
+  sectionId,
+  sectionName,
+  onSuccess,
+  variant = "ghost",
+  className,
+}: LeaveSectionButtonProps) {
   const [isLoading, setIsLoading] = useState(false);
 
   const handleLeaveSection = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(apiUrl(`/api/student/section/${sectionId}/leave`), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      const response = await fetch(
+        apiUrl(`/api/student/section/${sectionId}/leave`),
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
         },
-      });
+      );
 
       const data = await response.json();
 
       if (response.ok) {
-        toast.success('Successfully left section');
+        toast.success("Successfully left section");
         if (onSuccess) {
           onSuccess();
         } else {
-          // Refresh the page to update the UI
           window.location.reload();
         }
       } else {
-        toast.error(data.error || 'Failed to leave section');
+        toast.error(data.error || "Failed to leave section");
       }
     } catch (error) {
-      console.error('Error leaving section:', error);
-      toast.error('Failed to leave section');
+      console.error("Error leaving section:", error);
+      toast.error("Failed to leave section");
     } finally {
       setIsLoading(false);
     }
@@ -60,9 +73,18 @@ export default function LeaveSectionButton({ sectionId, sectionName, onSuccess }
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
-        <Button variant="outline" size="sm">
-          <LogOut className="h-4 w-4" />
-          Leave section
+        <Button
+          type="button"
+          variant={variant}
+          size="sm"
+          className={cn(
+            variant === "ghost" &&
+              "text-ink-muted hover:bg-destructive/10 hover:text-destructive",
+            className,
+          )}
+        >
+          <LogOut className="h-3.5 w-3.5" aria-hidden />
+          Leave
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>
@@ -70,8 +92,8 @@ export default function LeaveSectionButton({ sectionId, sectionName, onSuccess }
           <span className="eyebrow text-ink-faint">Leave</span>
           <AlertDialogTitle>Leave {sectionName}?</AlertDialogTitle>
           <AlertDialogDescription>
-            You will lose access to quizzes and materials for this section. You
-            can re-join later with a new code.
+            You will lose access to assignments and materials for this section.
+            You can re-join later with a new code.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

@@ -11,13 +11,21 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { compareNullableNumbers, sortRows } from '@/lib/listSort';
+import { activityCompletionLabel } from '@/lib/activities/status';
 import {
   comparePersonsByLastName,
   formatPersonName,
   type PersonNameFields,
 } from '@/lib/personName';
+import type { ActivityCompletionStatus } from '@/lib/assignments/types';
 
 type GradebookQuiz = { id: string; title: string };
+
+type GradebookCompletionCol = {
+  id: string;
+  title: string;
+  type: string;
+};
 
 type GradebookCell = {
   percentage: number;
@@ -30,6 +38,11 @@ export type GradebookLearnerRow = {
   id: string;
   person: PersonNameFields & { email: string | null };
   cells: Record<string, GradebookCell | undefined>;
+  /** Completion status keyed by completion column id */
+  completions?: Record<
+    string,
+    'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED' | undefined
+  >;
   average: number | null;
 };
 
@@ -38,9 +51,11 @@ type GradebookSortMode = 'LAST_NAME' | 'AVERAGE_DESC' | 'AVERAGE_ASC';
 export function SectionGradebookTable({
   learners,
   quizzes,
+  completionColumns = [],
 }: {
   learners: GradebookLearnerRow[];
   quizzes: GradebookQuiz[];
+  completionColumns?: GradebookCompletionCol[];
 }) {
   const [sortMode, setSortMode] = useState<GradebookSortMode>('LAST_NAME');
 
@@ -106,8 +121,19 @@ export function SectionGradebookTable({
                   {quiz.title}
                 </th>
               ))}
+              {completionColumns.map((col) => (
+                <th
+                  key={col.id}
+                  className="px-4 py-3 text-left eyebrow text-ink-faint min-w-[120px]"
+                >
+                  {col.title}
+                  <span className="block font-mono text-[0.6rem] opacity-70">
+                    {col.type}
+                  </span>
+                </th>
+              ))}
               <th className="px-4 py-3 text-right eyebrow text-ink-faint">
-                Average
+                Quiz avg
               </th>
             </tr>
           </thead>
@@ -148,8 +174,21 @@ export function SectionGradebookTable({
                           </div>
                         )
                       ) : (
-                        <span className="text-ink-faint">—</span>
+                        <span className="text-ink-faint">: </span>
                       )}
+                    </td>
+                  );
+                })}
+                {completionColumns.map((col) => {
+                  const st = (learner.completions?.[col.id] ??
+                    'NOT_STARTED') as ActivityCompletionStatus;
+                  const label =
+                    st === 'NOT_STARTED'
+                      ? '-'
+                      : activityCompletionLabel(st);
+                  return (
+                    <td key={col.id} className="px-4 py-3 text-ink-muted text-sm">
+                      {label}
                     </td>
                   );
                 })}
@@ -159,7 +198,7 @@ export function SectionGradebookTable({
                       {learner.average}%
                     </span>
                   ) : (
-                    <span className="text-ink-faint">—</span>
+                    <span className="text-ink-faint">: </span>
                   )}
                 </td>
               </tr>
@@ -176,7 +215,12 @@ export function SectionGradebookTable({
                   {q.average}%
                 </td>
               ))}
-              <td className="px-4 py-3 text-right text-ink-faint">—</td>
+              {completionColumns.map((col) => (
+                <td key={col.id} className="px-4 py-3 text-ink-faint">
+                  : 
+                </td>
+              ))}
+              <td className="px-4 py-3 text-right text-ink-faint">: </td>
             </tr>
           </tfoot>
         </table>

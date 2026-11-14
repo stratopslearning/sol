@@ -3,9 +3,10 @@
  * original quiz id while quiz_sections was moved to the professor-owned copy.
  *
  * Usage:
- *   npx tsx scripts/repair-quiz6-section-mismatch.ts [--dry-run]
+ *   npx tsx scripts/repair-quiz6-section-mismatch.ts [--dry-run] --confirm-dev-db
  */
-import 'dotenv/config';
+import './lib/bootstrapDevDb';
+
 import { and, eq, inArray, sql } from 'drizzle-orm';
 
 import { db } from '@/app/db';

@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { db } from '@/app/db';
 import { users } from '@/app/db/schema';
+import { bulkImportDbValues } from '@/lib/admin/bulkImportUserRow';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
 import { readJsonBody } from '@/lib/api/readJsonBody';
 
@@ -42,7 +43,7 @@ export async function POST(req: NextRequest) {
       where: eq(users.clerkId, adminId) 
     });
     
-    if (!admin || admin.role !== 'ADMIN') {
+    if (!admin || !admin.platformStaff) {
       return NextResponse.json({ 
         error: 'Forbidden - Admin access required' 
       }, { status: 403 });
@@ -147,12 +148,10 @@ export async function POST(req: NextRequest) {
                 .insert(users)
                 .values({
                   clerkId: existingClerk.id,
-                  email: userData.email,
+                  ...bulkImportDbValues(userData),
                   firstName:
                     userData.firstName || existingClerk.firstName || null,
                   lastName: userData.lastName || existingClerk.lastName || null,
-                  role: userData.role,
-                  paid: userData.paid,
                 })
                 .returning();
 
@@ -189,7 +188,7 @@ export async function POST(req: NextRequest) {
         }
 
         // Create user in our database. If this fails we MUST roll back the
-        // Clerk user we just created — otherwise we end up with a Clerk
+        // Clerk user we just created: otherwise we end up with a Clerk
         // identity that has no row in our DB and the next admin re-import
         // hits "form_identifier_exists" forever.
         let dbUser;
@@ -198,11 +197,7 @@ export async function POST(req: NextRequest) {
             .insert(users)
             .values({
               clerkId: clerkUser.id,
-              email: userData.email,
-              firstName: userData.firstName || null,
-              lastName: userData.lastName || null,
-              role: userData.role,
-              paid: userData.paid,
+              ...bulkImportDbValues(userData),
             })
             .returning();
         } catch (dbError: any) {
@@ -288,7 +283,7 @@ export async function GET() {
       where: eq(users.clerkId, adminId) 
     });
     
-    if (!admin || admin.role !== 'ADMIN') {
+    if (!admin || !admin.platformStaff) {
       return NextResponse.json({ 
         error: 'Forbidden - Admin access required' 
       }, { status: 403 });

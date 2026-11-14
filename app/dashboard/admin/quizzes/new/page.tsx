@@ -24,14 +24,17 @@ export default async function AdminQuizNewPage() {
   }));
 
   return (
-    <AppShell role="admin" active="quizzes" maxWidth="wide">
+    <AppShell role="admin" active="workspaces" maxWidth="wide">
       <PageHeader
-        eyebrow="New quiz"
+        eyebrow="Quiz"
         title="Create a quiz"
-        description="Author questions, set timing rules, and publish to a section."
+        description="Author questions, set timing rules, and publish to a section. Quizzes are one assignment type."
         breadcrumbs={[
-          { label: "Quizzes", href: withBasePath("/dashboard/admin/quizzes") },
-          { label: "New" },
+          {
+            label: "Assignments",
+            href: withBasePath("/dashboard/admin/assignments"),
+          },
+          { label: "New quiz" },
         ]}
       />
       <div className="mt-8">
@@ -42,10 +45,10 @@ export default async function AdminQuizNewPage() {
       </div>
       <div className="mt-10">
         <Link
-          href="/dashboard/admin/quizzes"
+          href="/dashboard/admin/assignments"
           className="text-sm text-ink-muted hover:text-brand transition-colors"
         >
-          ← Back to quizzes
+          ← Back to assignments
         </Link>
       </div>
     </AppShell>

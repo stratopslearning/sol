@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
+import { resetRateLimitForTests } from '@/lib/rateLimit';
 
 beforeEach(() => {
+  resetRateLimitForTests();
   delete process.env.UPSTASH_REDIS_REST_URL;
   delete process.env.UPSTASH_REDIS_REST_TOKEN;
 });

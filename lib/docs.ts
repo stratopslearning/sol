@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { blogLlmsEntries } from '@/lib/blog';
 import { absoluteUrl } from '@/lib/siteUrl';
 
 export type DocAudience = 'faculty' | 'students';
@@ -81,7 +82,7 @@ export function getDocBySlug(slug: string): Doc | null {
 
   const raw = fs.readFileSync(filePath, 'utf8');
   const { data, body } = parseFrontmatter(raw);
-  // Page chrome already renders title — drop a leading H1 from the body.
+  // Page chrome already renders title: drop a leading H1 from the body.
   const stripped = body.replace(/^#\s+[^\n]+\n+/, '');
   return { ...toMeta(slug, data), body: stripped };
 }
@@ -119,7 +120,7 @@ export function buildDocsIndexMarkdown(): string {
   const lines = [
     '# SOL Docs',
     '',
-    'Public guides for faculty and students on SOL',
+    'Public guides for the AI teaching layer: materials, authoring, tutoring, grading, analytics, and agent access.',
     '',
     `HTML index: ${absoluteUrl('/docs')}`,
     `LLM index: ${absoluteUrl('/docs/llms.txt')}`,
@@ -156,13 +157,21 @@ export function buildLlmsTxt(options?: { docsScoped?: boolean }): string {
   const students = docs.filter((d) => d.audience === 'students');
 
   const lines = [
-    '# SOL',
-    '> An academic learning management system for institutions that take pedagogy seriously. Faculty author quizzes and discussions; students enroll by learner code; AI-graded short answers stay auditable.',
+    '# SOL (teachwithsol)',
+    '> The AI teaching layer for the LMS you already use. Also known as teach with SOL / teachwithsol.com. The operating system for teaching. Faculty turn materials into courses, practice, and quizzes; learners get a course-scoped tutor; assessments stay hard to game; rubric grades stay auditable; concept gaps surface for reteaching. Not “just an AI quiz grader.” Instructors approve; SOL drafts and suggests. Built for Canvas: claim live Canvas sync only when that deployment has LTI_ENABLED=true and the connector is configured.',
+    '',
+    'Brand:',
+    `- Product name: SOL`,
+    `- Marketing site: ${absoluteUrl('/')}`,
+    `- Docs: ${absoluteUrl('/docs')}`,
+    `- Book a demo for institutional pilots (public self-serve signup may be disabled on marketing deploys).`,
     '',
     'Important notes:',
     '- New accounts default to STUDENT. Faculty must be verified and promoted to PROFESSOR by an admin.',
-    '- Professors join sections with a faculty enrolment code; students join with a separate learner enrolment code.',
-    '- Education records (rosters, gradebooks, attempts) require authenticated professor/admin access — do not invent public APIs for private data.',
+    '- Professors join sections with a faculty enrolment code; students join with a separate learner enrolment code. There is no public course catalog.',
+    '- Teaching loop: materials → authoring → release → tutor / assess → grade (Attention for unsure) → analytics.',
+    '- Education records (rosters, gradebooks, attempts) require authenticated professor/admin access. Do not invent public APIs for private data.',
+    '- Optional Canvas LTI 1.3 Advantage (launch, roster, grade passback): see the Canvas LTI setup doc. Off unless LTI_ENABLED=true.',
     `- Professor MCP endpoint: ${absoluteUrl('/api/mcp')} (OAuth or personal access token).`,
     `- Roles: STUDENT, PROFESSOR, ADMIN.`,
     '',
@@ -185,6 +194,7 @@ export function buildLlmsTxt(options?: { docsScoped?: boolean }): string {
   );
 
   if (!docsScoped) {
+    lines.push(...blogLlmsEntries());
     lines.push(
       `- [Marketing home](${absoluteUrl('/')}): Product overview for humans.`,
       `- [Privacy Policy](${absoluteUrl('/privacy')}): Education records, subprocessors, retention.`,

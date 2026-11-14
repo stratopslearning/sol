@@ -1,10 +1,14 @@
 /**
  * One-off diagnostic for a quiz's attempts / grading state.
- * Usage: npx tsx scripts/diagnose-quiz.ts <quizId>
+ * Usage: npx tsx scripts/diagnose-quiz.ts <quizId> --confirm-dev-db
  */
 import 'dotenv/config';
 import { neonConfig, Pool } from '@neondatabase/serverless';
 import ws from 'ws';
+
+import { assertDevDatabaseOrExit } from './lib/assertDevDatabase';
+
+assertDevDatabaseOrExit({ urlEnvVars: ['DATABASE_URL'] });
 
 const quizId = process.argv[2] ?? 'cc3914a7-1fe2-422e-b272-e6c9f780ed29';
 

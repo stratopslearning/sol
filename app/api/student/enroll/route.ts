@@ -1,23 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 import { db } from '@/app/db';
-import { courses, sections, studentSections } from '@/app/db/schema';
+import { courseOfferings } from '@/app/db/schema';
+import {
+  isOfferingEnded,
+  OFFERING_ENDED_MESSAGE,
+} from '@/lib/offerings/lifecycle';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
 import { readJsonBody } from '@/lib/api/readJsonBody';
 import { extractRequestMeta, logAudit } from '@/lib/audit';
-import { activeOnly } from '@/lib/db/filters';
 import { paymentsEnabled } from '@/lib/featureFlags';
+import { userMayUsePreEnrollStudentApi } from '@/lib/authz';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import { isSectionConcluded } from '@/lib/sectionAvailability';
+import {
+  findSectionByStudentCode,
+  findSectionByStudentCodeGloballyUnique,
+} from '@/lib/sections/enrollmentLookup';
+import { upsertStudentEnrollment } from '@/lib/enrollment/sources';
+import {
+  assertSeatAvailable,
+  ensureWorkspaceMembership,
+  getCourseWorkspaceId,
+  resolveStudentEnrollWorkspaceId,
+} from '@/lib/workspace';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
   try {
     const user = await getOrCreateUser();
-    if (!user || user.role !== 'STUDENT') {
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (!(await userMayUsePreEnrollStudentApi(user.id))) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     // Brute-force enrollment-code attempts (e.g. trying to guess a valid
@@ -46,7 +64,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const body = (await readJsonBody(req)) as { enrollmentCode?: unknown };
+    const body = (await readJsonBody(req)) as {
+      enrollmentCode?: unknown;
+      workspaceId?: unknown;
+    };
     const { enrollmentCode } = body;
     if (!enrollmentCode || typeof enrollmentCode !== 'string') {
       return NextResponse.json(
@@ -55,20 +76,47 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const section = await db.query.sections.findFirst({
-      where: and(
-        eq(sections.studentEnrollmentCode, enrollmentCode),
-        activeOnly(sections.deletedAt),
-      ),
-    });
+    const workspaceScope = await resolveStudentEnrollWorkspaceId(
+      user.id,
+      typeof body.workspaceId === 'string' ? body.workspaceId : undefined,
+    );
+    if (!workspaceScope.ok) {
+      return NextResponse.json(
+        { error: workspaceScope.error },
+        { status: workspaceScope.status },
+      );
+    }
+
+    let section: Awaited<ReturnType<typeof findSectionByStudentCode>>;
+    if (workspaceScope.workspaceId) {
+      section = await findSectionByStudentCode(
+        workspaceScope.workspaceId,
+        enrollmentCode,
+      );
+    } else if (workspaceScope.requireGlobalUnique) {
+      const hit = await findSectionByStudentCodeGloballyUnique(enrollmentCode);
+      section = hit?.section;
+    }
 
     if (!section) {
-      return NextResponse.json({ error: 'Invalid enrollment code' }, { status: 404 });
+      const needsWorkspace =
+        workspaceScope.requireGlobalUnique && !workspaceScope.workspaceId;
+      return NextResponse.json(
+        {
+          error: needsWorkspace
+            ? 'Invalid enrollment code or workspaceId is required when the same code exists in multiple workspaces.'
+            : 'Invalid enrollment code',
+        },
+        { status: 404 },
+      );
     }
 
     // Refuse to enroll into archived / concluded sections.
     if (!section.isActive) {
-      return NextResponse.json({ error: 'This section is no longer active.' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'This section is no longer active.' },
+        { status: 400 },
+      );
     }
     if (isSectionConcluded(section)) {
       return NextResponse.json(
@@ -77,49 +125,82 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Already enrolled in this exact section?
-    const existing = await db.query.studentSections.findFirst({
-      where: and(
-        eq(studentSections.sectionId, section.id),
-        eq(studentSections.studentId, user.id),
-      ),
-    });
-
-    if (existing) {
-      return NextResponse.json({ error: 'Already enrolled in this section' }, { status: 400 });
+    // Wave 3 (23): ended / archived offerings accept no new enrollments.
+    if (section.offeringId) {
+      const offering = await db.query.courseOfferings.findFirst({
+        where: eq(courseOfferings.id, section.offeringId),
+        columns: { status: true, endsAt: true },
+      });
+      if (isOfferingEnded(offering)) {
+        return NextResponse.json(
+          { error: OFFERING_ENDED_MESSAGE },
+          { status: 409 },
+        );
+      }
     }
 
-    // Already enrolled in another active (non-concluded) section in the same course?
-    const existingCourseEnrollments = await db.query.studentSections.findMany({
-      where: and(
-        eq(studentSections.studentId, user.id),
-        eq(studentSections.status, 'ACTIVE'),
-      ),
-      with: {
-        section: true,
-      },
-    });
-
-    const conflictingEnrollment = existingCourseEnrollments.find(
-      (e) =>
-        e.section.courseId === section.courseId &&
-        !isSectionConcluded(e.section),
-    );
-
-    if (conflictingEnrollment) {
+    const tenantId =
+      section.tenantId ??
+      section.workspaceId ??
+      (await getCourseWorkspaceId(section.courseId));
+    if (!tenantId) {
       return NextResponse.json(
-        {
-          error:
-            'You are already enrolled in a section from this course. You cannot enroll in multiple sections from the same course.',
-        },
-        { status: 400 },
+        { error: 'Section tenant could not be resolved' },
+        { status: 500 },
       );
     }
 
-    await db.insert(studentSections).values({
-      studentId: user.id,
-      sectionId: section.id,
-    });
+    try {
+      const { requireWorkspaceTeaching } = await import(
+        '@/lib/workspace/entitlement'
+      );
+      await requireWorkspaceTeaching(tenantId);
+    } catch (error) {
+      const { apiErrorResponse } = await import('@/lib/api/errors');
+      return apiErrorResponse(error);
+    }
+
+    const workspaceId = await getCourseWorkspaceId(section.courseId);
+    if (workspaceId) {
+      const seats = await assertSeatAvailable(workspaceId);
+      if (!seats.ok) {
+        return NextResponse.json(
+          { error: seats.reason, seatCap: seats.cap, seatsUsed: seats.used },
+          { status: 403 },
+        );
+      }
+    }
+
+    let enrollResult;
+    try {
+      enrollResult = await upsertStudentEnrollment({
+        studentId: user.id,
+        sectionId: section.id,
+        source: 'code',
+        tenantId,
+        refuseCourseConflict: true,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes('COURSE_SECTION_CONFLICT')) {
+        return NextResponse.json(
+          {
+            error:
+              'You are already enrolled in a section from this course. You cannot enroll in multiple sections from the same course.',
+          },
+          { status: 400 },
+        );
+      }
+      throw error;
+    }
+
+    if (workspaceId) {
+      await ensureWorkspaceMembership({
+        workspaceId,
+        userId: user.id,
+        role: 'learner',
+      });
+    }
 
     const meta = extractRequestMeta(req);
     await logAudit({
@@ -133,13 +214,15 @@ export async function POST(req: NextRequest) {
       userAgent: meta.userAgent,
     });
 
-    const course = await db.query.courses.findFirst({
-      where: eq(courses.id, section.courseId),
-    });
+    // Bare courses SELECT flakes under FORCE RLS — use entity DEFINER.
+    const { fetchCourseById } = await import('@/lib/db/entityScopedReads');
+    const course = await fetchCourseById(section.courseId);
 
     return NextResponse.json({
       success: true,
-      message: 'Successfully enrolled in section',
+      message: enrollResult.created
+        ? 'Successfully enrolled in section'
+        : 'Enrollment updated for this section',
       section: {
         id: section.id,
         name: section.name,
@@ -153,6 +236,13 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     console.error('Enrollment error:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes('Section not found')) {
+      return NextResponse.json(
+        { error: 'Section not found. Try the code again or ask your professor.' },
+        { status: 404 },
+      );
+    }
     return NextResponse.json({ error: 'Failed to enroll' }, { status: 500 });
   }
 }

@@ -233,7 +233,9 @@ describe('readRubricFromColumn', () => {
 
   it('returns the rubric when well-formed', () => {
     const rubric = [{ id: 'c1', description: 'A', weight: 1 }];
-    expect(readRubricFromColumn(rubric)).toEqual(rubric);
+    expect(readRubricFromColumn(rubric)).toEqual([
+      { id: 'c1', description: 'A', weight: 1, points: 1 },
+    ]);
   });
 });
 

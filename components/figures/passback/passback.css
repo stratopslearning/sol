@@ -1,0 +1,27 @@
+.passback-figure {
+  width: 100%;
+}
+
+.passback-figure .iso-plate {
+  background: var(--anatomy-card);
+}
+
+.passback {
+  outline: none;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.passback:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+.passback-figure .iso-legend {
+  color: var(--ink-muted);
+}
+
+.passback-figure .iso-caption {
+  color: var(--ink-muted);
+}

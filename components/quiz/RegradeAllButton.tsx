@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw } from '@/components/icons';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
@@ -28,7 +28,7 @@ export function RegradeAllButton({ count }: RegradeAllButtonProps) {
   async function handleClick() {
     if (count === 0) return;
     const confirmed = window.confirm(
-      `Re-grade all ${count} attempt${count === 1 ? '' : 's'} in your attention queue?\n\nThis runs in the background. You can keep using the app — refresh the page in a minute to see progress.`,
+      `Re-grade all ${count} attempt${count === 1 ? '' : 's'} in your attention queue?\n\nThis runs in the background. You can keep using the app. Refresh the page in a minute to see progress.`,
     );
     if (!confirmed) return;
 

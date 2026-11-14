@@ -69,6 +69,16 @@ describe('assembleSystemPrompt', () => {
     expect(system).toContain('FERPA');
     expect(systemPromptLooksSafe(system)).toBe(true);
   });
+
+  it('appends course materials context when provided', () => {
+    const system = assembleSystemPrompt(
+      'Coach on inventory.',
+      '',
+      'Course materials context (LEARNING MODE — excerpts only, no answer keys):\nExcerpt 1:\nEOQ balances ordering and holding cost.',
+    );
+    expect(system).toContain('Course materials context');
+    expect(system).toContain('EOQ balances');
+  });
 });
 
 describe('history helpers', () => {

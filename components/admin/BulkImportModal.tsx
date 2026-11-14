@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Upload, Users, CheckCircle, XCircle, AlertCircle, Download } from 'lucide-react';
+import { Upload, Users, CheckCircle, XCircle, AlertCircle, Download } from '@/components/icons';
 import Papa from 'papaparse';
 import { toast } from 'sonner';
 
@@ -110,7 +110,7 @@ export default function BulkImportModal() {
             toast.error(`Error parsing CSV: ${error.message}`);
           }
         });
-      } catch (error) {
+      } catch {
         toast.error('Error reading file');
       }
     };
@@ -251,32 +251,35 @@ export default function BulkImportModal() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-rule">
-                  {csvData.map((user, index) => (
+                  {csvData.map((row, index) => {
+                    const { role: importLegacyRole } = row;
+                    return (
                     <tr key={index} className="hover:bg-surface-sunken/40">
-                      <td className="px-4 py-2.5 text-ink">{user.email}</td>
+                      <td className="px-4 py-2.5 text-ink">{row.email}</td>
                       <td className="px-4 py-2.5 text-ink-muted">
-                        {user.firstName} {user.lastName}
+                        {row.firstName} {row.lastName}
                       </td>
                       <td className="px-4 py-2.5">
                         <Badge
                           variant={
-                            user.role === 'ADMIN'
+                            importLegacyRole === 'ADMIN'
                               ? 'default'
-                              : user.role === 'PROFESSOR'
+                              : importLegacyRole === 'PROFESSOR'
                                 ? 'info'
                                 : 'outline'
                           }
                         >
-                          {user.role.toLowerCase()}
+                          {importLegacyRole.toLowerCase()}
                         </Badge>
                       </td>
                       <td className="px-4 py-2.5">
-                        <Badge variant={user.paid ? 'success' : 'outline'}>
-                          {user.paid ? 'Yes' : 'No'}
+                        <Badge variant={row.paid ? 'success' : 'outline'}>
+                          {row.paid ? 'Yes' : 'No'}
                         </Badge>
                       </td>
                     </tr>
-                  ))}
+                  );
+                  })}
                 </tbody>
               </table>
             </div>

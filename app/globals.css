@@ -4,7 +4,7 @@
 @custom-variant dark (&:is(.dark *));
 
 /* ============================================================================
-   SOL Design — Academic cream paper, olive brand, Instrument Serif display
+   SOL Design — Academic cream paper, ink brand, Instrument Serif display
    Shared by marketing (.mkt) and product (dashboard). See content/brand/design.md
 ============================================================================ */
 
@@ -109,21 +109,21 @@
   --rule: #ddd6c6;
   --rule-strong: #c9c0ad;
 
-  --brand: #4a5240;
-  --brand-hover: #3b4234;
-  --brand-soft: #e4e7dc;
+  --brand: #1c1b17;
+  --brand-hover: #000000;
+  --brand-soft: #ebe6da;
   --brand-fg: #f7f4ec;
 
   --accent: #c47a3a;
   --accent-soft: #f3e6d6;
   --accent-fg: #1c1b17;
 
-  --mkt-leaf: #6d7f5c;
+  --mkt-leaf: #c9c0ad;
   --mkt-sky: #c5d5e0;
   --mkt-haze: #e7eef3;
 
-  --success: oklch(0.55 0.11 150);
-  --success-soft: oklch(0.94 0.04 150);
+  --success: #3d3a32;
+  --success-soft: #ebe6da;
   --warning: oklch(0.72 0.14 75);
   --warning-soft: oklch(0.95 0.06 75);
   --danger: oklch(0.55 0.18 25);
@@ -155,21 +155,21 @@
   --rule: #353128;
   --rule-strong: #4a453a;
 
-  --brand: #b8c4a6;
-  --brand-hover: #c9d4ba;
-  --brand-soft: #2a2e24;
+  --brand: #f4f1e8;
+  --brand-hover: #fffcf6;
+  --brand-soft: #2a2820;
   --brand-fg: #171612;
 
   --accent: #d4924f;
   --accent-soft: #3a2a1c;
   --accent-fg: #171612;
 
-  --mkt-leaf: #8fa37a;
+  --mkt-leaf: #4a453a;
   --mkt-sky: #3a4a56;
   --mkt-haze: #1c242a;
 
-  --success: oklch(0.7 0.11 150);
-  --success-soft: oklch(0.28 0.05 150);
+  --success: #e8e2d4;
+  --success-soft: #2a2820;
   --warning: oklch(0.78 0.13 75);
   --warning-soft: oklch(0.32 0.07 75);
   --danger: oklch(0.7 0.16 25);
@@ -531,6 +531,190 @@
 }
 
 /* ============================================================================
+   Hosted book chapter reader (sanitized HTML, not iframe)
+============================================================================ */
+
+.book-prose {
+  max-width: 42rem;
+  color: var(--ink);
+  font-size: 1.0625rem;
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+}
+
+.book-prose > :first-child {
+  margin-top: 0;
+}
+
+.book-prose h1,
+.book-prose h2,
+.book-prose h3,
+.book-prose h4,
+.book-prose h5,
+.book-prose h6 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  scroll-margin-top: 6rem;
+  line-height: 1.25;
+}
+
+.book-prose h1 {
+  font-size: 1.75rem;
+  margin: 0 0 1rem;
+}
+
+.book-prose h2 {
+  font-size: 1.4rem;
+  margin: 2.25rem 0 0.75rem;
+}
+
+.book-prose h3 {
+  font-size: 1.15rem;
+  margin: 1.75rem 0 0.5rem;
+}
+
+.book-prose h4,
+.book-prose h5,
+.book-prose h6 {
+  font-size: 1.05rem;
+  margin: 1.5rem 0 0.5rem;
+}
+
+.book-prose p {
+  margin: 0 0 1rem;
+}
+
+.book-prose ul,
+.book-prose ol {
+  margin: 0 0 1rem;
+  padding-left: 1.35rem;
+}
+
+.book-prose li {
+  margin: 0.25rem 0;
+}
+
+.book-prose a {
+  color: var(--brand);
+  text-underline-offset: 0.15em;
+}
+
+.book-prose a:hover {
+  text-decoration: underline;
+}
+
+.book-prose img,
+.book-prose figure {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.25rem auto;
+  border-radius: var(--radius-md);
+}
+
+.book-prose iframe {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  aspect-ratio: 16 / 9;
+  height: auto;
+  margin: 1.5rem auto;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+}
+
+/* Pressbooks EPUB oembed stub → watch card (no embed URL in the file) */
+.book-prose .book-media-card {
+  margin: 1.5rem 0;
+  padding: 1rem 1.15rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+}
+
+.book-prose .book-media-card__label {
+  margin: 0 0 0.35rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.book-prose .book-media-card__title {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--ink);
+  line-height: 1.4;
+}
+
+.book-prose .book-media-card__action {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.book-prose figcaption {
+  margin-top: 0.5rem;
+  text-align: center;
+  font-size: 0.8125rem;
+  color: var(--ink-muted);
+}
+
+.book-prose blockquote {
+  margin: 1.25rem 0;
+  padding: 0.25rem 0 0.25rem 1rem;
+  border-left: 3px solid var(--rule-strong);
+  color: var(--ink-muted);
+}
+
+.book-prose pre,
+.book-prose code {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.875em;
+}
+
+.book-prose pre {
+  overflow-x: auto;
+  padding: 0.85rem 1rem;
+  margin: 1rem 0;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+}
+
+.book-prose table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  display: block;
+  overflow-x: auto;
+  margin: 1.25rem 0;
+}
+
+.book-prose th,
+.book-prose td {
+  padding: 0.55rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--rule);
+}
+
+.book-prose th {
+  font-weight: 600;
+  background: var(--surface-sunken);
+}
+
+.book-prose hr {
+  border: 0;
+  border-top: 1px solid var(--rule);
+  margin: 2rem 0;
+}
+
+/* ============================================================================
    Editorial primitives (used by PageHeader, SectionHeading, StatCard, etc.)
 ============================================================================ */
 
@@ -742,6 +926,96 @@
   animation: scale-in 240ms cubic-bezier(0.4, 0, 0.2, 1) both;
 }
 
+/* Authoring ThinkingState — shimmer label + staggered row reveal */
+@keyframes thinking-shimmer-text {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+@keyframes thinking-fade-up {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes authoring-fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes authoring-pop-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+.thinking-shimmer {
+  background-image: linear-gradient(
+    90deg,
+    var(--ink-faint) 35%,
+    var(--ink) 50%,
+    var(--ink-faint) 65%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: thinking-shimmer-text 1.4s linear infinite;
+}
+.authoring-fade-up {
+  animation: authoring-fade-up 400ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+.authoring-pop-in {
+  animation: authoring-pop-in 200ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+/* Authoring chat markdown — quiet section labels, readable body */
+.authoring-md.prose {
+  font-size: 14px;
+  line-height: 1.55;
+  --tw-prose-body: var(--ink);
+  --tw-prose-headings: var(--ink-muted);
+  --tw-prose-bullets: var(--ink-faint);
+}
+.authoring-md.prose :where(p, li) {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.authoring-md.prose :where(h1, h2, h3, h4) {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  margin-top: 1.1em;
+  margin-bottom: 0.45em;
+  line-height: 1.35;
+}
+.authoring-md.prose :where(h1):first-child,
+.authoring-md.prose :where(h2):first-child,
+.authoring-md.prose :where(h3):first-child,
+.authoring-md.prose :where(h4):first-child {
+  margin-top: 0.15em;
+}
+.authoring-md.prose :where(strong) {
+  color: var(--ink);
+  font-weight: 600;
+}
+.authoring-md.prose :where(ul, ol) {
+  margin-top: 0.4em;
+  margin-bottom: 0.75em;
+}
+.authoring-md.prose :where(li) {
+  margin-top: 0.35em;
+  margin-bottom: 0.35em;
+}
+@media (prefers-reduced-motion: reduce) {
+  .thinking-shimmer {
+    animation: none;
+    color: var(--ink-muted);
+    background-image: none;
+  }
+  .authoring-fade-up,
+  .authoring-pop-in {
+    animation: none;
+  }
+}
+
 /* ----- Reduced motion ----- */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -772,39 +1046,43 @@
 }
 
 .auth-card-header {
-  padding: 2.25rem 1.75rem 1.5rem;
+  padding: 1.35rem 1.35rem 0.85rem;
   text-align: center;
 }
 
 @media (min-width: 480px) {
   .auth-card-header {
-    padding: 2.5rem 2rem 1.75rem;
+    padding: 1.5rem 1.5rem 1rem;
   }
+}
+
+.auth-card-header .mb-5 {
+  margin-bottom: 0.85rem !important;
 }
 
 /* Horizontal padding lives on the host so Clerk can't full-bleed past it */
 .auth-card-body {
-  padding: 0 0 1.75rem;
+  padding: 0 0 1.15rem;
   overflow: visible;
 }
 
 @media (min-width: 480px) {
   .auth-card-body {
-    padding: 0 0 2rem;
+    padding: 0 0 1.35rem;
   }
 }
 
 .auth-clerk-host {
   width: 100%;
   min-width: 0;
-  padding: 0 1.75rem;
+  padding: 0 1.35rem;
   overflow: visible;
   box-sizing: border-box;
 }
 
 @media (min-width: 480px) {
   .auth-clerk-host {
-    padding: 0 2rem;
+    padding: 0 1.5rem;
   }
 }
 
@@ -947,21 +1225,32 @@
   text-align: right !important;
 }
 
-/* Keep show-password eye inside the input */
+/*
+ * Password field: stack input + eye in one grid cell so the eye stays
+ * vertically centered inside the pill (absolute + translate drifts in Clerk).
+ */
 .auth-clerk-host .cl-formFieldInputGroup,
 .auth-clerk-host [class*="formFieldInputGroup"] {
   position: relative !important;
-  display: flex !important;
+  display: grid !important;
+  grid-template-columns: 1fr !important;
   align-items: center !important;
   width: 100% !important;
   max-width: 100% !important;
+  min-height: 2.75rem !important;
+  height: auto !important;
 }
 
 .auth-clerk-host .cl-formFieldInput,
-.auth-clerk-host input.cl-formFieldInput {
+.auth-clerk-host input.cl-formFieldInput,
+.auth-clerk-host .cl-formFieldInputGroup > input,
+.auth-clerk-host [class*="formFieldInputGroup"] > input {
+  grid-area: 1 / 1 !important;
   width: 100% !important;
   max-width: 100% !important;
   min-width: 0 !important;
+  height: 2.75rem !important;
+  min-height: 2.75rem !important;
   background-color: var(--paper) !important;
   border: 1px solid var(--rule) !important;
   border-radius: 999px !important;
@@ -972,28 +1261,62 @@
 }
 
 .auth-clerk-host .cl-formFieldInputShowPasswordButton,
-.auth-clerk-host button[class*="formFieldInputShowPassword"] {
-  position: absolute !important;
-  right: 0.375rem !important;
-  top: 50% !important;
-  transform: translateY(-50%) !important;
+.auth-clerk-host button[class*="formFieldInputShowPassword"],
+.auth-clerk-host .cl-formFieldInputGroup > button,
+.auth-clerk-host [class*="formFieldInputGroup"] > button {
+  grid-area: 1 / 1 !important;
+  position: relative !important;
+  inset: auto !important;
+  top: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  left: auto !important;
+  transform: none !important;
+  justify-self: end !important;
+  align-self: center !important;
   z-index: 2 !important;
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
   width: 2rem !important;
   height: 2rem !important;
-  margin: 0 !important;
+  margin: 0 0.4rem 0 0 !important;
   padding: 0 !important;
   border: 0 !important;
+  border-radius: 999px !important;
   background: transparent !important;
   color: var(--ink-faint) !important;
   cursor: pointer !important;
+  box-shadow: none !important;
 }
 
 .auth-clerk-host .cl-formFieldInputShowPasswordButton:hover,
-.auth-clerk-host button[class*="formFieldInputShowPassword"]:hover {
+.auth-clerk-host button[class*="formFieldInputShowPassword"]:hover,
+.auth-clerk-host .cl-formFieldInputGroup > button:hover,
+.auth-clerk-host [class*="formFieldInputGroup"] > button:hover {
   color: var(--ink) !important;
+}
+
+.auth-clerk-host .cl-formFieldInputShowPasswordIcon,
+.auth-clerk-host .cl-formFieldInputShowPasswordButton svg,
+.auth-clerk-host button[class*="formFieldInputShowPassword"] svg {
+  width: 1rem !important;
+  height: 1rem !important;
+  display: block !important;
+}
+
+/* Tighter Clerk field stack so signup fits one viewport */
+.auth-clerk-host .cl-form,
+.auth-clerk-host .cl-formFields,
+.auth-clerk-host .cl-main {
+  gap: 0.75rem !important;
+}
+
+.auth-clerk-host .cl-formFieldHintText,
+.auth-clerk-host [class*="formFieldHint"] {
+  margin-top: 0.35rem !important;
+  font-size: 0.7rem !important;
+  line-height: 1.35 !important;
 }
 
 .auth-clerk-host .cl-footerAction,
@@ -1056,8 +1379,8 @@
 .auth-clerk-host .cl-footer {
   background: transparent !important;
   border-top: 1px solid var(--rule) !important;
-  padding-top: 1.25rem !important;
-  margin-top: 0.25rem !important;
+  padding-top: 0.85rem !important;
+  margin-top: 0.15rem !important;
 }
 
 .auth-clerk-host .cl-rootBox {
@@ -1074,7 +1397,7 @@
 }
 
 /* ============================================================================
-   Clerk UserButton — academic olive / cream (not purple default)
+   Clerk UserButton — academic ink / cream (not purple default)
 ============================================================================ */
 .sol-clerk-user-btn .cl-userButtonAvatarBox,
 .sol-clerk-user-btn .cl-avatarBox {
@@ -1154,15 +1477,15 @@
   --ink-faint: #8a877c;
   --rule: #ddd6c6;
   --rule-strong: #c9c0ad;
-  /* Olive / moss primary (Vestris-like) */
-  --brand: #4a5240;
-  --brand-hover: #3b4234;
-  --brand-soft: #e4e7dc;
+  /* Ink primary on cream paper */
+  --brand: #1c1b17;
+  --brand-hover: #000000;
+  --brand-soft: #ebe6da;
   --brand-fg: #f7f4ec;
   --accent: #c47a3a;
   --accent-soft: #f3e6d6;
   --accent-fg: #1c1b17;
-  --mkt-leaf: #6d7f5c;
+  --mkt-leaf: #c9c0ad;
   --mkt-sky: #c5d5e0;
   --mkt-haze: #e7eef3;
   --shadow-paper:
@@ -1263,14 +1586,14 @@
   --ink-faint: #8a877c;
   --rule: #353128;
   --rule-strong: #4a453a;
-  --brand: #b8c4a6;
-  --brand-hover: #c9d4ba;
-  --brand-soft: #2a2e24;
+  --brand: #f4f1e8;
+  --brand-hover: #fffcf6;
+  --brand-soft: #2a2820;
   --brand-fg: #171612;
   --accent: #d4924f;
   --accent-soft: #3a2a1c;
   --accent-fg: #171612;
-  --mkt-leaf: #8fa37a;
+  --mkt-leaf: #4a453a;
   --mkt-sky: #3a4a56;
   --mkt-haze: #1c242a;
   --shadow-paper:

@@ -11,6 +11,9 @@
  *   `status` field) are treated as `'graded'` so existing data renders fine.
  */
 
+import { PROMPT_VERSION } from '@/lib/ai/prompts/common';
+import { defaultGradeModel } from '@/lib/ai/modelRouter';
+
 export type GradingStatus = 'graded' | 'pending' | 'manual_review';
 
 export type FailureReason =
@@ -25,6 +28,9 @@ export type FailureReason =
   | 'no_api_key'
   | 'missing_reference_answer'
   | 'db_write_failed'
+  | 'ai_band_exceeded'
+  | 'low_confidence'
+  | 'run_disagreement'
   | 'unknown';
 
 export type RubricCriterion = {
@@ -34,6 +40,12 @@ export type RubricCriterion = {
   description: string;
   /** Relative weight, default 1. Partial credit awards 0.5 * weight. */
   weight: number;
+  /** Alias accepted from authoring JSON (`points` ↔ `weight`). */
+  points?: number;
+  /** When partial credit applies: what "partial" looks like. */
+  partialDescriptor?: string;
+  /** Alternative terms/examples that also earn credit. */
+  acceptableVariants?: string[];
 };
 
 export type RubricMatch = {
@@ -43,6 +55,12 @@ export type RubricMatch = {
   partial?: boolean;
   /** Short quote from the student answer supporting the decision. */
   evidence?: string;
+  /** Exact quote claimed as evidence (must appear in the student answer). */
+  evidenceQuote?: string;
+  /** Per-criterion confidence 0–100. */
+  confidence?: number;
+  /** True when evidenceQuote failed the substring check. */
+  evidenceRejected?: boolean;
 };
 
 /**
@@ -71,13 +89,28 @@ export type StoredFeedback = {
   cached?: boolean;
   /** When set, student only needs this many rubric matches for full credit (any-N questions). */
   requiredMatchCount?: number | null;
+  /** Prompt provenance for explainability. */
+  promptVersion?: string;
+  /** Router task that produced this result (grade | grade_escalate). */
+  aiTask?: string;
+  /** Model tier from the smart router. */
+  modelTier?: string;
 };
 
 /** Coarse top-level grading state stored on `attempts.grading_status`. */
 export type AttemptGradingStatus = 'complete' | 'partial' | 'failed';
 
-/** Model identifier for cache-key invalidation. Bump on prompt/model change. */
-export const GRADING_MODEL_VERSION = 'gpt-5-mini-2025-08-07';
+/** Model identifier for cache-key invalidation — follows the smart router. */
+export const GRADING_MODEL_VERSION = defaultGradeModel();
+
+/** Prompt provenance — bump when grading system/user prompt text changes. */
+export const GRADING_PROMPT_VERSION = PROMPT_VERSION;
+
+/**
+ * Below this overall confidence (0–100 store scale) → dual-run / manual_review.
+ * Model returns 0–1; v2 review threshold is 0.6 → 60.
+ */
+export const GRADING_CONFIDENCE_REVIEW_THRESHOLD = 60;
 
 /** Hard ceiling for stored feedback text. Longer feedback is trimmed, never rejected. */
 export const MAX_FEEDBACK_LENGTH = 400;

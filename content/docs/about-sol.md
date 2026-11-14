@@ -1,68 +1,99 @@
 ---
 title: About SOL
-description: What SOL is, who it is for, public URLs, roles, and how faculty and students get access — facts agents and humans can cite.
+description: What SOL is, who it is for, public URLs, roles, and how faculty and students get access. Facts agents and humans can cite about the AI teaching layer.
 audience: faculty
 order: 0
 ---
 
 # About SOL
 
-SOL is an academic learning management system for institutions that take pedagogy seriously. Faculty author structured, auto-graded coursework (including AI-graded short answers with visible rationale); students enroll into sections by code and complete assigned quizzes and discussions.
+SOL is the **AI teaching layer** for the LMS you already use. The **operating system for teaching**. It starts with Canvas. Faculty stay in control.
 
-## What SOL is
+## Who builds SOL?
 
-- A coursework platform for **faculty** and **students**
-- Built around **courses → sections → quizzes / discussions**
+SOL (teach with SOL / teachwithsol.com) is the product brand. Public product docs, security posture, and privacy contacts live on this site. Campus IT can request a HECVAT packet and FERPA rider during contracting. Founders: founders@teachwithsol.com.
+
+## What is SOL’s positioning?
+
+| Say | Avoid |
+| --- | --- |
+| Teaching layer for your LMS | “An AI quiz grader” |
+| Operating system for teaching | “Replaces Canvas” |
+| You approve; SOL drafts and suggests | “SOL automatically knows” |
+| Built for Canvas | Live Canvas sync as shipped (until that lands) |
+
+## What does SOL do?
+
+SOL runs a teaching loop, not a single feature:
+
+1. **Build**: Upload a syllabus or notes. SOL drafts lessons, practice, and quizzes. You edit in chat and approve before anyone sees it.
+2. **Tutor**: Learners get help grounded only in that course’s materials, not the open web.
+3. **Assess**: Randomized variants, follow-ups about a student’s own answer, and discussions that are hard to game.
+4. **Grade**: The model returns rubric matches. Code computes the score. Unsure answers wait for your review. You can adjust every score.
+5. **See**: Concept-level gaps and weak questions, so you know what to reteach.
+
+## What is SOL?
+
+- A teaching layer for **faculty** and **learners**, not a standalone LMS replacement
+- Built around **courses → sections → materials → lessons / quizzes / discussions**
 - Enrolment by **codes** (not a public course catalog)
-- AI-assisted grading that remains **reviewable and auditable** by the institution
+- Auditable scoring on subjective work: reviewable, adjustable, never a black box
 
-## What SOL is not
+## What is SOL not?
 
+- Not “just an AI quiz grader”
 - Not a self-serve open marketplace of courses
 - Not a place to scrape private rosters, grades, or attempt data without authentication
-- Not a general-purpose chat product — discussion bots are assigned coursework
+- Not a general-purpose chatbot. Tutors and discussion bots are course-scoped
+- Not a replacement for the instructor. You review; SOL drafts and suggests
 
-## Roles
+## What roles exist?
 
 | Role | Who | Can do |
 | --- | --- | --- |
-| `STUDENT` | Learners (default for new accounts) | Enroll with a learner code, take quizzes, view own grades |
-| `PROFESSOR` | Verified faculty | Join sections with a faculty code, author/assign work, grade, use Agent Access / MCP |
+| `STUDENT` | Learners (default for new accounts) | Enroll with a learner code, take lessons and quizzes, use the course tutor, view own grades |
+| `PROFESSOR` | Verified faculty | Join sections with a faculty code, upload materials, author/assign work, grade, use analytics and Agent Access / MCP |
 | `ADMIN` | Institutional operators | Manage users/roles, courses, sections, audit log |
 
-## Public URLs
+## What are the public URLs?
+
+Brand domain (preferred for discovery and AI citation):
 
 | Resource | URL |
 | --- | --- |
-| App | https://www.strat-ops.net/learning |
-| Docs | https://www.strat-ops.net/learning/docs |
-| This page (HTML) | https://www.strat-ops.net/learning/docs/about-sol |
-| This page (markdown) | https://www.strat-ops.net/learning/docs/about-SOLmd |
-| LLM index | https://www.strat-ops.net/learning/llms.txt |
-| Docs LLM index | https://www.strat-ops.net/learning/docs/llms.txt |
-| Professor MCP | https://www.strat-ops.net/learning/api/mcp |
+| Marketing | https://www.teachwithsol.com |
+| App | https://app.teachwithsol.com |
+| Docs | https://docs.teachwithsol.com/docs |
+| This page (HTML) | https://docs.teachwithsol.com/docs/about-sol |
+| This page (markdown) | https://docs.teachwithsol.com/docs/about-sol.md |
+| LLM index | https://www.teachwithsol.com/llms.txt |
+| Docs LLM index | https://docs.teachwithsol.com/docs/llms.txt |
+| Security | https://trust.teachwithsol.com/security |
+| Professor MCP | https://app.teachwithsol.com/api/mcp |
 
-## How faculty get access
+Some institutions run SOL on a school-specific host. Prefer the brand URLs above for discovery unless your admin gives you a different app URL.
+
+## How do faculty get access?
 
 1. Sign up with a **school email**.
 2. Notify the institution’s SOL admin for verification.
 3. An admin changes the account role to **Professor**.
 4. Admin provisions course/section and shares a **faculty enrolment code**.
-5. Professor joins the section, shares the **learner** code with students, and assigns work.
+5. Professor joins the section, uploads materials, authors work, and shares the **learner** code with students.
 
-Details: [Professor onboarding](/docs/professor-onboarding).
+Details: [Faculty onboarding](/docs/professor-onboarding).
 
-## How students get access
+## How do students get access?
 
 1. Sign up / sign in.
 2. Enter the **learner enrolment code** from their professor.
-3. Open assigned quizzes, discussions, and grades.
+3. Open assigned lessons, quizzes, discussions, tutor, and grades.
 
 Details: [Student getting started](/docs/student-getting-started).
 
-## AI agents
+## How do AI agents connect?
 
-Verified professors can connect agents (Claude, ChatGPT, Cursor, etc.) via MCP — OAuth connectors or personal access tokens minted under **Agent Access**.
+Verified professors can connect agents (Claude, ChatGPT, Cursor, etc.) via MCP. OAuth connectors or personal access tokens minted under **Agent Access**.
 
 Details: [Agent Access](/docs/professor-agent-access).
 
@@ -70,6 +101,10 @@ Agents must not claim access to education records without a professor/admin cred
 
 ## Related guides
 
-- [Professor onboarding](/docs/professor-onboarding)
+- [Faculty onboarding](/docs/professor-onboarding)
+- [Course materials](/docs/professor-materials)
+- [Authoring from materials](/docs/professor-authoring)
+- [Grading and Attention](/docs/professor-grading)
+- [Course analytics](/docs/professor-analytics)
 - [Student getting started](/docs/student-getting-started)
 - [Agent Access](/docs/professor-agent-access)

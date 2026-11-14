@@ -5,14 +5,19 @@
 import { eq, inArray } from 'drizzle-orm';
 
 import { db } from '@/app/db';
-import { professorSections, quizSections, quizzes } from '@/app/db/schema';
+import { quizSections, quizzes, sections } from '@/app/db/schema';
 import { ApiError } from '@/lib/api/errors';
 import { activeOnly } from '@/lib/db/filters';
 import type { UserData } from '@/lib/getOrCreateUser';
-import { professorCanAccessQuiz, stripQuestionSecrets } from '@/lib/quizAccess';
+import { listTeachingSectionIds } from '@/lib/professor/graderSections';
+import {
+  professorCanAccessQuiz,
+  stripQuestionSecrets,
+  userCanWriteQuiz,
+} from '@/lib/quizAccess';
 import { partitionEnrollmentsByConclusion } from '@/lib/sectionAvailability';
 
-type ProfessorUser = Pick<UserData, 'id' | 'role'>;
+type ProfessorUser = Pick<UserData, 'id'> & { platformStaff?: boolean | null };
 
 export type ProfessorQuizSummary = {
   id: string;
@@ -37,11 +42,15 @@ export type ProfessorQuizSummary = {
 export async function listProfessorQuizzes(
   user: ProfessorUser,
 ): Promise<ProfessorQuizSummary[]> {
-  const enrollments = await db.query.professorSections.findMany({
-    where: eq(professorSections.professorId, user.id),
-    with: { section: true },
+  // Binding-derived teaching sections (professor_sections is metadata only).
+  const teachingIds = await listTeachingSectionIds(user);
+  if (teachingIds.length === 0) return [];
+  const teachingSections = await db.query.sections.findMany({
+    where: inArray(sections.id, teachingIds),
   });
-  const { active: ongoing } = partitionEnrollmentsByConclusion(enrollments);
+  const { active: ongoing } = partitionEnrollmentsByConclusion(
+    teachingSections.map((section) => ({ sectionId: section.id, section })),
+  );
   const sectionIds = ongoing.map((e) => e.sectionId);
   if (sectionIds.length === 0) return [];
 
@@ -95,11 +104,12 @@ export async function listProfessorQuizzes(
         ? Math.round(best.reduce((sum, p) => sum + p, 0) / best.length)
         : 0;
 
+    const authorId = quiz.professorId;
     result.push({
       id: quiz.id,
       title: quiz.title,
       description: quiz.description,
-      ownedByMe: quiz.professorId === user.id,
+      ownedByMe: Boolean(authorId && authorId === user.id),
       isActive: quiz.isActive,
       questionCount: quiz.questions.length,
       maxAttempts: quiz.maxAttempts,
@@ -141,6 +151,7 @@ export type ProfessorQuizDetail = {
     correctAnswer: string | null;
     points: number;
     order: number;
+    conceptTags: string[];
   }[];
   createdAt: Date;
   updatedAt: Date;
@@ -162,13 +173,15 @@ export async function getProfessorQuiz(
   });
   if (!quiz) throw ApiError.notFound('Quiz not found');
 
-  const isOwner = quiz.professorId === user.id || user.role === 'ADMIN';
+  // Answer keys only for callers with content.write on this quiz (bindings).
+  const isOwner = await userCanWriteQuiz(user, quizId);
+  const authorId = quiz.professorId;
 
   return {
     id: quiz.id,
     title: quiz.title,
     description: quiz.description,
-    ownedByMe: quiz.professorId === user.id,
+    ownedByMe: Boolean(authorId && authorId === user.id),
     isActive: quiz.isActive,
     maxAttempts: quiz.maxAttempts,
     timeLimit: quiz.timeLimit,
@@ -187,6 +200,7 @@ export async function getProfessorQuiz(
         correctAnswer: q.correctAnswer,
         points: q.points,
         order: q.order,
+        conceptTags: (q.conceptTags ?? []) as string[],
       };
       // Co-teachers may view stems but never answer keys or rubrics.
       return isOwner ? base : stripQuestionSecrets(base);

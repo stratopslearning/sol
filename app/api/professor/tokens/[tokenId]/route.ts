@@ -1,7 +1,9 @@
+// TODO(authz-cutover 11j admin/tokens): replace remaining users.role / professor_sections checks with authorize()/gates (see docs/GATE_2_REPORT.md).
 import { NextRequest, NextResponse } from 'next/server';
 
 import { ApiError, apiErrorResponse } from '@/lib/api/errors';
 import { extractRequestMeta, logAudit } from '@/lib/audit';
+import { userCanAccessTeachingArea } from '@/lib/authz';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import { revokeProfessorApiToken } from '@/lib/professorApiTokens';
 
@@ -14,7 +16,8 @@ export async function DELETE(
   try {
     const user = await getOrCreateUser();
     if (!user) throw ApiError.unauthorized();
-    if (user.role !== 'PROFESSOR' && user.role !== 'ADMIN') {
+    const teaching = await userCanAccessTeachingArea(user.id);
+    if (!teaching && !user.platformStaff) {
       throw ApiError.forbidden();
     }
 

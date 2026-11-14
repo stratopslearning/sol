@@ -2,15 +2,23 @@ import type { Metadata } from 'next';
 
 import { LegalShell } from '@/components/legal/LegalShell';
 import { withBasePath } from '@/lib/basePath';
+import { socialMetadata, titledPage } from '@/lib/pageMeta';
 import { absoluteUrl } from '@/lib/siteUrl';
 
+const termsDescription =
+  'Terms governing use of the SOL coursework platform by institutions, faculty, and students on teachwithsol.com.';
+
 export const metadata: Metadata = {
-  title: 'Terms of Use · SOL',
-  description:
-    'Terms governing use of the SOL coursework platform by institutions, faculty, and students.',
+  title: 'Terms of Use',
+  description: termsDescription,
   alternates: {
     canonical: absoluteUrl('/terms'),
   },
+  ...socialMetadata({
+    title: titledPage('Terms of Use'),
+    description: termsDescription,
+    url: absoluteUrl('/terms'),
+  }),
 };
 
 export default function TermsPage() {
@@ -29,6 +37,8 @@ export default function TermsPage() {
 
       <h2>2. Accounts and eligibility</h2>
       <p>
+        You must be at least 13 years old to create an account. SOL is intended
+        for higher-education and adult learners in institutional deployments.
         You must use an account issued or authorized for your institution
         (typically a school email). You are responsible for safeguarding your
         credentials and for activity under your account. New accounts default to
@@ -81,7 +91,9 @@ export default function TermsPage() {
         SOL and its branding, software, and documentation remain the property of
         SOL Learning and its licensors. Course content you upload remains subject
         to your and your institution’s rights; you grant SOL a limited license to
-        host and process that content to operate the service.
+        host and process that content to operate the service. Copyright
+        complaints are handled under our{" "}
+        <a href={withBasePath('/dmca')}>DMCA / Copyright</a> policy.
       </p>
 
       <h2>8. Disclaimers</h2>
@@ -114,12 +126,23 @@ export default function TermsPage() {
         where an institutional agreement requires a different change process.
       </p>
 
-      <h2>12. Contact</h2>
+      <h2>12. Fees and renewal (when paywall enabled)</h2>
+      <p>
+        When individual payment is enabled, charges are disclosed on the payment
+        page next to the pay control. Unless the checkout page expressly states
+        otherwise, enrolment fees are one-time for the stated term:{' '}
+        <strong>no automatic renewal</strong> and no recurring subscription.
+        Refund timing (for example a 14-day window) is as stated on the payment
+        page at the time of purchase.
+      </p>
+
+      <h2>13. Contact</h2>
       <p>
         Questions:{' '}
         <a href={withBasePath('/docs')}>product docs</a>, your institution’s SOL
         administrator, or the operations contact in your agreement. Privacy:{' '}
-        <a href={withBasePath('/privacy')}>Privacy Policy</a>.
+        <a href={withBasePath('/privacy')}>Privacy Policy</a>. Copyright:{' '}
+        <a href={withBasePath('/dmca')}>DMCA</a>.
       </p>
     </LegalShell>
   );

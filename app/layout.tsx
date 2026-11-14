@@ -17,6 +17,12 @@ import { ThemeProvider } from "@/components/theme/theme-provider";
 import { authLocalization } from "@/components/auth/auth-localization";
 import { TimeZoneProvider } from "@/components/timezone/TimeZoneProvider";
 import { withBasePath } from "@/lib/basePath";
+import {
+  clerkAllowedRedirectOrigins,
+  clerkSatelliteProviderProps,
+} from "@/lib/clerkMultiDomain";
+import { SEO, seoMetadataBase } from "@/lib/seo";
+import { absoluteUrl } from "@/lib/siteUrl";
 
 const fraunces = Fraunces({
   variable: "--font-fraunces",
@@ -58,29 +64,43 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(
-    process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000",
-  ),
+  metadataBase: seoMetadataBase(),
   title: {
-    default: "SOL · The operating system for teaching",
-    template: "%s · SOL",
+    default: `${SEO.brand} · ${SEO.tagline}`,
+    template: `%s · ${SEO.brand}`,
   },
-  description:
-    "SOL is the AI teaching layer for the LMS you already use. Turn your materials into courses, practice, and tutoring.",
+  description: SEO.description,
+  applicationName: SEO.brand,
+  keywords: [...SEO.keywords],
+  authors: [{ name: "SOL" }],
+  creator: "SOL",
+  publisher: "SOL",
+  alternates: {
+    canonical: absoluteUrl("/"),
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
+  // Per-page routes set openGraph/twitter title, description, and url via
+  // socialMetadata(). Keep only shared site fields here so docs/trust pages
+  // do not inherit the homepage card.
   openGraph: {
-    title: "SOL · The operating system for teaching",
-    description:
-      "SOL is the AI teaching layer for the LMS you already use. Turn your materials into courses, practice, and tutoring.",
-    siteName: "SOL",
+    siteName: SEO.brand,
     type: "website",
     locale: "en_US",
   },
   twitter: {
     card: "summary_large_image",
-    title: "SOL · The operating system for teaching",
-    description:
-      "SOL is the AI teaching layer for the LMS you already use. Turn your materials into courses, practice, and tutoring.",
   },
+  category: "education",
 };
 
 export default function RootLayout({
@@ -89,17 +109,24 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider
-      signInUrl={withBasePath("/login")}
-      signUpUrl={withBasePath("/signup")}
-      localization={authLocalization}
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className={`${fraunces.variable} ${instrumentSans.variable} ${instrumentSerif.variable} ${GeistSans.variable} ${inter.variable} ${manrope.variable} ${jetbrainsMono.variable}`}
     >
-      <html
-        lang="en"
-        suppressHydrationWarning
-        className={`${fraunces.variable} ${instrumentSans.variable} ${instrumentSerif.variable} ${GeistSans.variable} ${inter.variable} ${manrope.variable} ${jetbrainsMono.variable}`}
-      >
-        <body className="font-sans antialiased min-h-screen bg-paper text-ink">
+      <body className="font-sans antialiased min-h-screen bg-paper text-ink">
+        <ClerkProvider
+          signInUrl={withBasePath("/login")}
+          signUpUrl={withBasePath("/signup")}
+          localization={authLocalization}
+          // Satellite multi-domain props are env-gated; Clerk's satellite
+          // overload requires proxyUrl/router* that we intentionally omit
+          // when absolute sign-in URLs are set (see PRODUCTION_DEPLOY.md).
+          {...(clerkSatelliteProviderProps() as Record<string, unknown>)}
+          {...(clerkAllowedRedirectOrigins().length
+            ? { allowedRedirectOrigins: clerkAllowedRedirectOrigins() }
+            : {})}
+        >
           <TimeZoneProvider>
             <ThemeProvider>
               <a href="#main" className="skip-to-main">
@@ -109,8 +136,8 @@ export default function RootLayout({
               <Toaster position="top-right" richColors closeButton />
             </ThemeProvider>
           </TimeZoneProvider>
-        </body>
-      </html>
-    </ClerkProvider>
+        </ClerkProvider>
+      </body>
+    </html>
   );
 }

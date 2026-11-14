@@ -12,9 +12,12 @@ import ws from 'ws';
 
 import * as schema from '../app/db/schema';
 import { generateEnrollmentCode } from '../lib/utils';
+import { assertDevDatabaseOrExit } from './lib/assertDevDatabase';
 
 loadEnv({ path: '.env', quiet: true });
 loadEnv({ path: '.env.local', override: true, quiet: true });
+
+assertDevDatabaseOrExit({ urlEnvVars: ['DATABASE_URL'] });
 
 if (typeof WebSocket === 'undefined') {
   neonConfig.webSocketConstructor = ws as unknown as typeof WebSocket;
@@ -57,7 +60,6 @@ async function main() {
         .values({
           clerkId: `smoke_prof_${slug()}`,
           email: `smoke-prof-${slug()}@test.local`,
-          role: 'PROFESSOR',
           paid: true,
         })
         .returning();
@@ -67,7 +69,6 @@ async function main() {
         .values({
           clerkId: `smoke_stu_${slug()}`,
           email: `smoke-stu-${slug()}@test.local`,
-          role: 'STUDENT',
           paid: true,
         })
         .returning();
@@ -82,7 +83,11 @@ async function main() {
     try {
       const [course] = await db
         .insert(schema.courses)
-        .values({ title: `Smoke Course ${slug()}` })
+        .values({
+          workspaceId: schema.DEFAULT_WORKSPACE_ID,
+          tenantId: schema.DEFAULT_WORKSPACE_ID,
+          title: `Smoke Course ${slug()}`,
+        })
         .returning();
       courseId = course.id;
 
@@ -90,6 +95,8 @@ async function main() {
         .insert(schema.sections)
         .values({
           courseId,
+          workspaceId: schema.DEFAULT_WORKSPACE_ID,
+          tenantId: schema.DEFAULT_WORKSPACE_ID,
           name: `Smoke Section ${slug()}`,
           professorEnrollmentCode: generateEnrollmentCode(),
           studentEnrollmentCode: generateEnrollmentCode(),
@@ -335,7 +342,6 @@ async function main() {
         .values({
           clerkId: `smoke_dup_a_${slug()}`,
           email,
-          role: 'PROFESSOR',
           paid: false,
         })
         .returning();
@@ -344,7 +350,6 @@ async function main() {
         await db.insert(schema.users).values({
           clerkId: `smoke_dup_b_${slug()}`,
           email,
-          role: 'STUDENT',
           paid: false,
         });
       } catch {
@@ -359,7 +364,7 @@ async function main() {
         .values({
           clerkId: `smoke_admin_${slug()}`,
           email: `smoke-admin-${slug()}@test.local`,
-          role: 'ADMIN',
+          platformStaff: true,
           paid: true,
         })
         .returning();

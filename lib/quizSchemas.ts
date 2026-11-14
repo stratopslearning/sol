@@ -8,8 +8,17 @@ export const quizQuestionInputSchema = z.object({
   id: z.string().optional(),
   type: z.enum(['MULTIPLE_CHOICE', 'TRUE_FALSE', 'SHORT_ANSWER']),
   question: z.string().min(1).max(4_000),
-  options: z.array(z.string().max(2_000)).max(12).optional(),
-  correctAnswer: z.string().max(2_000).optional(),
+  // DB / edit forms often send null for TRUE_FALSE / SHORT_ANSWER.
+  options: z
+    .array(z.string().max(2_000))
+    .max(12)
+    .nullish()
+    .transform((v) => v ?? undefined),
+  correctAnswer: z
+    .string()
+    .max(2_000)
+    .nullish()
+    .transform((v) => v ?? undefined),
   points: z.number().min(1).max(100).default(1),
   order: z.number().min(0).max(500),
 });

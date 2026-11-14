@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/app/db';
-import { sections, professorSections } from '@/app/db/schema';
-import { eq, and } from 'drizzle-orm';
+
 import { ApiError, jsonError } from '@/lib/api/errors';
 import { requireProfessorApi } from '@/lib/api/professorAuth';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
 import { readJsonBody } from '@/lib/api/readJsonBody';
-import { activeOnly } from '@/lib/db/filters';
+import { enrollInSection } from '@/lib/professor/mutations';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,41 +24,23 @@ export async function POST(req: NextRequest) {
     });
     if (limited) return limited;
 
-    const body = (await readJsonBody(req)) as { enrollmentCode?: unknown };
+    const body = (await readJsonBody(req)) as {
+      enrollmentCode?: unknown;
+      workspaceId?: unknown;
+    };
     const { enrollmentCode } = body;
     if (!enrollmentCode || typeof enrollmentCode !== 'string') {
-      return NextResponse.json({ error: 'Enrollment code is required' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Enrollment code is required' },
+        { status: 400 },
+      );
     }
 
-    // Find section by professor enrollment code
-    const section = await db.query.sections.findFirst({
-      where: and(
-        eq(sections.professorEnrollmentCode, enrollmentCode),
-        activeOnly(sections.deletedAt),
-      ),
-    });
-
-    if (!section) {
-      return NextResponse.json({ error: 'Invalid enrollment code' }, { status: 404 });
-    }
-
-    // Check if already enrolled
-    const existing = await db.query.professorSections.findFirst({
-      where: and(
-        eq(professorSections.sectionId, section.id),
-        eq(professorSections.professorId, user.id)
-      )
-    });
-
-    if (existing) {
-      return NextResponse.json({ error: 'Already enrolled in this section' }, { status: 400 });
-    }
-
-    // Enroll the professor
-    await db.insert(professorSections).values({
-      professorId: user.id,
-      sectionId: section.id,
-    });
+    const section = await enrollInSection(
+      user,
+      enrollmentCode,
+      typeof body.workspaceId === 'string' ? body.workspaceId : undefined,
+    );
 
     return NextResponse.json({
       success: true,
@@ -68,12 +48,12 @@ export async function POST(req: NextRequest) {
       section: {
         id: section.id,
         name: section.name,
-        courseId: section.courseId
-      }
+        courseId: section.courseId,
+      },
     });
   } catch (error) {
     console.error('Professor enrollment error:', error);
     if (error instanceof ApiError) return jsonError(error);
     return NextResponse.json({ error: 'Failed to enroll' }, { status: 500 });
   }
-} 
+}

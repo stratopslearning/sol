@@ -7,7 +7,9 @@ import {
   isMutatingMethod,
   isOriginExemptPath,
   isSameOrigin,
+  isBookUploadApiPath,
   middlewareBodyLimitBytes,
+  MIDDLEWARE_BOOK_UPLOAD_MAX_BODY_BYTES,
   MIDDLEWARE_MAX_BODY_BYTES,
   MIDDLEWARE_UPLOAD_MAX_BODY_BYTES,
   shouldEnforceSameOrigin,
@@ -158,8 +160,11 @@ describe('isBodyTooLarge', () => {
 });
 
 describe('middleware upload body limits', () => {
-  it('allows 10 MB for materials and H5P import paths', () => {
+  it('allows ~51 MB for materials, knowledge docs, and H5P import paths', () => {
     expect(isLargeUploadApiPath('/api/professor/materials')).toBe(true);
+    expect(isLargeUploadApiPath('/api/professor/knowledge/documents')).toBe(
+      true,
+    );
     expect(isLargeUploadApiPath('/api/professor/interactive/import')).toBe(
       true,
     );
@@ -167,14 +172,47 @@ describe('middleware upload body limits', () => {
     expect(middlewareBodyLimitBytes('/api/professor/materials')).toBe(
       MIDDLEWARE_UPLOAD_MAX_BODY_BYTES,
     );
+    expect(
+      middlewareBodyLimitBytes('/api/professor/knowledge/documents'),
+    ).toBe(MIDDLEWARE_UPLOAD_MAX_BODY_BYTES);
     expect(middlewareBodyLimitBytes('/api/quiz/x/submit')).toBe(
       MIDDLEWARE_MAX_BODY_BYTES,
     );
     expect(
-      isBodyTooLarge('5000000', middlewareBodyLimitBytes('/api/professor/materials')),
+      isBodyTooLarge(
+        String(40 * 1024 * 1024),
+        middlewareBodyLimitBytes('/api/professor/materials'),
+      ),
     ).toBe(false);
     expect(
+      isBodyTooLarge(
+        String(52 * 1024 * 1024),
+        middlewareBodyLimitBytes('/api/professor/materials'),
+      ),
+    ).toBe(true);
+    expect(
       isBodyTooLarge('5000000', middlewareBodyLimitBytes('/api/quiz/x/submit')),
+    ).toBe(true);
+  });
+
+  it('allows 50 MB for hosted book EPUB/XML uploads', () => {
+    expect(isBookUploadApiPath('/api/professor/books')).toBe(true);
+    expect(isBookUploadApiPath('/api/professor/books/abc')).toBe(true);
+    expect(isBookUploadApiPath('/api/professor/materials')).toBe(false);
+    expect(middlewareBodyLimitBytes('/api/professor/books')).toBe(
+      MIDDLEWARE_BOOK_UPLOAD_MAX_BODY_BYTES,
+    );
+    expect(
+      isBodyTooLarge(
+        String(40 * 1024 * 1024),
+        middlewareBodyLimitBytes('/api/professor/books'),
+      ),
+    ).toBe(false);
+    expect(
+      isBodyTooLarge(
+        String(51 * 1024 * 1024),
+        middlewareBodyLimitBytes('/api/professor/books'),
+      ),
     ).toBe(true);
   });
 });

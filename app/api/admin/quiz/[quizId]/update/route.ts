@@ -4,8 +4,10 @@ import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { db } from '@/app/db';
-import { quizSections, quizzes, users } from '@/app/db/schema';
-import { upsertQuizQuestions } from '@/lib/quizQuestionUpsert';
+import { quizzes, users } from '@/app/db/schema';
+import { apiErrorResponse } from '@/lib/api/errors';
+import { requireSupportGrant } from '@/lib/authz/requireSupportGrant';
+import { updateQuizDefiner } from '@/lib/db/entityScopedReads';
 import {
   isoDateTimeRequired,
   quizWindowSuperRefine,
@@ -37,6 +39,7 @@ const adminQuizUpdateSchema = z
         options: z.array(z.string().max(2_000)).optional().nullable(),
         correctAnswer: z.string().max(2_000).optional().nullable(),
         points: z.number().int().min(1).max(100).default(1),
+        order: z.number().int().min(0).optional(),
       }),
     )
     .default([]),
@@ -60,12 +63,32 @@ export async function PUT(
     const user = await db.query.users.findFirst({
       where: eq(users.clerkId, userId),
     });
-    if (!user || user.role !== 'ADMIN') {
+    if (!user || !user.platformStaff) {
       return NextResponse.json(
         { error: 'Forbidden - Admin access required' },
         { status: 403 },
       );
     }
+
+    const existingQuiz = await db.query.quizzes.findFirst({
+      where: eq(quizzes.id, quizId),
+      columns: { tenantId: true },
+    });
+    if (!existingQuiz) {
+      return NextResponse.json({ error: 'Quiz not found' }, { status: 404 });
+    }
+    if (!existingQuiz.tenantId) {
+      return NextResponse.json({ error: 'Quiz missing tenant' }, { status: 400 });
+    }
+    await requireSupportGrant(
+      {
+        id: user.id,
+        clerkId: user.clerkId,
+        platformStaff: user.platformStaff,
+      },
+      existingQuiz.tenantId,
+      { action: 'support.tenant_access', targetType: 'quiz', targetId: quizId },
+    );
 
     const body = await readJsonBody(request);
     const parsed = adminQuizUpdateSchema.safeParse(body);
@@ -84,37 +107,32 @@ export async function PUT(
       hideFeedbackAfterDue,
     );
 
-    await db.transaction(async (tx) => {
-      await tx
-        .update(quizzes)
-        .set({
-          title: data.title,
-          description: normalizedDescription || null,
-          maxAttempts: data.maxAttempts,
-          timeLimit: data.timeLimit ?? null,
-          passingScore: data.passingScore,
-          startDate: new Date(data.startDate),
-          endDate: new Date(data.endDate),
-          isActive: data.isActive,
-          updatedAt: new Date(),
-        })
-        .where(eq(quizzes.id, quizId));
-
-      await upsertQuizQuestions(tx, quizId, data.questions);
-
-      await tx.delete(quizSections).where(eq(quizSections.quizId, quizId));
-      await tx.insert(quizSections).values(
-        data.sectionIds.map((sectionId) => ({
-          quizId,
-          sectionId,
-          assignedBy: user.id,
-        })),
-      );
+    await updateQuizDefiner({
+      quizId,
+      title: data.title,
+      description: normalizedDescription || null,
+      maxAttempts: data.maxAttempts,
+      timeLimit: data.timeLimit ?? null,
+      passingScore: data.passingScore,
+      startDate: new Date(data.startDate).toISOString(),
+      endDate: new Date(data.endDate).toISOString(),
+      isActive: data.isActive,
+      assignedBy: user.id,
+      sectionIds: data.sectionIds,
+      questions: data.questions.map((q, index) => ({
+        id: q.id,
+        type: q.type,
+        question: q.question,
+        options: q.options ?? null,
+        correctAnswer: q.correctAnswer ?? null,
+        points: q.points,
+        order: q.order ?? index,
+      })),
     });
 
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error updating quiz:', error);
-    return NextResponse.json({ error: 'Failed to update quiz' }, { status: 500 });
+    return apiErrorResponse(error);
   }
 }

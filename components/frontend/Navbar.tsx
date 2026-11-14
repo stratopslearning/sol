@@ -10,7 +10,7 @@ import {
 } from "framer-motion";
 import { useUser } from "@clerk/nextjs";
 import { useTheme } from "next-themes";
-import { Menu, X } from "lucide-react";
+import { Menu, X } from "@/components/icons";
 
 import { ThemedUserButton } from "@/components/auth/ThemedUserButton";
 import { SolMark } from "@/components/brand/SolMark";
@@ -18,18 +18,22 @@ import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { apiUrl } from "@/lib/basePath";
 import { CAL_BOOKING_URL } from "@/lib/calBooking";
-import { paymentsEnabled } from "@/lib/featureFlags";
-import { solHref } from "@/lib/solHosts";
+import type { DashboardAreas } from "@/lib/authz/gates";
+import {
+  marketingDashboardCtaLabel,
+  resolveMarketingDashboardHref,
+} from "@/lib/marketing/dashboardLinks";
+import { solDemoOnly, solHref } from "@/lib/solHosts";
 
 interface DbUser {
-  role?: "STUDENT" | "PROFESSOR" | "ADMIN";
   paid?: boolean;
+  areas?: DashboardAreas;
 }
 
 const LINKS = [
   { href: "/#product", label: "Product" },
   { href: "/#faq", label: "FAQ" },
-  { href: "/#trust", label: "Vision" },
+  { href: "/blog", label: "Blogs" },
 ] as const;
 
 /** Scroll distance (px) over which the nav morphs from bare → glass pill. */
@@ -104,17 +108,12 @@ export function Navbar({ variant = "landing" }: NavbarProps) {
     return () => window.removeEventListener("scroll", onScroll);
   }, [raw, solid]);
 
-  const studentEntitled = !paymentsEnabled() || Boolean(dbUser?.paid);
-  const dashboardHref =
-    dbUser?.role === "ADMIN"
-      ? solHref("/dashboard/admin")
-      : dbUser?.role === "PROFESSOR"
-        ? solHref("/dashboard/professor")
-        : dbUser?.role === "STUDENT"
-          ? studentEntitled
-            ? solHref("/dashboard/student")
-            : solHref("/payment")
-          : null;
+  const dashboardHref = dbUser?.areas
+    ? resolveMarketingDashboardHref(dbUser.areas, Boolean(dbUser.paid))
+    : null;
+  const deskCtaLabel = dbUser?.areas
+    ? marketingDashboardCtaLabel(dbUser.areas, Boolean(dbUser.paid))
+    : "Open desk";
 
   return (
     <>
@@ -124,7 +123,7 @@ export function Navbar({ variant = "landing" }: NavbarProps) {
           style={{ paddingTop: railPad }}
         >
           <motion.div
-            className="pointer-events-auto mx-auto flex h-14 items-center justify-between gap-3 border"
+            className="pointer-events-auto relative mx-auto flex h-14 items-center gap-3 border"
             style={{
               backgroundColor: shellBg,
               borderColor: shellBorder,
@@ -139,7 +138,7 @@ export function Navbar({ variant = "landing" }: NavbarProps) {
           >
             <a
               href={solHref("/")}
-              className="flex shrink-0 items-center gap-2 text-ink"
+              className="relative z-10 flex shrink-0 items-center gap-2 text-ink"
               aria-label="SOL home"
             >
               <SolMark className="h-7 w-7" />
@@ -148,7 +147,7 @@ export function Navbar({ variant = "landing" }: NavbarProps) {
               </span>
             </a>
 
-            <nav className="hidden items-center gap-7 text-sm text-ink-muted md:flex">
+            <nav className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 items-center gap-7 text-sm text-ink-muted md:flex">
               {LINKS.map((link) => (
                 <a
                   key={link.href}
@@ -160,16 +159,28 @@ export function Navbar({ variant = "landing" }: NavbarProps) {
               ))}
             </nav>
 
-            <div className="hidden items-center gap-2 md:flex">
+            <div className="relative z-10 ml-auto hidden items-center gap-2 md:flex">
               <ThemeToggle variant="ghost" />
-              {isSignedIn && dbUser ? (
+              {solDemoOnly() ? (
+                <Button
+                  asChild
+                  size="sm"
+                  className="rounded-full px-4 shadow-none"
+                >
+                  <a
+                    href={CAL_BOOKING_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Book a demo
+                  </a>
+                </Button>
+              ) : isSignedIn && dbUser ? (
                 <>
                   {dashboardHref ? (
                     <Button asChild size="sm" className="rounded-full px-4">
                       <a href={dashboardHref}>
-                        {dbUser.role === "STUDENT" && !studentEntitled
-                          ? "Complete payment"
-                          : "Open desk"}
+                        {deskCtaLabel}
                       </a>
                     </Button>
                   ) : null}
@@ -202,7 +213,7 @@ export function Navbar({ variant = "landing" }: NavbarProps) {
               )}
             </div>
 
-            <div className="flex items-center gap-2 md:hidden">
+            <div className="relative z-10 ml-auto flex items-center gap-2 md:hidden">
               <ThemeToggle variant="ghost" />
               <button
                 type="button"
@@ -242,7 +253,17 @@ export function Navbar({ variant = "landing" }: NavbarProps) {
                 </a>
               ))}
               <div className="hairline my-1" />
-              {isSignedIn ? (
+              {solDemoOnly() ? (
+                <Button asChild className="w-full rounded-full">
+                  <a
+                    href={CAL_BOOKING_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Book a demo
+                  </a>
+                </Button>
+              ) : isSignedIn ? (
                 dashboardHref ? (
                   <Button asChild className="w-full rounded-full">
                     <a href={dashboardHref}>Open desk</a>

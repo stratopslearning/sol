@@ -3,7 +3,12 @@ import { eq } from 'drizzle-orm';
 import type Stripe from 'stripe';
 
 import { db } from '@/app/db';
-import { stripeEvents, users as dbUsers } from '@/app/db/schema';
+import {
+  stripeEvents,
+  users as dbUsers,
+  workspaceLicenses,
+  workspaces,
+} from '@/app/db/schema';
 import { logAudit } from '@/lib/audit';
 import { invalidateUserCache } from '@/lib/getOrCreateUser';
 import { stripe } from '@/lib/stripe';
@@ -40,20 +45,29 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
   }
 
-  // Idempotency: if we've already recorded this event, skip processing. The
-  // unique constraint on `event_id` ensures concurrent retries don't both
-  // mutate user state. We attempt the insert first; a unique-constraint
-  // violation tells us this event was already accepted.
+  // Claim pattern:
+  // 1) Insert event with processedAt = null (unique on event_id).
+  // 2) On conflict: if processedAt set → ACK (done). If null → re-enter
+  //    processing (side effects are idempotent: toggle paid flags).
+  // 3) Never delete the row on failure — that raced with concurrent retries
+  //    that had already ACKed as "deduped" and dropped the event forever.
+  // 4) Only ACK "already done" when processedAt is set.
   try {
     await db.insert(stripeEvents).values({
       eventId: event.id,
       type: event.type,
       payload: event as unknown as object,
     });
-  } catch (insertErr) {
-    // Already-processed event: ack so Stripe stops retrying.
-    console.warn('Stripe event already processed (idempotency hit):', event.id);
-    return NextResponse.json({ received: true, deduped: true });
+  } catch {
+    const existing = await db.query.stripeEvents.findFirst({
+      where: eq(stripeEvents.eventId, event.id),
+    });
+    if (existing?.processedAt) {
+      return NextResponse.json({ received: true, deduped: true });
+    }
+    // Row exists but unprocessed (prior attempt failed, or still in flight).
+    // Fall through and re-run idempotent side effects, then stamp processedAt.
+    console.warn('Stripe event claim retry (unprocessed row):', event.id);
   }
 
   try {
@@ -64,18 +78,7 @@ export async function POST(req: NextRequest) {
       .where(eq(stripeEvents.eventId, event.id));
   } catch (err) {
     console.error('Stripe webhook handler failed:', { eventId: event.id, err });
-    // 5xx so Stripe retries with backoff. We do NOT mark the event processed
-    // and the next retry will hit the idempotency guard, fail to insert, and
-    // be acked — so we must make the handler itself idempotent (it is: we
-    // toggle a paid flag, not append).
-    //
-    // To allow retry to actually re-run the handler, we delete the event row
-    // so the next delivery re-inserts and re-runs.
-    try {
-      await db.delete(stripeEvents).where(eq(stripeEvents.eventId, event.id));
-    } catch (cleanupErr) {
-      console.error('Failed to clean up stripe_event for retry:', cleanupErr);
-    }
+    // Leave the unprocessed row so the next delivery can reclaim it.
     return NextResponse.json({ error: 'Webhook handler failed' }, { status: 500 });
   }
 
@@ -88,13 +91,22 @@ async function processStripeEvent(event: Stripe.Event): Promise<void> {
       const session = event.data.object as Stripe.Checkout.Session;
       // payment_status guard: a completed session can still be `unpaid` for
       // async-payment flows; we only mark paid on confirmed payment.
-      if (session.payment_status !== 'paid') {
+      if (session.payment_status !== 'paid' && session.mode !== 'subscription') {
         return;
       }
+      // Subscription mode: unpaid is normal until first invoice; treat as paid
+      // when status is paid OR subscription is present.
+      if (
+        session.mode === 'subscription' &&
+        session.payment_status !== 'paid' &&
+        !session.subscription
+      ) {
+        return;
+      }
+
       const clerkUserId =
         session.metadata?.clerkUserId ?? session.client_reference_id ?? null;
       if (!clerkUserId) {
-        // No correlation possible — surface as a 5xx so it ends up in alerting.
         throw new Error(
           `checkout.session.completed missing clerkUserId metadata (session ${session.id})`,
         );
@@ -104,6 +116,48 @@ async function processStripeEvent(event: Stripe.Event): Promise<void> {
         typeof session.customer === 'string'
           ? session.customer
           : session.customer?.id ?? null;
+
+      const workspaceId = session.metadata?.workspaceId ?? null;
+      if (
+        session.metadata?.kind === 'workspace_license' &&
+        workspaceId
+      ) {
+        const subscriptionId =
+          typeof session.subscription === 'string'
+            ? session.subscription
+            : session.subscription?.id ?? null;
+        await db
+          .update(workspaceLicenses)
+          .set({
+            status: 'active',
+            billingProvider: 'stripe',
+            stripeCustomerId: customerId,
+            stripeSubscriptionId: subscriptionId,
+            updatedAt: new Date(),
+          })
+          .where(eq(workspaceLicenses.workspaceId, workspaceId));
+        await db
+          .update(workspaces)
+          .set({ status: 'active', updatedAt: new Date() })
+          .where(eq(workspaces.id, workspaceId));
+        const actor = await db.query.users.findFirst({
+          where: eq(dbUsers.clerkId, clerkUserId),
+        });
+        if (actor) {
+          await logAudit({
+            actorUserId: actor.id,
+            actorClerkId: clerkUserId,
+            action: 'billing.workspace.license.activate',
+            targetType: 'workspace',
+            targetId: workspaceId,
+            metadata: {
+              source: 'stripe.checkout.session.completed',
+              subscriptionId,
+            },
+          });
+        }
+        return;
+      }
 
       const result = await db
         .update(dbUsers)
@@ -129,6 +183,39 @@ async function processStripeEvent(event: Stripe.Event): Promise<void> {
         targetId: result[0].id,
         metadata: { paid: true, source: 'stripe.checkout.session.completed' },
       });
+      return;
+    }
+
+    case 'customer.subscription.updated':
+    case 'customer.subscription.deleted': {
+      const sub = event.data.object as Stripe.Subscription;
+      const workspaceId = sub.metadata?.workspaceId;
+      if (!workspaceId) return;
+      const status =
+        event.type === 'customer.subscription.deleted' ||
+        sub.status === 'canceled'
+          ? 'canceled'
+          : sub.status === 'past_due'
+            ? 'past_due'
+            : sub.status === 'trialing'
+              ? 'trialing'
+              : 'active';
+      await db
+        .update(workspaceLicenses)
+        .set({
+          status,
+          stripeSubscriptionId: sub.id,
+          stripeCustomerId:
+            typeof sub.customer === 'string' ? sub.customer : sub.customer?.id,
+          updatedAt: new Date(),
+        })
+        .where(eq(workspaceLicenses.workspaceId, workspaceId));
+      if (status === 'canceled') {
+        await db
+          .update(workspaces)
+          .set({ status: 'suspended', updatedAt: new Date() })
+          .where(eq(workspaces.id, workspaceId));
+      }
       return;
     }
 
@@ -169,7 +256,7 @@ async function processStripeEvent(event: Stripe.Event): Promise<void> {
       }
 
       if (!clerkUserId) {
-        // Unable to map back to a user — log loudly so finance can investigate.
+        // Unable to map back to a user: log loudly so finance can investigate.
         console.error(
           `${event.type} could not be mapped to a user`,
           { eventId: event.id, customerId },

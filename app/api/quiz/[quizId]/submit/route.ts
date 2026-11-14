@@ -3,12 +3,14 @@ import { z } from 'zod';
 
 import { ApiError, apiErrorResponse } from '@/lib/api/errors';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
+import { tenantRateLimitKey } from '@/lib/rateLimit';
 import {
   QUIZ_ANSWERS_JSON_MAX_BYTES,
   readJsonBody,
 } from '@/lib/api/readJsonBody';
 import { sanitizeAnswerRecord } from '@/lib/api/sanitizeStoredText';
 import { logQuizAttemptAudit } from '@/lib/audit';
+import { loadExamContext } from '@/lib/examContext';
 import {
   executeQuizSubmit,
   MaxAttemptsExceededError,
@@ -36,18 +38,9 @@ export async function POST(
   try {
     const user = await getOrCreateUser();
     if (!user) throw ApiError.unauthorized();
-    if (user.role === 'STUDENT' && !isStudentEntitled(user)) {
+    if (!isStudentEntitled(user)) {
       throw ApiError.paymentRequired();
     }
-
-    const limited = await enforceRateLimit({
-      key: `submit:${user.id}`,
-      limit: 30,
-      windowMs: 5 * 60_000,
-      prefix: 'rl',
-      message: 'Too many quiz submissions. Please wait a moment and try again.',
-    });
-    if (limited) return limited;
 
     const rawBody = await readJsonBody(req, {
       maxBytes: QUIZ_ANSWERS_JSON_MAX_BYTES,
@@ -57,9 +50,26 @@ export async function POST(
       throw ApiError.badRequest('Invalid request body', parseResult.error.errors);
     }
     const { assignmentId, answers, autoSubmitted } = parseResult.data;
+
+    const examCtx = await loadExamContext({
+      quizId,
+      assignmentId,
+      studentId: user.id,
+      includeSections: false,
+      includeSubmittedAttempts: false,
+    });
+    const limited = await enforceRateLimit({
+      key: tenantRateLimitKey(examCtx.assignment?.tenantId, user.id, 'submit'),
+      limit: 30,
+      windowMs: 5 * 60_000,
+      prefix: 'rl',
+      message: 'Too many quiz submissions. Please wait a moment and try again.',
+    });
+    if (limited) return limited;
+
     const sanitizedAnswers = sanitizeAnswerRecord(answers);
 
-    // autoSubmitted is client telemetry only — never grants availability/timer bypass.
+    // autoSubmitted is client telemetry only: never grants availability/timer bypass.
     const result = await executeQuizSubmit({
       quizId,
       assignmentId,

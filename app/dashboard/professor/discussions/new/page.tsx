@@ -1,4 +1,5 @@
 import { eq, inArray } from 'drizzle-orm';
+import { requireTeachingAccess } from '@/lib/authz/gates';
 
 import { db } from '@/app/db';
 import { professorSections, quizSections, quizzes } from '@/app/db/schema';
@@ -8,30 +9,54 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { withBasePath } from '@/lib/basePath';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import { partitionEnrollmentsByConclusion } from '@/lib/sectionAvailability';
+import { listTeachingSectionIds } from '@/lib/professor/graderSections';
+import { fetchSectionsByIds } from '@/lib/db/entityScopedReads';
 
 interface PageProps {
-  searchParams: Promise<{ quizId?: string }>;
+  searchParams: Promise<{ quizId?: string; courseId?: string }>;
 }
 
 export default async function NewDiscussionPage(props: PageProps) {
-  const user = await getOrCreateUser();
-  if (!user || user.role !== 'PROFESSOR') return null;
+  const user = await requireTeachingAccess();
 
-  const { quizId } = await props.searchParams;
+  const { quizId, courseId } = await props.searchParams;
 
-  const professorSectionsList = await db.query.professorSections.findMany({
-    where: eq(professorSections.professorId, user.id),
-    with: { section: { with: { course: true } } },
-  });
+  const teachingIds = await listTeachingSectionIds(user);
+  const sectionRows = teachingIds.length ? await fetchSectionsByIds(teachingIds) : [];
+  const professorSectionsList = sectionRows.map((section) => ({
+    section: {
+      id: section.id,
+      name: section.name,
+      endsAt: section.endsAt,
+      createdAt: new Date(),
+      courseId: section.courseId,
+      course: section.course ?? { id: section.courseId, title: 'Course', description: null },
+    },
+    enrolledAt: new Date(),
+  }));
   const { active: ongoingEnrollments } =
     partitionEnrollmentsByConclusion(professorSectionsList);
 
-  const enrolledSections = ongoingEnrollments.map((ps) => ({
+  let enrolledSections = ongoingEnrollments.map((ps) => ({
     id: ps.section.id,
     title: `${ps.section.course.title} - ${ps.section.name}`,
+    courseId: ps.section.courseId,
   }));
 
-  const enrolledSectionIds = ongoingEnrollments.map((ps) => ps.sectionId);
+  let backHref = withBasePath('/dashboard/professor/courses');
+  let backLabel = 'Courses';
+  let defaultSectionIds: string[] | undefined;
+
+  if (courseId) {
+    enrolledSections = enrolledSections.filter((s) => s.courseId === courseId);
+    defaultSectionIds = enrolledSections.map((s) => s.id);
+    backHref = withBasePath(
+      `/dashboard/professor/courses/${courseId}/assignments`,
+    );
+    backLabel = 'Course assignments';
+  }
+
+  const enrolledSectionIds = enrolledSections.map((s) => s.id);
 
   const ownedQuizzes = await db.query.quizzes.findMany({
     where: eq(quizzes.professorId, user.id),
@@ -66,6 +91,7 @@ export default async function NewDiscussionPage(props: PageProps) {
         title?: string;
         description?: string;
         relatedQuizId?: string | null;
+        sectionIds?: string[];
       }
     | undefined;
 
@@ -79,30 +105,32 @@ export default async function NewDiscussionPage(props: PageProps) {
         title: `${quiz.title} Discussion`,
         description: full?.description ?? undefined,
         relatedQuizId: quizId,
+        sectionIds: defaultSectionIds,
       };
     }
+  } else if (defaultSectionIds?.length) {
+    initial = { sectionIds: defaultSectionIds };
   }
 
   return (
     <AppShell
       role="professor"
-      active="discussions"
-      topbarEyebrow="Faculty"
-      topbarTitle="Compose discussion"
+      active="assignments"
+      topbarTitle="New discussion"
       maxWidth="narrow"
     >
       <PageHeader
         breadcrumbs={[
           { label: 'Dashboard', href: withBasePath('/dashboard/professor') },
           {
-            label: 'Discussions',
-            href: withBasePath('/dashboard/professor/discussions'),
+            label: backLabel,
+            href: backHref,
           },
-          { label: 'Compose' },
+          { label: 'New discussion' },
         ]}
-        eyebrow="Compose"
-        title="Set a new discussion."
-        description="Author the Socratic flow, optionally link a quiz in learning mode, and assign sections."
+        eyebrow="Discussion"
+        title="Create a discussion."
+        description="Author the Socratic flow, optionally link a quiz in learning mode, and assign sections. Discussions track completion in Assignments."
       />
       <div className="mt-10">
         <ChatbotCreationForm

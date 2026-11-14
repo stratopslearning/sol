@@ -22,8 +22,7 @@ export default async function AdminSectionDetailPage({
   return (
     <AppShell
       role="admin"
-      active="sections"
-      topbarEyebrow="Administration"
+      active="workspaces"
       topbarTitle={data.section.name}
     >
       <PageHeader

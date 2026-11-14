@@ -5,7 +5,9 @@ import { z } from 'zod';
 
 import { db } from '@/app/db';
 import { sections, users } from '@/app/db/schema';
+import { apiErrorResponse } from '@/lib/api/errors';
 import { extractRequestMeta, logAudit } from '@/lib/audit';
+import { requireSupportGrant } from '@/lib/authz/requireSupportGrant';
 import { parseOptionalEndsAt } from '@/lib/sectionAvailability';
 
 export const dynamic = 'force-dynamic';
@@ -28,12 +30,31 @@ export async function PUT(
     const user = await db.query.users.findFirst({
       where: eq(users.clerkId, userId),
     });
-    if (!user || user.role !== 'ADMIN') {
+    if (!user || !user.platformStaff) {
       return NextResponse.json(
         { error: 'Forbidden - Admin access required' },
         { status: 403 },
       );
     }
+    const targetSection = await db.query.sections.findFirst({
+      where: eq(sections.id, sectionId),
+    });
+    if (!targetSection) {
+      return NextResponse.json({ error: 'Section not found' }, { status: 404 });
+    }
+    const tenantId = targetSection.tenantId ?? targetSection.workspaceId;
+    if (!tenantId) {
+      return NextResponse.json({ error: 'Section missing tenant' }, { status: 400 });
+    }
+    await requireSupportGrant(
+      {
+        id: user.id,
+        clerkId: user.clerkId,
+        platformStaff: user.platformStaff,
+      },
+      tenantId,
+      { action: 'support.tenant_access', targetType: 'section', targetId: sectionId },
+    );
     const body = await req.json();
     const validatedData = updateSectionSchema.parse(body);
     const patch: { name: string; endsAt?: Date | null; updatedAt: Date } = {
@@ -61,7 +82,7 @@ export async function PUT(
       );
     }
     console.error('Error updating section:', error);
-    return NextResponse.json({ error: 'Failed to update section' }, { status: 500 });
+    return apiErrorResponse(error);
   }
 }
 
@@ -77,7 +98,7 @@ export async function DELETE(
     const user = await db.query.users.findFirst({
       where: eq(users.clerkId, userId),
     });
-    if (!user || user.role !== 'ADMIN') {
+    if (!user || !user.platformStaff) {
       return NextResponse.json(
         { error: 'Forbidden - Admin access required' },
         { status: 403 },
@@ -91,6 +112,19 @@ export async function DELETE(
     if (!targetSection) {
       return NextResponse.json({ error: 'Section not found' }, { status: 404 });
     }
+    const tenantId = targetSection.tenantId ?? targetSection.workspaceId;
+    if (!tenantId) {
+      return NextResponse.json({ error: 'Section missing tenant' }, { status: 400 });
+    }
+    await requireSupportGrant(
+      {
+        id: user.id,
+        clerkId: user.clerkId,
+        platformStaff: user.platformStaff,
+      },
+      tenantId,
+      { action: 'support.tenant_access', targetType: 'section', targetId: sectionId },
+    );
     if (targetSection.deletedAt) {
       return NextResponse.json({ success: true, alreadyDeleted: true });
     }
@@ -117,6 +151,6 @@ export async function DELETE(
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error deleting section:', error);
-    return NextResponse.json({ error: 'Failed to delete section' }, { status: 500 });
+    return apiErrorResponse(error);
   }
 }

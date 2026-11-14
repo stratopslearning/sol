@@ -7,7 +7,7 @@ import {
   Hourglass,
   Sparkles,
   X,
-} from "lucide-react";
+} from "@/components/icons";
 
 import { detectRequiredMatchCount } from "@/lib/gradingQuestionIntent";
 import type {
@@ -119,8 +119,8 @@ function RubricBreakdown({
       <div className="eyebrow text-ink-faint mb-2">Rubric breakdown</div>
       {useAnyN ? (
         <p className="text-xs text-ink-muted mb-3 leading-relaxed">
-          This question required any {requiredMatchCount} — only{" "}
-          {requiredMatchCount} correct point
+          This question required any {requiredMatchCount} of the points below.
+          Only {requiredMatchCount} correct point
           {requiredMatchCount === 1 ? "" : "s"} were needed for full credit.
         </p>
       ) : null}
@@ -212,13 +212,13 @@ export function GPTFeedbackDisplay({
         </header>
         <p className="mt-3 text-sm text-ink leading-relaxed max-w-prose">
           {feedback.feedback ||
-            "Your answer is still being reviewed. The score for this question is not finalized yet — please check back shortly."}
+            "Your answer is still being reviewed. The score for this question is not finalized yet. Please check back shortly."}
         </p>
         <div className="mt-4 hairline" />
         <div className="mt-3 flex items-baseline gap-2">
           <span className="eyebrow text-ink-faint">Score</span>
           <span className="font-display text-lg text-ink-faint tnum">
-            — / {feedback.maxPoints ?? "?"}
+           . / {feedback.maxPoints ?? "?"}
           </span>
         </div>
       </section>
@@ -242,7 +242,7 @@ export function GPTFeedbackDisplay({
         <div className="mt-3 flex items-baseline gap-2">
           <span className="eyebrow text-ink-faint">Score</span>
           <span className="font-display text-lg text-ink-faint tnum">
-            — / {feedback.maxPoints ?? "?"}
+           . / {feedback.maxPoints ?? "?"}
           </span>
         </div>
       </section>

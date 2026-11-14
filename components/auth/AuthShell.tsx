@@ -1,6 +1,6 @@
 import * as React from "react";
 import Image from "next/image";
-import { Shield } from "lucide-react";
+import { Shield } from "@/components/icons";
 
 import { AuthClerkHost } from "@/components/auth/AuthClerkHost";
 import { SolMark } from "@/components/brand/SolMark";
@@ -32,8 +32,9 @@ function BrandHome() {
       className="inline-flex items-center gap-2 text-ink"
       aria-label="SOL home"
     >
-      <SolMark className="h-7 w-7" />
-      <span className="font-display text-[1.2rem] leading-none tracking-tight">
+      {/* Always the landing black mark + wordmark — never path/variant labels */}
+      <SolMark className="h-6 w-6 text-ink" title="SOL" />
+      <span className="font-display text-[1.15rem] leading-none tracking-tight text-ink">
         SOL
       </span>
     </a>
@@ -55,13 +56,13 @@ export function AuthShell({
   const formCard = (
     <article className="auth-card w-full overflow-visible text-center">
       <header className="auth-card-header">
-        <div className="mb-5 flex justify-center">
+        <div className="mb-3 flex justify-center">
           <BrandHome />
         </div>
         <h1
           className="font-display text-ink text-balance"
           style={{
-            fontSize: "clamp(1.65rem, 1.2vw + 1.2rem, 2rem)",
+            fontSize: "clamp(1.45rem, 1vw + 1.1rem, 1.75rem)",
             lineHeight: 1.15,
             letterSpacing: "-0.02em",
           }}
@@ -69,7 +70,7 @@ export function AuthShell({
           {title}
         </h1>
         {description ? (
-          <p className="mx-auto mt-2.5 max-w-[32ch] text-balance text-sm leading-relaxed text-ink-muted">
+          <p className="mx-auto mt-1.5 max-w-[34ch] text-balance text-[0.8125rem] leading-snug text-ink-muted">
             {description}
           </p>
         ) : null}
@@ -93,15 +94,15 @@ export function AuthShell({
 
   if (!split || !src) {
     return (
-      <div className="auth-page mkt flex min-h-screen flex-col text-ink">
+      <div className="auth-page mkt flex h-svh max-h-svh flex-col overflow-hidden text-ink">
         <main
           id="main"
           className={cn(
-            "flex flex-1 flex-col items-center justify-center px-4 py-12 md:py-16",
+            "flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-4 py-6",
             className,
           )}
         >
-          <div className="animate-rise flex w-full max-w-[26rem] flex-col items-center gap-6">
+          <div className="animate-rise flex w-full max-w-[26rem] flex-col items-center gap-4">
             {formCard}
             {footnoteBlock}
           </div>
@@ -111,8 +112,8 @@ export function AuthShell({
   }
 
   return (
-    <div className="auth-page mkt grid min-h-svh text-ink lg:grid-cols-2">
-      <aside className="relative isolate hidden min-h-svh overflow-hidden lg:block">
+    <div className="auth-page mkt grid h-svh max-h-svh overflow-hidden text-ink lg:grid-cols-2">
+      <aside className="relative isolate hidden h-svh overflow-hidden lg:block">
         <Image
           src={src}
           alt={paintingAlt}
@@ -123,8 +124,8 @@ export function AuthShell({
         />
       </aside>
 
-      {/* Mobile painting strip */}
-      <div className="relative isolate h-[32vh] min-h-[180px] w-full overflow-hidden lg:hidden">
+      {/* Mobile painting strip — short so the card fits without page scroll */}
+      <div className="relative isolate h-[18vh] max-h-[140px] min-h-[96px] w-full overflow-hidden lg:hidden">
         <Image
           src={src}
           alt=""
@@ -138,11 +139,11 @@ export function AuthShell({
       <main
         id="main"
         className={cn(
-          "flex min-h-0 flex-col items-center justify-center bg-paper px-5 py-10 sm:px-8 md:py-14",
+          "flex min-h-0 flex-col items-center justify-center overflow-y-auto bg-paper px-5 py-5 sm:px-8 sm:py-6",
           className,
         )}
       >
-        <div className="animate-rise flex w-full max-w-[24.5rem] flex-col items-center gap-6">
+        <div className="animate-rise flex w-full max-w-[24rem] flex-col items-center gap-3">
           {formCard}
           {footnoteBlock}
         </div>

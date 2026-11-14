@@ -1,12 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { and, eq } from 'drizzle-orm';
 
-import { db } from '@/app/db';
-import { professorSections } from '@/app/db/schema';
-import { ApiError, apiErrorResponse } from '@/lib/api/errors';
+import { apiErrorResponse } from '@/lib/api/errors';
 import { requireProfessorApi } from '@/lib/api/professorAuth';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
-import { extractRequestMeta, logAudit } from '@/lib/audit';
+import { leaveSection } from '@/lib/professor/mutations';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,35 +26,7 @@ export async function POST(
     });
     if (limited) return limited;
 
-    const enrollment = await db.query.professorSections.findFirst({
-      where: and(
-        eq(professorSections.sectionId, sectionId),
-        eq(professorSections.professorId, user.id),
-      ),
-    });
-    if (!enrollment) {
-      throw ApiError.badRequest('Not enrolled in this section');
-    }
-
-    await db
-      .delete(professorSections)
-      .where(
-        and(
-          eq(professorSections.sectionId, sectionId),
-          eq(professorSections.professorId, user.id),
-        ),
-      );
-
-    const meta = extractRequestMeta(req);
-    await logAudit({
-      actorUserId: user.id,
-      actorClerkId: user.clerkId,
-      action: 'education.professor_enrollment.leave',
-      targetType: 'section',
-      targetId: sectionId,
-      ip: meta.ip,
-      userAgent: meta.userAgent,
-    });
+    await leaveSection(user, sectionId);
 
     return NextResponse.json({ success: true });
   } catch (error) {

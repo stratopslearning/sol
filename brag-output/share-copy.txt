@@ -1,0 +1,11 @@
+The weekend you used to lose grading short answers? SOL gives it back.
+
+Build the quizzes. Let AI grade the hard ones — short and long answers scored with rubric-aligned reasoning you can read, challenge, and override. You stay the grader of record. The model just does the first pass.
+
+Less time grading. More time teaching.
+
+Built with @hyperframes → strat-ops.net/learning
+
+---
+Alt (short / X):
+Grading short answers ate your weekend. SOL fixes that — AI scores the subjective questions *with reasoning you can override*, and you stay the grader of record. Less time grading, more time teaching. 🎓

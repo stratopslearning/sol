@@ -1,8 +1,12 @@
 import type { ChatbotMessage } from '@/app/db/schema';
 import { minimizeStudentTextForAi } from '@/lib/ai/minimizeEducationPayload';
 import {
+  defaultCoursePromptContext,
+  type CoursePromptContext,
+} from '@/lib/ai/prompts/courseContext';
+import { assembleTutorSystemPrompt } from '@/lib/ai/prompts/tutor';
+import {
   CHATBOT_LEAK_REFUSAL,
-  SOCRATIC_LEARNING_RULES,
 } from '@/lib/chatbot/baseRules';
 import {
   HISTORY_WINDOW_MESSAGES,
@@ -13,7 +17,7 @@ export type SafeQuizQuestion = {
   order: number;
   type: string;
   question: string;
-  /** MCQ option labels only — never which is correct. */
+  /** MCQ option labels only: never which is correct. */
   options?: string[] | null;
 };
 
@@ -31,7 +35,7 @@ export function buildSafeQuizContext(quiz: SafeQuizInput | null | undefined): st
   if (!quiz) return '';
 
   const lines: string[] = [
-    'Linked quiz teaching context (LEARNING MODE — stems only, no answer keys):',
+    'Linked quiz teaching context (LEARNING MODE: stems only, no answer keys):',
     `Quiz title: ${quiz.title}`,
   ];
   if (quiz.description?.trim()) {
@@ -62,22 +66,36 @@ export function buildSafeQuizContext(quiz: SafeQuizInput | null | undefined): st
   return lines.join('\n');
 }
 
-/** Assemble the full system message. Exported for unit tests. */
+/**
+ * Assemble the full tutor system message (v2).
+ * Prefer passing courseCtx + assessmentLocked.
+ */
 export function assembleSystemPrompt(
   professorSystemPrompt: string,
   safeQuizContext: string,
+  safeMaterialsContext = '',
+  safeLessonsContext = '',
+  tutorPolicyRules = '',
+  opts?: {
+    courseCtx?: CoursePromptContext;
+    assessmentLocked?: boolean;
+  },
 ): string {
-  const ferpaGuard =
-    'FERPA: Do not ask for or repeat student legal names, emails, student IDs, or other directory identifiers. Coach on course concepts only.';
-  const parts = [
-    SOCRATIC_LEARNING_RULES,
-    ferpaGuard,
-    professorSystemPrompt.trim(),
-  ];
-  if (safeQuizContext.trim()) {
-    parts.push(safeQuizContext.trim());
-  }
-  return parts.join('\n\n');
+  const materials = [safeMaterialsContext, safeLessonsContext, safeQuizContext]
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .join('\n\n');
+
+  const instructorParts = [professorSystemPrompt.trim(), tutorPolicyRules.trim()]
+    .filter(Boolean)
+    .join('\n\n');
+
+  return assembleTutorSystemPrompt({
+    ctx: opts?.courseCtx ?? defaultCoursePromptContext(),
+    assessmentLocked: opts?.assessmentLocked,
+    instructorInstructions: instructorParts || null,
+    materials: materials || null,
+  });
 }
 
 /** Truncate oldest user/assistant pairs when over the window. */
@@ -126,8 +144,7 @@ export function systemPromptLooksSafe(systemContent: string): boolean {
 
 /**
  * Cheap leak detector for assistant replies. Flags schema field names and
- * common "here is the answer key" phrasing — not a guarantee against all
- * paraphrases, but catches the most dangerous dump patterns.
+ * common "here is the answer key" phrasing.
  */
 export function assistantReplyLooksSafe(reply: string): boolean {
   if (!reply) return true;

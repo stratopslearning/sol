@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Layers } from "lucide-react";
+import { Layers } from "@/components/icons";
 
 import CopyEnrollmentButton from "@/components/CopyEnrollmentButton";
 import { Button } from "@/components/ui/button";
@@ -120,8 +120,8 @@ export default function ProfessorSectionsPageContentClient({
       <EmptyState
         icon={<Layers className="h-5 w-5" />}
         eyebrow="Empty"
-        title="No sections assigned."
-        description="An administrator will assign you to sections at the start of the term. If you expected access, contact registrar."
+        title="No sections yet."
+        description="Create a course and section in Workspace, or join with a faculty enrollment code from a colleague."
       />
     );
   }

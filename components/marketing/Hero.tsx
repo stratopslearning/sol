@@ -10,16 +10,19 @@ import { SplitText } from "gsap/SplitText";
 import { Button } from "@/components/ui/button";
 import { apiUrl, withBasePath } from "@/lib/basePath";
 import { CAL_BOOKING_URL } from "@/lib/calBooking";
-import { paymentsEnabled } from "@/lib/featureFlags";
-import { solHref } from "@/lib/solHosts";
+import type { DashboardAreas } from "@/lib/authz/gates";
+import {
+  marketingDashboardCtaLabel,
+  resolveMarketingDashboardHref,
+} from "@/lib/marketing/dashboardLinks";
 
 const CLASSROOM_BG = withBasePath("/marketing/classroom-morning.jpg");
 
 gsap.registerPlugin(useGSAP, SplitText);
 
 interface DbUser {
-  role?: "STUDENT" | "PROFESSOR" | "ADMIN";
   paid?: boolean;
+  areas?: DashboardAreas;
 }
 
 export function Hero() {
@@ -35,22 +38,13 @@ export function Hero() {
       .catch((err) => console.error("Error fetching user:", err));
   }, [isSignedIn]);
 
-  const studentEntitled = !paymentsEnabled() || Boolean(dbUser?.paid);
-  const primaryHref =
-    dbUser?.role === "ADMIN"
-      ? solHref("/dashboard/admin")
-      : dbUser?.role === "PROFESSOR"
-        ? solHref("/dashboard/professor")
-        : dbUser?.role === "STUDENT"
-          ? studentEntitled
-            ? solHref("/dashboard/student")
-            : solHref("/payment")
-          : null;
+  const primaryHref = dbUser?.areas
+    ? resolveMarketingDashboardHref(dbUser.areas, Boolean(dbUser.paid))
+    : null;
 
-  const primaryLabel =
-    dbUser?.role === "STUDENT" && !studentEntitled
-      ? "Complete enrolment"
-      : "Open your dashboard";
+  const primaryLabel = dbUser?.areas
+    ? marketingDashboardCtaLabel(dbUser.areas, Boolean(dbUser.paid))
+    : "Open your dashboard";
 
   useGSAP(
     () => {
@@ -144,7 +138,7 @@ export function Hero() {
         <div className="relative mt-[min(8vh,3.5rem)] flex w-full items-center justify-center px-2">
           <h1
             data-hero="headline"
-            className="max-w-[14ch] font-display text-ink text-balance"
+            className="max-w-[14ch] font-display text-ink text-balance dark:text-[#1c1b17]"
             style={{
               fontSize: "clamp(2.6rem, 7vw, 4.75rem)",
               lineHeight: 1.05,

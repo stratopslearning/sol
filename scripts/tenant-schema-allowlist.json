@@ -1,0 +1,9 @@
+[
+  { "table": "users", "reason": "Global identity; platform_staff is global" },
+  { "table": "stripe_events", "reason": "Billing webhook idempotency; not tenant-scoped" },
+  { "table": "clerk_events", "reason": "Auth webhook idempotency; not tenant-scoped" },
+  { "table": "workspaces", "reason": "Tenant roots themselves (id is the tenant wall)" },
+  { "table": "workspace_memberships", "reason": "Seat roster; scoped by workspace_id RLS" },
+  { "table": "workspace_invites", "reason": "Seat invites; workspace_id keyed" },
+  { "table": "drizzle.__drizzle_migrations", "reason": "Migrator metadata" }
+]

@@ -1,14 +1,14 @@
-import { eq } from "drizzle-orm";
-
-import { db } from "@/app/db";
-import { attempts } from "@/app/db/schema";
 import { AppShell } from "@/components/layout/AppShell";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { listStudentActivities } from "@/lib/assignments";
 import { withBasePath } from "@/lib/basePath";
 import { requireStudent } from "@/lib/auth";
-import { isSectionConcluded } from "@/lib/sectionAvailability";
+import { fetchUserEnrollmentsDetail } from "@/lib/db/facultyStudentReads";
+import { fetchStudentGradebookAttemptsDefiner } from "@/lib/db/studentWriteDefiners";
+import { isSectionConcluded, partitionEnrollmentsByConclusion } from "@/lib/sectionAvailability";
 
 import StudentGradesTableClient from "./StudentGradesTableClient";
+import StudentCompletionsClient from "./StudentCompletionsClient";
 
 export default async function StudentGradesPage({
   searchParams,
@@ -18,34 +18,47 @@ export default async function StudentGradesPage({
   const user = await requireStudent();
   const { sectionId: focusSectionId } = await searchParams;
 
-  const allAttempts = await db.query.attempts.findMany({
-    where: eq(attempts.studentId, user.id),
-    orderBy: (attempts, { desc }) => desc(attempts.submittedAt),
-    with: {
-      quiz: true,
-      section: { with: { course: true } },
-    },
-  });
+  const [allAttempts, enrollments] = await Promise.all([
+    fetchStudentGradebookAttemptsDefiner(user.id),
+    fetchUserEnrollmentsDetail(user.id),
+  ]);
 
   const attemptRows = allAttempts.map((a) => ({
     id: a.id,
     quizId: a.quizId,
     sectionId: a.sectionId,
-    sectionName: a.section?.name ?? "Section",
-    quizTitle: a.quiz?.title ?? "Quiz",
-    courseTitle: a.section?.course?.title ?? null,
+    sectionName: a.sectionName,
+    quizTitle: a.quizTitle,
+    courseTitle: a.courseTitle,
     submittedAt: a.submittedAt
-      ? new Date(a.submittedAt).toISOString()
+      ? a.submittedAt.toISOString()
       : null,
     score: a.score,
     maxScore: a.maxScore,
     percentage: a.percentage,
     passed: a.passed,
-    sectionArchived: isSectionConcluded(a.section),
+    sectionArchived: isSectionConcluded({ endsAt: a.sectionEndsAt }),
   }));
 
+  const { active } = partitionEnrollmentsByConclusion(enrollments);
+  const sectionIds = active.map((e) => e.sectionId);
+  const activities = await listStudentActivities({
+    studentId: user.id,
+    sectionIds,
+  });
+  const completionRows = activities
+    .filter((a) => a.type !== "QUIZ")
+    .map((a) => ({
+      id: a.id,
+      type: a.type,
+      title: a.title,
+      courseTitle: a.courseTitle,
+      status: a.completionStatus ?? "NOT_STARTED",
+      href: a.href,
+    }));
+
   return (
-    <AppShell role="student" user={user} topbarEyebrow="Learner" topbarTitle="My grades">
+    <AppShell role="student" user={user} topbarTitle="My grades">
       <PageHeader
         breadcrumbs={[
           { label: "Dashboard", href: withBasePath("/dashboard/student") },
@@ -53,13 +66,14 @@ export default async function StudentGradesPage({
         ]}
         eyebrow="Record"
         title="Your gradebook."
-        description="Your attempts grouped by section and quiz — best scores, submission dates, and quick access to review each one. Archived sections stay visible here."
+        description="Quiz scores are numeric. Lessons, discussions, and interactives show completion status."
       />
-      <div className="mt-10">
+      <div className="mt-10 space-y-12">
         <StudentGradesTableClient
           attempts={attemptRows}
           initialSectionId={focusSectionId}
         />
+        <StudentCompletionsClient rows={completionRows} />
       </div>
     </AppShell>
   );

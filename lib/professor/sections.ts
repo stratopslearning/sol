@@ -2,11 +2,11 @@
  * Professor section reads, shared by the dashboard, the REST API, and MCP
  * tools. Mirrors the SSR logic of `/dashboard/professor/sections`.
  */
-import { eq } from 'drizzle-orm';
-
-import { db } from '@/app/db';
-import { professorSections } from '@/app/db/schema';
 import { ApiError } from '@/lib/api/errors';
+import { authorize, tenantIdForSection } from '@/lib/authz';
+import { fetchSectionsByIds } from '@/lib/db/entityScopedReads';
+import { fetchSectionLearnerCounts } from '@/lib/db/facultyStudentReads';
+import { listTeachingSectionIds } from '@/lib/professor/graderSections';
 import type { UserData } from '@/lib/getOrCreateUser';
 import { partitionEnrollmentsByConclusion } from '@/lib/sectionAvailability';
 import {
@@ -24,29 +24,39 @@ export type ProfessorSectionSummary = {
   enrolledAt: Date;
 };
 
-type ProfessorUser = Pick<UserData, 'id' | 'role'>;
+type ProfessorUser = Pick<UserData, 'id'> & {
+  platformStaff?: boolean | null;
+}
 
+/**
+ * Sections the user teaches, derived from role_bindings (DEFINER expansion).
+ */
 export async function listProfessorSections(
   user: ProfessorUser,
 ): Promise<{ active: ProfessorSectionSummary[]; archived: ProfessorSectionSummary[] }> {
-  const enrollments = await db.query.professorSections.findMany({
-    where: eq(professorSections.professorId, user.id),
-    with: {
-      section: {
-        with: {
-          course: true,
-          studentSections: true,
-        },
-      },
-    },
-  });
+  const sectionIds = await listTeachingSectionIds(user);
+  if (sectionIds.length === 0) return { active: [], archived: [] };
 
-  const { active, archived } = partitionEnrollmentsByConclusion(
-    enrollments.filter((e) => e.section && e.section.deletedAt == null),
-  );
+  const [sectionRows, learnerCounts] = await Promise.all([
+    fetchSectionsByIds(sectionIds),
+    fetchSectionLearnerCounts(sectionIds),
+  ]);
+
+  const rows = sectionRows.map((section) => ({
+    section: {
+      id: section.id,
+      name: section.name,
+      endsAt: section.endsAt,
+      createdAt: new Date(),
+      course: section.course,
+    },
+    enrolledAt: new Date(),
+  }));
+
+  const { active, archived } = partitionEnrollmentsByConclusion(rows);
 
   const toSummary = (
-    e: (typeof enrollments)[number],
+    e: (typeof rows)[number],
     isArchived: boolean,
   ): ProfessorSectionSummary => ({
     id: e.section.id,
@@ -54,9 +64,7 @@ export async function listProfessorSections(
     course: e.section.course
       ? { id: e.section.course.id, title: e.section.course.title }
       : null,
-    learnerCount: e.section.studentSections.filter(
-      (s) => s.status === 'ACTIVE',
-    ).length,
+    learnerCount: learnerCounts.get(e.section.id) ?? 0,
     endsAt: e.section.endsAt ?? null,
     archived: isArchived,
     enrolledAt: e.enrolledAt,
@@ -68,30 +76,72 @@ export async function listProfessorSections(
   };
 }
 
-/** Throws 403 unless the professor teaches the section (admins bypass). */
-export async function assertTeachesSection(
+/** View section desk (content.read). Org faculty can pass. */
+export async function assertCanViewSection(
   user: ProfessorUser,
   sectionId: string,
 ): Promise<void> {
-  if (user.role === 'ADMIN') return;
-  const enrollment = await db.query.professorSections.findFirst({
-    where: (t, { and, eq: eqOp }) =>
-      and(eqOp(t.sectionId, sectionId), eqOp(t.professorId, user.id)),
+  const tenantId = await tenantIdForSection(sectionId);
+  if (!tenantId) throw ApiError.notFound('Section not found');
+  const allowed = await authorize(user, 'content.read', {
+    tenantId,
+    scopeType: 'section',
+    scopeId: sectionId,
   });
-  if (!enrollment) {
+  if (!allowed) {
     throw ApiError.forbidden('You do not teach this section');
   }
 }
 
+/** Grade / desk ops that require grade.write (not org-only faculty). */
+export async function assertCanGradeSection(
+  user: ProfessorUser,
+  sectionId: string,
+): Promise<void> {
+  const tenantId = await tenantIdForSection(sectionId);
+  if (!tenantId) throw ApiError.notFound('Section not found');
+  const allowed = await authorize(user, 'grade.write', {
+    tenantId,
+    scopeType: 'section',
+    scopeId: sectionId,
+  });
+  if (!allowed) {
+    throw ApiError.forbidden('You cannot grade this section');
+  }
+}
+
 /**
- * Full section detail (roster, codes, assigned quizzes and discussions) for a
- * teaching professor or admin.
+ * @deprecated Prefer assertCanViewSection / assertCanGradeSection.
+ * Kept for call sites that need "teaches" ≈ content.read OR grade.write.
+ * New roster/staff gates should use roster.manage / staff.manage directly.
  */
+export async function assertTeachesSection(
+  user: ProfessorUser,
+  sectionId: string,
+): Promise<void> {
+  const tenantId = await tenantIdForSection(sectionId);
+  if (!tenantId) throw ApiError.notFound('Section not found');
+  const canGrade = await authorize(user, 'grade.write', {
+    tenantId,
+    scopeType: 'section',
+    scopeId: sectionId,
+  });
+  if (canGrade) return;
+  const canRead = await authorize(user, 'content.read', {
+    tenantId,
+    scopeType: 'section',
+    scopeId: sectionId,
+  });
+  if (!canRead) {
+    throw ApiError.forbidden('You do not teach this section');
+  }
+}
+
 export async function getProfessorSectionDetail(
   user: ProfessorUser,
   sectionId: string,
 ): Promise<SectionDetailData> {
-  await assertTeachesSection(user, sectionId);
+  await assertCanViewSection(user, sectionId);
   const detail = await loadSectionDetailData(sectionId);
   if (!detail) throw ApiError.notFound('Section not found');
   return detail;

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { FileText } from "lucide-react";
+import { FileText } from "@/components/icons";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -319,11 +319,11 @@ export default function StudentQuizzesTableClient({
                     >
                       {quiz.sectionNames.length
                         ? quiz.sectionNames.join(", ")
-                        : "—"}
+                        : "-"}
                     </span>
                   </TableCell>
                   <TableCell className="tnum align-top">
-                    {bestPct != null ? `${bestPct}%` : "—"}
+                    {bestPct != null ? `${bestPct}%` : "-"}
                   </TableCell>
                   <TableCell className="tnum text-ink-muted align-top">
                     {submittedCount}/{maxAttempts}
@@ -337,7 +337,7 @@ export default function StudentQuizzesTableClient({
                     {quiz.endDate ? (
                       <LocalDateTime stacked value={quiz.endDate} />
                     ) : (
-                      "—"
+                      "-"
                     )}
                   </TableCell>
                   <TableCell className="align-top">{statusBadge}</TableCell>

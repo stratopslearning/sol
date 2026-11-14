@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw } from '@/components/icons';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -64,7 +64,7 @@ export function RegradeAttemptButton({
         toast.warning(
           `Re-graded ${data.regradedQuestionCount}. ${stillPending} question${
             stillPending === 1 ? '' : 's'
-          } still pending — the background worker will retry shortly.`,
+          } still pending. The background worker will retry shortly.`,
         );
       } else if (data.regradedQuestionCount > 0) {
         toast.success(
@@ -88,7 +88,7 @@ export function RegradeAttemptButton({
   const banner = pendingQuestionCount > 0 ? (
     <p className="text-xs text-warning-fg max-w-sm text-right">
       {pendingQuestionCount} response
-      {pendingQuestionCount === 1 ? '' : 's'} still pending — queued for the
+      {pendingQuestionCount === 1 ? '' : 's'} still pending, queued for the
       background grader.
     </p>
   ) : fallbackQuestionCount > 0 ? (

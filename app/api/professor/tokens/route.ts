@@ -1,8 +1,10 @@
+// TODO(authz-cutover 11j admin/tokens): replace remaining users.role / professor_sections checks with authorize()/gates (see docs/GATE_2_REPORT.md).
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { ApiError, apiErrorResponse } from '@/lib/api/errors';
 import { extractRequestMeta, logAudit } from '@/lib/audit';
+import { userCanAccessTeachingArea } from '@/lib/authz';
 import { getOrCreateUser } from '@/lib/getOrCreateUser';
 import {
   DEFAULT_TOKEN_SCOPES,
@@ -10,6 +12,7 @@ import {
   mintProfessorApiToken,
   TOKEN_SCOPES,
 } from '@/lib/professorApiTokens';
+import { getActiveWorkspaceId } from '@/lib/workspace/activeWorkspace';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,7 +30,8 @@ const createSchema = z.object({
 async function requireSessionProfessor() {
   const user = await getOrCreateUser();
   if (!user) throw ApiError.unauthorized();
-  if (user.role !== 'PROFESSOR' && user.role !== 'ADMIN') {
+  const teaching = await userCanAccessTeachingArea(user.id);
+  if (!teaching && !user.platformStaff) {
     throw ApiError.forbidden();
   }
   return user;
@@ -65,8 +69,16 @@ export async function POST(req: NextRequest) {
     // session, and the 10-active-token cap is the real abuse control. An
     // Upstash miss was fail-closing every mint with a 429 (~3600s).
 
+    const tenantId = await getActiveWorkspaceId(user.id);
+    if (!tenantId) {
+      throw ApiError.badRequest(
+        'Select an active workspace before minting an API token.',
+      );
+    }
+
     const minted = await mintProfessorApiToken({
       userId: user.id,
+      tenantId,
       name: parsed.data.name,
       scopes: parsed.data.scopes ?? DEFAULT_TOKEN_SCOPES,
       expiresAt: parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : null,
@@ -79,6 +91,7 @@ export async function POST(req: NextRequest) {
       action: 'professor.api_token.create',
       targetType: 'api_token',
       targetId: minted.id,
+      tenantId,
       metadata: { name: minted.name, scopes: minted.scopes },
       ip: meta.ip,
       userAgent: meta.userAgent,

@@ -13,7 +13,7 @@ interface Attempt {
     name: string;
   };
   percentage: number | null;
-  passed: boolean | null;
+  passed?: boolean | null;
 }
 
 interface AttemptListProps {
@@ -38,7 +38,7 @@ export function AttemptList({ attempts }: AttemptListProps) {
           No attempts yet.
         </p>
         <p className="text-sm text-ink-muted max-w-sm leading-relaxed">
-          Complete a quiz from one of your sections — every attempt will appear
+          Complete a quiz from one of your sections: every attempt will appear
           here, with the most recent first.
         </p>
       </div>

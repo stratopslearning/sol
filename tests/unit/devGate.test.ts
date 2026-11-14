@@ -42,7 +42,7 @@ describe('assertDevOrAdmin', () => {
   it('returns 404 in production for non-admin users', async () => {
     vi.stubEnv('NODE_ENV', 'production');
     vi.resetModules();
-    getOrCreateUser.mockResolvedValueOnce({ id: 'u1', role: 'STUDENT' });
+    getOrCreateUser.mockResolvedValueOnce({ id: 'u1' });
     const { assertDevOrAdmin } = await import('@/lib/devGate');
     const result = await assertDevOrAdmin();
     expect(result?.status).toBe(404);
@@ -51,7 +51,7 @@ describe('assertDevOrAdmin', () => {
   it('allows admins in production', async () => {
     vi.stubEnv('NODE_ENV', 'production');
     vi.resetModules();
-    getOrCreateUser.mockResolvedValueOnce({ id: 'u1', role: 'ADMIN' });
+    getOrCreateUser.mockResolvedValueOnce({ id: 'u1', platformStaff: true });
     const { assertDevOrAdmin } = await import('@/lib/devGate');
     const result = await assertDevOrAdmin();
     expect(result).toBeNull();

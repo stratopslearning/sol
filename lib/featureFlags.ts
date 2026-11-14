@@ -5,7 +5,7 @@
  * client code because `NEXT_PUBLIC_*` vars are inlined at build time.
  *
  * Defaults are chosen so the platform behaves as if the flag is OFF when the
- * env var is unset — production toggles are then a single env change, not a
+ * env var is unset: production toggles are then a single env change, not a
  * code change.
  */
 
@@ -23,6 +23,16 @@
  */
 export function paymentsEnabled(): boolean {
   return process.env.NEXT_PUBLIC_PAYMENTS_ENABLED === "true";
+}
+
+/**
+ * Canvas-like course LMS shell (Home, Modules, … Settings).
+ * Default ON; set NEXT_PUBLIC_COURSE_LMS_SHELL=false to keep legacy hub tabs.
+ */
+export function courseLmsShellEnabled(): boolean {
+  const v = process.env.NEXT_PUBLIC_COURSE_LMS_SHELL;
+  if (v === "false" || v === "0") return false;
+  return true;
 }
 
 /**

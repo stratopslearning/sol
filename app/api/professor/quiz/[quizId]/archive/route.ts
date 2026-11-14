@@ -1,12 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { and, eq } from 'drizzle-orm';
 
-import { db } from '@/app/db';
-import { quizzes } from '@/app/db/schema';
 import { ApiError, jsonError } from '@/lib/api/errors';
 import { requireProfessorApi } from '@/lib/api/professorAuth';
-import { activeOnly } from '@/lib/db/filters';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
+import { archiveQuiz } from '@/lib/professor/mutations';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,41 +24,11 @@ export async function POST(
     });
     if (limited) return limited;
 
-    const existingQuiz = await db.query.quizzes.findFirst({
-      where: and(eq(quizzes.id, quizId), activeOnly(quizzes.deletedAt)),
-    });
-    if (!existingQuiz) {
-      return NextResponse.json({ error: 'Quiz not found' }, { status: 404 });
-    }
-
-    // Soft-delete. The professor library Hide/Publish control uses
-    // POST .../visibility (isActive only). Do not wire that toggle here —
-    // a second click 404s because this path sets deletedAt.
-    // Archiving applies across *all* sections including ones the caller
-    // doesn't teach. Restrict it to the quiz owner (or an admin).
-    const isAdmin = user.role === 'ADMIN';
-    const isOwner = existingQuiz.professorId === user.id;
-    if (!isAdmin && !isOwner) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
-
-    // Archive sets `deletedAt` in addition to `isActive=false` so it shares
-    // the same soft-delete tombstone as admin DELETE. Read paths filter on
-    // `deletedAt IS NULL`, so archived quizzes drop out of every listing
-    // immediately. They remain in the database for restore/audit/purge.
-    const [archivedQuiz] = await db
-      .update(quizzes)
-      .set({
-        isActive: false,
-        deletedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(quizzes.id, quizId))
-      .returning();
+    const archived = await archiveQuiz(user, quizId);
 
     return NextResponse.json({
       success: true,
-      quizId: archivedQuiz.id,
+      quizId: archived.id,
       message: 'Quiz archived successfully',
     });
   } catch (error) {

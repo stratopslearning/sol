@@ -3,16 +3,13 @@ import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { db } from '@/app/db';
-import { chatbotSections, chatbots } from '@/app/db/schema';
-import {
-  getActiveChatbot,
-  professorCanLinkQuiz,
-  professorEnrolledInSections,
-} from '@/lib/chatbot/access';
+import { chatbots } from '@/app/db/schema';
+import { userCanWriteChatbot } from '@/lib/chatbot/access';
 import { ApiError, apiErrorResponse, jsonError } from '@/lib/api/errors';
 import { requireProfessorApi } from '@/lib/api/professorAuth';
 import { enforceRateLimit } from '@/lib/api/rateLimitGuard';
 import { readJsonBody } from '@/lib/api/readJsonBody';
+import { updateDiscussion } from '@/lib/professor/mutations';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,6 +22,12 @@ const updateSchema = z.object({
   relatedQuizId: z.string().uuid().nullable().optional(),
   sectionIds: z.array(z.string().uuid()).optional(),
   isActive: z.boolean().optional(),
+  aiPolicy: z
+    .object({
+      mode: z.enum(['hints', 'guided', 'full_after_submit']),
+    })
+    .nullable()
+    .optional(),
 });
 
 export async function PUT(
@@ -46,74 +49,8 @@ export async function PUT(
     if (limited) return limited;
 
     const { id } = await context.params;
-    const bot = await getActiveChatbot(id);
-    if (!bot || bot.isTemplate) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    }
-    if (user.role === 'PROFESSOR' && bot.professorId !== user.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
     const body = updateSchema.parse(await readJsonBody(req));
-
-    if (body.sectionIds && user.role === 'PROFESSOR') {
-      const ok = await professorEnrolledInSections(user.id, body.sectionIds);
-      if (!ok) {
-        return NextResponse.json(
-          { error: 'You can only assign discussions to sections you teach' },
-          { status: 403 },
-        );
-      }
-    }
-
-    if (body.relatedQuizId && user.role === 'PROFESSOR') {
-      const canLink = await professorCanLinkQuiz(user.id, body.relatedQuizId);
-      if (!canLink) {
-        return NextResponse.json(
-          { error: 'You cannot link that quiz' },
-          { status: 403 },
-        );
-      }
-    }
-
-    await db.transaction(async (tx) => {
-      await tx
-        .update(chatbots)
-        .set({
-          ...(body.title != null ? { title: body.title } : {}),
-          ...(body.description !== undefined
-            ? { description: body.description }
-            : {}),
-          ...(body.personaName != null ? { personaName: body.personaName } : {}),
-          ...(body.instructions != null
-            ? { instructions: body.instructions }
-            : {}),
-          ...(body.systemPrompt != null
-            ? { systemPrompt: body.systemPrompt }
-            : {}),
-          ...(body.relatedQuizId !== undefined
-            ? { relatedQuizId: body.relatedQuizId }
-            : {}),
-          ...(body.isActive != null ? { isActive: body.isActive } : {}),
-          updatedAt: new Date(),
-        })
-        .where(eq(chatbots.id, id));
-
-      if (body.sectionIds) {
-        await tx
-          .delete(chatbotSections)
-          .where(eq(chatbotSections.chatbotId, id));
-        if (body.sectionIds.length > 0) {
-          await tx.insert(chatbotSections).values(
-            body.sectionIds.map((sectionId) => ({
-              chatbotId: id,
-              sectionId,
-              assignedBy: user.id,
-            })),
-          );
-        }
-      }
-    });
+    await updateDiscussion(user, id, body);
 
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -151,11 +88,7 @@ export async function GET(
   if (!bot) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
-  if (
-    user.role === 'PROFESSOR' &&
-    !bot.isTemplate &&
-    bot.professorId !== user.id
-  ) {
+  if (!bot.isTemplate && !(await userCanWriteChatbot(user, bot))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

@@ -1,6 +1,6 @@
 /**
  * Take-page enrollment gate. Questions and lazy assignment must not run
- * unless this returns allowed — the page used to load the question bank
+ * unless this returns allowed: the page used to load the question bank
  * before proving the student is in a section the quiz is assigned to.
  *
  * `resolvedSectionId` is the result of `resolveAttemptSectionId`.

@@ -8,7 +8,21 @@ import { createHash } from 'crypto';
 
 import { initLogger, traced, type Span } from 'braintrust';
 
-export type AiSurface = 'grading' | 'rubric' | 'chatbot' | 'mcp';
+export type AiSurface =
+  | 'grading'
+  | 'rubric'
+  | 'chatbot'
+  | 'mcp'
+  | 'authoring'
+  | 'insights'
+  | 'embed';
+
+/** Map gateway purpose → Braintrust surface. */
+export function surfaceFromPurpose(
+  purpose: 'grading' | 'rubric' | 'chatbot' | 'embed' | 'authoring',
+): AiSurface {
+  return purpose;
+}
 
 export type McpToolOutcome =
   | 'success'
@@ -67,7 +81,7 @@ export function shouldSampleTrace(
 export function initBraintrustLogger(): void {
   if (!isBraintrustEnabled() || loggerInitialized) return;
   initLogger({
-    projectName: process.env.BRAINTRUST_PROJECT?.trim() || 'SOL',
+    projectName: process.env.BRAINTRUST_PROJECT?.trim() || 'teachwithsol',
     apiKey: process.env.BRAINTRUST_API_KEY,
   });
   loggerInitialized = true;
